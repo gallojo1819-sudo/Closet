@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Fraunces, Jost } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
 
@@ -19,6 +19,20 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
+// Editorial pairing for the closet catalog surface: Fraunces (characterful
+// display serif) + Jost (geometric grotesque for labels/pills).
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  display: "swap",
+  subsets: ["latin"],
+});
+
+const jost = Jost({
+  variable: "--font-jost",
+  display: "swap",
+  subsets: ["latin"],
+});
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -26,7 +40,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.className} bg-neutral-950 text-neutral-100 antialiased`}>
+      <body
+        className={`${geistSans.variable} ${fraunces.variable} ${jost.variable} ${geistSans.className} bg-neutral-950 text-neutral-100 antialiased`}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

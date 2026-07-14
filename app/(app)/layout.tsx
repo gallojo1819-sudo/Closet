@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { LogoutButton } from "@/components/logout-button";
 import { BottomNav } from "@/components/bottom-nav";
 
 export default async function AppLayout({
@@ -16,15 +15,12 @@ export default async function AppLayout({
     redirect("/auth/login");
   }
 
+  // The shell is a neutral dark frame; each page owns its own surface (the
+  // closet paints a full-bleed cream catalog, add/stylist stay dark). Sign-out
+  // lives in the bottom nav so the top is free for each page's own header.
   return (
     <div className="min-h-svh bg-neutral-950 text-neutral-100">
-      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 py-3 backdrop-blur">
-        <span className="text-lg font-semibold tracking-tight">Closet</span>
-        <LogoutButton />
-      </header>
-      <main className="mx-auto w-full max-w-md px-4 pb-20 pt-6">
-        {children}
-      </main>
+      <main className="min-h-svh w-full">{children}</main>
       <BottomNav />
     </div>
   );

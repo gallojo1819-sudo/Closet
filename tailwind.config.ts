@@ -11,6 +11,8 @@ export default {
   theme: {
     extend: {
       colors: {
+        cream: "#F4F1EA",
+        ink: "#1A1A1A",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {
@@ -56,6 +58,10 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      fontFamily: {
+        display: ["var(--font-fraunces)", "Georgia", "serif"],
+        ui: ["var(--font-jost)", "system-ui", "sans-serif"],
       },
     },
   },
