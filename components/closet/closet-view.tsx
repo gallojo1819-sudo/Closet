@@ -27,6 +27,7 @@ import {
   mergeDuplicate,
   keepBoth,
   regenerateCutout,
+  retryAllFailedCutouts,
   type GarmentEdit,
 } from "@/app/(app)/closet/actions";
 
@@ -522,9 +523,11 @@ function Overlay({
 export function ClosetView({
   garments,
   pendingCutouts,
+  failedCutouts,
 }: {
   garments: EnrichedGarment[];
   pendingCutouts: number;
+  failedCutouts: number;
 }) {
   const router = useRouter();
   const [editId, setEditId] = useState<string | null>(null);
@@ -532,17 +535,29 @@ export function ClosetView({
   const [running, setRunning] = useState(false);
   const [runDone, setRunDone] = useState(0);
   const [runTotal, setRunTotal] = useState(0);
+  const [pausedMsg, setPausedMsg] = useState<string | null>(null);
+  const [retrying, startRetry] = useTransition();
 
-  // Drain the cutout queue by polling the worker until it reports empty.
+  // Drain the cutout queue by polling the worker until it reports empty. A
+  // quota/auth/network pause halts immediately and surfaces the reason —
+  // nothing is marked failed.
   const runCutouts = useCallback(async () => {
     if (running) return;
     setRunning(true);
+    setPausedMsg(null);
     setRunDone(0);
     let total = Math.max(pendingCutouts, 1);
     setRunTotal(total);
     let done = 0;
     for (let i = 0; i < 200; i++) {
-      let body: { processed?: unknown[]; remaining?: number } | null = null;
+      let body:
+        | {
+            processed?: unknown[];
+            remaining?: number;
+            paused?: boolean;
+            pause?: { message?: string };
+          }
+        | null = null;
       try {
         const res = await fetch("/api/cutouts/process", { method: "POST" });
         if (!res.ok) break;
@@ -558,12 +573,23 @@ export function ClosetView({
         setRunTotal(total);
       }
       setRunDone(done);
+      if (body?.paused) {
+        setPausedMsg(body.pause?.message ?? "Cutouts paused: Gemini quota/billing issue.");
+        break;
+      }
       // Empty queue, or nothing moved (stuck) — stop.
       if (remaining === 0 || processedNow === 0) break;
     }
     setRunning(false);
     router.refresh();
   }, [running, pendingCutouts, router]);
+
+  const retryFailed = () => {
+    startRetry(async () => {
+      const res = await retryAllFailedCutouts();
+      if (res.ok) await runCutouts();
+    });
+  };
 
   const byId = useMemo(
     () => new Map(garments.map((g) => [g.id, g])),
@@ -599,6 +625,16 @@ export function ClosetView({
         </span>
       </div>
 
+      {pausedMsg && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            {pausedMsg} Nothing was marked failed — press generate again once
+            billing/quota recovers.
+          </span>
+        </div>
+      )}
+
       {(pendingCutouts > 0 || running) && (
         <Button
           type="button"
@@ -614,6 +650,26 @@ export function ClosetView({
           ) : (
             <>
               <Wand2 aria-hidden /> Generate cutouts ({pendingCutouts} pending)
+            </>
+          )}
+        </Button>
+      )}
+
+      {failedCutouts > 0 && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={retryFailed}
+          disabled={retrying || running}
+          className="w-full"
+        >
+          {retrying ? (
+            <>
+              <Loader2 className="animate-spin" aria-hidden /> Re-queuing…
+            </>
+          ) : (
+            <>
+              <Wand2 aria-hidden /> Retry all failed cutouts ({failedCutouts})
             </>
           )}
         </Button>

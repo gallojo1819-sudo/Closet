@@ -42,11 +42,20 @@ export default async function ClosetPage() {
   }));
 
   // Pending cutout work drives the "Generate cutouts (N)" button.
-  const { count } = await supabase
+  const { count: pending } = await supabase
     .from("processing_jobs")
     .select("id", { count: "exact", head: true })
     .eq("kind", "cutout_generate")
     .in("status", ["queued", "running"]);
 
-  return <ClosetView garments={garments} pendingCutouts={count ?? 0} />;
+  // Stranded failures drive the "Retry all failed cutouts (N)" button.
+  const failedCount = rows.filter((r) => r.status === "cutout_failed").length;
+
+  return (
+    <ClosetView
+      garments={garments}
+      pendingCutouts={pending ?? 0}
+      failedCutouts={failedCount}
+    />
+  );
 }

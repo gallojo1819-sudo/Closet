@@ -171,6 +171,64 @@ export async function mergeDuplicate(newId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
+/**
+ * Re-queue every garment stranded at cutout_failed for the current user:
+ * garment back to 'tagged', a fresh queued cutout job (attempts default to 0),
+ * de-duped against any already queued/running job. RLS-scoped, no service key.
+ */
+export async function retryAllFailedCutouts(): Promise<
+  ActionResult & { requeued?: number }
+> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+
+  const { data: failed } = await supabase
+    .from("garments")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("status", "cutout_failed");
+  const failedIds = (failed ?? []).map((g) => g.id as string);
+  if (failedIds.length === 0) {
+    revalidatePath("/closet");
+    return { ok: true, requeued: 0 };
+  }
+
+  // Don't stack duplicate work for garments that already have a live job.
+  const { data: live } = await supabase
+    .from("processing_jobs")
+    .select("garment_id")
+    .eq("user_id", user.id)
+    .eq("kind", "cutout_generate")
+    .in("status", ["queued", "running"])
+    .in("garment_id", failedIds);
+  const alreadyQueued = new Set((live ?? []).map((j) => j.garment_id as string));
+  const toQueue = failedIds.filter((id) => !alreadyQueued.has(id));
+
+  // All failed garments go back to 'tagged'; fresh jobs start at attempts 0.
+  await supabase
+    .from("garments")
+    .update({ status: "tagged" })
+    .in("id", failedIds);
+
+  if (toQueue.length) {
+    const rows = toQueue.map((garmentId) => ({
+      user_id: user.id,
+      garment_id: garmentId,
+      kind: "cutout_generate",
+      status: "queued",
+      payload: { requeued: true },
+    }));
+    const { error } = await supabase.from("processing_jobs").insert(rows);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/closet");
+  return { ok: true, requeued: failedIds.length };
+}
+
 /** Keep both garments: clear the duplicate flag on the new row. */
 export async function keepBoth(id: string): Promise<ActionResult> {
   const supabase = await createClient();

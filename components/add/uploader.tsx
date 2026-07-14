@@ -103,6 +103,7 @@ export function Uploader() {
   const [cutoutRunning, setCutoutRunning] = useState(false);
   const [cutoutDone, setCutoutDone] = useState(0);
   const [cutoutTotal, setCutoutTotal] = useState(0);
+  const [cutoutPaused, setCutoutPaused] = useState<string | null>(null);
   const pickRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -130,14 +131,23 @@ export function Uploader() {
     );
     setBusy(false);
 
-    // Drain the cutout queue the upload just filled. Empty queue = clean no-op.
+    // Drain the cutout queue the upload just filled. Empty queue = clean no-op;
+    // a quota/auth/network pause halts and surfaces the reason.
     setCutoutRunning(true);
+    setCutoutPaused(null);
     setCutoutDone(0);
     setCutoutTotal(0);
     let done = 0;
     let total = 0;
     for (let i = 0; i < 200; i++) {
-      let body: { processed?: unknown[]; remaining?: number } | null = null;
+      let body:
+        | {
+            processed?: unknown[];
+            remaining?: number;
+            paused?: boolean;
+            pause?: { message?: string };
+          }
+        | null = null;
       try {
         const res = await fetch("/api/cutouts/process", { method: "POST" });
         if (!res.ok) break;
@@ -153,6 +163,12 @@ export function Uploader() {
         setCutoutTotal(total);
       }
       setCutoutDone(done);
+      if (body?.paused) {
+        setCutoutPaused(
+          body.pause?.message ?? "Cutouts paused: Gemini quota/billing issue.",
+        );
+        break;
+      }
       if (remaining === 0 || processedNow === 0) break;
     }
     setCutoutRunning(false);
@@ -275,6 +291,16 @@ export function Uploader() {
           <Loader2 className="size-4 animate-spin text-neutral-400" aria-hidden />
           Generating cutouts… {cutoutDone}
           {cutoutTotal > 0 ? ` of ${cutoutTotal}` : ""}
+        </div>
+      )}
+
+      {cutoutPaused && !cutoutRunning && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            {cutoutPaused} Your garments are saved and still queued — retry from
+            the closet once billing/quota recovers.
+          </span>
         </div>
       )}
 
