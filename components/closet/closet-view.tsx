@@ -11,6 +11,7 @@ import {
   Wand2,
   Loader2,
   AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -24,7 +25,7 @@ import {
   mergeDuplicate,
   keepBoth,
   regenerateCutout,
-  retryAllFailedCutouts,
+  rerunAsSegmentation,
   type GarmentEdit,
 } from "@/app/(app)/closet/actions";
 
@@ -153,7 +154,9 @@ function GarmentCell({
           {g.subtype ?? CATEGORY_LABELS[g.category]}
         </p>
         <p className="truncate font-ui text-[10px] uppercase tracking-[0.12em] text-neutral-400">
-          {g.colors[0] ?? g.pattern ?? CATEGORY_LABELS[g.category]}
+          {g.image_source === "photo"
+            ? "Photo only"
+            : (g.colors[0] ?? g.pattern ?? CATEGORY_LABELS[g.category])}
         </p>
       </div>
     </button>
@@ -366,10 +369,14 @@ function ProductDetail({
                 <p className="font-ui text-sm font-medium text-neutral-800">Cutout</p>
                 <p className="truncate font-ui text-xs text-neutral-500">
                   {garment.status === "cutout_ready"
-                    ? "Ready — regenerate to redo it."
-                    : garment.status === "cutout_failed"
-                      ? "Last attempt failed — try again."
-                      : "Not generated yet."}
+                    ? garment.image_source === "segmented"
+                      ? "Segmented from your photo."
+                      : "Generated & verified."
+                    : garment.status === "cutout_rejected"
+                      ? "Photo only — cutout didn't match the source."
+                      : garment.status === "cutout_failed"
+                        ? "Last attempt failed — try again."
+                        : "Not generated yet."}
                 </p>
               </div>
               <button
@@ -532,11 +539,15 @@ function DedupModal({
 export function ClosetView({
   garments,
   pendingCutouts,
-  failedCutouts,
+  rerunCandidates,
+  unauditedCutouts,
+  sourcing,
 }: {
   garments: EnrichedGarment[];
   pendingCutouts: number;
-  failedCutouts: number;
+  rerunCandidates: number;
+  unauditedCutouts: number;
+  sourcing: { segmented: number; cutout: number; photo: number };
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<PillKey>("all");
@@ -547,6 +558,8 @@ export function ClosetView({
   const [runTotal, setRunTotal] = useState(0);
   const [pausedMsg, setPausedMsg] = useState<string | null>(null);
   const [retrying, startRetry] = useTransition();
+  const [verifying, setVerifying] = useState(false);
+  const [verifyDemoted, setVerifyDemoted] = useState(0);
 
   const byId = useMemo(() => new Map(garments.map((g) => [g.id, g])), [garments]);
 
@@ -600,12 +613,42 @@ export function ClosetView({
     router.refresh();
   }, [running, pendingCutouts, router]);
 
-  const retryFailed = () => {
+  const rerun = () => {
     startRetry(async () => {
-      const res = await retryAllFailedCutouts();
+      const res = await rerunAsSegmentation();
       if (res.ok) await runCutouts();
     });
   };
+
+  // Audit already-generated cutouts against their source; demote fabrications.
+  const reverify = useCallback(async () => {
+    if (verifying) return;
+    setVerifying(true);
+    setPausedMsg(null);
+    setVerifyDemoted(0);
+    let demoted = 0;
+    for (let i = 0; i < 200; i++) {
+      let body:
+        | { demoted?: number; remaining?: number; paused?: boolean; pause?: { message?: string } }
+        | null = null;
+      try {
+        const res = await fetch("/api/cutouts/reverify", { method: "POST" });
+        if (!res.ok) break;
+        body = await res.json();
+      } catch {
+        break;
+      }
+      demoted += body?.demoted ?? 0;
+      setVerifyDemoted(demoted);
+      if (body?.paused) {
+        setPausedMsg(body.pause?.message ?? "Re-verify paused: Claude quota/billing issue.");
+        break;
+      }
+      if ((body?.remaining ?? 0) === 0) break;
+    }
+    setVerifying(false);
+    router.refresh();
+  }, [verifying, router]);
 
   const refresh = () => {
     setEditId(null);
@@ -650,14 +693,27 @@ export function ClosetView({
 
       {/* Body */}
       <div className="mx-auto max-w-7xl px-4 pb-28 pt-2 sm:px-6">
-        {(pendingCutouts > 0 || running || failedCutouts > 0 || pausedMsg) && (
+        {/* Sourcing mix — how the closet is actually sourced. */}
+        {(sourcing.segmented > 0 || sourcing.cutout > 0 || sourcing.photo > 0) && (
+          <p className="mb-4 font-ui text-[11px] uppercase tracking-[0.16em] text-neutral-400">
+            Sourced · {sourcing.segmented} segmented · {sourcing.cutout} generated ·{" "}
+            {sourcing.photo} photo
+          </p>
+        )}
+
+        {(pendingCutouts > 0 ||
+          running ||
+          rerunCandidates > 0 ||
+          unauditedCutouts > 0 ||
+          verifying ||
+          pausedMsg) && (
           <div className="mb-6 space-y-3">
             {pausedMsg && (
               <div className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 font-ui text-sm text-amber-800">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
                 <span>
-                  {pausedMsg} Nothing was marked failed — try again once
-                  billing/quota recovers.
+                  {pausedMsg} Nothing was demoted or marked failed — try again
+                  once billing/quota recovers.
                 </span>
               </div>
             )}
@@ -665,7 +721,7 @@ export function ClosetView({
               <button
                 type="button"
                 onClick={runCutouts}
-                disabled={running}
+                disabled={running || verifying}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-neutral-900 px-5 py-3 font-ui text-sm text-cream hover:bg-neutral-800 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
               >
                 {running ? (
@@ -680,11 +736,30 @@ export function ClosetView({
                 )}
               </button>
             )}
-            {failedCutouts > 0 && (
+            {unauditedCutouts > 0 && (
               <button
                 type="button"
-                onClick={retryFailed}
-                disabled={retrying || running}
+                onClick={reverify}
+                disabled={verifying || running}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-neutral-300 px-5 py-3 font-ui text-sm text-neutral-800 hover:bg-white/60 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900"
+              >
+                {verifying ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" aria-hidden /> Re-verifying…{" "}
+                    {verifyDemoted > 0 ? `${verifyDemoted} demoted` : ""}
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="size-4" aria-hidden /> Re-verify existing cutouts ({unauditedCutouts})
+                  </>
+                )}
+              </button>
+            )}
+            {rerunCandidates > 0 && (
+              <button
+                type="button"
+                onClick={rerun}
+                disabled={retrying || running || verifying}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-neutral-300 px-5 py-3 font-ui text-sm text-neutral-800 hover:bg-white/60 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900"
               >
                 {retrying ? (
@@ -693,7 +768,7 @@ export function ClosetView({
                   </>
                 ) : (
                   <>
-                    <Wand2 className="size-4" aria-hidden /> Retry all failed cutouts ({failedCutouts})
+                    <Wand2 className="size-4" aria-hidden /> Re-run as segmentation ({rerunCandidates})
                   </>
                 )}
               </button>

@@ -2,7 +2,10 @@ import "server-only";
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { createClient } from "@/lib/supabase/server";
-import { buildReferenceCrop } from "@/lib/cutouts/reference";
+import {
+  buildReferenceCrop,
+  cropOriginalBbox,
+} from "@/lib/cutouts/reference";
 import {
   buildCutoutPrompt,
   buildCorrectivePrompt,
@@ -10,7 +13,9 @@ import {
 } from "@/lib/cutouts/prompt";
 import { generateImage, toRefImage } from "@/lib/cutouts/gemini";
 import { removeChroma } from "@/lib/cutouts/chroma";
+import { segmentBackground } from "@/lib/cutouts/segment";
 import { runQaGates } from "@/lib/cutouts/qa";
+import { judgeEvidence, judgeFidelity } from "@/lib/cutouts/fidelity";
 import {
   classifyThrown,
   qaCode,
@@ -19,7 +24,6 @@ import {
 } from "@/lib/cutouts/errors";
 import type { Bbox, Category } from "@/lib/garments/types";
 
-// Image generation is slow; needs the Node runtime.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -53,25 +57,32 @@ interface GarmentRow {
 interface JobResult {
   jobId: string;
   garmentId: string | null;
-  outcome: "cutout_ready" | "cutout_failed" | "skipped" | "paused" | "error";
+  outcome:
+    | "segmented"
+    | "cutout_ready"
+    | "cutout_rejected"
+    | "cutout_failed"
+    | "hold"
+    | "skipped"
+    | "paused"
+    | "error";
   code?: FailureCode;
   detail?: string;
 }
 
-// A single generation+key+QA attempt resolves to one of three shapes:
-//  pass  -> we have a PNG
-//  infra -> quota/auth/network: DO NOT burn the job; halt the batch
-//  fail  -> a genuine generation/chroma/QA failure: consumes an attempt
-type AttemptOutcome =
-  | { kind: "pass"; png: Buffer }
+// A generation attempt (route B) resolves to one of these.
+type GenOutcome =
+  | { kind: "accept"; png: Buffer; verdict: string }
   | { kind: "infra"; code: FailureCode; message: string }
-  | { kind: "fail"; code: FailureCode; message: string; failedRefPng?: Buffer };
+  | { kind: "techfail"; code: FailureCode; message: string; failedRefPng?: Buffer }
+  | { kind: "fidelityfail"; reason: string; invented: string[]; failedRefPng?: Buffer };
 
-async function runOneAttempt(
+async function runGeneration(
   prompt: string,
   refImages: { mimeType: string; data: string }[],
   chromaHex: string,
-): Promise<AttemptOutcome> {
+  referenceCrop: Buffer,
+): Promise<GenOutcome> {
   let gen: Buffer;
   try {
     gen = await generateImage(prompt, refImages);
@@ -79,10 +90,9 @@ async function runOneAttempt(
     const c = classifyThrown(e);
     return c.infra
       ? { kind: "infra", code: c.code, message: c.message }
-      : { kind: "fail", code: c.code, message: c.message };
+      : { kind: "techfail", code: c.code, message: c.message };
   }
 
-  // Re-encode to PNG so it can be re-attached with a correct mime type.
   let failedRefPng: Buffer | undefined;
   try {
     failedRefPng = await sharp(gen).png().toBuffer();
@@ -93,31 +103,45 @@ async function runOneAttempt(
   const chroma = await removeChroma(gen, chromaHex);
   if (!chroma.ok) {
     return {
-      kind: "fail",
+      kind: "techfail",
       code: "chroma_nonuniform",
       message: `non-uniform background (${chroma.reason})`,
       failedRefPng,
     };
   }
-
   const qa = runQaGates(chroma.raw, chroma.width, chroma.height, chromaHex);
   if (!qa.pass) {
+    return { kind: "techfail", code: qaCode(qa.failures), message: qa.failures.join("; "), failedRefPng };
+  }
+
+  // Source-fidelity gate — this is what stops a plausible fabrication.
+  let fid;
+  try {
+    fid = await judgeFidelity(referenceCrop, chroma.png);
+  } catch (e) {
+    const c = classifyThrown(e);
+    if (c.infra) return { kind: "infra", code: c.code, message: c.message };
+    // Can't verify -> reject (false rejection is cheap).
+    return { kind: "fidelityfail", reason: `judge error: ${c.message}`, invented: [], failedRefPng };
+  }
+  if (fid.verdict === "fabricated" || fid.invented_elements.length > 0) {
     return {
-      kind: "fail",
-      code: qaCode(qa.failures),
-      message: qa.failures.join("; "),
+      kind: "fidelityfail",
+      reason: fid.reason || "fabricated",
+      invented: fid.invented_elements,
       failedRefPng,
     };
   }
-  return { kind: "pass", png: chroma.png };
+  return { kind: "accept", png: chroma.png, verdict: fid.verdict };
 }
 
-async function storeSuccess(
+async function storeCutout(
   supabase: Supabase,
   userId: string,
   job: JobRow,
   garmentId: string,
   png: Buffer,
+  source: "segmented" | "cutout",
   attempts: number,
   payload: Record<string, unknown>,
 ): Promise<void> {
@@ -127,7 +151,7 @@ async function storeSuccess(
     .upload(cutoutPath, png, { contentType: "image/png", upsert: true });
   await supabase
     .from("garments")
-    .update({ status: "cutout_ready", cutout_path: cutoutPath })
+    .update({ status: "cutout_ready", cutout_path: cutoutPath, image_source: source })
     .eq("id", garmentId);
   await supabase
     .from("processing_jobs")
@@ -135,10 +159,6 @@ async function storeSuccess(
     .eq("id", job.id);
 }
 
-/**
- * Infra failure: release the job back to 'queued' WITHOUT touching attempts or
- * the garment. It stays fully re-runnable once billing/quota recovers.
- */
 async function pauseJob(
   supabase: Supabase,
   job: JobRow,
@@ -173,7 +193,6 @@ async function handleJob(
     .eq("id", job.garment_id)
     .maybeSingle();
   const garment = g as GarmentRow | null;
-
   if (!garment) {
     await supabase
       .from("processing_jobs")
@@ -181,20 +200,14 @@ async function handleJob(
       .eq("id", job.id);
     return { ...base, outcome: "error", detail: "garment missing" };
   }
-
-  // Skip 'hold' garments — mark the job done with a note.
   if (garment.status === "hold") {
     await supabase
       .from("processing_jobs")
-      .update({
-        status: "done",
-        payload: { ...(job.payload ?? {}), note: "garment on hold — skipped" },
-      })
+      .update({ status: "done", payload: { ...(job.payload ?? {}), note: "garment on hold — skipped" } })
       .eq("id", job.id);
     return { ...base, outcome: "skipped", detail: "garment on hold" };
   }
 
-  // Load the original. A missing original is a genuine, non-retryable failure.
   let original: Buffer;
   try {
     const dl = await supabase.storage.from(BUCKET).download(garment.image_path);
@@ -209,12 +222,59 @@ async function handleJob(
         last_error: classifiedLastError("unknown", "could not load original image"),
       })
       .eq("id", job.id);
-    await supabase.from("garments").update({ status: "cutout_failed" }).eq("id", garment.id);
+    await supabase
+      .from("garments")
+      .update({ status: "cutout_failed", image_source: "photo" })
+      .eq("id", garment.id);
     return { ...base, outcome: "cutout_failed", code: "unknown", detail: "could not load original" };
   }
 
+  // ---- LADDER A: TRUE SEGMENTATION (real pixels, no invention) ----
+  try {
+    const crop = await cropOriginalBbox(original, garment.source_bbox);
+    const seg = await segmentBackground(crop);
+    if (seg.ok) {
+      const qa = runQaGates(seg.raw, seg.width, seg.height, null);
+      if (qa.pass) {
+        await storeCutout(supabase, userId, job, garment.id, seg.png, "segmented", 0, {
+          ...(job.payload ?? {}),
+          method: "segmented",
+        });
+        return { ...base, outcome: "segmented" };
+      }
+    }
+  } catch {
+    // segmentation is best-effort; fall through to the generation route
+  }
+
+  // ---- Evidence sufficiency (before spending a Gemini call) ----
   const reference = await buildReferenceCrop(original, garment.source_bbox);
-  const refImg = toRefImage(reference);
+  try {
+    const ev = await judgeEvidence(reference);
+    if (!ev.sufficient) {
+      await supabase
+        .from("garments")
+        .update({ status: "hold", image_source: "photo" })
+        .eq("id", garment.id);
+      await supabase
+        .from("processing_jobs")
+        .update({
+          status: "done",
+          payload: { ...(job.payload ?? {}), note: `insufficient_evidence: ${ev.reason}` },
+        })
+        .eq("id", job.id);
+      return { ...base, outcome: "hold", detail: `insufficient_evidence: ${ev.reason}` };
+    }
+  } catch (e) {
+    const c = classifyThrown(e);
+    if (c.infra) {
+      await pauseJob(supabase, job, c.code, c.message);
+      return { ...base, outcome: "paused", code: c.code, detail: c.message };
+    }
+    // non-infra judge error: proceed — the fidelity gate still guards output.
+  }
+
+  // ---- LADDER B: GEMINI RECONSTRUCTION (must pass the fidelity gate) ----
   const { prompt, chromaHex } = buildCutoutPrompt({
     category: garment.category,
     subtype: garment.subtype,
@@ -224,16 +284,20 @@ async function handleJob(
     observed: garment.attributes?.observed ?? {},
     unknowns: garment.unknowns ?? [],
   });
+  const refImg = toRefImage(reference);
   const payload: Record<string, unknown> = {
     ...(job.payload ?? {}),
+    method: "generated",
     chroma_hex: chromaHex,
     prompt,
   };
 
-  // Attempt 1
-  const a1 = await runOneAttempt(prompt, [refImg], chromaHex);
-  if (a1.kind === "pass") {
-    await storeSuccess(supabase, userId, job, garment.id, a1.png, 1, payload);
+  const a1 = await runGeneration(prompt, [refImg], chromaHex, reference);
+  if (a1.kind === "accept") {
+    await storeCutout(supabase, userId, job, garment.id, a1.png, "cutout", 1, {
+      ...payload,
+      fidelity: a1.verdict,
+    });
     return { ...base, outcome: "cutout_ready" };
   }
   if (a1.kind === "infra") {
@@ -241,37 +305,55 @@ async function handleJob(
     return { ...base, outcome: "paused", code: a1.code, detail: a1.message };
   }
 
-  // Corrective retry (attach failed output + reference crop)
-  const corrective = buildCorrectivePrompt(chromaHex, a1.message);
-  payload.first_failure = classifiedLastError(a1.code, a1.message);
+  // One corrective retry — name the specific problem to fix.
+  const corrective =
+    a1.kind === "fidelityfail"
+      ? buildCorrectivePrompt(
+          chromaHex,
+          `the invented elements not present in the source (${a1.invented.join(", ") || a1.reason}); reconstruct ONLY what the source photo shows`,
+        )
+      : buildCorrectivePrompt(chromaHex, a1.message);
+  payload.first_failure =
+    a1.kind === "fidelityfail" ? `fidelity: ${a1.reason}` : classifiedLastError(a1.code, a1.message);
   payload.corrective_prompt = corrective;
-  const retryImages = a1.failedRefPng
-    ? [refImg, toRefImage(a1.failedRefPng)]
-    : [refImg];
+  const retryImages = a1.failedRefPng ? [refImg, toRefImage(a1.failedRefPng)] : [refImg];
 
-  const a2 = await runOneAttempt(corrective, retryImages, chromaHex);
-  if (a2.kind === "pass") {
-    await storeSuccess(supabase, userId, job, garment.id, a2.png, 2, payload);
+  const a2 = await runGeneration(corrective, retryImages, chromaHex, reference);
+  if (a2.kind === "accept") {
+    await storeCutout(supabase, userId, job, garment.id, a2.png, "cutout", 2, {
+      ...payload,
+      fidelity: a2.verdict,
+    });
     return { ...base, outcome: "cutout_ready" };
   }
   if (a2.kind === "infra") {
-    // Infra on the retry: still must not burn — forgive attempt 1, re-queue.
     await pauseJob(supabase, job, a2.code, a2.message);
     return { ...base, outcome: "paused", code: a2.code, detail: a2.message };
   }
 
-  // Two genuine failures — honest terminal failure, no fabricated item.
-  payload.second_failure = classifiedLastError(a2.code, a2.message);
+  // ---- LADDER C: honest fallback (real photo), never a fabrication ----
+  if (a2.kind === "fidelityfail") {
+    const lastError = `fidelity: ${a2.reason}`;
+    await supabase
+      .from("processing_jobs")
+      .update({ status: "failed", attempts: 2, last_error: lastError, payload: { ...payload, second_failure: lastError } })
+      .eq("id", job.id);
+    await supabase
+      .from("garments")
+      .update({ status: "cutout_rejected", image_source: "photo" })
+      .eq("id", garment.id);
+    return { ...base, outcome: "cutout_rejected", detail: a2.reason };
+  }
+
+  const techError = classifiedLastError(a2.code, a2.message);
   await supabase
     .from("processing_jobs")
-    .update({
-      status: "failed",
-      attempts: 2,
-      last_error: classifiedLastError(a2.code, a2.message),
-      payload,
-    })
+    .update({ status: "failed", attempts: 2, last_error: techError, payload: { ...payload, second_failure: techError } })
     .eq("id", job.id);
-  await supabase.from("garments").update({ status: "cutout_failed" }).eq("id", garment.id);
+  await supabase
+    .from("garments")
+    .update({ status: "cutout_failed", image_source: "photo" })
+    .eq("id", garment.id);
   return { ...base, outcome: "cutout_failed", code: a2.code, detail: a2.message };
 }
 
@@ -280,30 +362,21 @@ export async function POST() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  // Atomic claim: queued -> running for up to MAX_JOBS of this user's jobs.
-  const { data: claimedRaw, error: claimError } = await supabase.rpc(
-    "claim_cutout_jobs",
-    { max_jobs: MAX_JOBS },
-  );
-  if (claimError) {
-    return NextResponse.json({ error: claimError.message }, { status: 500 });
-  }
+  const { data: claimedRaw, error: claimError } = await supabase.rpc("claim_cutout_jobs", {
+    max_jobs: MAX_JOBS,
+  });
+  if (claimError) return NextResponse.json({ error: claimError.message }, { status: 500 });
   const claimed = (claimedRaw ?? []) as JobRow[];
 
   const processed: JobResult[] = [];
   let paused: { code?: FailureCode; message?: string } | null = null;
-
   for (let i = 0; i < claimed.length; i++) {
     const result = await handleJob(supabase, user.id, claimed[i]);
     processed.push(result);
     if (result.outcome === "paused") {
       paused = { code: result.code, message: result.detail };
-      // Release the rest of the claimed batch back to 'queued' so nothing is
-      // stranded in 'running' — no point burning more calls on the same infra.
       const rest = claimed.slice(i + 1).map((j) => j.id);
       if (rest.length) {
         await supabase.from("processing_jobs").update({ status: "queued" }).in("id", rest);
@@ -326,11 +399,7 @@ export async function POST() {
     remaining: count ?? 0,
     paused: Boolean(paused),
     pause: paused
-      ? {
-          code: paused.code,
-          message: "Cutouts paused: Gemini quota/billing issue.",
-          detail: paused.message,
-        }
+      ? { code: paused.code, message: "Cutouts paused: Gemini quota/billing issue.", detail: paused.message }
       : null,
   });
 }

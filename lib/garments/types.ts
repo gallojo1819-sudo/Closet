@@ -16,6 +16,7 @@ export const GARMENT_STATUSES = [
   "tagged",
   "cutout_ready",
   "cutout_failed",
+  "cutout_rejected",
   "hold",
 ] as const;
 export type GarmentStatus = (typeof GARMENT_STATUSES)[number];
@@ -60,6 +61,10 @@ export interface GarmentRow {
   notes: string | null;
   thumb_path: string | null;
   cutout_path: string | null;
+  image_source: ImageSource;
   possible_duplicate_of: string | null;
   created_at: string;
 }
+
+export const IMAGE_SOURCES = ["segmented", "cutout", "photo", "official"] as const;
+export type ImageSource = (typeof IMAGE_SOURCES)[number];

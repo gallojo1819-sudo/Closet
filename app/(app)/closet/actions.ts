@@ -172,11 +172,13 @@ export async function mergeDuplicate(newId: string): Promise<ActionResult> {
 }
 
 /**
- * Re-queue every garment stranded at cutout_failed for the current user:
- * garment back to 'tagged', a fresh queued cutout job (attempts default to 0),
- * de-duped against any already queued/running job. RLS-scoped, no service key.
+ * Re-run the cutout ladder (segmentation-first) for every photo-only garment —
+ * cutout_failed and fidelity-rejected. Garment back to 'tagged', a fresh queued
+ * job (attempts default 0), de-duped against any live job. The worker tries
+ * segmentation before any Gemini call, so a re-shot clean photo takes the good
+ * path for free. RLS-scoped, no service key.
  */
-export async function retryAllFailedCutouts(): Promise<
+export async function rerunAsSegmentation(): Promise<
   ActionResult & { requeued?: number }
 > {
   const supabase = await createClient();
@@ -189,7 +191,7 @@ export async function retryAllFailedCutouts(): Promise<
     .from("garments")
     .select("id")
     .eq("user_id", user.id)
-    .eq("status", "cutout_failed");
+    .in("status", ["cutout_failed", "cutout_rejected"]);
   const failedIds = (failed ?? []).map((g) => g.id as string);
   if (failedIds.length === 0) {
     revalidatePath("/closet");

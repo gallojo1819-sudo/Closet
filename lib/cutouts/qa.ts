@@ -35,15 +35,17 @@ export function runQaGates(
   raw: Buffer,
   width: number,
   height: number,
-  keyHex: string,
+  // Chroma key of the generation route; pass null for segmentation (real
+  // pixels on an arbitrary background), which skips the chroma-edge gate.
+  keyHex: string | null,
 ): QaResult {
   const failures: string[] = [];
   const w = width;
   const h = height;
   const n = w * h;
-  const key = hexToRgb(keyHex);
-  const dominant = dominantChannels(key);
-  const nonKey = [0, 1, 2].filter((c) => !dominant.includes(c));
+  const key = keyHex ? hexToRgb(keyHex) : null;
+  const dominant = key ? dominantChannels(key) : [];
+  const nonKey = key ? [0, 1, 2].filter((c) => !dominant.includes(c)) : [];
   const alphaAt = (x: number, y: number) => raw[(y * w + x) * 4 + 3];
 
   let transparentCount = 0;
@@ -80,7 +82,7 @@ export function runQaGates(
         if (a <= A_TRANSPARENT) borderTransparent++;
       }
 
-      if (a > 0 && a < 255) {
+      if (key && a > 0 && a < 255) {
         if (isChromaLike([raw[i], raw[i + 1], raw[i + 2]], dominant, nonKey)) {
           chromaEdge++;
         }
@@ -131,9 +133,12 @@ export function runQaGates(
   }
 
   // 5. no chroma-colored pixels along partially transparent edges
-  const chromaTol = Math.max(20, Math.round(0.0005 * n));
-  if (chromaEdge > chromaTol) {
-    failures.push("chroma-colored pixels along transparent edges");
+  //    (generation route only — segmentation has no chroma key)
+  if (key) {
+    const chromaTol = Math.max(20, Math.round(0.0005 * n));
+    if (chromaEdge > chromaTol) {
+      failures.push("chroma-colored pixels along transparent edges");
+    }
   }
 
   return { pass: failures.length === 0, failures };

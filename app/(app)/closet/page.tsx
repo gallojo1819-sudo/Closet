@@ -4,7 +4,7 @@ import type { GarmentRow } from "@/lib/garments/types";
 
 const BUCKET = "garments";
 const GARMENT_COLUMNS =
-  "id,status,category,subtype,colors,pattern,material,brand,formality,warmth,seasons,notes,thumb_path,cutout_path,possible_duplicate_of,created_at";
+  "id,status,category,subtype,colors,pattern,material,brand,formality,warmth,seasons,notes,thumb_path,cutout_path,image_source,attributes,possible_duplicate_of,created_at";
 
 export default async function ClosetPage() {
   const supabase = await createClient();
@@ -13,7 +13,9 @@ export default async function ClosetPage() {
     .select(GARMENT_COLUMNS)
     .order("created_at", { ascending: false });
 
-  const rows = (data ?? []) as GarmentRow[];
+  const rows = (data ?? []) as (GarmentRow & {
+    attributes: { fidelity_checked?: boolean } | null;
+  })[];
 
   // Bucket is private — mint short-lived signed URLs for thumbs and (when
   // ready) cutouts.
@@ -41,21 +43,40 @@ export default async function ClosetPage() {
         : null,
   }));
 
-  // Pending cutout work drives the "Generate cutouts (N)" button.
+  // Pending cutout work drives "Generate cutouts (N)".
   const { count: pending } = await supabase
     .from("processing_jobs")
     .select("id", { count: "exact", head: true })
     .eq("kind", "cutout_generate")
     .in("status", ["queued", "running"]);
 
-  // Stranded failures drive the "Retry all failed cutouts (N)" button.
-  const failedCount = rows.filter((r) => r.status === "cutout_failed").length;
+  // Photo-only garments (failed/rejected) drive "Re-run as segmentation (N)".
+  const rerunCount = rows.filter(
+    (r) => r.status === "cutout_failed" || r.status === "cutout_rejected",
+  ).length;
+
+  // Generated cutouts never fidelity-checked drive "Re-verify existing (N)".
+  const unauditedCount = rows.filter(
+    (r) =>
+      r.status === "cutout_ready" &&
+      r.image_source === "cutout" &&
+      r.attributes?.fidelity_checked !== true,
+  ).length;
+
+  // Sourcing mix so Joe can see how the closet is actually sourced.
+  const sourcing = {
+    segmented: rows.filter((r) => r.image_source === "segmented").length,
+    cutout: rows.filter((r) => r.image_source === "cutout").length,
+    photo: rows.filter((r) => r.image_source === "photo").length,
+  };
 
   return (
     <ClosetView
       garments={garments}
       pendingCutouts={pending ?? 0}
-      failedCutouts={failedCount}
+      rerunCandidates={rerunCount}
+      unauditedCutouts={unauditedCount}
+      sourcing={sourcing}
     />
   );
 }
