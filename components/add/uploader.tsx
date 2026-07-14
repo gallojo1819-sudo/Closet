@@ -100,6 +100,9 @@ export function Uploader() {
   const [files, setFiles] = useState<FileState[]>([]);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [cutoutRunning, setCutoutRunning] = useState(false);
+  const [cutoutDone, setCutoutDone] = useState(0);
+  const [cutoutTotal, setCutoutTotal] = useState(0);
   const pickRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -126,6 +129,33 @@ export function Uploader() {
       list.map((file, i) => ingestFile(file, (p) => patch(initial[i].id, p))),
     );
     setBusy(false);
+
+    // Drain the cutout queue the upload just filled. Empty queue = clean no-op.
+    setCutoutRunning(true);
+    setCutoutDone(0);
+    setCutoutTotal(0);
+    let done = 0;
+    let total = 0;
+    for (let i = 0; i < 200; i++) {
+      let body: { processed?: unknown[]; remaining?: number } | null = null;
+      try {
+        const res = await fetch("/api/cutouts/process", { method: "POST" });
+        if (!res.ok) break;
+        body = await res.json();
+      } catch {
+        break;
+      }
+      const processedNow = body?.processed?.length ?? 0;
+      const remaining = body?.remaining ?? 0;
+      done += processedNow;
+      if (done + remaining > total) {
+        total = done + remaining;
+        setCutoutTotal(total);
+      }
+      setCutoutDone(done);
+      if (remaining === 0 || processedNow === 0) break;
+    }
+    setCutoutRunning(false);
   }, []);
 
   const doneCount = files
@@ -240,7 +270,15 @@ export function Uploader() {
         </ul>
       )}
 
-      {allSettled && !busy && (
+      {cutoutRunning && (
+        <div className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3 text-sm text-neutral-300">
+          <Loader2 className="size-4 animate-spin text-neutral-400" aria-hidden />
+          Generating cutouts… {cutoutDone}
+          {cutoutTotal > 0 ? ` of ${cutoutTotal}` : ""}
+        </div>
+      )}
+
+      {allSettled && !busy && !cutoutRunning && (
         <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3">
           <p className="text-sm text-neutral-300">
             {doneCount} {doneCount === 1 ? "garment" : "garments"} added.

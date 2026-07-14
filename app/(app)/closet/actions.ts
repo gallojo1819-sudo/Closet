@@ -63,29 +63,85 @@ export async function updateGarment(
   return { ok: true };
 }
 
-/** Best-effort removal of a garment's own thumbnail (the original may be shared). */
-async function removeThumb(
+/**
+ * Best-effort removal of a garment's own generated assets (thumbnail + cutout).
+ * The shared original is left in place — sibling garments from the same photo
+ * reference it.
+ */
+async function removeAssets(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  thumbPath: string | null,
+  paths: (string | null)[],
 ) {
-  if (thumbPath) {
-    await supabase.storage.from(BUCKET).remove([thumbPath]);
+  const real = paths.filter((p): p is string => Boolean(p));
+  if (real.length) {
+    await supabase.storage.from(BUCKET).remove(real);
   }
 }
 
-/** Delete a garment (with confirm in the UI). Removes its thumbnail too. */
+/** Delete a garment (with confirm in the UI). Removes its generated assets too. */
 export async function deleteGarment(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: row } = await supabase
     .from("garments")
-    .select("thumb_path")
+    .select("thumb_path, cutout_path")
     .eq("id", id)
     .maybeSingle();
 
   const { error } = await supabase.from("garments").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  await removeThumb(supabase, row?.thumb_path ?? null);
+  await removeAssets(supabase, [row?.thumb_path ?? null, row?.cutout_path ?? null]);
+  revalidatePath("/closet");
+  return { ok: true };
+}
+
+/**
+ * Re-queue a cutout job for a garment (also the retry path for cutout_failed).
+ * Resets the garment to 'tagged' so it reads as pending, and avoids stacking
+ * duplicate queued/running jobs.
+ */
+export async function regenerateCutout(garmentId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+
+  const { data: garment } = await supabase
+    .from("garments")
+    .select("status")
+    .eq("id", garmentId)
+    .maybeSingle();
+  if (!garment) return { ok: false, error: "Garment not found." };
+  if (garment.status === "hold") {
+    return { ok: false, error: "This garment is on hold and can't be cut out." };
+  }
+
+  // Don't stack duplicate work.
+  const { data: existing } = await supabase
+    .from("processing_jobs")
+    .select("id")
+    .eq("garment_id", garmentId)
+    .eq("kind", "cutout_generate")
+    .in("status", ["queued", "running"])
+    .limit(1);
+
+  await supabase
+    .from("garments")
+    .update({ status: "tagged" })
+    .eq("id", garmentId);
+
+  if (!existing || existing.length === 0) {
+    const { error } = await supabase.from("processing_jobs").insert({
+      user_id: user.id,
+      garment_id: garmentId,
+      kind: "cutout_generate",
+      status: "queued",
+      payload: { requeued: true },
+    });
+    if (error) return { ok: false, error: error.message };
+  }
+
   revalidatePath("/closet");
   return { ok: true };
 }
@@ -99,7 +155,7 @@ export async function mergeDuplicate(newId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: row } = await supabase
     .from("garments")
-    .select("thumb_path, possible_duplicate_of")
+    .select("thumb_path, cutout_path, possible_duplicate_of")
     .eq("id", newId)
     .maybeSingle();
 
@@ -110,7 +166,7 @@ export async function mergeDuplicate(newId: string): Promise<ActionResult> {
   const { error } = await supabase.from("garments").delete().eq("id", newId);
   if (error) return { ok: false, error: error.message };
 
-  await removeThumb(supabase, row.thumb_path ?? null);
+  await removeAssets(supabase, [row.thumb_path ?? null, row.cutout_path ?? null]);
   revalidatePath("/closet");
   return { ok: true };
 }

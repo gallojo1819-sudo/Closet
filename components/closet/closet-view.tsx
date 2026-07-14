@@ -1,9 +1,17 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Shirt, CopyCheck, X, Trash2 } from "lucide-react";
+import {
+  Shirt,
+  CopyCheck,
+  X,
+  Trash2,
+  Wand2,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,10 +26,14 @@ import {
   deleteGarment,
   mergeDuplicate,
   keepBoth,
+  regenerateCutout,
   type GarmentEdit,
 } from "@/app/(app)/closet/actions";
 
-export type EnrichedGarment = GarmentRow & { thumbUrl: string | null };
+export type EnrichedGarment = GarmentRow & {
+  thumbUrl: string | null;
+  cutoutUrl: string | null;
+};
 
 const CATEGORY_LABELS: Record<Category, string> = {
   top: "Tops",
@@ -53,6 +65,25 @@ function Thumb({ g, className }: { g: EnrichedGarment; className?: string }) {
   );
 }
 
+/** Ready cutout renders as a product shot on a light card; else the thumb. */
+function CardImage({ g }: { g: EnrichedGarment }) {
+  if (g.cutoutUrl) {
+    return (
+      <div className="relative h-full w-full bg-neutral-100">
+        <Image
+          src={g.cutoutUrl}
+          alt={g.subtype ?? g.category}
+          fill
+          sizes="(max-width: 448px) 45vw, 200px"
+          className="object-contain p-2"
+          unoptimized
+        />
+      </div>
+    );
+  }
+  return <Thumb g={g} />;
+}
+
 function GarmentCard({
   g,
   onOpen,
@@ -69,7 +100,12 @@ function GarmentCard({
       className="group flex flex-col overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50 text-left transition-colors hover:border-neutral-600"
     >
       <div className="relative aspect-square w-full">
-        <Thumb g={g} />
+        <CardImage g={g} />
+        {g.status === "cutout_failed" && (
+          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-[10px] font-medium text-red-950">
+            <AlertTriangle className="size-3" aria-hidden /> Cutout failed
+          </span>
+        )}
         {g.possible_duplicate_of && (
           <span
             role="button"
@@ -191,6 +227,18 @@ function EditSheet({
     });
   };
 
+  const regenerate = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await regenerateCutout(garment.id);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      onDone();
+    });
+  };
+
   return (
     <Overlay onClose={onClose}>
       <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
@@ -277,6 +325,32 @@ function EditSheet({
             className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
           />
         </Field>
+
+        {garment.status !== "hold" && (
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-neutral-200">Cutout</p>
+                <p className="truncate text-xs text-neutral-500">
+                  {garment.status === "cutout_ready"
+                    ? "Ready — regenerate to redo it."
+                    : garment.status === "cutout_failed"
+                      ? "Last attempt failed — try again."
+                      : "Not generated yet."}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={regenerate}
+                disabled={pending}
+              >
+                <Wand2 aria-hidden /> Regenerate
+              </Button>
+            </div>
+          </div>
+        )}
 
         {error && <p className="text-sm text-red-400">{error}</p>}
       </div>
@@ -445,10 +519,51 @@ function Overlay({
   );
 }
 
-export function ClosetView({ garments }: { garments: EnrichedGarment[] }) {
+export function ClosetView({
+  garments,
+  pendingCutouts,
+}: {
+  garments: EnrichedGarment[];
+  pendingCutouts: number;
+}) {
   const router = useRouter();
   const [editId, setEditId] = useState<string | null>(null);
   const [dupId, setDupId] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [runDone, setRunDone] = useState(0);
+  const [runTotal, setRunTotal] = useState(0);
+
+  // Drain the cutout queue by polling the worker until it reports empty.
+  const runCutouts = useCallback(async () => {
+    if (running) return;
+    setRunning(true);
+    setRunDone(0);
+    let total = Math.max(pendingCutouts, 1);
+    setRunTotal(total);
+    let done = 0;
+    for (let i = 0; i < 200; i++) {
+      let body: { processed?: unknown[]; remaining?: number } | null = null;
+      try {
+        const res = await fetch("/api/cutouts/process", { method: "POST" });
+        if (!res.ok) break;
+        body = await res.json();
+      } catch {
+        break;
+      }
+      const processedNow = body?.processed?.length ?? 0;
+      const remaining = body?.remaining ?? 0;
+      done += processedNow;
+      if (done + remaining > total) {
+        total = done + remaining;
+        setRunTotal(total);
+      }
+      setRunDone(done);
+      // Empty queue, or nothing moved (stuck) — stop.
+      if (remaining === 0 || processedNow === 0) break;
+    }
+    setRunning(false);
+    router.refresh();
+  }, [running, pendingCutouts, router]);
 
   const byId = useMemo(
     () => new Map(garments.map((g) => [g.id, g])),
@@ -483,6 +598,26 @@ export function ClosetView({ garments }: { garments: EnrichedGarment[] }) {
           {garments.length} {garments.length === 1 ? "item" : "items"}
         </span>
       </div>
+
+      {(pendingCutouts > 0 || running) && (
+        <Button
+          type="button"
+          onClick={runCutouts}
+          disabled={running}
+          className="w-full"
+        >
+          {running ? (
+            <>
+              <Loader2 className="animate-spin" aria-hidden /> Generating cutouts…{" "}
+              {runDone} of {runTotal}
+            </>
+          ) : (
+            <>
+              <Wand2 aria-hidden /> Generate cutouts ({pendingCutouts} pending)
+            </>
+          )}
+        </Button>
+      )}
 
       {garments.length === 0 && (
         <div className="rounded-2xl border border-dashed border-neutral-800 px-6 py-16 text-center">

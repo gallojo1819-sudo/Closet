@@ -59,6 +59,7 @@ export interface GarmentRow {
   seasons: string[];
   notes: string | null;
   thumb_path: string | null;
+  cutout_path: string | null;
   possible_duplicate_of: string | null;
   created_at: string;
 }
