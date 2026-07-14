@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   // Re-enable with explicit <Suspense> boundaries if partial prerender is
   // ever needed.
   cacheComponents: false,
+  // `sharp` is a native module; keep it out of the bundler so its prebuilt
+  // libvips binary loads correctly in the Node server runtime.
+  serverExternalPackages: ["sharp"],
 };
 
 export default nextConfig;
