@@ -4,7 +4,7 @@ import type { GarmentRow } from "@/lib/garments/types";
 
 const BUCKET = "garments";
 const GARMENT_COLUMNS =
-  "id,status,category,subtype,colors,pattern,material,brand,formality,warmth,seasons,notes,thumb_path,cutout_path,image_source,attributes,possible_duplicate_of,created_at";
+  "id,status,category,subtype,colors,pattern,material,brand,formality,warmth,seasons,notes,thumb_path,cutout_path,image_source,attributes,possible_duplicate_of,created_at,product_name,retailer,retailer_product_id,size,product_url,product_image_path,brand_verified";
 
 export default async function ClosetPage() {
   const supabase = await createClient();
@@ -14,15 +14,18 @@ export default async function ClosetPage() {
     .order("created_at", { ascending: false });
 
   const rows = (data ?? []) as (GarmentRow & {
-    attributes: { fidelity_checked?: boolean } | null;
+    attributes: { fidelity_checked?: boolean; resegment_tried?: boolean } | null;
   })[];
 
-  // Bucket is private — mint short-lived signed URLs for thumbs and (when
-  // ready) cutouts.
+  // Bucket is private — mint short-lived signed URLs for thumbs, cutouts (when
+  // ready), and official product images (when identified).
   const paths = new Set<string>();
   for (const r of rows) {
     if (r.thumb_path) paths.add(r.thumb_path);
     if (r.status === "cutout_ready" && r.cutout_path) paths.add(r.cutout_path);
+    if (r.image_source === "official" && r.product_image_path) {
+      paths.add(r.product_image_path);
+    }
   }
   const signedByPath = new Map<string, string>();
   if (paths.size) {
@@ -41,18 +44,24 @@ export default async function ClosetPage() {
       r.status === "cutout_ready" && r.cutout_path
         ? signedByPath.get(r.cutout_path) ?? null
         : null,
+    officialUrl:
+      r.image_source === "official" && r.product_image_path
+        ? signedByPath.get(r.product_image_path) ?? null
+        : null,
   }));
 
-  // Pending cutout work drives "Generate cutouts (N)".
+  // Pending cutout work drives "Resume AI previews (N)" (manual generation only).
   const { count: pending } = await supabase
     .from("processing_jobs")
     .select("id", { count: "exact", head: true })
     .eq("kind", "cutout_generate")
     .in("status", ["queued", "running"]);
 
-  // Photo-only garments (failed/rejected) drive "Re-run as segmentation (N)".
-  const rerunCount = rows.filter(
-    (r) => r.status === "cutout_failed" || r.status === "cutout_rejected",
+  // Photo/AI garments not yet re-scanned drive "Find real pixels (N)".
+  const resegmentCount = rows.filter(
+    (r) =>
+      (r.image_source === "photo" || r.image_source === "cutout") &&
+      r.attributes?.resegment_tried !== true,
   ).length;
 
   // Generated cutouts never fidelity-checked drive "Re-verify existing (N)".
@@ -63,18 +72,19 @@ export default async function ClosetPage() {
       r.attributes?.fidelity_checked !== true,
   ).length;
 
-  // Sourcing mix so Joe can see how the closet is actually sourced.
+  // Sourcing mix — how the closet is actually sourced, best to worst.
   const sourcing = {
+    official: rows.filter((r) => r.image_source === "official").length,
     segmented: rows.filter((r) => r.image_source === "segmented").length,
-    cutout: rows.filter((r) => r.image_source === "cutout").length,
     photo: rows.filter((r) => r.image_source === "photo").length,
+    cutout: rows.filter((r) => r.image_source === "cutout").length,
   };
 
   return (
     <ClosetView
       garments={garments}
       pendingCutouts={pending ?? 0}
-      rerunCandidates={rerunCount}
+      resegmentCandidates={resegmentCount}
       unauditedCutouts={unauditedCount}
       sourcing={sourcing}
     />

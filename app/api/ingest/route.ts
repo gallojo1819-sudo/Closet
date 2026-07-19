@@ -9,6 +9,7 @@ import {
   pickDuplicate,
   type DedupCandidate,
 } from "@/lib/garments/ingest";
+import { trySegment } from "@/lib/cutouts/autosegment";
 import type { VisionItem } from "@/lib/garments/types";
 
 // sharp + the Anthropic SDK need the Node runtime; the request is always dynamic.
@@ -197,22 +198,38 @@ export async function POST(request: NextRequest) {
         .eq("id", garmentId);
     }
 
-    // Queue cutout generation (B2 consumes this) for tagged garments only.
+    // Segmentation is now the default processing path (Round B4): try to strip a
+    // uniform background from the real photo, inline, for tagged garments. On
+    // success the garment displays its own segmented pixels; on failure it keeps
+    // its honest cropped photo (image_source stays 'photo'). Generation is NO
+    // longer auto-enqueued — it is an explicit, badged manual action.
+    let finalStatus = status;
     if (status === "tagged") {
-      await supabase.from("processing_jobs").insert({
-        user_id: user.id,
-        garment_id: garmentId,
-        kind: "cutout_generate",
-        status: "queued",
-        payload: { source_original: originalPath, bbox: item.bbox },
-      });
+      const png = await trySegment(uprightJpeg, item.bbox);
+      if (png) {
+        const cutoutPath = `${user.id}/cutouts/${garmentId}.png`;
+        const cutoutUpload = await supabase.storage
+          .from(BUCKET)
+          .upload(cutoutPath, png, { contentType: "image/png", upsert: true });
+        if (!cutoutUpload.error) {
+          await supabase
+            .from("garments")
+            .update({
+              status: "cutout_ready",
+              cutout_path: cutoutPath,
+              image_source: "segmented",
+            })
+            .eq("id", garmentId);
+          finalStatus = "cutout_ready";
+        }
+      }
     }
 
     created.push({
       id: garmentId,
       category: item.category,
       subtype: item.subtype,
-      status,
+      status: finalStatus,
       possible_duplicate_of: dupOf,
     });
   }

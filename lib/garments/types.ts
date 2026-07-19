@@ -64,6 +64,15 @@ export interface GarmentRow {
   image_source: ImageSource;
   possible_duplicate_of: string | null;
   created_at: string;
+  // Product identification (Round B4). Filled only when a garment is matched to
+  // a real manufacturer product; brand_verified gates the "verified" filter.
+  product_name: string | null;
+  retailer: string | null;
+  retailer_product_id: string | null;
+  size: string | null;
+  product_url: string | null;
+  product_image_path: string | null;
+  brand_verified: boolean;
 }
 
 export const IMAGE_SOURCES = ["segmented", "cutout", "photo", "official"] as const;

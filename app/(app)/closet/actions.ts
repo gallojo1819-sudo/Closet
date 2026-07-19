@@ -1,5 +1,6 @@
 "use server";
 
+import sharp from "sharp";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { CATEGORIES, type Category } from "@/lib/garments/types";
@@ -96,11 +97,14 @@ export async function deleteGarment(id: string): Promise<ActionResult> {
 }
 
 /**
- * Re-queue a cutout job for a garment (also the retry path for cutout_failed).
- * Resets the garment to 'tagged' so it reads as pending, and avoids stacking
- * duplicate queued/running jobs.
+ * Explicit, owner-initiated AI preview (Round B4). Generation is NO LONGER a
+ * silent display source: this is only reached from the clearly-labeled
+ * "Generate an AI preview — not a real photo" action on the detail page. It
+ * enqueues a cutout_generate job (the worker badges the result image_source
+ * 'cutout'); the caller drains /api/cutouts/process to run it. De-duped so we
+ * don't stack queued/running jobs.
  */
-export async function regenerateCutout(garmentId: string): Promise<ActionResult> {
+export async function generateAiPreview(garmentId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -114,7 +118,7 @@ export async function regenerateCutout(garmentId: string): Promise<ActionResult>
     .maybeSingle();
   if (!garment) return { ok: false, error: "Garment not found." };
   if (garment.status === "hold") {
-    return { ok: false, error: "This garment is on hold and can't be cut out." };
+    return { ok: false, error: "This garment is on hold and can't be previewed." };
   }
 
   // Don't stack duplicate work.
@@ -137,10 +141,105 @@ export async function regenerateCutout(garmentId: string): Promise<ActionResult>
       garment_id: garmentId,
       kind: "cutout_generate",
       status: "queued",
-      payload: { requeued: true },
+      payload: { requeued: true, ai_preview: true },
     });
     if (error) return { ok: false, error: error.message };
   }
+
+  revalidatePath("/closet");
+  return { ok: true };
+}
+
+export interface ApplyCandidate {
+  product_name: string;
+  brand: string | null;
+  retailer: string | null;
+  retailer_product_id: string | null;
+  size: string | null;
+  product_url: string | null;
+  image_url: string | null;
+}
+
+/**
+ * Apply a confirmed product match to a garment (Round B4). NOTHING is
+ * auto-applied — this runs only when the owner explicitly picks a candidate.
+ *
+ * The garment's display becomes the REAL official product image: we download it
+ * server-side into {user}/products/{garment_id}.jpg and set image_source
+ * 'official' + brand_verified. Any generated cutout is retired from display
+ * (image_source no longer points at it) but its file is left in place. If the
+ * official image can't be downloaded we apply nothing and say so — a verified
+ * badge without the real image would be dishonest.
+ */
+export async function applyProduct(
+  garmentId: string,
+  candidate: ApplyCandidate,
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not authenticated." };
+
+  if (!candidate.image_url) {
+    return {
+      ok: false,
+      error: "This match has no official image to download — pick another.",
+    };
+  }
+
+  // Confirm ownership before writing (belt-and-suspenders on top of RLS).
+  const { data: garment } = await supabase
+    .from("garments")
+    .select("id")
+    .eq("id", garmentId)
+    .maybeSingle();
+  if (!garment) return { ok: false, error: "Garment not found." };
+
+  // Download + normalize the official product image server-side.
+  let jpeg: Buffer;
+  try {
+    const res = await fetch(candidate.image_url, { redirect: "follow" });
+    if (!res.ok) throw new Error(`image fetch ${res.status}`);
+    const raw = Buffer.from(await res.arrayBuffer());
+    jpeg = await sharp(raw)
+      .rotate()
+      .resize(1200, 1200, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+  } catch (e) {
+    console.error("[applyProduct] image download failed", e);
+    return {
+      ok: false,
+      error: "Couldn't download that product image — try another candidate.",
+    };
+  }
+
+  const productPath = `${user.id}/products/${garmentId}.jpg`;
+  const upload = await supabase.storage
+    .from(BUCKET)
+    .upload(productPath, jpeg, { contentType: "image/jpeg", upsert: true });
+  if (upload.error) {
+    return { ok: false, error: "Couldn't save the product image. Please try again." };
+  }
+
+  const { error } = await supabase
+    .from("garments")
+    .update({
+      brand: cleanStr(candidate.brand),
+      product_name: cleanStr(candidate.product_name),
+      retailer: cleanStr(candidate.retailer),
+      retailer_product_id: cleanStr(candidate.retailer_product_id),
+      size: cleanStr(candidate.size),
+      product_url: cleanStr(candidate.product_url),
+      product_image_path: productPath,
+      brand_verified: true,
+      image_source: "official",
+      // An identified garment is a fully valid catalog item; lift it out of hold.
+      status: "tagged",
+    })
+    .eq("id", garmentId);
+  if (error) return { ok: false, error: error.message };
 
   revalidatePath("/closet");
   return { ok: true };
@@ -169,66 +268,6 @@ export async function mergeDuplicate(newId: string): Promise<ActionResult> {
   await removeAssets(supabase, [row.thumb_path ?? null, row.cutout_path ?? null]);
   revalidatePath("/closet");
   return { ok: true };
-}
-
-/**
- * Re-run the cutout ladder (segmentation-first) for every photo-only garment —
- * cutout_failed and fidelity-rejected. Garment back to 'tagged', a fresh queued
- * job (attempts default 0), de-duped against any live job. The worker tries
- * segmentation before any Gemini call, so a re-shot clean photo takes the good
- * path for free. RLS-scoped, no service key.
- */
-export async function rerunAsSegmentation(): Promise<
-  ActionResult & { requeued?: number }
-> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not authenticated." };
-
-  const { data: failed } = await supabase
-    .from("garments")
-    .select("id")
-    .eq("user_id", user.id)
-    .in("status", ["cutout_failed", "cutout_rejected"]);
-  const failedIds = (failed ?? []).map((g) => g.id as string);
-  if (failedIds.length === 0) {
-    revalidatePath("/closet");
-    return { ok: true, requeued: 0 };
-  }
-
-  // Don't stack duplicate work for garments that already have a live job.
-  const { data: live } = await supabase
-    .from("processing_jobs")
-    .select("garment_id")
-    .eq("user_id", user.id)
-    .eq("kind", "cutout_generate")
-    .in("status", ["queued", "running"])
-    .in("garment_id", failedIds);
-  const alreadyQueued = new Set((live ?? []).map((j) => j.garment_id as string));
-  const toQueue = failedIds.filter((id) => !alreadyQueued.has(id));
-
-  // All failed garments go back to 'tagged'; fresh jobs start at attempts 0.
-  await supabase
-    .from("garments")
-    .update({ status: "tagged" })
-    .in("id", failedIds);
-
-  if (toQueue.length) {
-    const rows = toQueue.map((garmentId) => ({
-      user_id: user.id,
-      garment_id: garmentId,
-      kind: "cutout_generate",
-      status: "queued",
-      payload: { requeued: true },
-    }));
-    const { error } = await supabase.from("processing_jobs").insert(rows);
-    if (error) return { ok: false, error: error.message };
-  }
-
-  revalidatePath("/closet");
-  return { ok: true, requeued: failedIds.length };
 }
 
 /** Keep both garments: clear the duplicate flag on the new row. */
