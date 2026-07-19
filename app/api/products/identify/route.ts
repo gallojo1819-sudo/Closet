@@ -49,11 +49,16 @@ export async function POST(request: NextRequest) {
   }
 
   // Load the garment's own attributes to ground the search (RLS scopes to owner).
-  const { data: g } = await supabase
+  const { data: g, error: garmentError } = await supabase
     .from("garments")
     .select("category,subtype,colors,pattern,material")
     .eq("id", garmentId)
     .maybeSingle();
+  if (garmentError) {
+    // A query failure is not "not found" — surface it as a real error.
+    console.error("[products/identify] garment lookup failed", garmentError);
+    return NextResponse.json({ error: "Couldn't load the garment." }, { status: 500 });
+  }
   if (!g) return NextResponse.json({ error: "Garment not found." }, { status: 404 });
 
   const signal: GarmentSignal = {

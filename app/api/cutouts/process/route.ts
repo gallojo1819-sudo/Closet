@@ -185,20 +185,26 @@ async function handleJob(
     return { ...base, outcome: "error", detail: "no garment_id" };
   }
 
-  const { data: g } = await supabase
+  const { data: g, error: garmentError } = await supabase
     .from("garments")
     .select(
       "id,status,category,subtype,colors,pattern,material,source_bbox,image_path,attributes,unknowns",
     )
     .eq("id", job.garment_id)
     .maybeSingle();
+  if (garmentError) console.error("[cutouts/process] garment fetch failed", garmentError);
   const garment = g as GarmentRow | null;
   if (!garment) {
+    // Distinguish an actual missing row from a query failure — don't record a
+    // transient DB error as "garment missing".
+    const detail = garmentError
+      ? `garment fetch failed: ${garmentError.message}`
+      : "garment missing";
     await supabase
       .from("processing_jobs")
-      .update({ status: "failed", last_error: classifiedLastError("unknown", "garment missing") })
+      .update({ status: "failed", last_error: classifiedLastError("unknown", detail) })
       .eq("id", job.id);
-    return { ...base, outcome: "error", detail: "garment missing" };
+    return { ...base, outcome: "error", detail };
   }
   if (garment.status === "hold") {
     await supabase
@@ -385,12 +391,14 @@ export async function POST() {
     }
   }
 
-  const { count } = await supabase
+  const { count, error: countError } = await supabase
     .from("processing_jobs")
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id)
     .eq("kind", "cutout_generate")
     .eq("status", "queued");
+  // Non-fatal (the client just sees a stale remaining count), but don't hide it.
+  if (countError) console.error("[cutouts/process] remaining count failed", countError);
 
   return NextResponse.json({
     ok: true,

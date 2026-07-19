@@ -6,12 +6,35 @@ const BUCKET = "garments";
 const GARMENT_COLUMNS =
   "id,status,category,subtype,colors,pattern,material,brand,formality,warmth,seasons,notes,thumb_path,cutout_path,image_source,attributes,possible_duplicate_of,created_at,product_name,retailer,retailer_product_id,size,product_url,product_image_path,brand_verified";
 
+// A visible failure state — never render an empty grid when the query actually
+// errored (that masked a pending migration for hours). Surfaces the real message.
+function ClosetError({ message }: { message: string }) {
+  return (
+    <div className="flex min-h-svh flex-col items-center justify-center bg-cream px-6 text-center font-ui text-neutral-900">
+      <p className="font-display text-2xl leading-tight text-neutral-800">
+        Couldn’t load your closet
+      </p>
+      <p className="mt-3 max-w-md font-ui text-sm text-neutral-600">{message}</p>
+      <p className="mt-2 max-w-md font-ui text-xs text-neutral-400">
+        This is a load error, not an empty wardrobe. If it persists, a database
+        migration may be pending.
+      </p>
+    </div>
+  );
+}
+
 export default async function ClosetPage() {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("garments")
     .select(GARMENT_COLUMNS)
     .order("created_at", { ascending: false });
+
+  // A failed query must NOT fall through to an empty grid — surface it.
+  if (error) {
+    console.error("[closet] garments query failed", error);
+    return <ClosetError message={error.message} />;
+  }
 
   const rows = (data ?? []) as (GarmentRow & {
     attributes: { fidelity_checked?: boolean; resegment_tried?: boolean } | null;
@@ -29,9 +52,12 @@ export default async function ClosetPage() {
   }
   const signedByPath = new Map<string, string>();
   if (paths.size) {
-    const { data: signed } = await supabase.storage
+    const { data: signed, error: signError } = await supabase.storage
       .from(BUCKET)
       .createSignedUrls([...paths], 60 * 60);
+    // Non-fatal (garments still render with a placeholder), but a signing failure
+    // must not be silent — it would otherwise look like every image is missing.
+    if (signError) console.error("[closet] createSignedUrls failed", signError);
     signed?.forEach((s) => {
       if (s.path && s.signedUrl) signedByPath.set(s.path, s.signedUrl);
     });
@@ -51,11 +77,12 @@ export default async function ClosetPage() {
   }));
 
   // Pending cutout work drives "Resume AI previews (N)" (manual generation only).
-  const { count: pending } = await supabase
+  const { count: pending, error: pendingError } = await supabase
     .from("processing_jobs")
     .select("id", { count: "exact", head: true })
     .eq("kind", "cutout_generate")
     .in("status", ["queued", "running"]);
+  if (pendingError) console.error("[closet] pending jobs count failed", pendingError);
 
   // Photo/AI garments not yet re-scanned drive "Find real pixels (N)".
   const resegmentCount = rows.filter(

@@ -32,12 +32,17 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   // Unaudited = a generated cutout that's currently displayed and not yet checked.
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("garments")
     .select("id,image_path,cutout_path,source_bbox,attributes")
     .eq("user_id", user.id)
     .eq("status", "cutout_ready")
     .eq("image_source", "cutout");
+  if (error) {
+    // Surface — never report "0 remaining, done" when the query actually failed.
+    console.error("[cutouts/reverify] garments query failed", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   const rows = (data ?? []) as Row[];
   const unaudited = rows.filter((r) => r.attributes?.fidelity_checked !== true);
 

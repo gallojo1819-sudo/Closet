@@ -84,12 +84,15 @@ export async function POST(request: NextRequest) {
   }
 
   // Cache lookup is scoped to this user (image_hash + user_id).
-  const { data: cached } = await supabase
+  const { data: cached, error: cacheError } = await supabase
     .from("enrichment_cache")
     .select("raw_response")
     .eq("image_hash", hash)
     .eq("user_id", user.id)
     .maybeSingle();
+  // Non-fatal (we fall through to a fresh vision run), but a cache-read failure
+  // must not be silent — it would look like every upload re-pays for vision.
+  if (cacheError) console.error("[ingest] cache lookup failed", cacheError);
 
   let items: VisionItem[];
   let cacheHit = false;
@@ -181,12 +184,14 @@ export async function POST(request: NextRequest) {
 
     // Conservative duplicate flag: compare against the user's existing garments
     // of the same category (everything already in the DB, excluding this row).
-    const { data: candidates } = await supabase
+    const { data: candidates, error: candidatesError } = await supabase
       .from("garments")
       .select("id, colors, subtype, created_at")
       .eq("user_id", user.id)
       .eq("category", item.category)
       .neq("id", garmentId);
+    // Best-effort (missing the flag is harmless), but don't hide a query failure.
+    if (candidatesError) console.error("[ingest] dedup candidates query failed", candidatesError);
     const dupOf = pickDuplicate(
       { colors: item.colors, subtype: item.subtype },
       (candidates ?? []) as DedupCandidate[],

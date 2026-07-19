@@ -82,11 +82,14 @@ async function removeAssets(
 /** Delete a garment (with confirm in the UI). Removes its generated assets too. */
 export async function deleteGarment(id: string): Promise<ActionResult> {
   const supabase = await createClient();
-  const { data: row } = await supabase
+  const { data: row, error: rowError } = await supabase
     .from("garments")
     .select("thumb_path, cutout_path")
     .eq("id", id)
     .maybeSingle();
+  // Non-fatal (the delete still proceeds; only asset cleanup may be skipped),
+  // but don't hide a lookup failure.
+  if (rowError) console.error("[deleteGarment] asset-path lookup failed", rowError);
 
   const { error } = await supabase.from("garments").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -111,24 +114,30 @@ export async function generateAiPreview(garmentId: string): Promise<ActionResult
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not authenticated." };
 
-  const { data: garment } = await supabase
+  const { data: garment, error: garmentError } = await supabase
     .from("garments")
     .select("status")
     .eq("id", garmentId)
     .maybeSingle();
+  if (garmentError) {
+    console.error("[generateAiPreview] garment lookup failed", garmentError);
+    return { ok: false, error: "Couldn't load the garment. Please try again." };
+  }
   if (!garment) return { ok: false, error: "Garment not found." };
   if (garment.status === "hold") {
     return { ok: false, error: "This garment is on hold and can't be previewed." };
   }
 
   // Don't stack duplicate work.
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("processing_jobs")
     .select("id")
     .eq("garment_id", garmentId)
     .eq("kind", "cutout_generate")
     .in("status", ["queued", "running"])
     .limit(1);
+  // Best-effort (worst case we enqueue a duplicate job), but don't hide it.
+  if (existingError) console.error("[generateAiPreview] existing-job check failed", existingError);
 
   await supabase
     .from("garments")
@@ -189,11 +198,15 @@ export async function applyProduct(
   }
 
   // Confirm ownership before writing (belt-and-suspenders on top of RLS).
-  const { data: garment } = await supabase
+  const { data: garment, error: garmentError } = await supabase
     .from("garments")
     .select("id")
     .eq("id", garmentId)
     .maybeSingle();
+  if (garmentError) {
+    console.error("[applyProduct] garment lookup failed", garmentError);
+    return { ok: false, error: "Couldn't load the garment. Please try again." };
+  }
   if (!garment) return { ok: false, error: "Garment not found." };
 
   // Download + normalize the official product image server-side.
@@ -252,11 +265,15 @@ export async function applyProduct(
  */
 export async function mergeDuplicate(newId: string): Promise<ActionResult> {
   const supabase = await createClient();
-  const { data: row } = await supabase
+  const { data: row, error: rowError } = await supabase
     .from("garments")
     .select("thumb_path, cutout_path, possible_duplicate_of")
     .eq("id", newId)
     .maybeSingle();
+  if (rowError) {
+    console.error("[mergeDuplicate] garment lookup failed", rowError);
+    return { ok: false, error: "Couldn't load the garment. Please try again." };
+  }
 
   if (!row?.possible_duplicate_of) {
     return { ok: false, error: "No duplicate target to merge into." };

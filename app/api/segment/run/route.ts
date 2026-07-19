@@ -34,11 +34,16 @@ export async function POST() {
   // Candidates: garments whose display is a plain photo or an AI cutout — the two
   // sources we'd upgrade to real segmented pixels. 'official' and 'segmented' are
   // already as good or better and are left alone.
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("garments")
     .select("id,image_path,cutout_path,source_bbox,attributes")
     .eq("user_id", user.id)
     .in("image_source", ["photo", "cutout"]);
+  if (error) {
+    // Surface — never report "0 remaining, done" when the query actually failed.
+    console.error("[segment/run] garments query failed", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   const rows = (data ?? []) as Row[];
   const untried = rows.filter((r) => r.attributes?.resegment_tried !== true);
 
