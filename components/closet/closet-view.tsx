@@ -55,6 +55,7 @@ interface Candidate {
   image_url: string | null;
   retailer_product_id: string | null;
   match_reason: string;
+  image_note: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -314,6 +315,7 @@ function IdentifyPanel({
   const [url, setUrl] = useState("");
   const [tagNote, setTagNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [slow, setSlow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [applyingIdx, setApplyingIdx] = useState<number | null>(null);
@@ -359,6 +361,13 @@ function IdentifyPanel({
     setError(null);
     setCandidates(null);
     setLoading(true);
+    setSlow(false);
+    // Two-stage lookup can run 1–2 min; show a "still searching" state after a
+    // few seconds and hard-abort well past the server's 240s budget so a stuck
+    // request never spins forever.
+    const controller = new AbortController();
+    const slowTimer = setTimeout(() => setSlow(true), 6000);
+    const abortTimer = setTimeout(() => controller.abort(), 255000);
     try {
       const res = await fetch("/api/products/identify", {
         method: "POST",
@@ -371,6 +380,7 @@ function IdentifyPanel({
           name,
           url,
         }),
+        signal: controller.signal,
       });
       const body = await res.json();
       if (!res.ok) {
@@ -378,10 +388,17 @@ function IdentifyPanel({
         return;
       }
       setCandidates((body.candidates ?? []) as Candidate[]);
-    } catch {
-      setError("Lookup failed. Please try again.");
+    } catch (e) {
+      setError(
+        (e as Error)?.name === "AbortError"
+          ? "Search timed out. Try again, or paste the product URL."
+          : "Lookup failed. Please try again.",
+      );
     } finally {
+      clearTimeout(slowTimer);
+      clearTimeout(abortTimer);
       setLoading(false);
+      setSlow(false);
     }
   }, [garment.id, method, brand, reference, name, url]);
 
@@ -541,6 +558,12 @@ function IdentifyPanel({
           <Loader2 className="size-3.5 animate-spin" aria-hidden /> Reading tag…
         </p>
       )}
+      {loading && slow && method !== "caretag" && (
+        <p className="font-ui text-xs text-neutral-500">
+          Still searching — this can take up to a minute or two. It searches for
+          the product, then fetches the real image from the page.
+        </p>
+      )}
 
       {error && <p className="font-ui text-sm text-red-600">{error}</p>}
 
@@ -586,11 +609,18 @@ function IdentifyPanel({
                     {c.match_reason}
                   </p>
                 )}
+                {!c.image_url && c.image_note && (
+                  // Never dropped — shown so it's clear why "Use this" is disabled.
+                  <p className="mt-0.5 font-ui text-[11px] text-amber-700">
+                    No usable image — {c.image_note}
+                  </p>
+                )}
                 <div className="mt-1.5 flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => apply(c, i)}
                     disabled={applyingIdx !== null || !c.image_url}
+                    title={!c.image_url ? "No official image found for this candidate" : undefined}
                     className="inline-flex items-center gap-1 rounded-full bg-neutral-900 px-3 py-1 font-ui text-[11px] uppercase tracking-wide text-cream hover:bg-neutral-800 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900"
                   >
                     {applyingIdx === i ? (

@@ -13,7 +13,9 @@ import {
 // each candidate's match_reason. Care-tag reading is a separate route (multipart).
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Two-stage lookup (web_search + per-page web_fetch) can legitimately run 1–2 min;
+// the lib enforces a 240s internal budget, so 300 leaves headroom to fail cleanly.
+export const maxDuration = 300;
 
 interface Body {
   garmentId?: string;
@@ -69,6 +71,11 @@ export async function POST(request: NextRequest) {
     material: (g.material as string | null) ?? null,
   };
 
+  console.log(
+    `[identify][DIAG] route POST — method=${method}, garmentId=${garmentId}, ` +
+      `signal={category:${signal.category}, subtype:${signal.subtype}, colors:[${signal.colors.join("/")}], pattern:${signal.pattern}}`,
+  );
+  const routeT0 = Date.now();
   try {
     let candidates: ProductCandidate[] = [];
     if (method === "reference") {
@@ -77,7 +84,9 @@ export async function POST(request: NextRequest) {
       if (!brand && !reference) {
         return NextResponse.json({ error: "Enter a brand and/or reference number." }, { status: 400 });
       }
-      candidates = await searchProducts(`${brand} ${reference}`.trim(), signal);
+      const q = `${brand} ${reference}`.trim();
+      console.log(`[identify][DIAG] reference method — built query=${JSON.stringify(q)} (brand=${JSON.stringify(brand)}, reference=${JSON.stringify(reference)})`);
+      candidates = await searchProducts(q, signal);
     } else if (method === "name") {
       const brand = clean(body.brand);
       const name = clean(body.name);
@@ -95,9 +104,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unknown lookup method." }, { status: 400 });
     }
 
+    console.log(
+      `[identify][DIAG] route DONE in ${Date.now() - routeT0}ms — returning ${candidates.length} candidate(s)`,
+    );
     return NextResponse.json({ ok: true, candidates });
   } catch (e) {
-    console.error("[products/identify] lookup failed", e);
+    const msg = e instanceof Error ? e.message : "";
+    console.error(
+      `[products/identify][DIAG] lookup THREW after ${Date.now() - routeT0}ms —`,
+      e,
+    );
+    // Surface a real timeout distinctly (consistent with the error-audit pass).
+    if (/timed out/i.test(msg)) {
+      return NextResponse.json({ error: msg }, { status: 504 });
+    }
     return NextResponse.json(
       { error: "Product lookup failed. Please try again." },
       { status: 502 },
