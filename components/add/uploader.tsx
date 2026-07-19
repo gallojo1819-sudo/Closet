@@ -196,17 +196,19 @@ export function Uploader() {
         }}
         onClick={() => pickRef.current?.click()}
         className={cn(
-          "flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-12 text-center transition-colors",
+          "flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed px-6 py-16 text-center transition-colors motion-reduce:transition-none",
           dragging
             ? "border-neutral-400 bg-neutral-900"
             : "border-neutral-700 bg-neutral-900/40 hover:border-neutral-500",
         )}
       >
-        <UploadCloud className="mb-3 size-8 text-neutral-400" aria-hidden />
-        <p className="text-sm font-medium text-neutral-200">
+        <span className="mb-4 inline-flex size-12 items-center justify-center rounded-full bg-neutral-800/70 text-neutral-300">
+          <UploadCloud className="size-6" aria-hidden />
+        </span>
+        <p className="font-ui text-[15px] font-medium text-neutral-200">
           Tap to choose photos, or drop them here
         </p>
-        <p className="mt-1 text-xs text-neutral-500">
+        <p className="mt-1.5 font-ui text-[13px] text-neutral-500">
           Add several at once — one item or a whole outfit per photo.
         </p>
       </div>

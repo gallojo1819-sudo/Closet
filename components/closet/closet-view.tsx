@@ -2,12 +2,14 @@
 
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Shirt,
   CopyCheck,
   X,
   Trash2,
+  Plus,
   Loader2,
   AlertTriangle,
   ShieldCheck,
@@ -118,27 +120,39 @@ function pickDisplay(
   return null;
 }
 
+// One 4:5 frame for every source — fixed footprint (zero layout shift), cream
+// dissolve fill, and a soft "seat" (hairline inset ring + a low bottom shadow)
+// so a full-bleed photo and a floating cutout sit at the same visual weight.
+const FRAME_CLASS =
+  "relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-cream shadow-[inset_0_0_0_1px_rgba(26,26,26,0.05),0_3px_10px_-2px_rgba(26,26,26,0.08)]";
+
 // ---------------------------------------------------------------------------
-// Catalog cell image
+// Catalog cell image — fills the 4:5 frame it's placed in.
+//   photo  → object-cover (honest, edge-to-edge) + a photos-only calming scrim
+//   else   → object-contain at ~88% (floats on cream), ragged edges grounded
 // ---------------------------------------------------------------------------
 function GarmentImage({ g }: { g: EnrichedGarment }) {
   const display = pickDisplay(g);
   if (!display) {
     return (
-      <div className="flex h-full w-full items-center justify-center rounded-2xl bg-black/[0.04]">
-        <Shirt className="size-6 text-neutral-400" aria-hidden />
+      <div className="flex h-full w-full items-center justify-center bg-black/[0.035]">
+        <Shirt className="size-7 text-neutral-400" aria-hidden />
       </div>
     );
   }
+  const isPhoto = g.image_source === "photo";
   return (
-    <Image
-      src={display.url}
-      alt={g.product_name ?? g.subtype ?? g.category}
-      fill
-      sizes="(max-width: 640px) 45vw, 200px"
-      className={display.float ? "object-contain p-2" : "rounded-2xl object-cover"}
-      unoptimized
-    />
+    <>
+      <Image
+        src={display.url}
+        alt={g.product_name ?? g.subtype ?? g.category}
+        fill
+        sizes="(max-width: 640px) 45vw, 200px"
+        className={display.float ? "object-contain p-[6%]" : "object-cover"}
+        unoptimized
+      />
+      {isPhoto && <div className="photo-scrim absolute inset-0" aria-hidden />}
+    </>
   );
 }
 
@@ -174,26 +188,29 @@ function GarmentCell({
   g,
   onOpen,
   onDuplicate,
+  index = 0,
 }: {
   g: EnrichedGarment;
   onOpen: () => void;
   onDuplicate: () => void;
+  index?: number;
 }) {
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group flex flex-col rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+      style={{ animationDelay: `${Math.min(index, 10) * 30}ms` }}
+      className="reveal-up group flex flex-col rounded-2xl text-left transition-transform duration-100 active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
     >
-      <div className="relative aspect-square w-full">
-        <div className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100">
+      <div className={FRAME_CLASS}>
+        <div className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100">
           <GarmentImage g={g} />
         </div>
         {g.image_source === "cutout" && (
-          <AiBadge className="absolute right-1.5 top-1.5" />
+          <AiBadge className="absolute right-2 top-2" />
         )}
         {g.image_source === "official" && (
-          <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-neutral-800 backdrop-blur">
+          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-neutral-800 shadow-[inset_0_0_0_1px_rgba(26,26,26,0.08)] backdrop-blur">
             <BadgeCheck className="size-2.5" aria-hidden /> Verified
           </span>
         )}
@@ -212,17 +229,17 @@ function GarmentCell({
                 onDuplicate();
               }
             }}
-            className="absolute left-1.5 top-1.5 inline-flex cursor-pointer items-center gap-1 rounded-full bg-neutral-900 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900"
+            className="absolute left-2 top-2 inline-flex cursor-pointer items-center gap-1 rounded-full bg-neutral-900 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900"
           >
             <CopyCheck className="size-2.5" aria-hidden /> Dup
           </span>
         )}
       </div>
-      <div className="px-1 pt-2">
-        <p className="truncate font-ui text-[13px] text-neutral-800">
+      <div className="px-0.5 pt-3">
+        <p className="truncate font-display text-[20px] font-medium leading-[1.15] text-neutral-900">
           {g.product_name ?? g.subtype ?? CATEGORY_LABELS[g.category]}
         </p>
-        <p className="truncate font-ui text-[10px] uppercase tracking-[0.12em] text-neutral-400">
+        <p className="truncate pt-1 font-ui text-[11px] uppercase tracking-[0.12em] text-neutral-400">
           {cellSubtitle(g)}
         </p>
       </div>
@@ -242,11 +259,11 @@ function Overlay({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[60] flex justify-center bg-black/40 sm:items-center sm:p-6"
+      className="overlay-in fixed inset-0 z-[60] flex justify-center bg-black/40 sm:items-center sm:p-6"
       onClick={onClose}
     >
       <div
-        className="flex max-h-svh w-full flex-col overflow-y-auto bg-cream text-neutral-900 sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl"
+        className="panel-in flex max-h-svh w-full flex-col overflow-y-auto bg-cream text-neutral-900 sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -707,9 +724,9 @@ function ProductDetail({
 
   return (
     <Overlay onClose={onClose}>
-      {/* Product hero */}
+      {/* Product hero — same 4:5 frame + treatment as the grid, one system */}
       <div className="relative">
-        <div className="relative aspect-square w-full bg-cream">
+        <div className="relative aspect-[4/5] w-full overflow-hidden bg-cream">
           <GarmentImage g={garment} />
           {garment.image_source === "cutout" && (
             <AiBadge className="absolute left-3 top-3" />
@@ -956,14 +973,14 @@ function DedupModal({
       <div className="grid grid-cols-2 gap-4 px-5 py-5">
         <div className="space-y-2">
           <p className="font-ui text-[10px] uppercase tracking-[0.14em] text-neutral-400">New</p>
-          <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-white/50">
+          <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-cream shadow-[inset_0_0_0_1px_rgba(26,26,26,0.05)]">
             <GarmentImage g={incoming} />
           </div>
           <DupAttrs g={incoming} />
         </div>
         <div className="space-y-2">
           <p className="font-ui text-[10px] uppercase tracking-[0.14em] text-neutral-400">Existing</p>
-          <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-white/50">
+          <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-cream shadow-[inset_0_0_0_1px_rgba(26,26,26,0.05)]">
             {existing ? (
               <GarmentImage g={existing} />
             ) : (
@@ -1300,20 +1317,37 @@ export function ClosetView({
             </p>
           </div>
         ) : shown.length === 0 ? (
-          <div className="py-24 text-center">
-            <Shirt className="mx-auto mb-3 size-8 text-neutral-400" aria-hidden />
-            <p className="font-ui text-sm text-neutral-500">
-              {main.length === 0
-                ? "Your wardrobe is empty. Add a few photos to get started."
-                : "Nothing matches these filters yet."}
-            </p>
-          </div>
+          main.length === 0 ? (
+            <div className="flex flex-col items-center px-6 py-28 text-center">
+              <p className="font-display text-2xl leading-tight text-neutral-800">
+                Your closet is empty
+              </p>
+              <p className="mt-2 max-w-xs font-ui text-sm text-neutral-500">
+                Add a few photos and they’ll appear here as a catalog — one clean
+                piece per card.
+              </p>
+              <Link
+                href="/add"
+                className="mt-7 inline-flex items-center gap-2 rounded-full bg-neutral-900 px-6 py-3 font-ui text-sm text-cream transition-transform duration-100 hover:bg-neutral-800 active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+              >
+                <Plus className="size-4" aria-hidden /> Add garments
+              </Link>
+            </div>
+          ) : (
+            <div className="py-24 text-center">
+              <Shirt className="mx-auto mb-3 size-8 text-neutral-400" aria-hidden />
+              <p className="font-ui text-sm text-neutral-500">
+                Nothing matches these filters yet.
+              </p>
+            </div>
+          )
         ) : (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
-            {shown.map((g) => (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-x-6 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+            {shown.map((g, i) => (
               <GarmentCell
                 key={g.id}
                 g={g}
+                index={i}
                 onOpen={() => setEditId(g.id)}
                 onDuplicate={() => setDupId(g.id)}
               />
@@ -1327,11 +1361,12 @@ export function ClosetView({
             <summary className="cursor-pointer font-ui text-[11px] uppercase tracking-[0.16em] text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900">
               Needs review ({hold.length})
             </summary>
-            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
-              {hold.map((g) => (
+            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 sm:gap-x-6 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+              {hold.map((g, i) => (
                 <GarmentCell
                   key={g.id}
                   g={g}
+                  index={i}
                   onOpen={() => setEditId(g.id)}
                   onDuplicate={() => setDupId(g.id)}
                 />
