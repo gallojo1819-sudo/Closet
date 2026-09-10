@@ -3,18 +3,21 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { askStylist } from "@/lib/ai";
+import { daysIdle, HOUSE_LABEL, housesOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 
 export const Route = createFileRoute("/stylist")({ component: StylistPage });
 
 const PROMPTS = [
-  "Dinner in the West Village, 62°",
-  "Client meeting, uptown",
-  "Saturday with no plans",
+  "Client meeting, uptown, afternoon",
+  "Dinner in the West Village",
+  "Saturday, nothing planned",
+  "Wear something I keep skipping",
 ];
 
 function StylistPage() {
   const garmentsAll = useCloset((s) => s.garments);
+  const drop = useCloset((s) => s.drop);
   const garments = useMemo(
     () => garmentsAll.filter((g) => !g.archived),
     [garmentsAll],
@@ -36,12 +39,28 @@ function StylistPage() {
     setText("");
     setBusy(true);
     const closet = forStylist
-      .map(
-        (g) =>
-          `- ${g.name} [${g.id}] (${g.category}/${g.subtype || "—"}, ${g.colors.join(" ")}, ${g.material})${g.demo ? " SAMPLE" : ""}`,
-      )
+      .map((g) => {
+        const idle = daysIdle(g);
+        const last = idle >= 120 ? "never worn" : `${idle}d idle`;
+        const house = housesOf(g).map((h) => HOUSE_LABEL[h]).join("/");
+        return `- ${g.name} [${g.id}] (${g.category}/${g.subtype || "—"}, ${g.colors.join(" ")}, ${g.material}, ${house}, ${last})${g.demo ? " SAMPLE" : ""}`;
+      })
       .join("\n");
-    const res = await askStylist({ data: { prompt: q, closet } });
+    const sitting = forStylist
+      .filter((g) => daysIdle(g) >= 21)
+      .sort((a, b) => daysIdle(b) - daysIdle(a))
+      .slice(0, 6)
+      .map((g) => `${g.name} (${daysIdle(g)}d)`)
+      .join(", ");
+    const context = [
+      drop?.weather ? `NYC ${drop.weather.f}° ${drop.weather.label}` : "NYC",
+      drop?.occasion ?? "",
+      drop?.moment ?? "",
+      sitting ? `Sitting idle: ${sitting}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const res = await askStylist({ data: { prompt: q, closet, context } });
     pushMessage({
       role: "stylist",
       text: res.ok ? res.text : res.error,
@@ -53,16 +72,17 @@ function StylistPage() {
     <div className="mx-auto max-w-2xl px-4 md:px-6 py-8 md:py-12 rise">
       <p className="micro text-champagne/60">The atelier</p>
       <h1 className="mt-2 font-editorial text-4xl md:text-5xl tracking-tight text-champagne">
-        Dress from what you own.
+        Ralph. Italian. Street.
       </h1>
       <p className="mt-3 text-champagne/70 text-sm">
-        The stylist can only see your closet. It will not invent a garment.
+        Mixed from your closet. Never a garment you don’t own.
       </p>
 
       <div className="mt-8 space-y-4 min-h-64">
         {messages.length === 0 && (
           <p className="text-champagne/50 text-sm">
-            Name an occasion. You’ll get a look built from the pieces above.
+            Name an occasion, a time, a constraint. The look will come from the
+            pieces above — especially the ones sitting.
           </p>
         )}
         {messages.map((m) => (
@@ -108,7 +128,7 @@ function StylistPage() {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="An occasion, a constraint, a feeling…"
+          placeholder="Occasion, time, weather, a feeling…"
           className="h-12 flex-1 border border-champagne/25 bg-night-elev px-3 text-sm text-champagne placeholder:text-champagne/40"
         />
         <Button variant="night" type="submit" disabled={busy}>

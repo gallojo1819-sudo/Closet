@@ -33,6 +33,7 @@ export const SEED_GARMENTS: Garment[] = [
     imageSource: "official",
     matteQuality: "clean",
     brand: "closet",
+    wornOn: ["2026-09-08"],
   }),
   g({
     id: "g_polo",
@@ -63,6 +64,7 @@ export const SEED_GARMENTS: Garment[] = [
     cutoutSrc: "/garments/white-tee.jpg",
     imageSource: "official",
     matteQuality: "clean",
+    wornOn: ["2026-09-09"],
   }),
   g({
     id: "g_cream",
@@ -108,6 +110,7 @@ export const SEED_GARMENTS: Garment[] = [
     cutoutSrc: "/garments/indigo-jeans.jpg",
     imageSource: "official",
     matteQuality: "clean",
+    wornOn: ["2026-09-07"],
   }),
   g({
     id: "g_trousers",
@@ -183,6 +186,7 @@ export const SEED_GARMENTS: Garment[] = [
     cutoutSrc: "/garments/white-sneakers.jpg",
     imageSource: "official",
     matteQuality: "clean",
+    wornOn: ["2026-09-09"],
   }),
   g({
     id: "g_loafers",

@@ -1,4 +1,5 @@
-import type { Garment, WeatherSnap } from "./types";
+import type { Garment, Moment, Occasion, WeatherSnap } from "./types";
+import { HOUSE_LABEL, daysIdle, lookHouses } from "./style";
 
 const ORDER: Garment["category"][] = [
   "top",
@@ -23,26 +24,33 @@ export function nameLook(pieces: Garment[]): string {
   return `${sorted[0]!.name} · ${sorted[1]!.name}`;
 }
 
-export function dropNote(pieces: Garment[], weather?: WeatherSnap): string {
+export function dropNote(
+  pieces: Garment[],
+  weather?: WeatherSnap,
+  occasion?: Occasion,
+  moment?: Moment,
+): string {
   const f = weather?.f ?? 68;
   const sky = (weather?.label ?? "fair").toLowerCase();
-  const coat = pieces.find((g) => g.category === "outerwear");
-  const top = pieces.find((g) => g.category === "top" || g.category === "dress");
-  const shoes = pieces.find((g) => g.category === "footwear");
+  const houses = lookHouses(pieces)
+    .slice(0, 2)
+    .map((h) => HOUSE_LABEL[h])
+    .join(" × ");
+  const sitting = [...pieces].sort((a, b) => daysIdle(b) - daysIdle(a))[0];
+  const idle = sitting ? daysIdle(sitting) : 0;
+  const when = [occasion, moment].filter(Boolean).join(" · ");
+  const head = when ? `${when}. ` : "";
 
-  if (f < 55 && coat) {
-    return `${f}° and ${sky}. The ${coat.name.toLowerCase()} is doing the work.`;
+  if (idle >= 21 && sitting) {
+    return `${head}${f}° ${sky}. Putting the ${sitting.name.toLowerCase()} back in — it has sat ${idle} days. ${houses}.`;
+  }
+  if (f < 55) {
+    return `${head}${f}°. Coat weather. ${houses || "From the closet"}.`;
   }
   if (f > 78) {
-    return `${f}°. Keep it light — nothing that traps heat.`;
+    return `${head}${f}°. Keep it light. ${houses}.`;
   }
-  if (coat) {
-    return `${f}° and ${sky}. ${coat.name} over ${top ? top.name.toLowerCase() : "the rest"}.`;
-  }
-  if (top && shoes) {
-    return `${f}° and ${sky}. ${top.name} and ${shoes.name.toLowerCase()} — nothing you don't own.`;
-  }
-  return `${f}°. Built from the closet, not a catalog.`;
+  return `${head}${f}° ${sky}. ${houses || "Built from what you own"}.`;
 }
 
 export function neglectedPiece(
@@ -52,8 +60,7 @@ export function neglectedPiece(
   const used = new Set(dropIds);
   const pool = garments.filter((g) => !g.archived && !used.has(g.id));
   if (!pool.length) return null;
-  const last = (g: Garment) => g.wornOn.at(-1) ?? "0000-00-00";
-  return [...pool].sort((a, b) => last(a).localeCompare(last(b)))[0] ?? null;
+  return [...pool].sort((a, b) => daysIdle(b) - daysIdle(a))[0] ?? null;
 }
 
 export function alternatives(
@@ -62,11 +69,13 @@ export function alternatives(
   dropIds: string[],
 ): Garment[] {
   const used = new Set(dropIds);
-  return garments.filter(
-    (g) =>
-      !g.archived &&
-      g.category === current.category &&
-      g.id !== current.id &&
-      !used.has(g.id),
-  );
+  return garments
+    .filter(
+      (g) =>
+        !g.archived &&
+        g.category === current.category &&
+        g.id !== current.id &&
+        !used.has(g.id),
+    )
+    .sort((a, b) => daysIdle(b) - daysIdle(a));
 }

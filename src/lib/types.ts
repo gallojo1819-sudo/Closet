@@ -64,9 +64,23 @@ export type WeatherSnap = {
   code: number;
 };
 
+export const OCCASIONS = [
+  { id: "weekday", label: "Weekday" },
+  { id: "client", label: "Client" },
+  { id: "dinner", label: "Dinner" },
+  { id: "weekend", label: "Weekend" },
+  { id: "travel", label: "Travel" },
+] as const;
+
+export type Occasion = (typeof OCCASIONS)[number]["id"];
+export type Moment = "morning" | "day" | "evening";
+
 export type DailyDrop = {
   date: string;
   garmentIds: string[];
   worn: boolean;
   weather?: WeatherSnap;
+  occasion?: Occasion;
+  moment?: Moment;
 };
+

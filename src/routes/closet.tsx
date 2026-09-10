@@ -2,25 +2,33 @@ import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentDetail } from "@/components/closet/detail";
 import { GarmentTile } from "@/components/closet/tile";
+import { daysIdle } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { CATEGORIES, type Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/closet")({ component: ClosetPage });
 
+type Filter = "all" | "waiting" | Category;
+
 function ClosetPage() {
   const garmentsAll = useCloset((s) => s.garments);
-  const [filter, setFilter] = useState<"all" | Category>("all");
+  const [filter, setFilter] = useState<Filter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
 
   const garments = useMemo(
     () => garmentsAll.filter((g) => !g.archived),
     [garmentsAll],
   );
-  const list = useMemo(
-    () => (filter === "all" ? garments : garments.filter((g) => g.category === filter)),
-    [garments, filter],
+  const waiting = useMemo(
+    () => garments.filter((g) => daysIdle(g) >= 21),
+    [garments],
   );
+  const list = useMemo(() => {
+    if (filter === "all") return garments;
+    if (filter === "waiting") return waiting;
+    return garments.filter((g) => g.category === filter);
+  }, [garments, waiting, filter]);
   const open = garments.find((g) => g.id === openId) ?? null;
   const showingDemo = garments.some((g) => g.demo);
 
@@ -33,6 +41,11 @@ function ClosetPage() {
             {garments.length} pieces
             <span className="italic text-accent"> on paper.</span>
           </h1>
+          {waiting.length > 0 && (
+            <p className="mt-3 text-sm text-ink-soft">
+              {waiting.length} sitting idle. Wear them, don’t buy more.
+            </p>
+          )}
         </div>
         <Link
           to="/add"
@@ -48,7 +61,7 @@ function ClosetPage() {
         </p>
       )}
       <div className="mt-8 flex gap-2 overflow-x-auto pb-2">
-        {(["all", ...CATEGORIES] as const).map((c) => (
+        {(["all", "waiting", ...CATEGORIES] as const).map((c) => (
           <button
             key={c}
             type="button"
@@ -60,13 +73,15 @@ function ClosetPage() {
                 : "border-hairline text-ink-soft",
             )}
           >
-            {c}
+            {c === "waiting" ? `waiting (${waiting.length})` : c}
           </button>
         ))}
       </div>
       {list.length === 0 ? (
         <p className="mt-16 text-ink-soft">
-          Nothing in this drawer. Photograph a piece on a plain surface.
+          {filter === "waiting"
+            ? "Everything has been out recently."
+            : "Nothing in this drawer. Photograph a piece on a plain surface."}
         </p>
       ) : (
         <ul className="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">

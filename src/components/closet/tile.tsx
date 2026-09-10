@@ -1,4 +1,5 @@
 import type { Garment } from "@/lib/types";
+import { daysIdle } from "@/lib/style";
 import { cn } from "@/lib/utils";
 
 export function GarmentTile({
@@ -28,6 +29,11 @@ export function GarmentTile({
         {garment.demo && (
           <span className="absolute left-2 top-2 micro bg-paper px-2 py-1 text-ink-soft border border-hairline">
             Sample
+          </span>
+        )}
+        {!garment.demo && daysIdle(garment) >= 21 && (
+          <span className="absolute left-2 top-2 micro bg-paper px-2 py-1 text-ink-soft border border-hairline">
+            Waiting
           </span>
         )}
       </div>

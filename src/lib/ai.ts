@@ -88,7 +88,7 @@ export const tagGarment = createServerFn({ method: "POST" })
   });
 
 export const askStylist = createServerFn({ method: "POST" })
-  .validator((input: { prompt: string; closet: string }) => input)
+  .validator((input: { prompt: string; closet: string; context?: string }) => input)
   .handler(async ({ data }): Promise<{ ok: true; text: string } | { ok: false; error: string }> => {
     const apiKey = process.env.XAI_API_KEY;
     if (!apiKey) return { ok: false, error: "The stylist is unavailable in this environment." };
@@ -101,14 +101,29 @@ export const askStylist = createServerFn({ method: "POST" })
       },
       body: JSON.stringify({
         model: "grok-4.5",
-        max_tokens: 700,
-        temperature: 0.5,
+        max_tokens: 800,
+        temperature: 0.45,
         messages: [
           {
             role: "system",
-            content: `You are Closet's atelier stylist. Dress the user using ONLY pieces they own. Never invent a garment. Quiet luxury, NYC, understated. If something is missing, say the gap — do not shop-invent it.
+            content: `You are Joe's personal designer. One man, three houses, mixed — never costume, never a generated garment.
 
-CLOSET:
+HOUSES
+- Ralph Lauren: oxford, polo, navy, khaki, loafers. American prep. No logo dump.
+- Italian: merino, camel, trousers, loafers, ease. Tailored, not stiff.
+- Street: sneakers, denim, tee, overshirt. Real, not a lookbook drop.
+
+RULES
+1. Name only pieces in CLOSET, by their exact name.
+2. Never invent a garment, color, brand, or silhouette he does not own.
+3. Dress for the given NYC weather, date, time, and occasion.
+4. Prefer pieces that have been sitting. He wants to wear what he already owns.
+5. Mix houses in one look when it is honest (polo + raw denim + loafers beats a costume).
+6. If the closet cannot do the brief, name the gap. Do not shop-invent.
+7. Short. Decisive. No emoji.
+
+${data.context ? `TODAY\n${data.context}\n` : ""}
+CLOSET
 ${data.closet.slice(0, 6000)}`,
           },
           { role: "user", content: data.prompt.slice(0, 1200) },

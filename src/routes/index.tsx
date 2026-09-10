@@ -3,9 +3,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { LookStack } from "@/components/closet/look-stack";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, nameLook, neglectedPiece, sortLook } from "@/lib/look";
+import { HOUSE_LABEL, daysIdle, lookHouses } from "@/lib/style";
 import { useCloset } from "@/lib/store";
+import { OCCASIONS, type Occasion } from "@/lib/types";
 import { getNycWeather } from "@/lib/weather";
-import { formatLongDate, todayISO } from "@/lib/utils";
+import { cn, formatLongDate, todayISO } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({ component: Today });
 
@@ -53,7 +55,12 @@ function Today() {
   );
   const sample = garments.some((g) => g.demo);
   const lookName = nameLook(pieces);
-  const note = dropNote(pieces, weather);
+  const note = dropNote(pieces, weather, drop?.occasion, drop?.moment);
+  const houses = lookHouses(pieces);
+
+  const setOccasion = (occasion: Occasion) => {
+    rerollDrop(weather, occasion);
+  };
 
   return (
     <div className="mx-auto max-w-5xl px-4 md:px-6 py-8 md:py-12 rise">
@@ -66,6 +73,7 @@ function Today() {
         {weather ? (
           <>
             New York · {weather.f}° · {weather.label}
+            {drop?.moment ? ` · ${drop.moment}` : ""}
           </>
         ) : (
           "New York"
@@ -73,17 +81,38 @@ function Today() {
         {sample ? " · sample wardrobe until you photograph yours" : null}
       </p>
 
+      <div className="mt-6 flex flex-wrap gap-2">
+        {OCCASIONS.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => setOccasion(o.id)}
+            className={cn(
+              "micro border px-3 py-2",
+              drop?.occasion === o.id
+                ? "border-ink bg-ink text-paper"
+                : "border-hairline text-ink-soft",
+            )}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+
       <div className="mt-10 grid md:grid-cols-[1fr_0.95fr] gap-10 items-start">
         <LookStack pieces={pieces} />
         <div className="space-y-6">
           <div>
-            <p className="micro text-ink-soft">Today’s look</p>
+            <p className="micro text-ink-soft">
+              {houses.map((h) => HOUSE_LABEL[h]).join(" · ") || "Today’s look"}
+            </p>
             <h2 className="mt-1 font-editorial text-3xl tracking-tight">{lookName}</h2>
             <p className="mt-3 text-sm text-ink-soft leading-relaxed">{note}</p>
           </div>
           <ol className="space-y-3">
             {pieces.map((g) => {
               const canSwap = alternatives(garments, g, drop?.garmentIds ?? []).length > 0;
+              const idle = daysIdle(g);
               return (
                 <li
                   key={g.id}
@@ -96,7 +125,10 @@ function Today() {
                   />
                   <div className="min-w-0 flex-1">
                     <p>{g.name}</p>
-                    <p className="micro text-ink-soft">{g.subtype || g.category}</p>
+                    <p className="micro text-ink-soft">
+                      {g.subtype || g.category}
+                      {idle >= 21 ? ` · sat ${idle}d` : ""}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -117,7 +149,7 @@ function Today() {
             >
               {drop?.worn ? "Logged for today" : "Wear this"}
             </Button>
-            <Button variant="ghost" onClick={() => rerollDrop(weather)}>
+            <Button variant="ghost" onClick={() => rerollDrop(weather, drop?.occasion)}>
               Reroll
             </Button>
             <Button
@@ -126,7 +158,7 @@ function Today() {
                 drop &&
                 saveLook({
                   name: lookName,
-                  occasion: "daily",
+                  occasion: drop.occasion ?? "daily",
                   garmentIds: drop.garmentIds,
                   source: "ai",
                 })
@@ -143,9 +175,9 @@ function Today() {
           </div>
           {neglected && (
             <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
-              Waiting in the closet:{" "}
-              <span className="text-ink">{neglected.name}</span>. Swap it in, or
-              photograph yours tonight.
+              Still waiting:{" "}
+              <span className="text-ink">{neglected.name}</span>
+              {` · ${daysIdle(neglected)} days off the hanger.`} Swap it in.
             </p>
           )}
         </div>

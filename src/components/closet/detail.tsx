@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
 import type { Garment } from "@/lib/types";
 import { useCloset } from "@/lib/store";
 import { todayISO } from "@/lib/utils";
@@ -58,7 +59,16 @@ export function GarmentDetail({
             </div>
             <div>
               <dt className="micro text-ink-soft">Worn</dt>
-              <dd>{garment.wornOn.length} times</dd>
+              <dd>
+                {garment.wornOn.length} times
+                {garment.wornOn.length === 0
+                  ? " · never"
+                  : ` · last ${daysIdle(garment)}d ago`}
+              </dd>
+            </div>
+            <div>
+              <dt className="micro text-ink-soft">House</dt>
+              <dd>{housesOf(garment).map((h) => HOUSE_LABEL[h]).join(" · ")}</dd>
             </div>
           </dl>
           {garment.notes && (

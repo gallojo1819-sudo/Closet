@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
-import type { DailyDrop, Garment, Look, StylistMessage, WeatherSnap } from "./types";
+import { daysIdle, defaultOccasion, momentOfDay, pickLook } from "./style";
+import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WeatherSnap } from "./types";
 import { todayISO, uid } from "./utils";
 
 type ClosetState = {
@@ -17,48 +18,22 @@ type ClosetState = {
   saveLook: (look: Omit<Look, "id" | "createdAt">) => string;
   removeLook: (id: string) => void;
   setDrop: (drop: DailyDrop) => void;
-  rerollDrop: (weather?: WeatherSnap) => void;
+  rerollDrop: (weather?: WeatherSnap, occasion?: Occasion) => void;
   swapDropPiece: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
   resetDemo: () => void;
 };
 
-function pickDrop(garments: Garment[], weather?: WeatherSnap): string[] {
-  const active = garments.filter((g) => !g.archived);
-  const by = (cat: Garment["category"]) => active.filter((g) => g.category === cat);
-  const tops = by("top");
-  const bottoms = by("bottom");
-  const shoes = by("footwear");
-  const outer = by("outerwear");
-  const acc = by("accessory");
-  const f = weather?.f ?? 68;
-  const cool = f < 62;
-  const warm = f > 78;
-  const formalityBias = 3;
-  const score = (g: Garment) => {
-    let s = 0;
-    if (cool) s += g.warmth;
-    if (warm) s += 6 - g.warmth;
-    s += 3 - Math.abs(g.formality - formalityBias);
-    s += (g.wornOn.at(-1) === todayISO() ? -4 : 0);
-    return s + Math.random() * 0.4;
-  };
-  const best = (list: Garment[]) =>
-    [...list].sort((a, b) => score(b) - score(a))[0];
-  const ids: string[] = [];
-  const t = best(tops);
-  const b = best(bottoms);
-  const sh = best(shoes);
-  if (t) ids.push(t.id);
-  if (b) ids.push(b.id);
-  if (sh) ids.push(sh.id);
-  if (cool) {
-    const o = best(outer);
-    if (o) ids.push(o.id);
-  }
-  const belt = acc.find((a) => a.subtype === "belt");
-  if (belt && sh?.subtype === "loafers") ids.push(belt.id);
-  return ids;
+function pickDrop(
+  garments: Garment[],
+  weather?: WeatherSnap,
+  occasion?: Occasion,
+): string[] {
+  return pickLook(garments, {
+    weather,
+    occasion: occasion ?? defaultOccasion(),
+    moment: momentOfDay(),
+  });
 }
 
 export const useCloset = create<ClosetState>()(
@@ -126,14 +101,18 @@ export const useCloset = create<ClosetState>()(
       },
       removeLook: (id) => set((s) => ({ looks: s.looks.filter((l) => l.id !== id) })),
       setDrop: (drop) => set({ drop }),
-      rerollDrop: (weather) => {
-        const ids = pickDrop(get().garments, weather ?? get().drop?.weather);
+      rerollDrop: (weather, occasion) => {
+        const occ = occasion ?? get().drop?.occasion ?? defaultOccasion();
+        const moment = momentOfDay();
+        const ids = pickDrop(get().garments, weather ?? get().drop?.weather, occ);
         set({
           drop: {
             date: todayISO(),
             garmentIds: ids,
             worn: false,
             weather: weather ?? get().drop?.weather,
+            occasion: occ,
+            moment,
           },
         });
       },
@@ -143,13 +122,15 @@ export const useCloset = create<ClosetState>()(
         const current = get().garments.find((g) => g.id === id);
         if (!current) return;
         const used = new Set(drop.garmentIds);
-        const pool = get().garments.filter(
-          (g) =>
-            !g.archived &&
-            g.category === current.category &&
-            !used.has(g.id),
-        );
-        const next = pool[Math.floor(Math.random() * pool.length)];
+        const pool = get()
+          .garments.filter(
+            (g) =>
+              !g.archived &&
+              g.category === current.category &&
+              !used.has(g.id),
+          )
+          .sort((a, b) => daysIdle(b) - daysIdle(a));
+        const next = pool[0];
         if (!next) return;
         set({
           drop: {
@@ -175,7 +156,7 @@ export const useCloset = create<ClosetState>()(
         }),
     }),
     {
-      name: "closet.v3",
+      name: "closet.v4",
       skipHydration: true,
     },
   ),
