@@ -25,6 +25,7 @@ type Draft = {
   subtype: string;
   colors: string;
   material: string;
+  paid: string;
 };
 
 const CATS: Category[] = [
@@ -89,6 +90,7 @@ export function Studio() {
         subtype,
         colors,
         material,
+        paid: "",
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not process that photo.");
@@ -122,6 +124,7 @@ export function Studio() {
     if (!draft) return;
     const source: ImageSource =
       draft.quality === "clean" ? "segmented" : draft.quality === "ok" ? "segmented" : "photo";
+    const paid = parseFloat(draft.paid);
     addGarment({
       name: draft.name.trim() || "Untitled piece",
       category: draft.category,
@@ -140,6 +143,9 @@ export function Studio() {
       cutoutSrc: draft.cutout,
       imageSource: source,
       matteQuality: draft.quality,
+      ...(Number.isFinite(paid) && paid > 0
+        ? { paid: Math.round(paid * 100) / 100 }
+        : {}),
     });
     setSaved(true);
     setDraft(null);
@@ -275,6 +281,18 @@ export function Studio() {
               value={draft.material}
               onChange={(v) => setDraft({ ...draft, material: v })}
             />
+            <label className="block">
+              <span className="micro text-ink-soft">What you paid (optional)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                className="mt-1 h-11 w-full border border-hairline bg-card px-3 text-sm"
+                value={draft.paid}
+                onChange={(e) => setDraft({ ...draft, paid: e.target.value })}
+              />
+            </label>
           </div>
           <div className="flex gap-3">
             <Button onClick={keep}>Keep my photo</Button>

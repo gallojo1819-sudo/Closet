@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { FitBoard } from "@/components/closet/fit";
 import { LookStack } from "@/components/closet/look-stack";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, nameLook, neglectedPiece, sortLook } from "@/lib/look";
@@ -22,6 +23,7 @@ function Today() {
   const skipDrop = useCloset((s) => s.skipDrop);
   const saveLook = useCloset((s) => s.saveLook);
   const hydrated = useCloset((s) => s.hydrated);
+  const [view, setView] = useState<"fit" | "paper">("fit");
 
   const ownedCount = garments.filter((g) => !g.archived).length;
 
@@ -195,7 +197,37 @@ function Today() {
       </ol>
 
       <div className="mt-10 grid md:grid-cols-[1fr_0.95fr] gap-10 items-start">
-        <LookStack pieces={pieces} />
+        <div>
+          {pieces.length > 0 && (
+            <div className="mb-3 flex gap-2">
+              {(
+                [
+                  { id: "fit", label: "On you · 5′8" },
+                  { id: "paper", label: "On paper" },
+                ] as const
+              ).map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setView(v.id)}
+                  className={cn(
+                    "micro border px-3 py-2",
+                    view === v.id
+                      ? "border-ink bg-ink text-paper"
+                      : "border-hairline text-ink-soft",
+                  )}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {view === "fit" && pieces.length > 0 ? (
+            <FitBoard pieces={pieces} />
+          ) : (
+            <LookStack pieces={pieces} />
+          )}
+        </div>
         <div className="space-y-6">
           <div>
             <p className="micro text-ink-soft">

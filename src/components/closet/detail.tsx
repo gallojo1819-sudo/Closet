@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { costPerWear, money } from "@/lib/look";
 import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
 import type { Garment } from "@/lib/types";
 import { useCloset } from "@/lib/store";
@@ -13,7 +15,19 @@ export function GarmentDetail({
 }) {
   const wearToday = useCloset((s) => s.wearToday);
   const removeGarment = useCloset((s) => s.removeGarment);
+  const updateGarment = useCloset((s) => s.updateGarment);
   const worn = garment.wornOn.includes(todayISO());
+  const [paid, setPaid] = useState(
+    garment.paid != null ? String(garment.paid) : "",
+  );
+  const cpw = costPerWear(garment);
+
+  const commitPaid = () => {
+    const n = parseFloat(paid);
+    const next = Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : undefined;
+    if (next !== garment.paid) updateGarment(garment.id, { paid: next });
+    setPaid(next != null ? String(next) : "");
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
@@ -71,6 +85,32 @@ export function GarmentDetail({
               <dd>{housesOf(garment).map((h) => HOUSE_LABEL[h]).join(" · ")}</dd>
             </div>
           </dl>
+          <div>
+            <label className="block">
+              <span className="micro text-ink-soft">What you paid</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="—"
+                className="mt-1 h-10 w-32 border border-hairline bg-card px-3 text-sm"
+                value={paid}
+                onChange={(e) => setPaid(e.target.value)}
+                onBlur={commitPaid}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+            </label>
+            {cpw != null && (
+              <p className="mt-1 text-sm text-ink-soft">
+                {garment.wornOn.length === 0
+                  ? `first wear ${money(garment.paid ?? 0)}`
+                  : `cost per wear ${money(cpw)}`}
+              </p>
+            )}
+          </div>
           {garment.notes && (
             <p className="text-sm text-ink-soft">{garment.notes}</p>
           )}

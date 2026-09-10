@@ -26,6 +26,13 @@ type ClosetState = {
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
   loadSample: () => void;
   emptyCloset: () => void;
+  importCloset: (payload: {
+    garments: Garment[];
+    looks: Look[];
+    journal: WearEntry[];
+    avoid: Record<string, number>;
+    drop: DailyDrop | null;
+  }) => void;
 };
 
 function pickDrop(
@@ -217,6 +224,14 @@ export const useCloset = create<ClosetState>()(
           drop: null,
           journal: [],
           avoid: {},
+        }),
+      importCloset: (payload) =>
+        set({
+          garments: payload.garments,
+          looks: payload.looks,
+          journal: payload.journal,
+          avoid: payload.avoid,
+          drop: payload.drop,
         }),
     }),
     {

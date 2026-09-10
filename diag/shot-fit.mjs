@@ -1,0 +1,12 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1280, height: 1100 } });
+page.on("dialog", (d) => void d.accept());
+await page.goto("http://127.0.0.1:8080/", { waitUntil: "networkidle" });
+await page.waitForTimeout(600);
+await page.getByRole("button", { name: "Sample rack" }).click();
+await page.waitForTimeout(1500);
+await page.locator("figure").first().screenshot({ path: "diag/fitboard.png" });
+await page.screenshot({ path: "diag/today-fit.png" });
+await browser.close();
+console.log("shots saved");

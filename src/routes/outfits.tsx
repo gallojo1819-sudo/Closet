@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentTile } from "@/components/closet/tile";
+import { FitBoard } from "@/components/closet/fit";
 import { LookStack } from "@/components/closet/look-stack";
 import { Button } from "@/components/ui/button";
 import { nameLook } from "@/lib/look";
@@ -84,6 +85,9 @@ function OutfitsPage() {
             </li>
           ))}
         </ul>
+        {selected.length >= 2 && (
+          <FitBoard pieces={selected} className="mt-5 max-w-xs" />
+        )}
         <div className="mt-5 flex flex-col sm:flex-row gap-3">
           <input
             value={name}
@@ -127,7 +131,11 @@ function OutfitsPage() {
             .filter((g): g is NonNullable<typeof g> => Boolean(g));
           return (
             <li key={look.id}>
-              <LookStack pieces={pieces} />
+              {pieces.length >= 2 ? (
+                <FitBoard pieces={pieces} />
+              ) : (
+                <LookStack pieces={pieces} />
+              )}
               <div className="mt-3 flex items-baseline justify-between">
                 <div>
                   <p>{look.name}</p>

@@ -11,6 +11,16 @@ const ORDER: Garment["category"][] = [
   "other",
 ];
 
+export function costPerWear(g: Garment): number | null {
+  if (g.paid == null || !(g.paid > 0)) return null;
+  return g.paid / Math.max(g.wornOn.length, 1);
+}
+
+export function money(n: number): string {
+  const v = Math.round(n * 100) / 100;
+  return `$${Number.isInteger(v) ? v.toLocaleString("en-US") : v.toFixed(2)}`;
+}
+
 export function sortLook(pieces: Garment[]): Garment[] {
   return [...pieces].sort(
     (a, b) => ORDER.indexOf(a.category) - ORDER.indexOf(b.category),
