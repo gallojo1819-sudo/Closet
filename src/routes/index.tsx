@@ -7,17 +7,19 @@ import { HOUSE_LABEL, daysIdle, lookHouses } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, type Occasion } from "@/lib/types";
 import { getNycWeather } from "@/lib/weather";
-import { cn, formatLongDate, todayISO } from "@/lib/utils";
+import { cn, formatLongDate, lastDays, todayISO, weekdayLetter } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({ component: Today });
 
 function Today() {
   const garments = useCloset((s) => s.garments);
   const drop = useCloset((s) => s.drop);
+  const journal = useCloset((s) => s.journal);
   const setDrop = useCloset((s) => s.setDrop);
   const rerollDrop = useCloset((s) => s.rerollDrop);
   const swapDropPiece = useCloset((s) => s.swapDropPiece);
   const wearToday = useCloset((s) => s.wearToday);
+  const skipDrop = useCloset((s) => s.skipDrop);
   const saveLook = useCloset((s) => s.saveLook);
   const hydrated = useCloset((s) => s.hydrated);
 
@@ -53,10 +55,16 @@ function Today() {
     () => neglectedPiece(garments, drop?.garmentIds ?? []),
     [garments, drop],
   );
+  const waiting = useMemo(
+    () => garments.filter((g) => !g.archived && daysIdle(g) >= 21),
+    [garments],
+  );
   const sample = garments.some((g) => g.demo);
   const lookName = nameLook(pieces);
   const note = dropNote(pieces, weather, drop?.occasion, drop?.moment);
   const houses = lookHouses(pieces);
+  const week = lastDays(7);
+  const done = drop?.worn || drop?.verdict === "worn";
 
   const setOccasion = (occasion: Occasion) => {
     rerollDrop(weather, occasion);
@@ -67,7 +75,7 @@ function Today() {
       <p className="micro text-ink-soft">The daily drop</p>
       <h1 className="mt-2 font-editorial text-4xl md:text-6xl tracking-tight">
         {formatLongDate()}
-        <span className="italic text-accent"> — dressed from what you own.</span>
+        <span className="italic text-accent"> — one look. Wear it.</span>
       </h1>
       <p className="mt-4 text-ink-soft">
         {weather ? (
@@ -78,7 +86,11 @@ function Today() {
         ) : (
           "New York"
         )}
-        {sample ? " · sample wardrobe until you photograph yours" : null}
+        {waiting.length > 0
+          ? ` · ${waiting.length} sitting idle`
+          : sample
+            ? " · sample wardrobe until you photograph yours"
+            : null}
       </p>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -98,6 +110,36 @@ function Today() {
           </button>
         ))}
       </div>
+
+      <ol className="mt-8 grid grid-cols-7 gap-1">
+        {week.map((iso) => {
+          const entry = journal.find((j) => j.date === iso && j.verdict === "worn");
+          const first = entry
+            ? garments.find((g) => g.id === entry.garmentIds[0])
+            : undefined;
+          const isToday = iso === todayISO();
+          return (
+            <li
+              key={iso}
+              className={cn(
+                "border aspect-square flex flex-col items-center justify-center gap-1",
+                isToday ? "border-ink" : "border-hairline",
+              )}
+            >
+              <span className="micro text-ink-soft">{weekdayLetter(iso)}</span>
+              {first ? (
+                <img
+                  src={first.cutoutSrc}
+                  alt=""
+                  className="size-8 object-contain"
+                />
+              ) : (
+                <span className="size-8 border border-dashed border-hairline" />
+              )}
+            </li>
+          );
+        })}
+      </ol>
 
       <div className="mt-10 grid md:grid-cols-[1fr_0.95fr] gap-10 items-start">
         <LookStack pieces={pieces} />
@@ -132,7 +174,7 @@ function Today() {
                   </div>
                   <button
                     type="button"
-                    disabled={!canSwap}
+                    disabled={!canSwap || done}
                     onClick={() => swapDropPiece(g.id)}
                     className="micro text-ink-soft hover:text-ink disabled:opacity-30"
                   >
@@ -145,12 +187,16 @@ function Today() {
           <div className="flex flex-wrap gap-3">
             <Button
               onClick={() => drop && wearToday(drop.garmentIds)}
-              disabled={drop?.worn}
+              disabled={done}
             >
-              {drop?.worn ? "Logged for today" : "Wear this"}
+              {done ? "Logged for today" : "Wear this"}
             </Button>
-            <Button variant="ghost" onClick={() => rerollDrop(weather, drop?.occasion)}>
-              Reroll
+            <Button
+              variant="ghost"
+              onClick={() => skipDrop()}
+              disabled={done}
+            >
+              Skip
             </Button>
             <Button
               variant="ghost"
@@ -173,11 +219,11 @@ function Today() {
               Ask the stylist
             </Link>
           </div>
-          {neglected && (
+          {neglected && !done && (
             <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
               Still waiting:{" "}
               <span className="text-ink">{neglected.name}</span>
-              {` · ${daysIdle(neglected)} days off the hanger.`} Swap it in.
+              {` · ${daysIdle(neglected)} days.`} Swap it in — don’t buy another.
             </p>
           )}
         </div>

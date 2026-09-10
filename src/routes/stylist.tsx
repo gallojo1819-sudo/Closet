@@ -18,6 +18,7 @@ const PROMPTS = [
 function StylistPage() {
   const garmentsAll = useCloset((s) => s.garments);
   const drop = useCloset((s) => s.drop);
+  const journal = useCloset((s) => s.journal);
   const garments = useMemo(
     () => garmentsAll.filter((g) => !g.archived),
     [garmentsAll],
@@ -52,11 +53,25 @@ function StylistPage() {
       .slice(0, 6)
       .map((g) => `${g.name} (${daysIdle(g)}d)`)
       .join(", ");
+    const wornLately = journal
+      .filter((j) => j.verdict === "worn")
+      .slice(0, 5)
+      .map((j) => j.garmentIds.map((id) => forStylist.find((g) => g.id === id)?.name).filter(Boolean).join(" + "))
+      .filter(Boolean)
+      .join("; ");
+    const skippedLately = journal
+      .filter((j) => j.verdict === "skipped")
+      .slice(0, 3)
+      .map((j) => j.garmentIds.map((id) => forStylist.find((g) => g.id === id)?.name).filter(Boolean).join(" + "))
+      .filter(Boolean)
+      .join("; ");
     const context = [
       drop?.weather ? `NYC ${drop.weather.f}° ${drop.weather.label}` : "NYC",
       drop?.occasion ?? "",
       drop?.moment ?? "",
       sitting ? `Sitting idle: ${sitting}` : "",
+      wornLately ? `Recently worn: ${wornLately}` : "",
+      skippedLately ? `He skipped: ${skippedLately}` : "",
     ]
       .filter(Boolean)
       .join(" · ");

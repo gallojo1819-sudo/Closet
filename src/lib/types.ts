@@ -79,8 +79,17 @@ export type DailyDrop = {
   date: string;
   garmentIds: string[];
   worn: boolean;
+  verdict?: "pending" | "worn" | "skipped";
   weather?: WeatherSnap;
   occasion?: Occasion;
   moment?: Moment;
 };
+
+export type WearEntry = {
+  date: string;
+  garmentIds: string[];
+  verdict: "worn" | "skipped";
+  occasion?: Occasion;
+};
+
 

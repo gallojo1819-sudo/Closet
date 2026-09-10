@@ -52,7 +52,13 @@ function formalityTarget(occasion: Occasion, moment: Moment): number {
 
 export function pickLook(
   garments: Garment[],
-  opts: { weather?: WeatherSnap; occasion: Occasion; moment: Moment },
+  opts: {
+    weather?: WeatherSnap;
+    occasion: Occasion;
+    moment: Moment;
+    avoid?: Record<string, number>;
+    recentWorn?: string[];
+  },
 ): string[] {
   const active = garments.filter((g) => !g.archived);
   const by = (cat: Garment["category"]) => active.filter((g) => g.category === cat);
@@ -61,13 +67,17 @@ export function pickLook(
   const warm = f > 78;
   const target = formalityTarget(opts.occasion, opts.moment);
 
+  const avoid = opts.avoid ?? {};
+  const recent = new Set(opts.recentWorn ?? []);
   const score = (g: Garment) => {
     let s = 0;
     s += 4 - Math.abs(g.formality - target);
     if (cool) s += g.warmth;
     if (warm) s += 6 - g.warmth;
     if (g.wornOn.at(-1) === todayISO()) s -= 6;
-    s += Math.min(daysIdle(g), 90) / 12;
+    if (recent.has(g.id) && g.category !== "accessory") s -= 2.5;
+    s -= Math.min(avoid[g.id] ?? 0, 4) * 1.6;
+    s += Math.min(daysIdle(g), 90) / 10;
     if (opts.occasion === "client" || opts.occasion === "dinner") {
       if (g.subtype === "sneakers") s -= 2;
       if (g.subtype === "loafers" || g.subtype === "trousers") s += 1.5;
@@ -75,7 +85,7 @@ export function pickLook(
     if (opts.occasion === "weekend" || opts.occasion === "travel") {
       if (g.subtype === "sneakers" || g.subtype === "jeans") s += 1.2;
     }
-    return s + Math.random() * 0.35;
+    return s + Math.random() * 0.25;
   };
 
   const best = (list: Garment[]) =>

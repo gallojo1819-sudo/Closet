@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
 import { daysIdle, defaultOccasion, momentOfDay, pickLook } from "./style";
-import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WeatherSnap } from "./types";
+import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry, WeatherSnap } from "./types";
 import { todayISO, uid } from "./utils";
 
 type ClosetState = {
@@ -10,11 +10,14 @@ type ClosetState = {
   looks: Look[];
   messages: StylistMessage[];
   drop: DailyDrop | null;
+  journal: WearEntry[];
+  avoid: Record<string, number>;
   hydrated: boolean;
   addGarment: (g: Omit<Garment, "id" | "createdAt" | "archived" | "wornOn" | "demo">) => string;
   updateGarment: (id: string, patch: Partial<Garment>) => void;
   removeGarment: (id: string) => void;
   wearToday: (ids: string[]) => void;
+  skipDrop: () => void;
   saveLook: (look: Omit<Look, "id" | "createdAt">) => string;
   removeLook: (id: string) => void;
   setDrop: (drop: DailyDrop) => void;
@@ -28,11 +31,15 @@ function pickDrop(
   garments: Garment[],
   weather?: WeatherSnap,
   occasion?: Occasion,
+  avoid?: Record<string, number>,
+  recentWorn?: string[],
 ): string[] {
   return pickLook(garments, {
     weather,
     occasion: occasion ?? defaultOccasion(),
     moment: momentOfDay(),
+    avoid,
+    recentWorn,
   });
 }
 
@@ -43,6 +50,8 @@ export const useCloset = create<ClosetState>()(
       looks: SEED_LOOKS,
       messages: [],
       drop: null,
+      journal: [],
+      avoid: {},
       hydrated: false,
       addGarment: (input) => {
         const id = uid("g");
@@ -65,6 +74,8 @@ export const useCloset = create<ClosetState>()(
               ? s.looks.filter((l) => l.garmentIds.every((gid) => allowed.has(gid)))
               : s.looks,
             drop: replacingDemo ? null : s.drop,
+            journal: replacingDemo ? [] : s.journal,
+            avoid: replacingDemo ? {} : s.avoid,
           };
         });
         return id;
@@ -83,14 +94,44 @@ export const useCloset = create<ClosetState>()(
         })),
       wearToday: (ids) => {
         const day = todayISO();
-        set((s) => ({
-          garments: s.garments.map((g) =>
-            ids.includes(g.id) && !g.wornOn.includes(day)
-              ? { ...g, wornOn: [...g.wornOn, day] }
-              : g,
-          ),
-          drop: s.drop ? { ...s.drop, worn: true } : s.drop,
-        }));
+        const drop = get().drop;
+        set((s) => {
+          const avoid = { ...s.avoid };
+          for (const id of ids) delete avoid[id];
+          const entry: WearEntry = {
+            date: day,
+            garmentIds: ids,
+            verdict: "worn",
+            occasion: drop?.occasion,
+          };
+          return {
+            garments: s.garments.map((g) =>
+              ids.includes(g.id) && !g.wornOn.includes(day)
+                ? { ...g, wornOn: [...g.wornOn, day] }
+                : g,
+            ),
+            drop: s.drop ? { ...s.drop, worn: true, verdict: "worn" } : s.drop,
+            journal: [entry, ...s.journal.filter((j) => j.date !== day)].slice(0, 60),
+            avoid,
+          };
+        });
+      },
+      skipDrop: () => {
+        const drop = get().drop;
+        if (!drop || drop.worn) return;
+        const avoid = { ...get().avoid };
+        for (const id of drop.garmentIds) avoid[id] = (avoid[id] ?? 0) + 1;
+        const entry: WearEntry = {
+          date: todayISO(),
+          garmentIds: drop.garmentIds,
+          verdict: "skipped",
+          occasion: drop.occasion,
+        };
+        set({
+          avoid,
+          journal: [entry, ...get().journal.filter((j) => j.date !== todayISO())].slice(0, 60),
+        });
+        get().rerollDrop(drop.weather, drop.occasion);
       },
       saveLook: (look) => {
         const id = uid("l");
@@ -104,12 +145,20 @@ export const useCloset = create<ClosetState>()(
       rerollDrop: (weather, occasion) => {
         const occ = occasion ?? get().drop?.occasion ?? defaultOccasion();
         const moment = momentOfDay();
-        const ids = pickDrop(get().garments, weather ?? get().drop?.weather, occ);
+        const lastWorn = get().journal.find((j) => j.verdict === "worn")?.garmentIds;
+        const ids = pickDrop(
+          get().garments,
+          weather ?? get().drop?.weather,
+          occ,
+          get().avoid,
+          lastWorn,
+        );
         set({
           drop: {
             date: todayISO(),
             garmentIds: ids,
             worn: false,
+            verdict: "pending",
             weather: weather ?? get().drop?.weather,
             occasion: occ,
             moment,
@@ -133,9 +182,11 @@ export const useCloset = create<ClosetState>()(
         const next = pool[0];
         if (!next) return;
         set({
+          avoid: { ...get().avoid, [id]: (get().avoid[id] ?? 0) + 1 },
           drop: {
             ...drop,
             worn: false,
+            verdict: "pending",
             garmentIds: drop.garmentIds.map((gid) => (gid === id ? next.id : gid)),
           },
         });
@@ -153,10 +204,12 @@ export const useCloset = create<ClosetState>()(
           looks: SEED_LOOKS,
           messages: [],
           drop: null,
+          journal: [],
+          avoid: {},
         }),
     }),
     {
-      name: "closet.v4",
+      name: "closet.v5",
       skipHydration: true,
     },
   ),
