@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useRouterState } from "@tanstack/react-router";
+import { migrateImagesToIdb } from "@/lib/migrate";
 import { useCloset } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "./bottom-nav";
@@ -12,6 +13,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void Promise.resolve(useCloset.persist.rehydrate()).finally(() => {
       useCloset.setState({ hydrated: true });
+      void migrateImagesToIdb().catch(() => {});
     });
   }, []);
 

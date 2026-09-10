@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { FitBoard } from "@/components/closet/fit";
+import { GarmentImg } from "@/components/closet/gimg";
 import { LookStack } from "@/components/closet/look-stack";
+import { OnMeButton } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, nameLook, neglectedPiece, sortLook } from "@/lib/look";
 import { HOUSE_LABEL, daysIdle, lookHouses } from "@/lib/style";
@@ -183,11 +185,7 @@ function Today() {
             >
               <span className="micro text-ink-soft">{weekdayLetter(iso)}</span>
               {first ? (
-                <img
-                  src={first.cutoutSrc}
-                  alt=""
-                  className="size-8 object-contain"
-                />
+                <GarmentImg garment={first} alt="" className="size-8 object-contain" />
               ) : (
                 <span className="size-8 border border-dashed border-hairline" />
               )}
@@ -245,8 +243,8 @@ function Today() {
                   key={g.id}
                   className="flex items-center gap-3 border-b border-hairline pb-3"
                 >
-                  <img
-                    src={g.cutoutSrc}
+                  <GarmentImg
+                    garment={g}
                     alt=""
                     className="size-14 object-contain bg-paper-deep"
                   />
@@ -303,6 +301,7 @@ function Today() {
             >
               Ask the stylist
             </Link>
+            <OnMeButton pieces={pieces} />
           </div>
           {neglected && !done && (
             <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">

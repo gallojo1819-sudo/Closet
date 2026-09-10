@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentTile } from "@/components/closet/tile";
 import { FitBoard } from "@/components/closet/fit";
 import { LookStack } from "@/components/closet/look-stack";
+import { OnMeButton } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { nameLook } from "@/lib/look";
 import { useCloset } from "@/lib/store";
@@ -144,13 +145,16 @@ function OutfitsPage() {
                     {look.source === "manual" ? " · composed" : ""}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="micro text-ink-soft hover:text-accent"
-                  onClick={() => removeLook(look.id)}
-                >
-                  Remove
-                </button>
+                <div className="flex items-center gap-3">
+                  {pieces.length > 0 && <OnMeButton pieces={pieces} />}
+                  <button
+                    type="button"
+                    className="micro text-ink-soft hover:text-accent"
+                    onClick={() => removeLook(look.id)}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             </li>
           );

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GarmentImg } from "@/components/closet/gimg";
 import { Button } from "@/components/ui/button";
 import { costPerWear, money } from "@/lib/look";
 import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
@@ -39,9 +40,8 @@ export function GarmentDetail({
       />
       <div className="relative z-10 w-full max-w-3xl max-h-[92dvh] overflow-auto bg-paper border border-hairline md:grid md:grid-cols-2">
         <div className="bg-paper-deep aspect-page">
-          <img
-            src={garment.cutoutSrc || garment.imageSrc}
-            alt={garment.name}
+          <GarmentImg
+            garment={garment}
             className="h-full w-full object-contain p-[8%]"
           />
         </div>

@@ -17,6 +17,8 @@ export type MatteResult = {
   cutoutSrc: string;
   quality: MatteQuality;
   reason: string;
+  /** True when the shot is already catalog-like (white/grey studio bg) — no flood. */
+  official: boolean;
 };
 
 function median(nums: number[]): number {
@@ -115,7 +117,20 @@ function sampleBorder(data: Uint8ClampedArray, w: number, h: number) {
   const frac = rs.length ? outliers / rs.length : 1;
   const med = median(ds);
   const mad = median(ds.map((d) => Math.abs(d - med)));
-  return { bg, frac, floodTol: Math.max(28, med + 2.4 * mad + 12) };
+  return { bg, frac, mad, floodTol: Math.max(28, med + 2.4 * mad + 12) };
+}
+
+/** A studio/product shot: border is uniform, near-white and near-achromatic.
+ *  A cream wall or wood floor fails at least one leg and gets the flood. */
+function looksOfficial(
+  bg: { r: number; g: number; b: number },
+  frac: number,
+  mad: number,
+): boolean {
+  const lo = Math.min(bg.r, bg.g, bg.b);
+  const spread =
+    Math.max(bg.r, bg.g, bg.b) - lo;
+  return frac <= 0.06 && mad <= 6 && lo >= 200 && spread <= 10;
 }
 
 function sampleForeground(
@@ -251,14 +266,24 @@ function compositePaper(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(src, sx, sy, sw, sh, dx, dy, dw, dh);
-  return out.toDataURL("image/jpeg", 0.9);
+  return out.toDataURL("image/jpeg", 0.85);
 }
 
 export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
   const img = await loadImage(imageSrc);
   const { canvas, ctx } = drawFit(img);
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const { bg, frac, floodTol } = sampleBorder(image.data, canvas.width, canvas.height);
+  const { bg, frac, mad, floodTol } = sampleBorder(image.data, canvas.width, canvas.height);
+
+  if (looksOfficial(bg, frac, mad)) {
+    return {
+      cutoutSrc: compositePaper(canvas, null),
+      quality: "clean",
+      official: true,
+      reason: "Already a catalog shot — centered on paper, pixels untouched.",
+    };
+  }
+
   const { fg, sep } = sampleForeground(image.data, canvas.width, canvas.height, bg);
 
   floodBackground(image.data, canvas.width, canvas.height, bg, fg, floodTol, sep);
@@ -277,7 +302,7 @@ export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
     quality = "ok";
     reason = "Floated on paper. Soft edge — a plainer surface will be tighter.";
   }
-  return { cutoutSrc, quality, reason };
+  return { cutoutSrc, quality, reason, official: false };
 }
 
 export function preflightHints(file: File): string[] {

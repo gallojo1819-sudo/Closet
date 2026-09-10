@@ -2,60 +2,101 @@ import { useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentDetail } from "@/components/closet/detail";
 import { GarmentTile } from "@/components/closet/tile";
+import {
+  blobToDataUrl,
+  getImage,
+  imageKey,
+  isIdbKey,
+  stashDataUrl,
+} from "@/lib/images";
 import { daysIdle } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import { CATEGORIES, type Category } from "@/lib/types";
+import { CATEGORIES, type Category, type Garment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/closet")({ component: ClosetPage });
 
 type Filter = "all" | "waiting" | Category;
 
+/** Backup files carry pixels as data URLs; the live store carries IDB keys. */
+async function embedSrc(src: string): Promise<string> {
+  if (!isIdbKey(src)) return src;
+  const blob = await getImage(src);
+  return blob ? blobToDataUrl(blob) : src;
+}
+
 function ClosetPage() {
   const garmentsAll = useCloset((s) => s.garments);
   const importCloset = useCloset((s) => s.importCloset);
+  const setRefPhoto = useCloset((s) => s.setRefPhoto);
   const [filter, setFilter] = useState<Filter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
-  const exportCloset = () => {
-    const s = useCloset.getState();
-    const payload = {
-      v: 1,
-      garments: s.garments,
-      looks: s.looks,
-      journal: s.journal,
-      avoid: s.avoid,
-      drop: s.drop,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "closet-joe.json";
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportCloset = async () => {
+    setBusy(true);
+    try {
+      const s = useCloset.getState();
+      const garments = await Promise.all(
+        s.garments.map(async (g) => ({
+          ...g,
+          imageSrc: await embedSrc(g.imageSrc),
+          cutoutSrc: await embedSrc(g.cutoutSrc),
+        })),
+      );
+      const payload = {
+        v: 2,
+        garments,
+        looks: s.looks,
+        journal: s.journal,
+        avoid: s.avoid,
+        drop: s.drop,
+        refPhoto: s.refPhoto ? await embedSrc(s.refPhoto) : null,
+      };
+      const blob = new Blob([JSON.stringify(payload)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "closet-joe.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onImportFile = async (file: File | undefined) => {
     if (!file) return;
     setImportError(null);
+    setBusy(true);
     try {
       const data = JSON.parse(await file.text());
       if (!data || !Array.isArray(data.garments)) throw new Error("bad file");
+      const garments: Garment[] = [];
+      for (const g of data.garments as Garment[]) {
+        const imageSrc = await stashDataUrl(imageKey(g.id, "o"), g.imageSrc);
+        const cutoutSrc = await stashDataUrl(imageKey(g.id, "c"), g.cutoutSrc);
+        garments.push({ ...g, imageSrc, cutoutSrc });
+      }
       importCloset({
-        garments: data.garments,
+        garments,
         looks: Array.isArray(data.looks) ? data.looks : [],
         journal: Array.isArray(data.journal) ? data.journal : [],
         avoid: data.avoid && typeof data.avoid === "object" ? data.avoid : {},
         drop: data.drop ?? null,
       });
+      if (typeof data.refPhoto === "string" && data.refPhoto.startsWith("data:")) {
+        setRefPhoto(await stashDataUrl("idb:me:ref", data.refPhoto));
+      }
       setOpenId(null);
     } catch {
       setImportError("That file is not a closet export.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -98,15 +139,17 @@ function ClosetPage() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={exportCloset}
-            className="micro border border-hairline px-3 h-11 text-ink-soft hover:border-hairline-strong"
+            onClick={() => void exportCloset()}
+            disabled={busy}
+            className="micro border border-hairline px-3 h-11 text-ink-soft hover:border-hairline-strong disabled:opacity-40"
           >
-            Export
+            {busy ? "Working…" : "Export"}
           </button>
           <button
             type="button"
             onClick={() => importRef.current?.click()}
-            className="micro border border-hairline px-3 h-11 text-ink-soft hover:border-hairline-strong"
+            disabled={busy}
+            className="micro border border-hairline px-3 h-11 text-ink-soft hover:border-hairline-strong disabled:opacity-40"
           >
             Import
           </button>

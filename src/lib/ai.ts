@@ -92,6 +92,34 @@ export const tagGarment = createServerFn({ method: "POST" })
     }
   });
 
+export const onMePreview = createServerFn({ method: "POST" })
+  .validator((input: { refImage: string; pieces: string }) => input)
+  .handler(async ({ data }): Promise<{ ok: true; image: string } | { ok: false; error: string }> => {
+    const apiKey = process.env.XAI_API_KEY;
+    if (!apiKey) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
+
+    const res = await fetch("https://api.x.ai/v1/images/edits", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "grok-2-image",
+        image: data.refImage,
+        prompt: `The same man as the reference photo — same face, same 5'8 regular build — now wearing exactly these clothes: ${data.pieces}. Full body, standing, editorial paper-catalog photograph on a plain warm paper background. Do not change the colors, patterns, or shapes of the garments. No other people, no text, no logos.`,
+      }),
+    });
+    if (!res.ok) return { ok: false, error: `Preview failed (${res.status})` };
+    const body = (await res.json()) as {
+      data?: { b64_json?: string; url?: string }[];
+    };
+    const first = body.data?.[0];
+    if (first?.b64_json) return { ok: true, image: `data:image/png;base64,${first.b64_json}` };
+    if (first?.url) return { ok: true, image: first.url };
+    return { ok: false, error: "Preview came back empty." };
+  });
+
 export const askStylist = createServerFn({ method: "POST" })
   .validator((input: { prompt: string; closet: string; context?: string }) => input)
   .handler(async ({ data }): Promise<{ ok: true; text: string } | { ok: false; error: string }> => {

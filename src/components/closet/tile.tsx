@@ -1,3 +1,4 @@
+import { GarmentImg } from "@/components/closet/gimg";
 import type { Garment } from "@/lib/types";
 import { daysIdle } from "@/lib/style";
 import { cn } from "@/lib/utils";
@@ -21,9 +22,8 @@ export function GarmentTile({
       )}
     >
       <div className="relative bg-paper-deep border border-hairline overflow-hidden aspect-page">
-        <img
-          src={garment.cutoutSrc || garment.imageSrc}
-          alt={garment.name}
+        <GarmentImg
+          garment={garment}
           className="absolute inset-0 h-full w-full object-contain p-[8%]"
         />
         {garment.demo && (

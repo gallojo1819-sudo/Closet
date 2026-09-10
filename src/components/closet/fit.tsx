@@ -1,3 +1,4 @@
+import { GarmentImg } from "@/components/closet/gimg";
 import type { Garment } from "@/lib/types";
 
 type Slot = {
@@ -120,10 +121,9 @@ export function FitBoard({
             }}
           >
             {list.map((g) => (
-              <img
+              <GarmentImg
                 key={g.id}
-                src={g.cutoutSrc || g.imageSrc}
-                alt={g.name}
+                garment={g}
                 className="min-w-0 flex-1 h-full object-contain"
               />
             ))}

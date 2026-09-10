@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { deleteImage, isIdbKey } from "./images";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
 import { daysIdle, defaultOccasion, momentOfDay, pickLook } from "./style";
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry, WeatherSnap } from "./types";
@@ -13,7 +14,11 @@ type ClosetState = {
   journal: WearEntry[];
   avoid: Record<string, number>;
   hydrated: boolean;
-  addGarment: (g: Omit<Garment, "id" | "createdAt" | "archived" | "wornOn" | "demo">) => string;
+  /** IDB key for Joe's full-body reference photo ("On me"), metadata only. */
+  refPhoto: string | null;
+  addGarment: (
+    g: Omit<Garment, "id" | "createdAt" | "archived" | "wornOn" | "demo"> & { id?: string },
+  ) => string;
   updateGarment: (id: string, patch: Partial<Garment>) => void;
   removeGarment: (id: string) => void;
   wearToday: (ids: string[]) => void;
@@ -24,6 +29,7 @@ type ClosetState = {
   rerollDrop: (weather?: WeatherSnap, occasion?: Occasion) => void;
   swapDropPiece: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
+  setRefPhoto: (key: string | null) => void;
   loadSample: () => void;
   emptyCloset: () => void;
   importCloset: (payload: {
@@ -61,8 +67,9 @@ export const useCloset = create<ClosetState>()(
       journal: [],
       avoid: {},
       hydrated: false,
+      refPhoto: null,
       addGarment: (input) => {
-        const id = uid("g");
+        const id = input.id ?? uid("g");
         const garment: Garment = {
           ...input,
           id,
@@ -93,14 +100,19 @@ export const useCloset = create<ClosetState>()(
         set((s) => ({
           garments: s.garments.map((g) => (g.id === id ? { ...g, ...patch } : g)),
         })),
-      removeGarment: (id) =>
+      removeGarment: (id) => {
+        const g = get().garments.find((x) => x.id === id);
+        for (const src of [g?.imageSrc, g?.cutoutSrc]) {
+          if (isIdbKey(src)) void deleteImage(src).catch(() => {});
+        }
         set((s) => ({
           garments: s.garments.filter((g) => g.id !== id),
           looks: s.looks.map((l) => ({
             ...l,
             garmentIds: l.garmentIds.filter((gid) => gid !== id),
           })),
-        })),
+        }));
+      },
       wearToday: (ids) => {
         const day = todayISO();
         const drop = get().drop;
@@ -207,6 +219,13 @@ export const useCloset = create<ClosetState>()(
             { ...m, id: uid("m"), createdAt: new Date().toISOString() },
           ],
         })),
+      setRefPhoto: (key) => {
+        const prev = get().refPhoto;
+        if (prev && prev !== key && isIdbKey(prev)) {
+          void deleteImage(prev).catch(() => {});
+        }
+        set({ refPhoto: key });
+      },
       loadSample: () =>
         set({
           garments: SEED_GARMENTS,
