@@ -113,8 +113,9 @@ function sampleBorder(data: Uint8ClampedArray, w: number, h: number) {
     if (d > OUTLIER_TOL) outliers++;
   }
   const frac = rs.length ? outliers / rs.length : 1;
-  const mad = median(ds.map((d) => Math.abs(d - median(ds))));
-  return { bg, frac, floodTol: Math.max(28, median(ds) + 2.4 * mad + 12) };
+  const med = median(ds);
+  const mad = median(ds.map((d) => Math.abs(d - med)));
+  return { bg, frac, floodTol: Math.max(28, med + 2.4 * mad + 12) };
 }
 
 function sampleForeground(
