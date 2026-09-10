@@ -84,7 +84,7 @@ export function GarmentDetail({
                   view === v ? "bg-ink text-paper" : "text-ink-soft",
                 )}
               >
-                {v === "print" ? "Print" : "Original"}
+                {v === "print" ? "Cover" : "Original"}
               </button>
             ))}
             {refPhoto && (
@@ -109,7 +109,7 @@ export function GarmentDetail({
               }}
               className="micro w-full py-2 text-ink-soft border-t border-hairline hover:text-ink"
             >
-              Use my photo — the print lies
+              Use my photo as cover — the extract lies
             </button>
           )}
         </div>

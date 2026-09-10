@@ -13,12 +13,14 @@ const PAD = 0.1;
 
 export type MatteQuality = "clean" | "ok" | "busy";
 
+/** What the upload actually is. Decides the cover path, not just the matte. */
+export type IngestKind = "page" | "phone" | "studio";
+
 export type MatteResult = {
   cutoutSrc: string;
   quality: MatteQuality;
   reason: string;
-  /** True when the shot is already catalog-like (white/grey studio bg) — no flood. */
-  official: boolean;
+  kind: IngestKind;
 };
 
 function median(nums: number[]): number {
@@ -122,7 +124,7 @@ function sampleBorder(data: Uint8ClampedArray, w: number, h: number) {
 
 /** A studio/product shot: border is uniform, near-white and near-achromatic.
  *  A cream wall or wood floor fails at least one leg and gets the flood. */
-function looksOfficial(
+function looksStudio(
   bg: { r: number; g: number; b: number },
   frac: number,
   mad: number,
@@ -134,9 +136,9 @@ function looksOfficial(
 }
 
 /** Shopping-page screenshots also have a white border, but the top/bottom
- *  bands carry nav text, prices, "Add to bag". Dense dark ink there means
- *  page chrome — extract the garment, never frame the webpage. */
-function looksScreenshot(data: Uint8ClampedArray, w: number, h: number): boolean {
+ *  bands carry nav text, prices, "Add to bag", SKU/ID blocks. Dense dark ink
+ *  there means page chrome — extract the garment, never frame the webpage. */
+function looksPage(data: Uint8ClampedArray, w: number, h: number): boolean {
   const band = Math.max(8, Math.round(h * 0.09));
   let dark = 0;
   let n = 0;
@@ -327,13 +329,14 @@ export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const { bg, frac, mad, floodTol } = sampleBorder(image.data, canvas.width, canvas.height);
 
-  if (looksOfficial(bg, frac, mad) && !looksScreenshot(image.data, canvas.width, canvas.height)) {
+  const page = looksPage(image.data, canvas.width, canvas.height);
+  if (looksStudio(bg, frac, mad) && !page) {
     // Clean product shot: crop to the garment so it fills the page.
     const box = contentBounds(image.data, canvas.width, canvas.height, bg, floodTol);
     return {
       cutoutSrc: compositePaper(canvas, box),
       quality: "clean",
-      official: true,
+      kind: "studio",
       reason: "Already a catalog shot — centered on paper, pixels untouched.",
     };
   }
@@ -356,7 +359,7 @@ export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
     quality = "ok";
     reason = "Floated on paper. Soft edge — a plainer surface will be tighter.";
   }
-  return { cutoutSrc, quality, reason, official: false };
+  return { cutoutSrc, quality, reason, kind: page ? "page" : "phone" };
 }
 
 export function preflightHints(file: File): string[] {

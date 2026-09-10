@@ -24,12 +24,24 @@ type Saved = {
   cutout: string;
 };
 
+/** A shopping-page screenshot we cannot extract (no key) — not a read error. */
+class PageRejected extends Error {}
+
+/** Filenames and shop chrome are never names. */
+function badName(name: string): boolean {
+  return (
+    looksLikeFilename(name) ||
+    /farfetch|ssense|net-a-porter|mr\s?porter|add to bag|\bID\b/i.test(name)
+  );
+}
+
 export function Studio() {
   const addGarment = useCloset((s) => s.addGarment);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
+  const [rejected, setRejected] = useState<string[]>([]);
   const [saved, setSaved] = useState<Saved[]>([]);
   const [canPrint, setCanPrint] = useState<boolean | null>(null);
   const pickRef = useRef<HTMLInputElement>(null);
@@ -47,15 +59,21 @@ export function Studio() {
       // Originals shrink to max edge 1600 before they ever touch storage.
       const original = await shrinkDataUrl(raw, 1600, 0.85);
       const matte = await matteToPaper(original);
-      // The catalog print is a digital print of HIS exact piece — the flood
-      // cutout stays as fallback if there's no key or the edit fails.
+      // A webpage is never a cover. Without the key we cannot extract the
+      // garment, so the piece is refused instead of framed.
+      if (matte.kind === "page" && !canPrint) {
+        throw new PageRejected();
+      }
+      // The cover is a catalog photograph of HIS exact piece — for phone
+      // shots the flood cutout stays as fallback if the edit fails.
       let cutout = matte.cutoutSrc;
-      let source: ImageSource = matte.official
-        ? "official"
-        : matte.quality === "busy"
-          ? "photo"
-          : "segmented";
-      if (!matte.official && canPrint) {
+      let source: ImageSource =
+        matte.kind === "studio"
+          ? "official"
+          : matte.quality === "busy"
+            ? "photo"
+            : "segmented";
+      if (matte.kind !== "studio" && canPrint) {
         try {
           const print = await printGarment({
             data: { image: await shrinkDataUrl(original, 1024) },
@@ -70,24 +88,40 @@ export function Studio() {
           /* flood version stays */
         }
       }
+      // A page only enters the closet as an extracted garment. If the edit
+      // failed, refuse it rather than frame the webpage.
+      if (matte.kind === "page" && source !== "cutout") {
+        throw new PageRejected();
+      }
       let name = "";
       let category: Category = "other";
       let subtype = "";
       let colors: string[] = [];
       let material = "";
+      let brand = "";
       let fit: "slim" | "regular" | "relaxed" = "regular";
       let formality: 1 | 2 | 3 | 4 | 5 = 3;
       let warmth: 1 | 2 | 3 | 4 | 5 = 3;
       try {
-        // Tag the print, not the messy original.
+        // Tag the cover, not the messy original. For a page, the original
+        // goes along as context only — the brand may live in the chrome.
         const thumb = await shrinkDataUrl(cutout, 768);
-        const tag = await tagGarment({ data: { image: thumb } });
-        if (tag.ok && !looksLikeFilename(tag.name)) {
+        const tag = await tagGarment({
+          data: {
+            image: thumb,
+            context:
+              matte.kind === "page"
+                ? await shrinkDataUrl(original, 768)
+                : undefined,
+          },
+        });
+        if (tag.ok && !badName(tag.name)) {
           name = tag.name;
           category = tag.category;
           subtype = tag.subtype;
           colors = tag.colors;
           material = tag.material;
+          brand = tag.brand;
           fit = tag.fit;
           formality = tag.formality;
           warmth = tag.warmth;
@@ -95,9 +129,9 @@ export function Studio() {
       } catch {
         /* fall through to guess */
       }
-      if (!name || looksLikeFilename(name) || category === "other") {
+      if (!name || badName(name) || category === "other") {
         const guess = await guessGarment(cutout);
-        if (!name || looksLikeFilename(name)) name = guess.name;
+        if (!name || badName(name)) name = guess.name;
         if (category === "other") {
           category = guess.category;
           subtype = subtype || guess.subtype;
@@ -115,7 +149,7 @@ export function Studio() {
         subtype,
         colors,
         material,
-        brand: "",
+        brand,
         notes: matte.reason,
         formality,
         warmth,
@@ -143,6 +177,7 @@ export function Studio() {
       let i = 0;
       let done = 0;
       const misses: string[] = [];
+      const pages: string[] = [];
       const worker = async () => {
         while (i < images.length) {
           const file = images[i++]!;
@@ -152,9 +187,10 @@ export function Studio() {
             done++;
             setProgress(`${done} / ${images.length} — ${piece.name}`);
             setSaved((cur) => [piece, ...cur]);
-          } catch {
+          } catch (e) {
             done++;
-            misses.push(file.name);
+            if (e instanceof PageRejected) pages.push(file.name);
+            else misses.push(file.name);
           }
           // Let the tab breathe between pieces.
           await new Promise((r) => setTimeout(r, 0));
@@ -164,6 +200,7 @@ export function Studio() {
       setBusy(false);
       setProgress("");
       if (misses.length) setFailed((cur) => [...misses, ...cur]);
+      if (pages.length) setRejected((cur) => [...pages, ...cur]);
     },
     [processOne],
   );
@@ -259,12 +296,19 @@ export function Studio() {
       {canPrint === false && (
         <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
           No XAI_API_KEY here — pieces float on paper with the local cut instead
-          of a catalog print. Set XAI_API_KEY for catalog prints.
+          of a catalog cover. Set XAI_API_KEY for catalog covers.
         </p>
       )}
       {error && (
         <p className="text-sm text-accent border border-accent/40 bg-card px-4 py-3">
           {error}
+        </p>
+      )}
+      {rejected.length > 0 && (
+        <p className="text-sm text-accent border border-accent/40 bg-card px-4 py-3">
+          {rejected.slice(0, 6).join(", ")}
+          {rejected.length > 6 ? "…" : ""} — that’s a webpage. Right-click the
+          clothing photo, save it, drop that.
         </p>
       )}
       {failed.length > 0 && (

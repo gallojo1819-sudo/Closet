@@ -8,6 +8,7 @@ export type TagResult = {
   subtype: string;
   colors: string[];
   material: string;
+  brand: string;
   fit: "slim" | "regular" | "relaxed";
   formality: 1 | 2 | 3 | 4 | 5;
   warmth: 1 | 2 | 3 | 4 | 5;
@@ -24,10 +25,25 @@ const CATEGORY_SET = new Set([
 ]);
 
 export const tagGarment = createServerFn({ method: "POST" })
-  .validator((input: { image: string }) => input)
+  .validator((input: { image: string; context?: string }) => input)
   .handler(async ({ data }): Promise<TagResult> => {
     const apiKey = process.env.XAI_API_KEY;
     if (!apiKey) return { ok: false, error: "AI tagging is unavailable here." };
+
+    const userContent: unknown[] = [
+      { type: "image_url", image_url: { url: data.image } },
+    ];
+    if (data.context) {
+      userContent.push({ type: "image_url", image_url: { url: data.context } });
+    }
+    userContent.push({
+      type: "text",
+      text:
+        'Return ONLY JSON: {"name":"Khaki chinos","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"chinos","colors":["khaki"],"material":"cotton","brand":"","fit":"slim|regular|relaxed","formality":3,"warmth":2}. Name the FIRST image like a closet label: color + garment (Navy oxford, Grey merino, White sneakers). Fit from how it lies. If unsure, regular.' +
+        (data.context
+          ? " The second image is only the page the garment came from — you may read a brand name from it (Axel Arigato, AMI), nothing else. Never name the garment after the shop or a page ID."
+          : " Brand only if a label or logo is legible on the garment itself, else empty."),
+    });
 
     const res = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -43,18 +59,9 @@ export const tagGarment = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You tag ONE garment in the photo. Catalog voice. Never a filename (no IMG_0930). Never invent a brand. JSON only.",
+              "You tag ONE garment in the photo. Catalog voice. Never a filename (no IMG_0930). Never a shop name or page ID (no FARFETCH, no SKU). Never invent a brand. JSON only.",
           },
-          {
-            role: "user",
-            content: [
-              { type: "image_url", image_url: { url: data.image } },
-              {
-                type: "text",
-                text: 'Return ONLY JSON: {"name":"Khaki chinos","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"chinos","colors":["khaki"],"material":"cotton","fit":"slim|regular|relaxed","formality":3,"warmth":2}. Name like a closet label: color + garment (Navy oxford, Grey merino, White sneakers). Fit from how it lies. If unsure, regular.',
-              },
-            ],
-          },
+          { role: "user", content: userContent },
         ],
       }),
     });
@@ -83,6 +90,7 @@ export const tagGarment = createServerFn({ method: "POST" })
           ? parsed.colors.filter((c) => typeof c === "string").slice(0, 4)
           : [],
         material: String(parsed.material ?? "").slice(0, 32),
+        brand: String(parsed.brand ?? "").slice(0, 40),
         fit,
         formality: (formality >= 1 && formality <= 5 ? formality : 3) as 1 | 2 | 3 | 4 | 5,
         warmth: (warmth >= 1 && warmth <= 5 ? warmth : 3) as 1 | 2 | 3 | 4 | 5,
@@ -126,7 +134,7 @@ export const printGarment = createServerFn({ method: "POST" })
   .validator((input: { image: string }) => input)
   .handler(async ({ data }): Promise<EditResult> => {
     const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) return { ok: false, error: "Set XAI_API_KEY for catalog prints." };
+    if (!apiKey) return { ok: false, error: "Set XAI_API_KEY for catalog covers." };
     const res = await fetch("https://api.x.ai/v1/images/edits", {
       method: "POST",
       headers: {
@@ -137,7 +145,7 @@ export const printGarment = createServerFn({ method: "POST" })
         model: "grok-imagine-image-2.0",
         image: { url: data.image },
         prompt:
-          "Catalog product photo of the SINGLE garment in this image. If this is a screenshot of a shopping page or order email (prices, buttons, color dots, text, navigation), extract ONLY the garment — never frame the webpage. Keep the exact color, fabric, stitching, hardware, and wear. Remove the floor, wall, hanger, hands, and any room. Lay the garment flat on a warm paper background (#F4EFE6), 4:5 portrait, filling about 80% of the frame. Do not replace or invent clothing.",
+          "Product photograph of the SINGLE garment only. Keep the exact garment: color, fabric, stitching, hardware, logos, wear. Remove floor, walls, hangers, people, webpage chrome, prices, IDs, buttons, color swatches, text. Lay the garment (or pair of shoes) neatly on a solid #F4EFE6 paper, 4:5, garment filling ~80% of the frame, even light, no shadow theater. Do not invent a different item, brand, or color.",
       }),
     });
     return readEditedImage(res);
