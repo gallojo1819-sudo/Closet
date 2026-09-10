@@ -1,15 +1,48 @@
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { GarmentTile } from "@/components/closet/tile";
 import { LookStack } from "@/components/closet/look-stack";
+import { Button } from "@/components/ui/button";
+import { nameLook } from "@/lib/look";
 import { useCloset } from "@/lib/store";
 
 export const Route = createFileRoute("/outfits")({ component: OutfitsPage });
 
 function OutfitsPage() {
   const looks = useCloset((s) => s.looks);
-  const garments = useCloset((s) => s.garments);
+  const garmentsAll = useCloset((s) => s.garments);
+  const garments = useMemo(
+    () => garmentsAll.filter((g) => !g.archived),
+    [garmentsAll],
+  );
   const removeLook = useCloset((s) => s.removeLook);
   const saveLook = useCloset((s) => s.saveLook);
   const drop = useCloset((s) => s.drop);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [name, setName] = useState("");
+  const [occasion, setOccasion] = useState("");
+
+  const selected = garments.filter((g) => picked.includes(g.id));
+  const draftName = name.trim() || nameLook(selected);
+
+  const toggle = (id: string) => {
+    setPicked((cur) =>
+      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
+    );
+  };
+
+  const keep = () => {
+    if (picked.length < 2) return;
+    saveLook({
+      name: draftName,
+      occasion: occasion.trim() || "composed",
+      garmentIds: picked,
+      source: "manual",
+    });
+    setPicked([]);
+    setName("");
+    setOccasion("");
+  };
 
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-6 py-8 md:py-12 rise">
@@ -18,8 +51,44 @@ function OutfitsPage() {
         Saved outfits
       </h1>
       <p className="mt-3 text-ink-soft max-w-xl">
-        Composed from your real pieces — never a fabricated garment.
+        Tap pieces you own. Save the look. Nothing fabricated.
       </p>
+
+      <section className="mt-10 border border-hairline bg-card px-4 py-5 md:px-6">
+        <p className="micro text-ink-soft">Compose</p>
+        <p className="mt-1 font-editorial text-2xl tracking-tight">
+          {selected.length ? draftName : "Tap two or more pieces."}
+        </p>
+        <ul className="mt-5 grid grid-cols-3 md:grid-cols-6 gap-3">
+          {garments.map((g) => (
+            <li key={g.id}>
+              <GarmentTile
+                garment={g}
+                selected={picked.includes(g.id)}
+                onClick={() => toggle(g.id)}
+              />
+            </li>
+          ))}
+        </ul>
+        <div className="mt-5 flex flex-col sm:flex-row gap-3">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Name this look"
+            className="h-11 flex-1 border border-hairline bg-paper px-3 text-sm"
+          />
+          <input
+            value={occasion}
+            onChange={(e) => setOccasion(e.target.value)}
+            placeholder="Occasion"
+            className="h-11 sm:w-48 border border-hairline bg-paper px-3 text-sm"
+          />
+          <Button onClick={keep} disabled={picked.length < 2}>
+            Save look
+          </Button>
+        </div>
+      </section>
+
       {drop && drop.garmentIds.length > 0 && (
         <button
           type="button"
@@ -36,6 +105,7 @@ function OutfitsPage() {
           Save today’s drop
         </button>
       )}
+
       <ul className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
         {looks.map((look) => {
           const pieces = look.garmentIds
@@ -47,7 +117,10 @@ function OutfitsPage() {
               <div className="mt-3 flex items-baseline justify-between">
                 <div>
                   <p>{look.name}</p>
-                  <p className="micro text-ink-soft">{look.occasion}</p>
+                  <p className="micro text-ink-soft">
+                    {look.occasion}
+                    {look.source === "manual" ? " · composed" : ""}
+                  </p>
                 </div>
                 <button
                   type="button"

@@ -18,6 +18,7 @@ type ClosetState = {
   removeLook: (id: string) => void;
   setDrop: (drop: DailyDrop) => void;
   rerollDrop: (weather?: WeatherSnap) => void;
+  swapDropPiece: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
   resetDemo: () => void;
 };
@@ -133,6 +134,28 @@ export const useCloset = create<ClosetState>()(
             garmentIds: ids,
             worn: false,
             weather: weather ?? get().drop?.weather,
+          },
+        });
+      },
+      swapDropPiece: (id) => {
+        const drop = get().drop;
+        if (!drop) return;
+        const current = get().garments.find((g) => g.id === id);
+        if (!current) return;
+        const used = new Set(drop.garmentIds);
+        const pool = get().garments.filter(
+          (g) =>
+            !g.archived &&
+            g.category === current.category &&
+            !used.has(g.id),
+        );
+        const next = pool[Math.floor(Math.random() * pool.length)];
+        if (!next) return;
+        set({
+          drop: {
+            ...drop,
+            worn: false,
+            garmentIds: drop.garmentIds.map((gid) => (gid === id ? next.id : gid)),
           },
         });
       },
