@@ -9,7 +9,7 @@ const BORDER = 10;
 const OUTLIER_TOL = 34;
 const OUT_W = 720;
 const OUT_H = 900;
-const PAD = 0.12;
+const PAD = 0.1;
 
 export type MatteQuality = "clean" | "ok" | "busy";
 
@@ -131,6 +131,58 @@ function looksOfficial(
   const spread =
     Math.max(bg.r, bg.g, bg.b) - lo;
   return frac <= 0.06 && mad <= 6 && lo >= 200 && spread <= 10;
+}
+
+/** Shopping-page screenshots also have a white border, but the top/bottom
+ *  bands carry nav text, prices, "Add to bag". Dense dark ink there means
+ *  page chrome — extract the garment, never frame the webpage. */
+function looksScreenshot(data: Uint8ClampedArray, w: number, h: number): boolean {
+  const band = Math.max(8, Math.round(h * 0.09));
+  let dark = 0;
+  let n = 0;
+  for (const [y0, y1] of [
+    [0, band],
+    [h - band, h],
+  ] as const) {
+    for (let y = y0; y < y1; y++) {
+      for (let x = 0; x < w; x += 2) {
+        const i = (y * w + x) * 4;
+        n++;
+        if (data[i]! < 90 && data[i + 1]! < 90 && data[i + 2]! < 90) dark++;
+      }
+    }
+  }
+  return n > 0 && dark / n > 0.004;
+}
+
+/** Bbox of everything that is not the (uniform, clean) background. Used to
+ *  fill official shots to ~80% of the page instead of a postage stamp. */
+function contentBounds(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number,
+  bg: { r: number; g: number; b: number },
+  tol: number,
+) {
+  const t = Math.max(30, tol);
+  let minX = w;
+  let minY = h;
+  let maxX = 0;
+  let maxY = 0;
+  let count = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (dist(data[i]!, data[i + 1]!, data[i + 2]!, bg.r, bg.g, bg.b) <= t) continue;
+      count++;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (count < w * h * 0.02 || maxX <= minX || maxY <= minY) return null;
+  return { minX, minY, maxX, maxY };
 }
 
 function sampleForeground(
@@ -275,9 +327,11 @@ export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const { bg, frac, mad, floodTol } = sampleBorder(image.data, canvas.width, canvas.height);
 
-  if (looksOfficial(bg, frac, mad)) {
+  if (looksOfficial(bg, frac, mad) && !looksScreenshot(image.data, canvas.width, canvas.height)) {
+    // Clean product shot: crop to the garment so it fills the page.
+    const box = contentBounds(image.data, canvas.width, canvas.height, bg, floodTol);
     return {
-      cutoutSrc: compositePaper(canvas, null),
+      cutoutSrc: compositePaper(canvas, box),
       quality: "clean",
       official: true,
       reason: "Already a catalog shot — centered on paper, pixels untouched.",

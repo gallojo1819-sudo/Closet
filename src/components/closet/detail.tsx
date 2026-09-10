@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
+import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { costPerWear, money } from "@/lib/look";
 import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
@@ -22,7 +23,8 @@ export function GarmentDetail({
   const [paid, setPaid] = useState(
     garment.paid != null ? String(garment.paid) : "",
   );
-  const [view, setView] = useState<"print" | "original">("print");
+  const refPhoto = useCloset((s) => s.refPhoto);
+  const [view, setView] = useState<"print" | "original" | "me">("print");
   const [name, setName] = useState(garment.name);
   const originalSrc = useImageSrc(garment.imageSrc);
   const usingOriginal = garment.cutoutSrc === garment.imageSrc;
@@ -51,22 +53,26 @@ export function GarmentDetail({
       />
       <div className="relative z-10 w-full max-w-3xl max-h-[92dvh] overflow-auto bg-paper border border-hairline md:grid md:grid-cols-2">
         <div>
-          <div className="bg-paper-deep aspect-page">
-            {view === "print" ? (
-              <GarmentImg
-                garment={garment}
-                className="h-full w-full object-contain p-[8%]"
-              />
-            ) : originalSrc ? (
-              <img
-                src={originalSrc}
-                alt={garment.name}
-                className="h-full w-full object-contain p-[8%]"
-              />
-            ) : (
-              <div className="h-full w-full" aria-hidden />
-            )}
-          </div>
+          {view === "me" ? (
+            <OnMePanel pieces={[garment]} />
+          ) : (
+            <div className="bg-paper-deep aspect-page">
+              {view === "print" ? (
+                <GarmentImg
+                  garment={garment}
+                  className="h-full w-full object-contain p-[8%]"
+                />
+              ) : originalSrc ? (
+                <img
+                  src={originalSrc}
+                  alt={garment.name}
+                  className="h-full w-full object-contain p-[8%]"
+                />
+              ) : (
+                <div className="h-full w-full" aria-hidden />
+              )}
+            </div>
+          )}
           <div className="flex border-t border-hairline">
             {(["print", "original"] as const).map((v) => (
               <button
@@ -81,8 +87,20 @@ export function GarmentDetail({
                 {v === "print" ? "Print" : "Original"}
               </button>
             ))}
+            {refPhoto && (
+              <button
+                type="button"
+                onClick={() => setView("me")}
+                className={cn(
+                  "micro flex-1 py-2",
+                  view === "me" ? "bg-ink text-paper" : "text-ink-soft",
+                )}
+              >
+                On me
+              </button>
+            )}
           </div>
-          {!usingOriginal && (
+          {!usingOriginal && view !== "me" && (
             <button
               type="button"
               onClick={() => {

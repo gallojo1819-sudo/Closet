@@ -88,7 +88,7 @@
 
 .flat-piece {
   transform: translate(var(--rx, 0), var(--ry, 0)) rotate(var(--rr, 0deg));
-  transition: transform 700ms var(--ease-atelier);
+  transition: transform 280ms var(--ease-atelier);
   will-change: transform;
 }
 

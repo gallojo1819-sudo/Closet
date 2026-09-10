@@ -137,7 +137,7 @@ export const printGarment = createServerFn({ method: "POST" })
         model: "grok-imagine-image-2.0",
         image: { url: data.image },
         prompt:
-          "Catalog product photo of the SINGLE garment in this photo. Keep the exact color, fabric, stitching, hardware, and wear. Remove the floor, wall, hanger, hands, and any room. Lay the garment flat on a warm paper background (#F4EFE6), 4:5 portrait, filling the frame. Do not replace or invent clothing.",
+          "Catalog product photo of the SINGLE garment in this image. If this is a screenshot of a shopping page or order email (prices, buttons, color dots, text, navigation), extract ONLY the garment — never frame the webpage. Keep the exact color, fabric, stitching, hardware, and wear. Remove the floor, wall, hanger, hands, and any room. Lay the garment flat on a warm paper background (#F4EFE6), 4:5 portrait, filling about 80% of the frame. Do not replace or invent clothing.",
       }),
     });
     return readEditedImage(res);
