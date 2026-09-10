@@ -92,6 +92,57 @@ export const tagGarment = createServerFn({ method: "POST" })
     }
   });
 
+type EditResult = { ok: true; image: string } | { ok: false; error: string };
+
+async function readEditedImage(res: Response): Promise<EditResult> {
+  if (!res.ok) return { ok: false, error: `Edit failed (${res.status})` };
+  const body = (await res.json()) as {
+    data?: { b64_json?: string; url?: string }[];
+  };
+  const first = body.data?.[0];
+  if (first?.b64_json) return { ok: true, image: `data:image/png;base64,${first.b64_json}` };
+  if (first?.url) {
+    // The imgen URL is temporary and not CORS-open — pull the pixels
+    // server-side and hand back a data URL.
+    try {
+      const img = await fetch(first.url);
+      if (!img.ok) return { ok: false, error: "Could not download the edit." };
+      const buf = Buffer.from(await img.arrayBuffer());
+      const mime = img.headers.get("content-type") ?? "image/jpeg";
+      return { ok: true, image: `data:${mime};base64,${buf.toString("base64")}` };
+    } catch {
+      return { ok: false, error: "Could not download the edit." };
+    }
+  }
+  return { ok: false, error: "Edit came back empty." };
+}
+
+export const aiStatus = createServerFn({ method: "GET" }).handler(async () => ({
+  /** Catalog prints + on-me previews need the xAI key server-side. */
+  print: Boolean(process.env.XAI_API_KEY),
+}));
+
+export const printGarment = createServerFn({ method: "POST" })
+  .validator((input: { image: string }) => input)
+  .handler(async ({ data }): Promise<EditResult> => {
+    const apiKey = process.env.XAI_API_KEY;
+    if (!apiKey) return { ok: false, error: "Set XAI_API_KEY for catalog prints." };
+    const res = await fetch("https://api.x.ai/v1/images/edits", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "grok-imagine-image-2.0",
+        image: { url: data.image },
+        prompt:
+          "Catalog product photo of the SINGLE garment in this photo. Keep the exact color, fabric, stitching, hardware, and wear. Remove the floor, wall, hanger, hands, and any room. Lay the garment flat on a warm paper background (#F4EFE6), 4:5 portrait, filling the frame. Do not replace or invent clothing.",
+      }),
+    });
+    return readEditedImage(res);
+  });
+
 export const onMePreview = createServerFn({ method: "POST" })
   .validator((input: { refImage: string; cutouts: string[]; pieces: string }) => input)
   .handler(async ({ data }): Promise<{ ok: true; image: string } | { ok: false; error: string }> => {
@@ -107,18 +158,11 @@ export const onMePreview = createServerFn({ method: "POST" })
       body: JSON.stringify({
         model: "grok-imagine-image-2.0",
         // Joe's reference first, then the actual cutouts of this look (max 4).
-        images: [data.refImage, ...data.cutouts.slice(0, 4)],
+        images: [{ url: data.refImage }, ...data.cutouts.slice(0, 4).map((c) => ({ url: c }))],
         prompt: `Dress THIS man — the man in the first image, same face, same 5'8 regular build — in THESE exact garments from the following images: ${data.pieces}. Editorial full-body photograph on plain warm paper. Do not invent clothing, logos, or colors. If a piece is unclear, omit it. No text.`,
       }),
     });
-    if (!res.ok) return { ok: false, error: `Preview failed (${res.status})` };
-    const body = (await res.json()) as {
-      data?: { b64_json?: string; url?: string }[];
-    };
-    const first = body.data?.[0];
-    if (first?.b64_json) return { ok: true, image: `data:image/png;base64,${first.b64_json}` };
-    if (first?.url) return { ok: true, image: first.url };
-    return { ok: false, error: "Preview came back empty." };
+    return readEditedImage(res);
   });
 
 export const askStylist = createServerFn({ method: "POST" })

@@ -86,6 +86,24 @@
   opacity: 0.07;
 }
 
+.flat-piece {
+  transform: translate(var(--rx, 0), var(--ry, 0)) rotate(var(--rr, 0deg));
+  transition: transform 700ms var(--ease-atelier);
+  will-change: transform;
+}
+
+.group:hover .flat-piece,
+.group:focus-visible .flat-piece,
+.group:focus-within .flat-piece {
+  transform: translate(var(--sx, 0), var(--sy, 0)) rotate(var(--sr, 0deg));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flat-piece {
+    transition: none;
+  }
+}
+
 .micro {
   font-family: var(--font-mono);
   font-size: 0.65625rem;

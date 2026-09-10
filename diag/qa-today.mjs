@@ -33,8 +33,12 @@ const dropCount = await page.evaluate(() => {
 });
 if (!dropCount) fail("no daily drop generated");
 else ok(`daily drop generated (${dropCount} pieces)`);
+await page.getByRole("button", { name: "5′8", exact: true }).click();
+await page.waitForTimeout(300);
 if (!(await page.locator("figure svg").count())) fail("FitBoard missing");
 else ok("FitBoard shows the drop");
+await page.getByRole("button", { name: "On paper", exact: true }).click();
+await page.waitForTimeout(300);
 if (!(await page.getByRole("button", { name: "Wear this" }).count())) fail("Wear button missing");
 
 // Wear it -> logged
@@ -61,7 +65,7 @@ if (!srcs) fail("cutoutSrc was overwritten");
 else ok("cutouts untouched (still his pixels in IDB)");
 
 // on-me gated without reference photo, tiles unchanged after click
-await page.getByRole("button", { name: "On me" }).first().click();
+await page.getByRole("button", { name: "On me", exact: true }).click();
 await page.waitForTimeout(400);
 if (!/No reference photo yet/i.test(await page.textContent("body"))) fail("on-me not gated");
 else ok("on me gated without reference photo");
@@ -84,11 +88,16 @@ else ok("reference photo stored in IDB");
 // clicking On me now attempts the call; without XAI key it shows the copy line
 await page.goto(BASE + "/", { waitUntil: "networkidle" });
 await page.waitForTimeout(1500);
-await page.getByRole("button", { name: "On me" }).first().click();
-await page.waitForTimeout(4000);
+await page.getByRole("button", { name: "On me", exact: true }).click();
+await page.waitForTimeout(300);
+await page.getByRole("button", { name: "Generate preview" }).click();
+await page.waitForTimeout(20000);
 const body = await page.textContent("body");
-if (!/XAI_API_KEY|Preview failed|missing/i.test(body)) fail("no clear disabled/error copy for on-me");
-else ok("on-me without key shows clear copy");
+// With a key set this may genuinely generate; without one it must say so.
+const hasImg = await page.locator("img[alt='Preview on you']").count();
+if (!hasImg && !/XAI_API_KEY|Preview failed|Edit failed|missing/i.test(body))
+  fail("on-me produced neither a preview nor a clear error");
+else ok(hasImg ? "on-me preview generated" : "on-me shows clear copy without key");
 const srcs2 = await page.evaluate(() => {
   const s = JSON.parse(localStorage.getItem("closet.v6"));
   return s.state.garments.every((g) => g.cutoutSrc.startsWith("idb:"));

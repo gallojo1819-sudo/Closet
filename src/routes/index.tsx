@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { FitBoard } from "@/components/closet/fit";
+import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
-import { LookStack } from "@/components/closet/look-stack";
-import { OnMeButton } from "@/components/closet/on-me";
+import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, nameLook, neglectedPiece, sortLook } from "@/lib/look";
 import { HOUSE_LABEL, daysIdle, lookHouses } from "@/lib/style";
@@ -25,7 +25,7 @@ function Today() {
   const skipDrop = useCloset((s) => s.skipDrop);
   const saveLook = useCloset((s) => s.saveLook);
   const hydrated = useCloset((s) => s.hydrated);
-  const [view, setView] = useState<"fit" | "paper">("fit");
+  const [view, setView] = useState<"paper" | "fit" | "me">("paper");
 
   const ownedCount = garments.filter((g) => !g.archived).length;
 
@@ -200,8 +200,9 @@ function Today() {
             <div className="mb-3 flex gap-2">
               {(
                 [
-                  { id: "fit", label: "On you · 5′8" },
                   { id: "paper", label: "On paper" },
+                  { id: "fit", label: "5′8" },
+                  { id: "me", label: "On me" },
                 ] as const
               ).map((v) => (
                 <button
@@ -220,10 +221,12 @@ function Today() {
               ))}
             </div>
           )}
-          {view === "fit" && pieces.length > 0 ? (
+          {view === "me" && pieces.length > 0 ? (
+            <OnMePanel pieces={pieces} />
+          ) : view === "fit" && pieces.length > 0 ? (
             <FitBoard pieces={pieces} />
           ) : (
-            <LookStack pieces={pieces} />
+            <FlatLay pieces={pieces} />
           )}
         </div>
         <div className="space-y-6">
@@ -301,7 +304,6 @@ function Today() {
             >
               Ask the stylist
             </Link>
-            <OnMeButton pieces={pieces} />
           </div>
           {neglected && !done && (
             <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">

@@ -87,14 +87,32 @@ export async function guessGarment(cutoutSrc: string): Promise<{
   const bw = Math.max(1, maxX - minX);
   const bh = Math.max(1, maxY - minY);
   const aspect = bw / bh;
+
+  // Count separated opaque runs on a scanline — two runs near the hem are
+  // legs (pants, never a shirt); two runs across a wide box are shoes.
+  const runsAt = (frac: number): number => {
+    const y = Math.min(h - 1, Math.round(minY + bh * frac));
+    let runs = 0;
+    let inRun = false;
+    for (let x = minX; x <= maxX; x++) {
+      const i = (y * w + x) * 4;
+      const solid = dist(data[i]!, data[i + 1]!, data[i + 2]!, PAPER) >= 28;
+      if (solid && !inRun) runs++;
+      inRun = solid;
+    }
+    return runs;
+  };
+  const legRuns = bh > h * 0.3 ? runsAt(0.85) : 0;
+  const midRuns = runsAt(0.5);
+
   let category: Category = "other";
   let subtype = "";
   let noun = "piece";
-  if (aspect < 0.72) {
+  if (legRuns >= 2 || aspect < 0.72) {
     category = "bottom";
     subtype = color === "khaki" || color === "tan" || color === "olive" ? "chinos" : "pants";
     noun = subtype;
-  } else if (aspect > 1.15 && bh < h * 0.45) {
+  } else if ((aspect > 1.05 && midRuns >= 2) || (aspect > 1.15 && bh < h * 0.45)) {
     category = "footwear";
     subtype = "shoes";
     noun = "shoes";

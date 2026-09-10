@@ -3,9 +3,10 @@ import { GarmentImg } from "@/components/closet/gimg";
 import { Button } from "@/components/ui/button";
 import { costPerWear, money } from "@/lib/look";
 import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
-import type { Garment } from "@/lib/types";
+import { CATEGORIES, type Category, type Garment } from "@/lib/types";
 import { useCloset } from "@/lib/store";
-import { todayISO } from "@/lib/utils";
+import { useImageSrc } from "@/lib/use-image";
+import { cn, todayISO } from "@/lib/utils";
 
 export function GarmentDetail({
   garment,
@@ -21,6 +22,10 @@ export function GarmentDetail({
   const [paid, setPaid] = useState(
     garment.paid != null ? String(garment.paid) : "",
   );
+  const [view, setView] = useState<"print" | "original">("print");
+  const [name, setName] = useState(garment.name);
+  const originalSrc = useImageSrc(garment.imageSrc);
+  const usingOriginal = garment.cutoutSrc === garment.imageSrc;
   const cpw = costPerWear(garment);
 
   const commitPaid = () => {
@@ -28,6 +33,12 @@ export function GarmentDetail({
     const next = Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : undefined;
     if (next !== garment.paid) updateGarment(garment.id, { paid: next });
     setPaid(next != null ? String(next) : "");
+  };
+
+  const commitName = () => {
+    const next = name.trim();
+    if (next && next !== garment.name) updateGarment(garment.id, { name: next });
+    else setName(garment.name);
   };
 
   return (
@@ -39,15 +50,79 @@ export function GarmentDetail({
         onClick={onClose}
       />
       <div className="relative z-10 w-full max-w-3xl max-h-[92dvh] overflow-auto bg-paper border border-hairline md:grid md:grid-cols-2">
-        <div className="bg-paper-deep aspect-page">
-          <GarmentImg
-            garment={garment}
-            className="h-full w-full object-contain p-[8%]"
-          />
+        <div>
+          <div className="bg-paper-deep aspect-page">
+            {view === "print" ? (
+              <GarmentImg
+                garment={garment}
+                className="h-full w-full object-contain p-[8%]"
+              />
+            ) : originalSrc ? (
+              <img
+                src={originalSrc}
+                alt={garment.name}
+                className="h-full w-full object-contain p-[8%]"
+              />
+            ) : (
+              <div className="h-full w-full" aria-hidden />
+            )}
+          </div>
+          <div className="flex border-t border-hairline">
+            {(["print", "original"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={cn(
+                  "micro flex-1 py-2",
+                  view === v ? "bg-ink text-paper" : "text-ink-soft",
+                )}
+              >
+                {v === "print" ? "Print" : "Original"}
+              </button>
+            ))}
+          </div>
+          {!usingOriginal && (
+            <button
+              type="button"
+              onClick={() => {
+                updateGarment(garment.id, { cutoutSrc: garment.imageSrc });
+                setView("original");
+              }}
+              className="micro w-full py-2 text-ink-soft border-t border-hairline hover:text-ink"
+            >
+              Use my photo — the print lies
+            </button>
+          )}
         </div>
         <div className="p-6 flex flex-col gap-4">
-          <p className="micro text-ink-soft">{garment.category}</p>
-          <h2 className="font-editorial text-3xl tracking-tight">{garment.name}</h2>
+          <div className="flex items-center gap-3">
+            <select
+              value={garment.category}
+              onChange={(e) =>
+                updateGarment(garment.id, {
+                  category: e.target.value as Category,
+                })
+              }
+              className="micro border border-hairline bg-card px-2 py-1 text-ink-soft"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={commitName}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            aria-label="Name"
+            className="font-editorial text-3xl tracking-tight bg-transparent border-b border-transparent hover:border-hairline focus:border-hairline-strong focus:outline-none w-full"
+          />
           {garment.demo && (
             <p className="text-sm text-ink-soft">
               Sample piece — not from your closet. Add a photo of the real thing

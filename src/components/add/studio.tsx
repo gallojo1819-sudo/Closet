@@ -3,10 +3,10 @@ import { Camera, ClipboardPaste, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { imageKey, putImage, dataUrlToBlob } from "@/lib/images";
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
-import { tagGarment } from "@/lib/ai";
+import { aiStatus, printGarment, tagGarment } from "@/lib/ai";
 import { guessGarment, looksLikeFilename } from "@/lib/guess";
 import { useCloset } from "@/lib/store";
-import type { Category } from "@/lib/types";
+import type { Category, ImageSource } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
 const CHECKS = [
@@ -31,8 +31,15 @@ export function Studio() {
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
   const [saved, setSaved] = useState<Saved[]>([]);
+  const [canPrint, setCanPrint] = useState<boolean | null>(null);
   const pickRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    aiStatus()
+      .then((s) => setCanPrint(s.print))
+      .catch(() => setCanPrint(false));
+  }, []);
 
   const processOne = useCallback(
     async (file: File): Promise<Saved> => {
@@ -40,6 +47,29 @@ export function Studio() {
       // Originals shrink to max edge 1600 before they ever touch storage.
       const original = await shrinkDataUrl(raw, 1600, 0.85);
       const matte = await matteToPaper(original);
+      // The catalog print is a digital print of HIS exact piece — the flood
+      // cutout stays as fallback if there's no key or the edit fails.
+      let cutout = matte.cutoutSrc;
+      let source: ImageSource = matte.official
+        ? "official"
+        : matte.quality === "busy"
+          ? "photo"
+          : "segmented";
+      if (!matte.official && canPrint) {
+        try {
+          const print = await printGarment({
+            data: { image: await shrinkDataUrl(original, 1024) },
+          });
+          if (print.ok) {
+            // The edit comes back as a temporary URL — pull the pixels local
+            // before tagging or storing (canvas + IDB need same-origin data).
+            cutout = await shrinkDataUrl(await toLocalDataUrl(print.image), 900, 0.85);
+            source = "cutout";
+          }
+        } catch {
+          /* flood version stays */
+        }
+      }
       let name = "";
       let category: Category = "other";
       let subtype = "";
@@ -49,7 +79,8 @@ export function Studio() {
       let formality: 1 | 2 | 3 | 4 | 5 = 3;
       let warmth: 1 | 2 | 3 | 4 | 5 = 3;
       try {
-        const thumb = await shrinkDataUrl(original, 768);
+        // Tag the print, not the messy original.
+        const thumb = await shrinkDataUrl(cutout, 768);
         const tag = await tagGarment({ data: { image: thumb } });
         if (tag.ok && !looksLikeFilename(tag.name)) {
           name = tag.name;
@@ -65,7 +96,7 @@ export function Studio() {
         /* fall through to guess */
       }
       if (!name || looksLikeFilename(name) || category === "other") {
-        const guess = await guessGarment(matte.cutoutSrc);
+        const guess = await guessGarment(cutout);
         if (!name || looksLikeFilename(name)) name = guess.name;
         if (category === "other") {
           category = guess.category;
@@ -76,7 +107,7 @@ export function Studio() {
       const id = uid("g");
       // Pixels go to IndexedDB; persist keeps only the keys.
       await putImage(imageKey(id, "o"), dataUrlToBlob(original));
-      await putImage(imageKey(id, "c"), dataUrlToBlob(matte.cutoutSrc));
+      await putImage(imageKey(id, "c"), dataUrlToBlob(cutout));
       addGarment({
         id,
         name,
@@ -92,16 +123,12 @@ export function Studio() {
         seasons: [],
         imageSrc: imageKey(id, "o"),
         cutoutSrc: imageKey(id, "c"),
-        imageSource: matte.official
-          ? "official"
-          : matte.quality === "busy"
-            ? "photo"
-            : "segmented",
+        imageSource: source,
         matteQuality: matte.quality,
       });
-      return { id, name, category, cutout: matte.cutoutSrc };
+      return { id, name, category, cutout };
     },
-    [addGarment],
+    [addGarment, canPrint],
   );
 
   const processFiles = useCallback(
@@ -229,6 +256,12 @@ export function Studio() {
           {progress || "Working…"}
         </div>
       )}
+      {canPrint === false && (
+        <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
+          No XAI_API_KEY here — pieces float on paper with the local cut instead
+          of a catalog print. Set XAI_API_KEY for catalog prints.
+        </p>
+      )}
       {error && (
         <p className="text-sm text-accent border border-accent/40 bg-card px-4 py-3">
           {error}
@@ -267,6 +300,17 @@ export function Studio() {
       )}
     </div>
   );
+}
+
+async function toLocalDataUrl(src: string): Promise<string> {
+  if (src.startsWith("data:")) return src;
+  const blob = await (await fetch(src)).blob();
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error("Could not download print"));
+    r.readAsDataURL(blob);
+  });
 }
 
 async function shrinkDataUrl(src: string, max: number, q = 0.82): Promise<string> {

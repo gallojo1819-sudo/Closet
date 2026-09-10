@@ -18,8 +18,8 @@ await page.goto(BASE + "/", { waitUntil: "networkidle" });
 await page.waitForTimeout(800);
 if (!/empty until you photograph it/i.test(await page.textContent("body"))) fail("empty copy missing");
 else ok("empty closet copy");
-if (await page.getByRole("button", { name: /On you · 5′8/ }).count()) fail("fit toggle visible with 0 pieces");
-else ok("fit toggle hidden with 0 pieces");
+if (await page.getByRole("button", { name: "5′8", exact: true }).count()) fail("view toggle visible with 0 pieces");
+else ok("view toggle hidden with 0 pieces");
 
 // 2. 4 files (2 product-white, 2 messy phone)
 await page.goto(BASE + "/add", { waitUntil: "networkidle" });
@@ -83,12 +83,16 @@ else ok("images render from IDB after refresh");
 if (await page.getByText("Waiting", { exact: true }).count()) fail("WAITING badge on new uploads");
 else ok("no WAITING badges");
 
-// 6. Today: fit board + on-me gating (no ref photo yet)
+// 6. Today: flat-lay default, fit board behind the 5′8 toggle, on-me gating
 await page.goto(BASE + "/", { waitUntil: "networkidle" });
 await page.waitForTimeout(1500);
-if (!(await page.locator("figure svg").count())) fail("FitBoard missing on Today");
-else ok("FitBoard on Today");
-await page.getByRole("button", { name: "On me" }).first().click();
+if (!(await page.locator(".flat-piece").count())) fail("FlatLay missing on Today");
+else ok("FlatLay default on Today");
+await page.getByRole("button", { name: "5′8", exact: true }).click();
+await page.waitForTimeout(300);
+if (!(await page.locator("figure svg").count())) fail("FitBoard missing behind 5′8 toggle");
+else ok("FitBoard behind 5′8 toggle");
+await page.getByRole("button", { name: "On me", exact: true }).click();
 await page.waitForTimeout(400);
 if (!/No reference photo yet/i.test(await page.textContent("body"))) fail("on-me gating message missing");
 else ok("on me gated without reference photo");

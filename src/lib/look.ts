@@ -68,7 +68,9 @@ export function neglectedPiece(
   dropIds: string[],
 ): Garment | null {
   const used = new Set(dropIds);
-  const pool = garments.filter((g) => !g.archived && !used.has(g.id));
+  const pool = garments.filter(
+    (g) => !g.archived && !used.has(g.id) && daysIdle(g) >= 21,
+  );
   if (!pool.length) return null;
   return [...pool].sort((a, b) => daysIdle(b) - daysIdle(a))[0] ?? null;
 }

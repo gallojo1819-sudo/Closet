@@ -30,7 +30,7 @@ const shots = await page.evaluate(() => {
     out["prod-sweater.png"] = c.toDataURL("image/png");
   }
 
-  // 2. brown loafers on light grey
+  // 2. brown loafers on light grey — a standing pair, clearly shoes
   {
     const c = document.createElement("canvas");
     c.width = W;
@@ -38,16 +38,28 @@ const shots = await page.evaluate(() => {
     const ctx = c.getContext("2d");
     ctx.fillStyle = "#e8e8e8";
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "#5f4028";
-    ctx.beginPath(); // loafer silhouettes, side by side
-    ctx.ellipse(340, 560, 130, 220, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(560, 560, 130, 220, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#3f2a18";
-    ctx.fillRect(250, 420, 180, 26);
-    ctx.fillRect(470, 420, 180, 26);
+    const shoe = (cx) => {
+      // sole
+      ctx.fillStyle = "#3f2a18";
+      ctx.beginPath();
+      ctx.ellipse(cx, 640, 95, 260, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // leather upper
+      ctx.fillStyle = "#6b4a2e";
+      ctx.beginPath();
+      ctx.ellipse(cx, 600, 88, 240, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // vamp strap
+      ctx.fillStyle = "#54371f";
+      ctx.fillRect(cx - 80, 520, 160, 34);
+      // heel cap
+      ctx.fillStyle = "#462d18";
+      ctx.beginPath();
+      ctx.ellipse(cx, 810, 80, 60, 0, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    shoe(320);
+    shoe(580);
     out["prod-loafers.png"] = c.toDataURL("image/png");
   }
   return out;

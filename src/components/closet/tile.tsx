@@ -21,7 +21,7 @@ export function GarmentTile({
         selected && "outline outline-1 outline-ink",
       )}
     >
-      <div className="relative bg-paper-deep border border-hairline overflow-hidden aspect-page">
+      <div className="relative bg-paper-deep border border-hairline overflow-hidden aspect-page transition-all duration-500 ease-[var(--ease-atelier)] group-hover:-translate-y-1 group-hover:shadow-[0_14px_34px_-14px_rgb(23_20_15/0.3)]">
         <GarmentImg
           garment={garment}
           className="absolute inset-0 h-full w-full object-contain p-[8%]"
