@@ -156,7 +156,14 @@ export default defineConfig(({ command, isPreview }) => ({
     port: 8081,
     strictPort: true,
   },
-  resolve: { tsconfigPaths: true },
+  resolve: { tsconfigPaths: true, dedupe: ["tailwindcss"] },
+  // Never inherit a parent-folder postcss.config (Joe's tree has Tailwind v3
+  // at thesium-intelligence/). Tailwind v4 is the Vite plugin above.
+  css: {
+    postcss: {
+      plugins: [],
+    },
+  },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
