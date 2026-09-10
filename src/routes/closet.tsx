@@ -41,6 +41,11 @@ function ClosetPage() {
             {garments.length} pieces
             <span className="italic text-accent"> on paper.</span>
           </h1>
+          {garments.length === 0 && (
+            <p className="mt-3 text-sm text-ink-soft">
+              Nothing in here yet. The grid is yours once you photograph a piece.
+            </p>
+          )}
           {waiting.length > 0 && (
             <p className="mt-3 text-sm text-ink-soft">
               {waiting.length} sitting idle. Wear them, don’t buy more.

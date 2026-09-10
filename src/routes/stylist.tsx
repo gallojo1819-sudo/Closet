@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { askStylist } from "@/lib/ai";
@@ -35,7 +35,7 @@ function StylistPage() {
 
   const send = async (prompt: string) => {
     const q = prompt.trim();
-    if (!q || busy) return;
+    if (!q || busy || owned.length === 0) return;
     pushMessage({ role: "user", text: q });
     setText("");
     setBusy(true);
@@ -93,8 +93,22 @@ function StylistPage() {
         Mixed from your closet. Never a garment you don’t own.
       </p>
 
+      {owned.length === 0 && (
+        <div className="mt-10 border border-champagne/20 bg-night-elev px-4 py-5">
+          <p className="text-sm text-champagne/80">
+            The stylist has nothing to dress. Photograph a piece first.
+          </p>
+          <Link
+            to="/add"
+            className="mt-4 inline-flex h-11 items-center bg-champagne px-4 text-sm text-night"
+          >
+            Add a piece
+          </Link>
+        </div>
+      )}
+
       <div className="mt-8 space-y-4 min-h-64">
-        {messages.length === 0 && (
+        {messages.length === 0 && owned.length > 0 && (
           <p className="text-champagne/50 text-sm">
             Name an occasion, a time, a constraint. The look will come from the
             pieces above — especially the ones sitting.
@@ -126,7 +140,8 @@ function StylistPage() {
             key={p}
             type="button"
             onClick={() => void send(p)}
-            className="micro border border-champagne/25 px-3 py-2 text-champagne/80 hover:border-champagne/60"
+            disabled={owned.length === 0}
+            className="micro border border-champagne/25 px-3 py-2 text-champagne/80 hover:border-champagne/60 disabled:opacity-40"
           >
             {p}
           </button>
@@ -144,9 +159,10 @@ function StylistPage() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Occasion, time, weather, a feeling…"
-          className="h-12 flex-1 border border-champagne/25 bg-night-elev px-3 text-sm text-champagne placeholder:text-champagne/40"
+          disabled={owned.length === 0}
+          className="h-12 flex-1 border border-champagne/25 bg-night-elev px-3 text-sm text-champagne placeholder:text-champagne/40 disabled:opacity-40"
         />
-        <Button variant="night" type="submit" disabled={busy}>
+        <Button variant="night" type="submit" disabled={busy || owned.length === 0}>
           Send
         </Button>
       </form>

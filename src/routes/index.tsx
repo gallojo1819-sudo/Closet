@@ -23,6 +23,8 @@ function Today() {
   const saveLook = useCloset((s) => s.saveLook);
   const hydrated = useCloset((s) => s.hydrated);
 
+  const ownedCount = garments.filter((g) => !g.archived).length;
+
   useEffect(() => {
     if (!hydrated) return;
     let cancelled = false;
@@ -34,17 +36,31 @@ function Today() {
         weather = weather ?? { f: 68, label: "Fair", code: 2 };
       }
       if (cancelled) return;
-      if (!drop || drop.date !== todayISO()) {
+      const owned = useCloset.getState().garments.filter((g) => !g.archived);
+      const current = useCloset.getState().drop;
+      if (!owned.length) {
+        if (weather && current?.weather?.f !== weather.f) {
+          setDrop({
+            date: todayISO(),
+            garmentIds: [],
+            worn: false,
+            verdict: "pending",
+            weather,
+          });
+        }
+        return;
+      }
+      if (!current || current.date !== todayISO() || current.garmentIds.length === 0) {
         useCloset.getState().rerollDrop(weather);
-      } else if (weather && drop.weather?.f !== weather.f) {
-        setDrop({ ...drop, weather });
+      } else if (weather && current.weather?.f !== weather.f) {
+        setDrop({ ...current, weather });
       }
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  }, [hydrated, ownedCount]);
 
   const pieces = useMemo(
     () => sortLook(garments.filter((g) => drop?.garmentIds.includes(g.id))),
@@ -69,6 +85,43 @@ function Today() {
   const setOccasion = (occasion: Occasion) => {
     rerollDrop(weather, occasion);
   };
+
+  const owned = garments.filter((g) => !g.archived);
+
+  if (owned.length === 0) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 md:px-6 py-8 md:py-16 rise">
+        <p className="micro text-ink-soft">Your closet</p>
+        <h1 className="mt-2 font-editorial text-4xl md:text-6xl tracking-tight">
+          {formatLongDate()}
+          <span className="italic text-accent"> — empty until you photograph it.</span>
+        </h1>
+        <p className="mt-4 text-ink-soft">
+          {weather ? (
+            <>
+              New York · {weather.f}° · {weather.label}. The drop starts when the
+              first real piece is on paper.
+            </>
+          ) : (
+            "New York. Photograph what you own. We keep that picture."
+          )}
+        </p>
+        <div className="mt-10 flex flex-wrap gap-3">
+          <Link
+            to="/add"
+            className="inline-flex h-11 items-center bg-accent px-4 text-sm text-paper"
+          >
+            Photograph the first piece
+          </Link>
+        </div>
+        <ol className="mt-12 space-y-4 text-sm text-ink-soft">
+          <li>Cream sheet. One garment. Phone from above.</li>
+          <li>Keep my photo — never a generated stand-in.</li>
+          <li>Wear / Skip / Swap dresses from what you actually own.</li>
+        </ol>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 md:px-6 py-8 md:py-12 rise">

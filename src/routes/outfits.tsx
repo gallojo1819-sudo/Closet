@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentTile } from "@/components/closet/tile";
 import { LookStack } from "@/components/closet/look-stack";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,20 @@ function OutfitsPage() {
       <p className="mt-3 text-ink-soft max-w-xl">
         Tap pieces you own. Save the look. Nothing fabricated.
       </p>
+
+      {garments.length === 0 && (
+        <div className="mt-10 border border-hairline bg-card px-4 py-5">
+          <p className="text-sm text-ink-soft">
+            No pieces to compose. Photograph the closet first.
+          </p>
+          <Link
+            to="/add"
+            className="mt-4 inline-flex h-11 items-center bg-accent px-4 text-sm text-paper"
+          >
+            Add a piece
+          </Link>
+        </div>
+      )}
 
       <section className="mt-10 border border-hairline bg-card px-4 py-5 md:px-6">
         <p className="micro text-ink-soft">Compose</p>

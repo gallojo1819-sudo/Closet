@@ -24,7 +24,8 @@ type ClosetState = {
   rerollDrop: (weather?: WeatherSnap, occasion?: Occasion) => void;
   swapDropPiece: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
-  resetDemo: () => void;
+  loadSample: () => void;
+  emptyCloset: () => void;
 };
 
 function pickDrop(
@@ -46,8 +47,8 @@ function pickDrop(
 export const useCloset = create<ClosetState>()(
   persist(
     (set, get) => ({
-      garments: SEED_GARMENTS,
-      looks: SEED_LOOKS,
+      garments: [],
+      looks: [],
       messages: [],
       drop: null,
       journal: [],
@@ -65,6 +66,7 @@ export const useCloset = create<ClosetState>()(
         };
         set((s) => {
           const replacingDemo = s.garments.some((g) => g.demo);
+          const wasEmpty = s.garments.filter((g) => !g.archived && !g.demo).length === 0;
           const rest = replacingDemo ? s.garments.filter((g) => !g.demo) : s.garments;
           const garments = [garment, ...rest];
           const allowed = new Set(garments.map((g) => g.id));
@@ -73,7 +75,7 @@ export const useCloset = create<ClosetState>()(
             looks: replacingDemo
               ? s.looks.filter((l) => l.garmentIds.every((gid) => allowed.has(gid)))
               : s.looks,
-            drop: replacingDemo ? null : s.drop,
+            drop: replacingDemo || wasEmpty ? null : s.drop,
             journal: replacingDemo ? [] : s.journal,
             avoid: replacingDemo ? {} : s.avoid,
           };
@@ -198,7 +200,7 @@ export const useCloset = create<ClosetState>()(
             { ...m, id: uid("m"), createdAt: new Date().toISOString() },
           ],
         })),
-      resetDemo: () =>
+      loadSample: () =>
         set({
           garments: SEED_GARMENTS,
           looks: SEED_LOOKS,
@@ -207,9 +209,18 @@ export const useCloset = create<ClosetState>()(
           journal: [],
           avoid: {},
         }),
+      emptyCloset: () =>
+        set({
+          garments: [],
+          looks: [],
+          messages: [],
+          drop: null,
+          journal: [],
+          avoid: {},
+        }),
     }),
     {
-      name: "closet.v5",
+      name: "closet.v6",
       skipHydration: true,
     },
   ),

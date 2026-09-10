@@ -15,7 +15,9 @@ export function TopBar() {
   const night = pathname.startsWith("/stylist");
   const garments = useCloset((s) => s.garments);
   const count = garments.filter((g) => !g.archived).length;
-  const resetDemo = useCloset((s) => s.resetDemo);
+  const sample = garments.some((g) => g.demo);
+  const loadSample = useCloset((s) => s.loadSample);
+  const emptyCloset = useCloset((s) => s.emptyCloset);
 
   return (
     <header
@@ -79,18 +81,31 @@ export function TopBar() {
           >
             Stylist
           </Link>
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm("Reset this closet to the demo wardrobe?")) resetDemo();
-            }}
-            className={cn(
-              "micro opacity-60 hover:opacity-100",
-              night ? "text-champagne" : "text-ink-soft",
-            )}
-          >
-            Reset
-          </button>
+          {sample ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm("Remove the sample rack? Your photos stay if you’ve added any.")) emptyCloset();
+              }}
+              className={cn(
+                "micro opacity-60 hover:opacity-100",
+                night ? "text-champagne" : "text-ink-soft",
+              )}
+            >
+              Clear sample
+            </button>
+          ) : count === 0 ? (
+            <button
+              type="button"
+              onClick={() => loadSample()}
+              className={cn(
+                "micro opacity-60 hover:opacity-100",
+                night ? "text-champagne" : "text-ink-soft",
+              )}
+            >
+              Sample rack
+            </button>
+          ) : null}
         </div>
       </div>
     </header>
