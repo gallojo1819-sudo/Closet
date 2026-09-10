@@ -93,7 +93,7 @@ export const tagGarment = createServerFn({ method: "POST" })
   });
 
 export const onMePreview = createServerFn({ method: "POST" })
-  .validator((input: { refImage: string; pieces: string }) => input)
+  .validator((input: { refImage: string; cutouts: string[]; pieces: string }) => input)
   .handler(async ({ data }): Promise<{ ok: true; image: string } | { ok: false; error: string }> => {
     const apiKey = process.env.XAI_API_KEY;
     if (!apiKey) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
@@ -105,9 +105,10 @@ export const onMePreview = createServerFn({ method: "POST" })
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "grok-2-image",
-        image: data.refImage,
-        prompt: `The same man as the reference photo — same face, same 5'8 regular build — now wearing exactly these clothes: ${data.pieces}. Full body, standing, editorial paper-catalog photograph on a plain warm paper background. Do not change the colors, patterns, or shapes of the garments. No other people, no text, no logos.`,
+        model: "grok-imagine-image-2.0",
+        // Joe's reference first, then the actual cutouts of this look (max 4).
+        images: [data.refImage, ...data.cutouts.slice(0, 4)],
+        prompt: `Dress THIS man — the man in the first image, same face, same 5'8 regular build — in THESE exact garments from the following images: ${data.pieces}. Editorial full-body photograph on plain warm paper. Do not invent clothing, logos, or colors. If a piece is unclear, omit it. No text.`,
       }),
     });
     if (!res.ok) return { ok: false, error: `Preview failed (${res.status})` };

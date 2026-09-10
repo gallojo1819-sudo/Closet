@@ -1,10 +1,23 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { onMePreview } from "@/lib/ai";
-import { blobToDataUrl, getImage } from "@/lib/images";
+import { blobToDataUrl, getImage, resolveImage } from "@/lib/images";
 import { useCloset } from "@/lib/store";
 import type { Garment } from "@/lib/types";
 import { sortLook } from "@/lib/look";
+
+/** Stored src (idb key, path, or data URL) -> data URL for the edit request. */
+async function asDataUrl(src: string): Promise<string | null> {
+  try {
+    const url = await resolveImage(src);
+    if (!url) return null;
+    if (url.startsWith("data:")) return url;
+    const blob = await (await fetch(url)).blob();
+    return blobToDataUrl(blob);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * On-demand "On me" preview for one look: Joe's reference photo + these exact
@@ -24,10 +37,16 @@ export function OnMeButton({ pieces }: { pieces: Garment[] }) {
       const blob = await getImage(refPhoto);
       if (!blob) throw new Error("Reference photo is missing — set it again.");
       const refImage = await blobToDataUrl(blob);
-      const list = sortLook(pieces)
+      const ordered = sortLook(pieces);
+      const cutouts = (
+        await Promise.all(
+          ordered.slice(0, 4).map((g) => asDataUrl(g.cutoutSrc || g.imageSrc)),
+        )
+      ).filter((c): c is string => Boolean(c));
+      const list = ordered
         .map((g) => `${g.name} (${[g.colors.join("/"), g.subtype || g.category].filter(Boolean).join(" ")})`)
         .join(", ");
-      const res = await onMePreview({ data: { refImage, pieces: list } });
+      const res = await onMePreview({ data: { refImage, cutouts, pieces: list } });
       if (res.ok) setImage(res.image);
       else setError(res.error);
     } catch (e) {
