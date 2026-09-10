@@ -20,9 +20,9 @@
  * `process.env`, which is why the merge has to happen before Vite starts.
  */
 import { spawn } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { constants as osConstants } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const APP_ENV_REL_PATH = ".grok/app-env.json";
@@ -104,14 +104,36 @@ export function isMainModule(moduleUrl) {
   }
 }
 
+/** PATH with this workspace's `node_modules/.bin` first — npm does this; a raw node spawn does not. */
+export function withLocalBinPath(env, root = projectRoot()) {
+  const bin = join(root, "node_modules", ".bin");
+  const key = Object.keys(env).find((k) => k.toLowerCase() === "path") ?? "PATH";
+  return { ...env, [key]: `${bin}${delimiter}${env[key] ?? ""}` };
+}
+
+/**
+ * Resolve a wrapped command so `vite` never depends on a global install.
+ * `spawn("vite")` is ENOENT on Windows (`vite.cmd`) and any PATH without `.bin`.
+ */
+export function runnable(command, args, root = projectRoot()) {
+  if (command === "vite") {
+    const viteJs = join(root, "node_modules", "vite", "bin", "vite.js");
+    if (existsSync(viteJs)) {
+      return { command: process.execPath, args: [viteJs, ...args] };
+    }
+  }
+  return { command, args };
+}
+
 function main(argv) {
   const [command, ...args] = argv;
   if (!command) {
     console.error("usage: node scripts/with-app-env.mjs <command> [args…]");
     process.exit(2);
   }
-  const env = mergeAppEnv(readAppEnv(projectRoot()), process.env);
-  const child = spawn(command, args, { stdio: "inherit", env });
+  const env = withLocalBinPath(mergeAppEnv(readAppEnv(projectRoot()), process.env));
+  const run = runnable(command, args);
+  const child = spawn(run.command, run.args, { stdio: "inherit", env });
   // The dev server is long-running and is stopped by signalling this wrapper.
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(signal, () => child.kill(signal));
