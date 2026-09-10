@@ -8,6 +8,7 @@ export type TagResult = {
   subtype: string;
   colors: string[];
   material: string;
+  fit: "slim" | "regular" | "relaxed";
   formality: 1 | 2 | 3 | 4 | 5;
   warmth: 1 | 2 | 3 | 4 | 5;
 } | { ok: false; error: string };
@@ -42,7 +43,7 @@ export const tagGarment = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You tag a single clothing item from a photo. Name only what is visible in THIS picture. Never invent a different garment, color, or brand. JSON only.",
+              "You tag ONE garment in the photo. Catalog voice. Never a filename (no IMG_0930). Never invent a brand. JSON only.",
           },
           {
             role: "user",
@@ -50,7 +51,7 @@ export const tagGarment = createServerFn({ method: "POST" })
               { type: "image_url", image_url: { url: data.image } },
               {
                 type: "text",
-                text: 'Return ONLY JSON: {"name":"short catalog name","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"oxford shirt","colors":["navy"],"material":"cotton","formality":1-5,"warmth":1-5}',
+                text: 'Return ONLY JSON: {"name":"Khaki chinos","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"chinos","colors":["khaki"],"material":"cotton","fit":"slim|regular|relaxed","formality":3,"warmth":2}. Name like a closet label: color + garment (Navy oxford, Grey merino, White sneakers). Fit from how it lies. If unsure, regular.',
               },
             ],
           },
@@ -70,6 +71,9 @@ export const tagGarment = createServerFn({ method: "POST" })
       const category = String(parsed.category ?? "other");
       const formality = Number(parsed.formality);
       const warmth = Number(parsed.warmth);
+      const fitRaw = String(parsed.fit ?? "regular");
+      const fit =
+        fitRaw === "slim" || fitRaw === "relaxed" ? fitRaw : "regular";
       return {
         ok: true,
         name: String(parsed.name ?? "Garment").slice(0, 48),
@@ -79,6 +83,7 @@ export const tagGarment = createServerFn({ method: "POST" })
           ? parsed.colors.filter((c) => typeof c === "string").slice(0, 4)
           : [],
         material: String(parsed.material ?? "").slice(0, 32),
+        fit,
         formality: (formality >= 1 && formality <= 5 ? formality : 3) as 1 | 2 | 3 | 4 | 5,
         warmth: (warmth >= 1 && warmth <= 5 ? warmth : 3) as 1 | 2 | 3 | 4 | 5,
       };

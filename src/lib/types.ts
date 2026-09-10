@@ -35,9 +35,10 @@ export type Garment = {
   cutoutSrc: string;
   imageSource: ImageSource;
   matteQuality: "clean" | "ok" | "busy";
-  paid?: number;
   demo: boolean;
   wornOn: string[];
+  paid?: number;
+  fit?: "slim" | "regular" | "relaxed";
   archived: boolean;
   createdAt: string;
 };

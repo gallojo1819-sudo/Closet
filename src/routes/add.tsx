@@ -19,7 +19,7 @@ function AddPage() {
         Add to the closet
       </h1>
       <p className="mt-3 text-ink-soft max-w-xl">
-        The picture you take is the garment. We only set it on paper.
+        Drop a dozen. We float each one on paper and name it. No form.
       </p>
 
       <aside className="mt-8 border border-hairline bg-card px-5 py-5">

@@ -1,17 +1,15 @@
 /**
  * Client-side catalog matte.
  * Always returns a 4:5 paper canvas. Never edge-to-edge bedroom crops.
+ * Floods only background connected to the frame so khaki-on-cream stays.
  */
 
 const PAPER = { r: 244, g: 239, b: 230 };
-const BORDER = 8;
-const LOW = 18;
-const HIGH = 72;
+const BORDER = 10;
 const OUTLIER_TOL = 34;
-const OUTLIER_FRAC = 0.12;
 const OUT_W = 720;
 const OUT_H = 900;
-const PAD = 0.1;
+const PAD = 0.12;
 
 export type MatteQuality = "clean" | "ok" | "busy";
 
@@ -71,10 +69,33 @@ function drawFit(
   return { canvas, ctx };
 }
 
+function sampleBlock(
+  data: Uint8ClampedArray,
+  w: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+) {
+  const rs: number[] = [];
+  const gs: number[] = [];
+  const bs: number[] = [];
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const i = (y * w + x) * 4;
+      rs.push(data[i]!);
+      gs.push(data[i + 1]!);
+      bs.push(data[i + 2]!);
+    }
+  }
+  return { r: median(rs), g: median(gs), b: median(bs) };
+}
+
 function sampleBorder(data: Uint8ClampedArray, w: number, h: number) {
   const rs: number[] = [];
   const gs: number[] = [];
   const bs: number[] = [];
+  const ds: number[] = [];
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       if (x >= BORDER && y >= BORDER && x < w - BORDER && y < h - BORDER) continue;
@@ -87,45 +108,56 @@ function sampleBorder(data: Uint8ClampedArray, w: number, h: number) {
   const bg = { r: median(rs), g: median(gs), b: median(bs) };
   let outliers = 0;
   for (let i = 0; i < rs.length; i++) {
-    if (dist(rs[i]!, gs[i]!, bs[i]!, bg.r, bg.g, bg.b) > OUTLIER_TOL) outliers++;
+    const d = dist(rs[i]!, gs[i]!, bs[i]!, bg.r, bg.g, bg.b);
+    ds.push(d);
+    if (d > OUTLIER_TOL) outliers++;
   }
   const frac = rs.length ? outliers / rs.length : 1;
-  return { bg, frac };
+  const mad = median(ds.map((d) => Math.abs(d - median(ds))));
+  return { bg, frac, floodTol: Math.max(28, median(ds) + 2.4 * mad + 12) };
 }
 
-function punchBackground(
+function sampleForeground(
   data: Uint8ClampedArray,
   w: number,
   h: number,
   bg: { r: number; g: number; b: number },
 ) {
-  const span = HIGH - LOW;
-  for (let p = 0; p < w * h; p++) {
-    const i = p * 4;
-    const r = data[i]!;
-    const g = data[i + 1]!;
-    const b = data[i + 2]!;
-    const d = dist(r, g, b, bg.r, bg.g, bg.b);
-    let a: number;
-    if (d <= LOW) a = 0;
-    else if (d >= HIGH) a = 255;
-    else {
-      const t = (d - LOW) / span;
-      a = Math.round(t * t * (3 - 2 * t) * 255);
-    }
-    if (a === 0) {
-      data[i] = data[i + 1] = data[i + 2] = data[i + 3] = 0;
-    } else {
-      data[i + 3] = Math.min(data[i + 3]!, a);
+  const regions = [
+    [0.38, 0.38, 0.62, 0.62],
+    [0.28, 0.22, 0.72, 0.45],
+    [0.28, 0.5, 0.72, 0.78],
+    [0.2, 0.3, 0.45, 0.7],
+    [0.55, 0.3, 0.8, 0.7],
+  ] as const;
+  let best = { r: 40, g: 40, b: 40 };
+  let bestD = -1;
+  for (const [a, b, c, d] of regions) {
+    const fg = sampleBlock(
+      data,
+      w,
+      Math.floor(w * a),
+      Math.floor(h * b),
+      Math.floor(w * c),
+      Math.floor(h * d),
+    );
+    const dd = dist(fg.r, fg.g, fg.b, bg.r, bg.g, bg.b);
+    if (dd > bestD) {
+      bestD = dd;
+      best = fg;
     }
   }
+  return { fg: best, sep: bestD };
 }
 
-function floodFromEdges(
+function floodBackground(
   data: Uint8ClampedArray,
   w: number,
   h: number,
   bg: { r: number; g: number; b: number },
+  fg: { r: number; g: number; b: number },
+  floodTol: number,
+  sep: number,
 ) {
   const seen = new Uint8Array(w * h);
   const stack: number[] = [];
@@ -144,11 +176,17 @@ function floodFromEdges(
     push(0, y);
     push(w - 1, y);
   }
+  const close = sep < 22;
   while (stack.length) {
     const p = stack.pop()!;
     const i = p * 4;
-    const d = dist(data[i]!, data[i + 1]!, data[i + 2]!, bg.r, bg.g, bg.b);
-    if (d > HIGH + 8) continue;
+    const r = data[i]!;
+    const g = data[i + 1]!;
+    const b = data[i + 2]!;
+    const db = dist(r, g, b, bg.r, bg.g, bg.b);
+    const df = dist(r, g, b, fg.r, fg.g, fg.b);
+    const isBg = close ? db <= 16 : db < df - 4 && db <= floodTol;
+    if (!isBg) continue;
     data[i] = data[i + 1] = data[i + 2] = data[i + 3] = 0;
     const x = p % w;
     const y = (p / w) | 0;
@@ -176,7 +214,7 @@ function opaqueBounds(data: Uint8ClampedArray, w: number, h: number) {
       if (y > maxY) maxY = y;
     }
   }
-  if (count < w * h * 0.02 || maxX <= minX || maxY <= minY) return null;
+  if (count < w * h * 0.015 || maxX <= minX || maxY <= minY) return null;
   return { minX, minY, maxX, maxY, count };
 }
 
@@ -212,34 +250,32 @@ function compositePaper(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(src, sx, sy, sw, sh, dx, dy, dw, dh);
-  return out.toDataURL("image/jpeg", 0.88);
+  return out.toDataURL("image/jpeg", 0.9);
 }
 
 export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
   const img = await loadImage(imageSrc);
   const { canvas, ctx } = drawFit(img);
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const { bg, frac } = sampleBorder(image.data, canvas.width, canvas.height);
+  const { bg, frac, floodTol } = sampleBorder(image.data, canvas.width, canvas.height);
+  const { fg, sep } = sampleForeground(image.data, canvas.width, canvas.height, bg);
+
+  floodBackground(image.data, canvas.width, canvas.height, bg, fg, floodTol, sep);
+  ctx.putImageData(image, 0, 0);
+
+  const box = opaqueBounds(image.data, canvas.width, canvas.height);
+  const cutoutSrc = compositePaper(canvas, box);
 
   let quality: MatteQuality = "clean";
   let reason = "Kept your real pixels — same fabric, same color — on paper.";
-  if (frac > 0.28) {
+  if (frac > 0.28 || sep < 18) {
     quality = "busy";
     reason =
-      "Busy background. Floated the photo on paper anyway — reshoot on a plain sheet for a true cutout.";
-  } else if (frac > OUTLIER_FRAC) {
+      "Floated on paper from this shot. A cream sheet and window light will cut cleaner.";
+  } else if (frac > 0.12) {
     quality = "ok";
-    reason = "Background was a little uneven. Cutout may have soft edges — a plain surface will be cleaner.";
+    reason = "Floated on paper. Soft edge — a plainer surface will be tighter.";
   }
-
-  if (quality !== "busy") {
-    floodFromEdges(image.data, canvas.width, canvas.height, bg);
-    punchBackground(image.data, canvas.width, canvas.height, bg);
-    ctx.putImageData(image, 0, 0);
-  }
-
-  const box = quality === "busy" ? null : opaqueBounds(image.data, canvas.width, canvas.height);
-  const cutoutSrc = compositePaper(canvas, box);
   return { cutoutSrc, quality, reason };
 }
 

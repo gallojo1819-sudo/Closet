@@ -68,8 +68,8 @@ export function GarmentDetail({
               <dd>{garment.colors.join(", ") || "—"}</dd>
             </div>
             <div>
-              <dt className="micro text-ink-soft">Source</dt>
-              <dd>{garment.imageSource}</dd>
+              <dt className="micro text-ink-soft">Fit</dt>
+              <dd>{garment.fit || "regular"}</dd>
             </div>
             <div>
               <dt className="micro text-ink-soft">Worn</dt>

@@ -23,10 +23,10 @@ export function momentOfDay(d = new Date()): Moment {
 }
 
 export function daysIdle(g: Garment, today = todayISO()): number {
-  const last = g.wornOn.at(-1);
-  if (!last) return 120;
+  const last = g.wornOn.at(-1) ?? g.createdAt.slice(0, 10);
+  if (!last) return 0;
   const ms = Date.parse(today) - Date.parse(last);
-  if (!Number.isFinite(ms)) return 120;
+  if (!Number.isFinite(ms)) return 0;
   return Math.max(0, Math.round(ms / 86_400_000));
 }
 
