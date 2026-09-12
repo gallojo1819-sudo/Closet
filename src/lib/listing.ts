@@ -110,11 +110,29 @@ function jsonLdBrand(html: string): string {
 
 async function fetchHtml(url: string): Promise<string> {
   const res = await fetch(url, {
-    headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" },
+    headers: {
+      "User-Agent": UA,
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
     redirect: "follow",
   });
-  if (!res.ok) throw new Error(`Page ${res.status}`);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
   return res.text();
+}
+
+function isImageUrl(u: URL): boolean {
+  if (/\.(jpe?g|png|webp|avif|gif)(\?|$)/i.test(u.pathname)) return true;
+  return /cdn-images\.farfetch|img\.ssensemedia|images\.nordstrom|media\.endclothing|images\.ralphlauren|cdn\.shopify/i.test(
+    u.hostname,
+  );
+}
+
+function blockedCopy(host: string): string {
+  const who = hostLabel(`https://${host}`);
+  return `${who} blocks the server. Right-click the clothing photo → Copy image address, paste that. Or Save image and drop it. That’s the official plate.`;
 }
 
 async function downloadImage(url: string): Promise<string> {
@@ -182,6 +200,17 @@ export const fetchListing = createServerFn({ method: "POST" })
         return { ok: false, error: "Only http(s) links." };
       }
       try {
+        if (isImageUrl(parsed)) {
+          const image = await downloadImage(parsed.toString());
+          return {
+            ok: true,
+            title: "Piece",
+            brand: hostLabel(parsed.toString()),
+            source: hostLabel(parsed.toString()),
+            pageUrl: parsed.toString(),
+            image,
+          };
+        }
         const html = await fetchHtml(parsed.toString());
         const img = pickImage(html, parsed.toString());
         if (!img) return { ok: false, error: "No product photo on that page." };
@@ -206,9 +235,13 @@ export const fetchListing = createServerFn({ method: "POST" })
           image,
         };
       } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (/HTTP (401|403|429)/.test(msg) || /Image (401|403|429)/.test(msg)) {
+          return { ok: false, error: blockedCopy(parsed.hostname) };
+        }
         return {
           ok: false,
-          error: e instanceof Error ? e.message : "Could not open that listing.",
+          error: msg && !msg.startsWith("HTTP") ? msg : "Could not open that listing.",
         };
       }
     },
