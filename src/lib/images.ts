@@ -40,6 +40,7 @@ export async function putImage(key: string, blob: Blob): Promise<void> {
     tx.onerror = () => reject(tx.error ?? new Error("Could not store image"));
   });
   urlCache.delete(key);
+  notifyImage(key);
 }
 
 export async function getImage(key: string): Promise<Blob | null> {
@@ -69,6 +70,39 @@ export async function deleteImage(key: string): Promise<void> {
 }
 
 const urlCache = new Map<string, string>();
+const imageWatchers = new Map<string, Set<() => void>>();
+
+export function watchImage(key: string, fn: () => void): () => void {
+  let set = imageWatchers.get(key);
+  if (!set) {
+    set = new Set();
+    imageWatchers.set(key, set);
+  }
+  set.add(fn);
+  return () => {
+    set!.delete(fn);
+    if (set!.size === 0) imageWatchers.delete(key);
+  };
+}
+
+function notifyImage(key: string) {
+  imageWatchers.get(key)?.forEach((fn) => fn());
+}
+
+/** name + size + lastModified + first 64KB. Same File → same hash. */
+export async function fileFingerprint(file: File): Promise<string> {
+  const head = await file.slice(0, 64 * 1024).arrayBuffer();
+  const meta = new TextEncoder().encode(
+    `${file.name}\0${file.size}\0${file.lastModified}`,
+  );
+  const bytes = new Uint8Array(meta.byteLength + head.byteLength);
+  bytes.set(meta, 0);
+  bytes.set(new Uint8Array(head), meta.byteLength);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 /** Resolve any stored src (idb key, data URL, or path) to a displayable URL. */
 export async function resolveImage(src: string): Promise<string> {

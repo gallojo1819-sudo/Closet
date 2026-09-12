@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, ClipboardPaste, Link2, Loader2, Tag, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { imageKey, putImage, dataUrlToBlob } from "@/lib/images";
+import { imageKey, putImage, dataUrlToBlob, fileFingerprint } from "@/lib/images";
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
 import { aiStatus, printGarment, tagGarment } from "@/lib/ai";
 import { guessGarment, looksLikeFilename } from "@/lib/guess";
@@ -33,6 +33,11 @@ type Saved = {
 };
 
 class PageRejected extends Error {}
+class AlreadyInCloset extends Error {
+  constructor() {
+    super("Already in the closet.");
+  }
+}
 
 function badName(name: string): boolean {
   return (
@@ -44,11 +49,13 @@ function badName(name: string): boolean {
 export function Studio() {
   const addGarment = useCloset((s) => s.addGarment);
   const updateGarment = useCloset((s) => s.updateGarment);
+  const ensureLookbook = useCloset((s) => s.ensureLookbook);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
   const [rejected, setRejected] = useState<string[]>([]);
+  const [dupes, setDupes] = useState<string[]>([]);
   const [saved, setSaved] = useState<Saved[]>([]);
   const [canPrint, setCanPrint] = useState<boolean | null>(null);
   const [url, setUrl] = useState("");
@@ -74,6 +81,7 @@ export function Studio() {
 
   const commit = useCallback(
     async (opts: {
+      id: string;
       original: string;
       cover: string;
       source: ImageSource;
@@ -88,38 +96,49 @@ export function Studio() {
       warmth?: 1 | 2 | 3 | 4 | 5;
       notes?: string;
       productUrl?: string;
+      fileHash?: string;
+      quiet?: boolean;
     }): Promise<Saved> => {
-      const id = uid("g");
+      const id = opts.id;
       await putImage(imageKey(id, "o"), dataUrlToBlob(opts.original));
       await putImage(imageKey(id, "c"), dataUrlToBlob(opts.cover));
-      addGarment({
-        id,
-        name: opts.name,
-        category: opts.category,
-        subtype: opts.subtype ?? "",
-        colors: opts.colors ?? [],
-        material: opts.material ?? "",
-        brand: opts.brand ?? "",
-        notes: opts.notes ?? "",
-        formality: opts.formality ?? 3,
-        warmth: opts.warmth ?? 3,
-        fit: opts.fit ?? "regular",
-        seasons: [],
-        imageSrc: imageKey(id, "o"),
-        cutoutSrc: imageKey(id, "c"),
-        imageSource: opts.source,
-        matteQuality: "clean",
-        productUrl: opts.productUrl,
-      });
+      addGarment(
+        {
+          id,
+          name: opts.name,
+          category: opts.category,
+          subtype: opts.subtype ?? "",
+          colors: opts.colors ?? [],
+          material: opts.material ?? "",
+          brand: opts.brand ?? "",
+          notes: opts.notes ?? "",
+          formality: opts.formality ?? 3,
+          warmth: opts.warmth ?? 3,
+          fit: opts.fit ?? "regular",
+          seasons: [],
+          imageSrc: imageKey(id, "o"),
+          cutoutSrc: imageKey(id, "c"),
+          imageSource: opts.source,
+          matteQuality: "clean",
+          productUrl: opts.productUrl,
+          fileHash: opts.fileHash,
+        },
+        { quiet: opts.quiet },
+      );
       return { id, name: opts.name, category: opts.category, cutout: opts.cover };
     },
     [addGarment],
   );
 
   const processOne = useCallback(
-    async (file: File): Promise<Saved> => {
+    async (file: File, known: Set<string>): Promise<Saved> => {
+      const id = uid("g");
+      const hash = await fileFingerprint(file);
+      if (known.has(hash)) throw new AlreadyInCloset();
+      known.add(hash);
+      try {
       const raw = await readAsImageSrc(file);
-      const original = await shrinkDataUrl(raw, 1600, 0.85);
+      const original = await shrinkDataUrl(raw, 1280, 0.85);
       const matte = await matteToPaper(original);
       if (matte.kind === "page" && !canPrint) {
         throw new PageRejected();
@@ -131,7 +150,8 @@ export function Studio() {
           : matte.quality === "busy"
             ? "photo"
             : "segmented";
-      if (matte.kind !== "studio" && canPrint) {
+      // Studio/official plates stay on paper. Imagine is how three shirts become one polo.
+      if ((matte.kind === "phone" || matte.kind === "page") && canPrint) {
         try {
           const print = await printGarment({
             data: { image: await shrinkDataUrl(original, 1024) },
@@ -141,7 +161,7 @@ export function Studio() {
             source = "cutout";
           }
         } catch {
-          /* flood version stays */
+          /* paper pad stays */
         }
       }
       if (matte.kind === "page" && source !== "cutout") {
@@ -188,7 +208,8 @@ export function Studio() {
           colors = colors.length ? colors : guess.colors;
         }
       }
-      const piece = await commit({
+      return await commit({
+        id,
         original,
         cover: cutout,
         source,
@@ -202,28 +223,13 @@ export function Studio() {
         formality,
         warmth,
         notes: matte.reason,
+        fileHash: hash,
+        quiet: true,
       });
-      // Don't block the dump — hunt an official plate in the background.
-      void (async () => {
-        try {
-          const idn = await identifyPiece({
-            data: { image: await shrinkDataUrl(cutout, 768), mode: "photo" },
-          });
-          if (!idn.ok || !idn.query) return;
-          const found = await searchOfficial({ data: { query: idn.query } });
-          if (!found.ok || !found.hits.length) return;
-          setSaved((cur) =>
-            cur.map((s) =>
-              s.id === piece.id
-                ? { ...s, matches: found.hits, query: idn.query, name: s.name }
-                : s,
-            ),
-          );
-        } catch {
-          /* official match is optional */
-        }
-      })();
-      return piece;
+      } catch (e) {
+        known.delete(hash);
+        throw e;
+      }
     },
     [canPrint, commit],
   );
@@ -237,34 +243,53 @@ export function Studio() {
       }
       setError(null);
       setBusy(true);
-      let i = 0;
+      const known = new Set(
+        useCloset
+          .getState()
+          .garments.map((g) => g.fileHash)
+          .filter((h): h is string => Boolean(h)),
+      );
+      let next = 0;
       let done = 0;
+      const total = images.length;
       const misses: string[] = [];
       const pages: string[] = [];
+      const already: string[] = [];
       const worker = async () => {
-        while (i < images.length) {
-          const file = images[i++]!;
-          setProgress(`${done} / ${images.length}`);
+        for (;;) {
+          const idx = next++;
+          if (idx >= total) return;
+          const file = images[idx]!;
           try {
-            const piece = await processOne(file);
+            const piece = await processOne(file, known);
             done++;
-            setProgress(`${done} / ${images.length} — ${piece.name}`);
+            setProgress(`${done}/${total} — ${piece.name}`);
             setSaved((cur) => [piece, ...cur]);
           } catch (e) {
             done++;
-            if (e instanceof PageRejected) pages.push(file.name);
-            else misses.push(file.name);
+            if (e instanceof AlreadyInCloset) {
+              already.push(file.name);
+              setProgress(`${done}/${total} — Already in the closet.`);
+            } else if (e instanceof PageRejected) {
+              pages.push(file.name);
+              setProgress(`${done}/${total}`);
+            } else {
+              misses.push(file.name);
+              setProgress(`${done}/${total}`);
+            }
           }
-          await new Promise((r) => setTimeout(r, 0));
         }
       };
-      await Promise.all([worker(), worker()]);
+      const n = Math.min(3, total);
+      await Promise.all(Array.from({ length: n }, () => worker()));
+      ensureLookbook();
       setBusy(false);
       setProgress("");
       if (misses.length) setFailed((cur) => [...misses, ...cur]);
       if (pages.length) setRejected((cur) => [...pages, ...cur]);
+      if (already.length) setDupes((cur) => [...already, ...cur]);
     },
-    [processOne],
+    [processOne, ensureLookbook],
   );
 
   const addFromUrl = async () => {
@@ -306,6 +331,7 @@ export function Studio() {
         if (badName(name)) name = guess.name;
       }
       const piece = await commit({
+        id: uid("g"),
         original,
         cover: matte.cutoutSrc,
         source: "official",
@@ -364,6 +390,31 @@ export function Studio() {
     }
   };
 
+  const findOfficial = async (piece: Saved) => {
+    setError(null);
+    try {
+      const idn = await identifyPiece({
+        data: { image: await shrinkDataUrl(piece.cutout, 768), mode: "photo" },
+      });
+      if (!idn.ok || !idn.query) {
+        setError(idn.ok ? "No official listing for that piece." : idn.error);
+        return;
+      }
+      const found = await searchOfficial({ data: { query: idn.query } });
+      if (!found.ok || !found.hits.length) {
+        setError(found.ok ? "No official listing for that piece." : found.error);
+        return;
+      }
+      setSaved((cur) =>
+        cur.map((s) =>
+          s.id === piece.id ? { ...s, matches: found.hits, query: idn.query } : s,
+        ),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not find an official plate.");
+    }
+  };
+
   const pickOfficial = async (hit: OfficialHit, forId?: string) => {
     setBusy(true);
     setProgress("Setting the official plate…");
@@ -393,6 +444,7 @@ export function Studio() {
         );
       } else if (picker) {
         const piece = await commit({
+          id: uid("g"),
           original: picker.hangtag ? raw : picker.original,
           cover: matte.cutoutSrc,
           source: "official",
@@ -566,6 +618,13 @@ export function Studio() {
           {failed.length > 6 ? "…" : ""}. The rest are in the closet.
         </p>
       )}
+      {dupes.length > 0 && (
+        <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
+          Already in the closet
+          {dupes.length ? `: ${dupes.slice(0, 6).join(", ")}` : "."}
+          {dupes.length > 6 ? "…" : ""}
+        </p>
+      )}
 
       {picker && (
         <section className="space-y-4 border border-hairline bg-card p-5">
@@ -625,6 +684,16 @@ export function Studio() {
                   <p className="text-sm">{g.name}</p>
                   <span className="micro text-ink-soft">{g.category}</span>
                 </div>
+                {!g.matches && (
+                  <button
+                    type="button"
+                    className="micro text-ink-soft hover:text-ink"
+                    onClick={() => void findOfficial(g)}
+                    disabled={busy}
+                  >
+                    Find official
+                  </button>
+                )}
                 {g.matches && g.matches.length > 0 && (
                   <div className="space-y-2">
                     <p className="micro text-ink-soft">Official make — tap yours</p>

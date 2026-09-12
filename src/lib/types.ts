@@ -40,6 +40,8 @@ export type Garment = {
   paid?: number;
   fit?: "slim" | "regular" | "relaxed";
   productUrl?: string;
+  /** Fingerprint of the source File so a dump cannot add the same JPEG twice. */
+  fileHash?: string;
   archived: boolean;
   createdAt: string;
 };

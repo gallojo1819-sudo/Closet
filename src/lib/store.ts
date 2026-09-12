@@ -19,6 +19,7 @@ type ClosetState = {
   refPhoto: string | null;
   addGarment: (
     g: Omit<Garment, "id" | "createdAt" | "archived" | "wornOn" | "demo"> & { id?: string },
+    opts?: { quiet?: boolean },
   ) => string;
   updateGarment: (id: string, patch: Partial<Garment>) => void;
   removeGarment: (id: string) => void;
@@ -76,7 +77,7 @@ export const useCloset = create<ClosetState>()(
       avoid: {},
       hydrated: false,
       refPhoto: null,
-      addGarment: (input) => {
+      addGarment: (input, opts) => {
         const id = input.id ?? uid("g");
         const garment: Garment = {
           ...input,
@@ -102,7 +103,7 @@ export const useCloset = create<ClosetState>()(
             avoid: replacingDemo ? {} : s.avoid,
           };
         });
-        get().ensureLookbook();
+        if (!opts?.quiet) get().ensureLookbook();
         return id;
       },
       updateGarment: (id, patch) => {
