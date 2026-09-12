@@ -151,6 +151,30 @@ export const printGarment = createServerFn({ method: "POST" })
     return readEditedImage(res);
   });
 
+export const recolorCover = createServerFn({ method: "POST" })
+  .validator((input: { image: string; color: string }) => input)
+  .handler(async ({ data }): Promise<EditResult> => {
+    const apiKey = process.env.XAI_API_KEY;
+    if (!apiKey) return { ok: false, error: "Set XAI_API_KEY to recolor a cover." };
+    const color = data.color.trim();
+    if (!color) return { ok: false, error: "Pick a color first." };
+    const res = await fetch("https://api.x.ai/v1/images/edits", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "grok-imagine-image-2.0",
+        image: { url: data.image },
+        prompt: `This is the SAME garment. Change ONLY the fabric color to ${color}.
+Keep cut, stitching, pockets, hardware, wrinkles, logos. Do not turn pants into a shirt.
+Lay on #F4EFE6 paper, 4:5, fill ~80%. No extra garments, no model, no text.`,
+      }),
+    });
+    return readEditedImage(res);
+  });
+
 export const onMePreview = createServerFn({ method: "POST" })
   .validator((input: { refImage: string; cutouts: string[]; pieces: string }) => input)
   .handler(async ({ data }): Promise<{ ok: true; image: string } | { ok: false; error: string }> => {

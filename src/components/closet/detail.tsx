@@ -1,13 +1,74 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
+import { aiStatus, recolorCover } from "@/lib/ai";
+import {
+  blobToDataUrl,
+  dataUrlToBlob,
+  getImage,
+  imageKey,
+  isIdbKey,
+  putImage,
+} from "@/lib/images";
 import { costPerWear, money } from "@/lib/look";
 import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
 import { CATEGORIES, type Category, type Garment } from "@/lib/types";
 import { useCloset } from "@/lib/store";
 import { useImageSrc } from "@/lib/use-image";
 import { cn, todayISO } from "@/lib/utils";
+
+const COLOR_CHIPS = [
+  "navy",
+  "olive",
+  "khaki",
+  "cream",
+  "white",
+  "black",
+  "brown",
+  "maroon",
+  "burgundy",
+  "pink",
+  "light blue",
+  "grey",
+  "tan",
+  "camel",
+] as const;
+
+const COLOR_LEAD =
+  /^(?:(?:dark|light|pale|bright|deep|off)\s+)?(?:navy|olive|khaki|cream|white|black|brown|maroon|burgundy|pink|blue|grey|gray|tan|camel|ivory|red|green|charcoal|beige|stone|ecru|wine|rust|mustard|yellow|orange|purple|lilac|teal)\s+/i;
+
+function titleColor(color: string): string {
+  return color
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function nameWithColor(name: string, color: string): string {
+  const titled = titleColor(color);
+  if (!titled) return name;
+  if (COLOR_LEAD.test(name)) return name.replace(COLOR_LEAD, `${titled} `);
+  return name;
+}
+
+async function coverDataUrl(src: string): Promise<string | null> {
+  try {
+    if (src.startsWith("data:")) return src;
+    if (isIdbKey(src)) {
+      const blob = await getImage(src);
+      return blob ? blobToDataUrl(blob) : null;
+    }
+    const res = await fetch(src);
+    if (!res.ok) return null;
+    return blobToDataUrl(await res.blob());
+  } catch {
+    return null;
+  }
+}
 
 export function GarmentDetail({
   garment,
@@ -26,9 +87,20 @@ export function GarmentDetail({
   const refPhoto = useCloset((s) => s.refPhoto);
   const [view, setView] = useState<"print" | "original" | "me">("print");
   const [name, setName] = useState(garment.name);
+  const [color, setColor] = useState(garment.colors[0] ?? "");
+  const [canPrint, setCanPrint] = useState(false);
+  const [recoloring, setRecoloring] = useState(false);
+  const [coverNote, setCoverNote] = useState<string | null>(null);
+  const [coverError, setCoverError] = useState<string | null>(null);
   const originalSrc = useImageSrc(garment.imageSrc);
   const usingOriginal = garment.cutoutSrc === garment.imageSrc;
   const cpw = costPerWear(garment);
+
+  useEffect(() => {
+    aiStatus()
+      .then((s) => setCanPrint(s.print))
+      .catch(() => setCanPrint(false));
+  }, []);
 
   const commitPaid = () => {
     const n = parseFloat(paid);
@@ -41,6 +113,57 @@ export function GarmentDetail({
     const next = name.trim();
     if (next && next !== garment.name) updateGarment(garment.id, { name: next });
     else setName(garment.name);
+  };
+
+  const commitColor = (raw: string) => {
+    const next = raw.trim().toLowerCase();
+    setColor(next);
+    const named = next ? nameWithColor(garment.name, next) : garment.name;
+    const patch: Partial<Garment> = {
+      colors: next ? [next] : [],
+    };
+    if (named !== garment.name) {
+      patch.name = named;
+      setName(named);
+    }
+    if (
+      (garment.colors[0] ?? "") !== next ||
+      (patch.name && patch.name !== garment.name)
+    ) {
+      updateGarment(garment.id, patch);
+    }
+  };
+
+  const updateCover = async () => {
+    const next = color.trim().toLowerCase() || garment.colors[0] || "";
+    if (!next) {
+      setCoverError("Pick a color first.");
+      return;
+    }
+    setRecoloring(true);
+    setCoverError(null);
+    setCoverNote(null);
+    try {
+      const image = await coverDataUrl(garment.cutoutSrc || garment.imageSrc);
+      if (!image) throw new Error("Could not read the cover.");
+      const res = await recolorCover({ data: { image, color: next } });
+      if (!res.ok) throw new Error(res.error);
+      const key = imageKey(garment.id, "c");
+      await putImage(key, dataUrlToBlob(res.image));
+      const named = nameWithColor(garment.name, next);
+      updateGarment(garment.id, {
+        cutoutSrc: key,
+        colors: [next],
+        ...(named !== garment.name ? { name: named } : {}),
+      });
+      if (named !== garment.name) setName(named);
+      setView("print");
+      setCoverNote("Cover updated — original photo unchanged.");
+    } catch (e) {
+      setCoverError(e instanceof Error ? e.message : "Could not recolor that cover.");
+    } finally {
+      setRecoloring(false);
+    }
   };
 
   return (
@@ -156,9 +279,55 @@ export function GarmentDetail({
               <dt className="micro text-ink-soft">Material</dt>
               <dd>{garment.material || "—"}</dd>
             </div>
-            <div>
+            <div className="col-span-2">
               <dt className="micro text-ink-soft">Color</dt>
-              <dd>{garment.colors.join(", ") || "—"}</dd>
+              <dd className="mt-1 space-y-2">
+                <div className="flex flex-wrap gap-1">
+                  {COLOR_CHIPS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => commitColor(c)}
+                      className={cn(
+                        "micro border px-2 py-1",
+                        (color || garment.colors[0] || "") === c
+                          ? "border-ink bg-ink text-paper"
+                          : "border-hairline text-ink-soft",
+                      )}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  onBlur={() => commitColor(color)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  aria-label="Color"
+                  placeholder="maroon"
+                  className="h-9 w-40 border border-hairline bg-card px-2 text-sm"
+                />
+                {canPrint && (
+                  <button
+                    type="button"
+                    disabled={recoloring}
+                    onClick={() => void updateCover()}
+                    className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40 inline-flex items-center gap-2"
+                  >
+                    {recoloring && <Loader2 className="size-3 animate-spin" />}
+                    {recoloring ? "Recoloring…" : "Update cover"}
+                  </button>
+                )}
+                {coverNote && (
+                  <p className="text-sm text-ink-soft">{coverNote}</p>
+                )}
+                {coverError && (
+                  <p className="text-sm text-accent">{coverError}</p>
+                )}
+              </dd>
             </div>
             <div>
               <dt className="micro text-ink-soft">Fit</dt>
