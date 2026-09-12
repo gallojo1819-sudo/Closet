@@ -7,6 +7,27 @@ import { useCloset } from "@/lib/store";
 import type { Garment } from "@/lib/types";
 import { sortLook } from "@/lib/look";
 
+/** Dress Joe in these exact cutouts. Never writes cutoutSrc. */
+export async function dressLook(pieces: Garment[]): Promise<string> {
+  const refPhoto = useCloset.getState().refPhoto;
+  if (!refPhoto) throw new Error("No reference photo yet. Tap Fit · 5′8 reg up top to add one.");
+  const blob = await getImage(refPhoto);
+  if (!blob) throw new Error("Reference photo is missing — set it again.");
+  const refImage = await blobToDataUrl(blob);
+  const layers: { name: string; category: string; url: string }[] = [];
+  for (const g of sortLook(pieces).slice(0, 4)) {
+    const url = await asDataUrl(g.cutoutSrc || g.imageSrc);
+    if (url) layers.push({ name: g.name, category: g.category, url });
+  }
+  const cutouts = layers.map((l) => l.url);
+  const list = layers
+    .map((l, i) => `image ${i + 2} = ${l.name} (${l.category})`)
+    .join(". ");
+  const res = await onMePreview({ data: { refImage, cutouts, pieces: list } });
+  if (!res.ok) throw new Error(res.error);
+  return res.image;
+}
+
 /** Stored src (idb key, path, or data URL) -> data URL for the edit request. */
 async function asDataUrl(src: string): Promise<string | null> {
   try {
@@ -38,22 +59,9 @@ function useOnMe(pieces: Garment[]) {
     setBusy(true);
     setError(null);
     try {
-      const blob = await getImage(refPhoto);
-      if (!blob) throw new Error("Reference photo is missing — set it again.");
-      const refImage = await blobToDataUrl(blob);
-      const layers: { name: string; category: string; url: string }[] = [];
-      for (const g of sortLook(pieces).slice(0, 4)) {
-        const url = await asDataUrl(g.cutoutSrc || g.imageSrc);
-        if (url) layers.push({ name: g.name, category: g.category, url });
-      }
-      const cutouts = layers.map((l) => l.url);
-      const list = layers
-        .map((l, i) => `image ${i + 2} = ${l.name} (${l.category})`)
-        .join(". ");
-      const res = await onMePreview({ data: { refImage, cutouts, pieces: list } });
+      const image = await dressLook(pieces);
       if (useCloset.getState().refPhoto !== refPhoto) return;
-      if (res.ok) setImage(res.image);
-      else setError(res.error);
+      setImage(image);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview failed.");
     } finally {

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
-import { deleteImage, isIdbKey } from "./images";
+import { dataUrlToBlob, deleteImage, getImage, isIdbKey, putImage, refImageKey } from "./images";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
 import { buildLookbook, mergeLookbook } from "./lookbook";
 import {
@@ -25,6 +25,8 @@ type ClosetState = {
   hydrated: boolean;
   /** IDB key for Joe's full-body reference photo ("On me"), metadata only. */
   refPhoto: string | null;
+  /** Compressed JPEG data URL backup of the body photo. */
+  refPhotoBackup: string | null;
   addGarment: (
     g: Omit<Garment, "id" | "createdAt" | "archived" | "wornOn" | "demo"> & { id?: string },
     opts?: { quiet?: boolean },
@@ -43,7 +45,8 @@ type ClosetState = {
   ) => void;
   swapDropPiece: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
-  setRefPhoto: (key: string | null) => void;
+  setRefPhoto: (key: string | null, backup?: string | null) => void;
+  restoreRefPhoto: () => Promise<void>;
   ensureLookbook: () => void;
   loadSample: () => void;
   emptyCloset: () => void;
@@ -113,6 +116,7 @@ export const useCloset = create<ClosetState>()(
       avoid: {},
       hydrated: false,
       refPhoto: null,
+      refPhotoBackup: null,
       addGarment: (input, opts) => {
         const id = input.id ?? uid("g");
         const garment: Garment = {
@@ -290,12 +294,38 @@ export const useCloset = create<ClosetState>()(
         if (key(s.looks) === key(next)) return;
         set({ looks: next });
       },
-      setRefPhoto: (key) => {
-        const prev = get().refPhoto;
-        if (prev && prev !== key && isIdbKey(prev)) {
-          void deleteImage(prev).catch(() => {});
+      setRefPhoto: (key, backup) => {
+        if (key === null) {
+          const prev = get().refPhoto;
+          if (prev && isIdbKey(prev)) void deleteImage(prev).catch(() => {});
+          set({ refPhoto: null, refPhotoBackup: null });
+          return;
         }
-        set({ refPhoto: key });
+        set({
+          refPhoto: key,
+          ...(backup !== undefined ? { refPhotoBackup: backup } : {}),
+        });
+      },
+      restoreRefPhoto: async () => {
+        const s = get();
+        const key = s.refPhoto && isIdbKey(s.refPhoto) ? s.refPhoto : refImageKey();
+        try {
+          const existing = await getImage(key);
+          if (existing) {
+            if (s.refPhoto !== key) set({ refPhoto: key });
+            return;
+          }
+        } catch {
+          /* fall through to backup */
+        }
+        const backup = s.refPhotoBackup;
+        if (!backup || !backup.startsWith("data:")) return;
+        try {
+          await putImage(refImageKey(), dataUrlToBlob(backup));
+          set({ refPhoto: refImageKey() });
+        } catch {
+          /* IDB still unavailable */
+        }
       },
       loadSample: () => {
         set({
@@ -317,6 +347,7 @@ export const useCloset = create<ClosetState>()(
           journal: [],
           avoid: {},
         });
+        // Joe's body photo stays. Only Fit → Remove deletes it.
       },
       importCloset: (payload) => {
         set({
@@ -340,6 +371,7 @@ export const useCloset = create<ClosetState>()(
         avoid: s.avoid,
         drop: s.drop,
         refPhoto: s.refPhoto,
+        refPhotoBackup: s.refPhotoBackup,
         messages: s.messages,
       }),
       merge: (persisted, current) => mergeClosetPersist(persisted, current),

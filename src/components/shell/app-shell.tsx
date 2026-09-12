@@ -19,6 +19,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         console.error("[closet] rehydrate failed", e);
       }
       if (!live) return;
+      await useCloset.getState().restoreRefPhoto();
+      if (!live) return;
       useCloset.setState({ hydrated: true });
       const s = useCloset.getState();
       if (s.garments.length > 0) s.ensureLookbook();

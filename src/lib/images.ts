@@ -134,6 +134,46 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+const REF_KEY = "idb:me:ref";
+
+export function refImageKey(): string {
+  return REF_KEY;
+}
+
+export function lookOnMeKey(lookId: string): string {
+  return `${KEY_PREFIX}lb:${lookId}`;
+}
+
+/** JPEG data URL, long edge ≤900, payload ≤400KB — persist backup for Joe's body photo. */
+export async function compressRefBackup(blob: Blob): Promise<string> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("backup"));
+      el.src = url;
+    });
+    const scale = Math.min(1, 900 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = c.getContext("2d");
+    if (!ctx) throw new Error("canvas");
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    const maxChars = Math.floor((400 * 1024 * 4) / 3);
+    let q = 0.82;
+    let data = c.toDataURL("image/jpeg", q);
+    while (data.length > maxChars && q > 0.35) {
+      q -= 0.1;
+      data = c.toDataURL("image/jpeg", q);
+    }
+    return data;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /** Store a data URL under a key. No-op for non-data URLs; returns the src to keep. */
 export async function stashDataUrl(key: string, src: string): Promise<string> {
   if (!src.startsWith("data:")) return src;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { putImage } from "@/lib/images";
+import { compressRefBackup, putImage, refImageKey } from "@/lib/images";
 import { useCloset } from "@/lib/store";
 import { useImageSrc } from "@/lib/use-image";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,7 @@ const NAV = [
   { to: "/stylist", label: "Stylist" },
 ];
 
-const REF_KEY = "idb:me:ref";
+const REF_KEY = refImageKey();
 const SAVE_ERR = "Could not save that photo.";
 
 const refDialogOpeners = new Set<(open: boolean) => void>();
@@ -100,8 +100,9 @@ function RefPhotoDialog({ onClose }: { onClose: () => void }) {
       setError(null);
       try {
         const blob = await fileToJpegBlob(file);
+        const backup = await compressRefBackup(blob);
         await putImage(REF_KEY, blob);
-        setRefPhoto(REF_KEY);
+        setRefPhoto(REF_KEY, backup);
         setJustSaved((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return URL.createObjectURL(blob);

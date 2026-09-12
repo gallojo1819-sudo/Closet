@@ -7,6 +7,8 @@ export type PersistedCloset = {
   avoid: Record<string, number>;
   drop: DailyDrop | null;
   refPhoto: string | null;
+  /** Compressed JPEG data URL so idb:me:ref can be rebuilt if IDB is cleared. */
+  refPhotoBackup: string | null;
   messages: StylistMessage[];
 };
 
@@ -21,9 +23,16 @@ export function mergeClosetPersist<T extends ClosetSnapshot>(
 ): T {
   const p = (persisted ?? {}) as Partial<PersistedCloset>;
   const stored = Array.isArray(p.garments) ? p.garments : [];
-  // Never replace a non-empty closet with [].
-  if (current.garments.length > 0 && stored.length === 0) return current;
-  if (stored.length === 0) return current;
+  const refPhoto = "refPhoto" in p ? (p.refPhoto ?? null) : current.refPhoto;
+  const refPhotoBackup =
+    "refPhotoBackup" in p ? (p.refPhotoBackup ?? null) : current.refPhotoBackup;
+  // Never replace a non-empty closet with []. Always keep Joe's photo.
+  if (current.garments.length > 0 && stored.length === 0) {
+    return { ...current, refPhoto, refPhotoBackup };
+  }
+  if (stored.length === 0) {
+    return { ...current, refPhoto, refPhotoBackup };
+  }
   return {
     ...current,
     garments: stored,
@@ -31,7 +40,8 @@ export function mergeClosetPersist<T extends ClosetSnapshot>(
     journal: Array.isArray(p.journal) ? p.journal : current.journal,
     avoid: p.avoid && typeof p.avoid === "object" ? p.avoid : current.avoid,
     drop: "drop" in p ? (p.drop ?? null) : current.drop,
-    refPhoto: "refPhoto" in p ? (p.refPhoto ?? null) : current.refPhoto,
+    refPhoto,
+    refPhotoBackup,
     messages: Array.isArray(p.messages) ? p.messages : current.messages,
   };
 }

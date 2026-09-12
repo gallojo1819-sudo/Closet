@@ -1,23 +1,128 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Loader2 } from "lucide-react";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { LookBuilder } from "@/components/closet/look-builder";
-import { OnMeButton } from "@/components/closet/on-me";
+import { dressLook } from "@/components/closet/on-me";
+import { openRefPhotoDialog } from "@/components/shell/top-bar";
+import { aiStatus } from "@/lib/ai";
+import {
+  dataUrlToBlob,
+  deleteImage,
+  getImage,
+  lookOnMeKey,
+  putImage,
+} from "@/lib/images";
 import { lookbookPool, lookbookStats } from "@/lib/lookbook";
 import { slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import type { Garment } from "@/lib/types";
+import type { Garment, Look } from "@/lib/types";
+import { useImageSrc } from "@/lib/use-image";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/lookbook")({ component: LookbookPage });
+
+function LookOnMeCard({
+  look,
+  pieces,
+  paper,
+  noKey,
+  dressing,
+  onWear,
+  onPaper,
+  onRetry,
+}: {
+  look: Look;
+  pieces: Garment[];
+  paper: boolean;
+  noKey: boolean;
+  dressing: boolean;
+  onWear: () => void;
+  onPaper: () => void;
+  onRetry: () => void;
+}) {
+  const cached = useImageSrc(lookOnMeKey(look.id));
+  const showMe = Boolean(cached) && !paper;
+
+  return (
+    <li>
+      <div className="relative border border-hairline bg-paper-deep aspect-[4/5]">
+        {showMe ? (
+          <img
+            src={cached}
+            alt={look.name}
+            className="h-full w-full object-contain"
+          />
+        ) : (
+          <FlatLay pieces={pieces} className="border-0 aspect-[4/5]" />
+        )}
+        {!showMe && (
+          <p className="absolute inset-x-0 bottom-0 micro bg-paper/90 px-2 py-2 text-ink-soft">
+            {noKey
+              ? "On-me needs the key."
+              : dressing
+                ? "Dressing you…"
+                : paper
+                  ? "Paper tiles are the garment."
+                  : "Dressing you…"}
+          </p>
+        )}
+      </div>
+      <p className="mt-3">{look.name}</p>
+      <p className="micro text-ink-soft">{look.occasion}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={onWear}
+          className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+        >
+          Wear this
+        </button>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong inline-flex items-center gap-2"
+        >
+          {dressing && <Loader2 className="size-3 animate-spin" />}
+          Try again
+        </button>
+        <button
+          type="button"
+          onClick={onPaper}
+          className={cn(
+            "micro border px-3 py-2",
+            paper
+              ? "border-ink bg-ink text-paper"
+              : "border-hairline text-ink-soft hover:border-hairline-strong",
+          )}
+        >
+          Use paper
+        </button>
+      </div>
+    </li>
+  );
+}
 
 function LookbookPage() {
   const hydrated = useCloset((s) => s.hydrated);
   const garmentsAll = useCloset((s) => s.garments);
   const looksAll = useCloset((s) => s.looks);
+  const refPhoto = useCloset((s) => s.refPhoto);
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
   const wearToday = useCloset((s) => s.wearToday);
-  const saveLook = useCloset((s) => s.saveLook);
   const [play, setPlay] = useState(false);
+  const [canPrint, setCanPrint] = useState<boolean | null>(null);
+  const [paper, setPaper] = useState<Set<string>>(() => new Set());
+  const [busyIds, setBusyIds] = useState<Set<string>>(() => new Set());
+  const [done, setDone] = useState(0);
+  const [total, setTotal] = useState(0);
+  const askedFit = useRef(false);
+
+  useEffect(() => {
+    aiStatus()
+      .then((s) => setCanPrint(s.print))
+      .catch(() => setCanPrint(false));
+  }, []);
 
   useEffect(() => {
     if (!hydrated || garmentsAll.length === 0) return;
@@ -34,7 +139,7 @@ function LookbookPage() {
     return m;
   }, [garments]);
   const book = useMemo(
-    () => looksAll.filter((l) => l.lookbook),
+    () => looksAll.filter((l) => l.lookbook).slice(0, 48),
     [looksAll],
   );
   const pool = lookbookPool(garments);
@@ -42,6 +147,87 @@ function LookbookPage() {
     pool.some((g) => slotOf(g) === slot || (slot === "top" && slotOf(g) === "dress")),
   );
   const stats = lookbookStats(book, garments);
+  const bookKey = book.map((l) => l.id).join(",");
+
+  useEffect(() => {
+    if (!hydrated || !canBuild) return;
+    if (refPhoto) return;
+    if (askedFit.current) return;
+    askedFit.current = true;
+    openRefPhotoDialog();
+  }, [hydrated, canBuild, refPhoto]);
+
+  useEffect(() => {
+    if (!hydrated || !canBuild || !refPhoto || canPrint !== true) return;
+    if (!book.length) return;
+    let live = true;
+    const jobs: Look[] = [];
+    void (async () => {
+      for (const look of book) {
+        if (paper.has(look.id)) continue;
+        const hit = await getImage(lookOnMeKey(look.id)).catch(() => null);
+        if (!hit) jobs.push(look);
+      }
+      if (!live) return;
+      setTotal(jobs.length);
+      setDone(0);
+      if (!jobs.length) return;
+      let i = 0;
+      const worker = async () => {
+        for (;;) {
+          const idx = i++;
+          if (idx >= jobs.length || !live) return;
+          const look = jobs[idx]!;
+          const pieces = look.garmentIds
+            .map((id) => byId.get(id))
+            .filter((g): g is Garment => Boolean(g));
+          setBusyIds((cur) => new Set(cur).add(look.id));
+          try {
+            const image = await dressLook(pieces);
+            if (!live) return;
+            await putImage(lookOnMeKey(look.id), dataUrlToBlob(image));
+          } catch {
+            /* card stays on paper */
+          } finally {
+            setBusyIds((cur) => {
+              const next = new Set(cur);
+              next.delete(look.id);
+              return next;
+            });
+            setDone((n) => n + 1);
+          }
+        }
+      };
+      await Promise.all([worker(), worker()]);
+    })();
+    return () => {
+      live = false;
+    };
+    // paper is read once per book/ref change; Use paper shouldn't restart the queue
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, canBuild, refPhoto, canPrint, bookKey]);
+
+  const retry = async (look: Look, pieces: Garment[]) => {
+    setPaper((cur) => {
+      const next = new Set(cur);
+      next.delete(look.id);
+      return next;
+    });
+    setBusyIds((cur) => new Set(cur).add(look.id));
+    try {
+      await deleteImage(lookOnMeKey(look.id));
+      const image = await dressLook(pieces);
+      await putImage(lookOnMeKey(look.id), dataUrlToBlob(image));
+    } catch {
+      /* stay paper */
+    } finally {
+      setBusyIds((cur) => {
+        const next = new Set(cur);
+        next.delete(look.id);
+        return next;
+      });
+    }
+  };
 
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-6 py-8 md:py-12 rise">
@@ -50,12 +236,17 @@ function LookbookPage() {
         Lookbook
       </h1>
       <p className="mt-3 text-ink-soft max-w-xl">
-        Best outfits from this closet. Updates when you add.
+        You, in the best outfits from this closet.
       </p>
       {book.length > 0 && (
         <p className="mt-3 micro text-ink-soft">
           {stats.looks} looks · {stats.pieces} pieces
           {stats.everyPieceUsed ? " · every piece used." : "."}
+        </p>
+      )}
+      {total > 0 && done < total && (
+        <p className="mt-2 micro text-ink-soft">
+          On you · {done}/{total}
         </p>
       )}
       <button
@@ -103,35 +294,23 @@ function LookbookPage() {
               .filter((g): g is Garment => Boolean(g));
             if (pieces.length < 3) return null;
             return (
-              <li key={look.id}>
-                <FlatLay pieces={pieces} />
-                <p className="mt-3">{look.name}</p>
-                <p className="micro text-ink-soft">{look.occasion}</p>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => wearToday(look.garmentIds)}
-                    className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-                  >
-                    Wear this
-                  </button>
-                  <OnMeButton pieces={pieces} />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      saveLook({
-                        name: look.name,
-                        occasion: look.occasion,
-                        garmentIds: look.garmentIds,
-                        source: "manual",
-                      })
-                    }
-                    className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-                  >
-                    Save
-                  </button>
-                </div>
-              </li>
+              <LookOnMeCard
+                key={look.id}
+                look={look}
+                pieces={pieces}
+                paper={paper.has(look.id)}
+                noKey={canPrint === false}
+                dressing={busyIds.has(look.id)}
+                onWear={() => wearToday(look.garmentIds)}
+                onPaper={() =>
+                  setPaper((cur) => {
+                    const next = new Set(cur);
+                    next.add(look.id);
+                    return next;
+                  })
+                }
+                onRetry={() => void retry(look, pieces)}
+              />
             );
           })}
         </ul>

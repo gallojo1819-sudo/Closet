@@ -35,6 +35,7 @@ const empty = {
   drop: null,
   refPhoto: null,
   messages: [],
+  refPhotoBackup: null,
   hydrated: false,
 };
 
@@ -47,6 +48,7 @@ describe("mergeClosetPersist", () => {
       avoid: {},
       drop: null,
       refPhoto: null,
+      refPhotoBackup: null,
       messages: [],
     };
     const next = mergeClosetPersist(persisted, empty);
@@ -59,6 +61,15 @@ describe("mergeClosetPersist", () => {
     const next = mergeClosetPersist({ garments: [] }, current);
     assert.equal(next.garments.length, 1);
     assert.equal(next.garments[0]?.id, "live");
+  });
+
+  it("keeps Joe's photo when garments are empty", () => {
+    const next = mergeClosetPersist(
+      { garments: [], refPhoto: "idb:me:ref", refPhotoBackup: "data:image/jpeg;base64,xx" },
+      empty,
+    );
+    assert.equal(next.refPhoto, "idb:me:ref");
+    assert.equal(next.refPhotoBackup, "data:image/jpeg;base64,xx");
   });
 });
 
