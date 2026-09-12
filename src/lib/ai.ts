@@ -39,7 +39,7 @@ export const tagGarment = createServerFn({ method: "POST" })
     userContent.push({
       type: "text",
       text:
-        'Return ONLY JSON: {"name":"Khaki chinos","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"chinos","colors":["khaki"],"material":"cotton","brand":"","fit":"slim|regular|relaxed","formality":3,"warmth":2}. Name the FIRST image like a closet label: color + garment (Navy oxford, Grey merino, White sneakers). Fit from how it lies. If unsure, regular.' +
+        'Return ONLY JSON: {"name":"Brown suede mules","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"mules","colors":["brown"],"material":"suede","brand":"Giuseppe Zanotti","fit":"slim|regular|relaxed","formality":3,"warmth":2}. Name the FIRST image like a closet label: color + garment (Navy oxford, Grey merino, Brown suede mules). A pair of shoes is footwear. Two trouser legs joined at a crotch is bottom. Fit from how it lies. If unsure, regular.' +
         (data.context
           ? " The second image is only the page the garment came from — you may read a brand name from it (Axel Arigato, AMI), nothing else. Never name the garment after the shop or a page ID."
           : " Brand only if a label or logo is legible on the garment itself, else empty."),
@@ -59,7 +59,7 @@ export const tagGarment = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "You tag ONE garment in the photo. Catalog voice. Never a filename (no IMG_0930). Never a shop name or page ID (no FARFETCH, no SKU). Never invent a brand. JSON only.",
+              "You tag ONE garment (or one pair of shoes) in the photo. Catalog voice. A pair of mules, loafers, or sneakers photographed from above is footwear — never pants. Read the insole/label brand if it is printed (Giuseppe Zanotti, Golden Goose, AMI). Never a filename. Never a shop name or page ID. Never invent a brand that is not visible. JSON only.",
           },
           { role: "user", content: userContent },
         ],

@@ -102,20 +102,25 @@ export async function guessGarment(cutoutSrc: string): Promise<{
     }
     return runs;
   };
-  const legRuns = bh > h * 0.3 ? runsAt(0.85) : 0;
+  const topRuns = runsAt(0.22);
   const midRuns = runsAt(0.5);
+  const hemRuns = bh > h * 0.3 ? runsAt(0.85) : 0;
+  // Two separate objects from toe to heel = a pair of shoes, never trousers.
+  const pair = topRuns >= 2 && hemRuns >= 2;
+  // One body, two legs at the hem = pants.
+  const crotch = topRuns <= 1 && hemRuns >= 2;
 
   let category: Category = "other";
   let subtype = "";
   let noun = "piece";
-  if (legRuns >= 2 || aspect < 0.72) {
+  if (pair || (aspect > 1.05 && midRuns >= 2) || (aspect > 1.15 && bh < h * 0.45)) {
+    category = "footwear";
+    subtype = "mules";
+    noun = "mules";
+  } else if (crotch || aspect < 0.65) {
     category = "bottom";
     subtype = color === "khaki" || color === "tan" || color === "olive" ? "chinos" : "pants";
     noun = subtype;
-  } else if ((aspect > 1.05 && midRuns >= 2) || (aspect > 1.15 && bh < h * 0.45)) {
-    category = "footwear";
-    subtype = "shoes";
-    noun = "shoes";
   } else if (aspect > 0.95) {
     category = "top";
     subtype = "shirt";
