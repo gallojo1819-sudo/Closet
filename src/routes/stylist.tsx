@@ -1,12 +1,75 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
+import { FlatLay } from "@/components/closet/flat-lay";
+import { dressLook } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { askStylist } from "@/lib/ai";
-import { daysIdle, HOUSE_LABEL, housesOf } from "@/lib/style";
+import { nameLook } from "@/lib/look";
+import { daysIdle, defaultOccasion, HOUSE_LABEL, housesOf, momentOfDay } from "@/lib/style";
 import { useCloset } from "@/lib/store";
+import type { Garment, Occasion } from "@/lib/types";
+import { dataUrlToBlob, lookOnMeKey, putImage } from "@/lib/images";
+import { todayISO } from "@/lib/utils";
 
 export const Route = createFileRoute("/stylist")({ component: StylistPage });
+
+function StylistLookFrame({
+  lookId,
+  pieces,
+}: {
+  lookId: string;
+  pieces: Garment[];
+}) {
+  const [frame, setFrame] = useState<string | null>(null);
+  const [dressing, setDressing] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    let url: string | null = null;
+    void (async () => {
+      try {
+        const image = await dressLook(pieces);
+        if (!live) return;
+        await putImage(lookOnMeKey(lookId), dataUrlToBlob(image));
+        url = URL.createObjectURL(dataUrlToBlob(image));
+        setFrame(url);
+      } catch (e) {
+        if (live) setError(e instanceof Error ? e.message : "Could not dress you.");
+      } finally {
+        if (live) setDressing(false);
+      }
+    })();
+    return () => {
+      live = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [lookId, pieces.map((p) => p.id).join(",")]);
+
+  return (
+    <div className="relative mt-3 border border-champagne/20 bg-paper aspect-[4/5] overflow-hidden max-w-sm">
+      <FlatLay pieces={pieces} className="border-0" />
+      {frame && (
+        <img
+          src={frame}
+          alt="On you"
+          className="absolute inset-0 z-10 h-full w-full object-cover bg-paper"
+        />
+      )}
+      {dressing && !frame && (
+        <p className="absolute inset-x-0 bottom-0 z-20 micro bg-paper/90 px-2 py-2 text-ink-soft">
+          Dressing you…
+        </p>
+      )}
+      {error && !frame && (
+        <p className="absolute inset-x-0 bottom-0 z-20 micro bg-paper/90 px-2 py-2 text-accent">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const PROMPTS = [
   "Client meeting, uptown, afternoon",
@@ -30,6 +93,8 @@ function StylistPage() {
   const forStylist = owned.length ? owned : garments;
   const messages = useCloset((s) => s.messages);
   const pushMessage = useCloset((s) => s.pushMessage);
+  const saveLook = useCloset((s) => s.saveLook);
+  const setDrop = useCloset((s) => s.setDrop);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -84,9 +149,36 @@ function StylistPage() {
         weatherF: drop?.weather?.f ?? 68,
       },
     });
+    let lookId: string | undefined;
+    let garmentIds: string[] | undefined;
+    if (res.ok && res.garmentIds.length) {
+      const pieces = res.garmentIds
+        .map((id) => forStylist.find((g) => g.id === id))
+        .filter((g): g is Garment => Boolean(g));
+      const occasion = (res.occasion ?? defaultOccasion()) as Occasion;
+      lookId = saveLook({
+        name: nameLook(pieces),
+        occasion,
+        garmentIds: res.garmentIds,
+        source: "manual",
+        lookbook: true,
+      });
+      garmentIds = res.garmentIds;
+      setDrop({
+        date: todayISO(),
+        garmentIds: res.garmentIds,
+        worn: false,
+        verdict: "pending",
+        weather: drop?.weather,
+        occasion,
+        moment: drop?.moment ?? momentOfDay(),
+      });
+    }
     pushMessage({
       role: "stylist",
       text: res.ok ? res.text : res.error,
+      lookId,
+      garmentIds,
     });
     setBusy(false);
   };
@@ -133,6 +225,31 @@ function StylistPage() {
           >
             {m.role === "user" && <p className="micro text-champagne/50 mb-1">You</p>}
             <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</p>
+            {m.role === "stylist" && m.garmentIds && m.garmentIds.length > 0 && (
+              <StylistLookFrame
+                lookId={m.lookId ?? m.id}
+                pieces={m.garmentIds
+                  .map((id) => forStylist.find((g) => g.id === id))
+                  .filter((g): g is Garment => Boolean(g))}
+              />
+            )}
+            {m.role === "stylist" && m.lookId && (
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Link
+                  to="/lookbook"
+                  search={{ look: m.lookId }}
+                  className="micro text-champagne/80 hover:text-champagne underline-offset-2 hover:underline"
+                >
+                  See on you →
+                </Link>
+                <Link
+                  to="/"
+                  className="micro text-champagne/80 hover:text-champagne underline-offset-2 hover:underline"
+                >
+                  Today
+                </Link>
+              </div>
+            )}
           </div>
         ))}
         {busy && (

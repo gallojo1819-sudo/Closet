@@ -61,7 +61,8 @@ export type StylistMessage = {
   id: string;
   role: "user" | "stylist";
   text: string;
-  lookIds?: string[];
+  lookId?: string;
+  garmentIds?: string[];
   createdAt: string;
 };
 

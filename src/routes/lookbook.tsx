@@ -18,7 +18,12 @@ import type { Garment, Look } from "@/lib/types";
 import { useImageSrc } from "@/lib/use-image";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/lookbook")({ component: LookbookPage });
+export const Route = createFileRoute("/lookbook")({
+  component: LookbookPage,
+  validateSearch: (raw: Record<string, unknown>): { look?: string } => ({
+    look: typeof raw.look === "string" ? raw.look : undefined,
+  }),
+});
 
 type Job = () => Promise<void>;
 const dressQ: Job[] = [];
@@ -90,6 +95,7 @@ function LookCard({
   canPrint,
   refPhoto,
   closet,
+  highlight,
   onWear,
   onLayer,
 }: {
@@ -99,6 +105,7 @@ function LookCard({
   canPrint: boolean;
   refPhoto: string | null;
   closet: Garment[];
+  highlight?: boolean;
   onWear: () => void;
   onLayer: (shirt: Garment) => void;
 }) {
@@ -189,8 +196,20 @@ function LookCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canPrint, refPhoto, cacheKey, pieceIds]);
 
+  useEffect(() => {
+    if (!highlight) return;
+    rootRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (painted) setShowMe(true);
+    else runDress(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlight]);
+
   return (
-    <li ref={rootRef}>
+    <li
+      ref={rootRef}
+      id={`look-${look.id}`}
+      className={highlight ? "outline outline-1 outline-ink" : undefined}
+    >
       <div className="relative border border-hairline bg-paper aspect-[4/5] overflow-hidden">
         <FlatLay pieces={pieces} className="border-0" />
         {showMe && painted && (
@@ -258,6 +277,7 @@ function LookbookPage() {
   const [play, setPlay] = useState(false);
   const [canPrint, setCanPrint] = useState(false);
   const [extras, setExtras] = useState<Record<string, string>>({});
+  const { look: focusLook } = Route.useSearch();
 
   useEffect(() => {
     aiStatus()
@@ -361,6 +381,7 @@ function LookbookPage() {
                 canPrint={canPrint}
                 refPhoto={refPhoto}
                 closet={garments}
+                highlight={focusLook === look.id}
                 onWear={() => wearToday(pieces.map((g) => g.id))}
                 onLayer={(shirt) => setExtras((cur) => ({ ...cur, [look.id]: shirt.id }))}
               />

@@ -199,6 +199,9 @@ export function lookbookStats(
 }
 
 export function mergeLookbook(existing: Look[], book: Look[]): Look[] {
-  const kept = existing.filter((l) => !l.lookbook);
-  return [...kept, ...book];
+  // Auto builder ids are lb_*. Stylist/manual lookbook cards must survive a rebuild.
+  const kept = existing.filter((l) => !l.lookbook || !l.id.startsWith("lb_"));
+  const keys = new Set(kept.map((l) => [...l.garmentIds].sort().join("|")));
+  const extra = book.filter((b) => !keys.has([...b.garmentIds].sort().join("|")));
+  return [...kept, ...extra];
 }

@@ -282,19 +282,33 @@ function occasionFromPrompt(prompt: string): Occasion {
   return defaultOccasion();
 }
 
-function localStylistLook(
+export function parseLookLine(text: string, valid: Set<string>): string[] {
+  const m = text.match(/LOOK:\s*([^\n]+)/i);
+  if (!m?.[1]) return [];
+  return m[1]
+    .split(/[,|\s]+/)
+    .map((id) => id.trim())
+    .filter((id) => id && valid.has(id));
+}
+
+function resolveStylistLook(
   garments: Garment[],
   prompt: string,
   f: number,
-): string {
+  grokText?: string,
+): { text: string; garmentIds: string[]; occasion: Occasion } {
   const occasion = occasionFromPrompt(prompt);
   const skip = /skip/.test(prompt.toLowerCase());
-  const ids = pickLook(garments, {
-    occasion,
-    moment: momentOfDay(),
-    weather: { f, label: "Fair", code: 2 },
-    recentWorn: skip ? [] : undefined,
-  });
+  const valid = new Set(garments.map((g) => g.id));
+  let ids = grokText ? parseLookLine(grokText, valid) : [];
+  if (ids.length < 2) {
+    ids = pickLook(garments, {
+      occasion,
+      moment: momentOfDay(),
+      weather: { f, label: "Fair", code: 2 },
+      recentWorn: skip ? [] : undefined,
+    });
+  }
   const pieces = ids
     .map((id) => garments.find((g) => g.id === id))
     .filter((g): g is Garment => Boolean(g));
@@ -304,7 +318,13 @@ function localStylistLook(
     .join(" × ");
   const line = houses ? `${houses} — ${occasion} ${f}°` : `${occasion} ${f}°`;
   const bullets = pieces.map((g) => `• ${g.name}`).join("\n");
-  return `${line}\n${bullets}\n(Grok was blocked — this is from your rack.)`;
+  const stripped = grokText
+    ? grokText.replace(/\n?LOOK:\s*[^\n]+/i, "").trim()
+    : "";
+  const text = stripped
+    ? stripped
+    : `${line}\n${bullets}${grokText ? "" : "\n(Grok was blocked — this is from your rack.)"}`;
+  return { text, garmentIds: ids, occasion };
 }
 
 const CHAT_MODELS = ["grok-4.5", "grok-4.3", "grok-4"] as const;
@@ -322,7 +342,10 @@ HOUSES (mix when honest, never costume)
 FORMAT
 Line 1 only: {House} × {House} — {occasion} {temp}°
 Example: Ralph × Faloni — weekday 77°
-Then 2–5 short lines naming closet pieces by exact name. No lecture. No emoji. Pixels beat names. No invented oxford under a knit.`;
+Then 2–5 short lines naming closet pieces by exact name. No lecture. No emoji. Pixels beat names. No invented oxford under a knit.
+Last line MUST be exactly:
+LOOK: g_xxx,g_yyy,g_zzz
+IDs from the closet list only, in order top, bottom, footwear (outer optional). Never invent an id.`;
 
 export const askStylist = createServerFn({ method: "POST" })
   .validator(
@@ -334,12 +357,18 @@ export const askStylist = createServerFn({ method: "POST" })
       weatherF?: number;
     }) => input,
   )
-  .handler(async ({ data }): Promise<{ ok: true; text: string } | { ok: false; error: string }> => {
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      | { ok: true; text: string; garmentIds: string[]; occasion: Occasion }
+      | { ok: false; error: string }
+    > => {
     const rack = (data.garments ?? []).filter((g) => !g.archived);
     const f = data.weatherF ?? 68;
     const fallback = () =>
       rack.length
-        ? { ok: true as const, text: localStylistLook(rack, data.prompt, f) }
+        ? { ok: true as const, ...resolveStylistLook(rack, data.prompt, f) }
         : { ok: false as const, error: "The stylist has nothing to dress." };
 
     if (!process.env.XAI_API_KEY) return fallback();
@@ -366,7 +395,10 @@ ${data.closet.slice(0, 6000)}`,
       if (r.ok) {
         const body = r.json as { choices?: { message?: { content?: string } }[] };
         const text = body.choices?.[0]?.message?.content ?? "";
-        if (text.trim()) return { ok: true, text };
+        if (text.trim() && rack.length) {
+          return { ok: true, ...resolveStylistLook(rack, data.prompt, f, text) };
+        }
+        if (text.trim()) return { ok: true, text, garmentIds: [], occasion: occasionFromPrompt(data.prompt) };
       }
       if (r.status !== 403 && r.status !== 404 && r.status !== 422) {
         return fallback();
