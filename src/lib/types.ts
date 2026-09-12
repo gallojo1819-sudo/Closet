@@ -39,6 +39,7 @@ export type Garment = {
   wornOn: string[];
   paid?: number;
   fit?: "slim" | "regular" | "relaxed";
+  productUrl?: string;
   archived: boolean;
   createdAt: string;
 };

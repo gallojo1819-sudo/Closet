@@ -14,12 +14,13 @@ const SHOOT = [
 function AddPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 md:px-6 py-8 md:py-12 rise">
-      <p className="micro text-ink-soft">Your photo. Never a stand-in.</p>
+      <p className="micro text-ink-soft">Exact make. Official plate.</p>
       <h1 className="mt-2 font-editorial text-4xl md:text-5xl tracking-tight">
         Add to the closet
       </h1>
       <p className="mt-3 text-ink-soft max-w-xl">
-        Drop a dozen. We float each one on paper and name it. No form.
+        Paste the Farfetch link. Shoot the hangtag. Or drop a photo and tap the
+        official make. The grid never keeps a webpage.
       </p>
 
       <aside className="mt-8 border border-hairline bg-card px-5 py-5">
