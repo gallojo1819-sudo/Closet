@@ -53,6 +53,7 @@ export function housesOf(g: Garment): House[] {
   const blob = `${g.subtype} ${g.name} ${g.material} ${g.colors.join(" ")} ${g.notes}`.toLowerCase();
   const houses = new Set<House>();
   if (/oxford|polo|chino|cable|blazer/.test(blob)) houses.add("ralph");
+  if (/trouser/.test(blob) && g.formality >= 3) houses.add("ralph");
   if (/loafer/.test(blob) && g.formality >= 3) houses.add("ralph");
   if (/navy/.test(blob) && g.formality >= 3 && g.formality <= 4) houses.add("ralph");
   if (/rugby|oversized|yankee|\b990\b|new balance/.test(blob)) houses.add("ald");
@@ -99,6 +100,32 @@ function formalityTarget(occasion: Occasion, moment: Moment): number {
 
 function blobOf(g: Garment): string {
   return `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
+}
+
+function isHoodiePiece(g: Garment): boolean {
+  return /\bhoodies?\b/.test(blobOf(g));
+}
+
+/**
+ * Graphic / 90s hoodie with pleated trousers and loafers is costume.
+ * ALD hoodie only with jean and sneaker. Hoodie is never a coat.
+ */
+export function houseMixPenalty(pieces: Garment[]): number {
+  const hoodie = pieces.some(isHoodiePiece);
+  if (!hoodie) return 0;
+  const blob = pieces.map((g) => `${g.subtype} ${g.name}`).join(" ").toLowerCase();
+  const jean = /\bjeans?\b|denim/.test(blob);
+  const sneaker = /sneaker|trainer|\b990\b/.test(blob);
+  const loafer = /loafer/.test(blob);
+  const trouser = /trouser|pleat|chino/.test(blob);
+  const sweet = /fair\s*isle|gingham|cable|cord/.test(blob);
+  let p = 0;
+  if (trouser && loafer) p -= 16;
+  else if (trouser) p -= 10;
+  else if (loafer && !jean) p -= 10;
+  if (sweet) p -= 10;
+  if (jean && sneaker) p += 1;
+  return p;
 }
 
 /** Occasion briefs: mixed houses, not costume. Penalties beat idle. */
@@ -236,7 +263,8 @@ export function pickLook(
         const pieces = [t, b, sh].filter((g): g is Garment => Boolean(g));
         if (pieces.length < 2) continue;
         const h = harmony(pieces, { occasion: opts.occasion, f });
-        const s = pieces.reduce((n, g) => n + score(g), 0) + h;
+        const s =
+          pieces.reduce((n, g) => n + score(g), 0) + h + houseMixPenalty(pieces);
         combos.push({ ids: pieces.map((g) => g.id), s, h, pieces });
       }
     }
@@ -247,8 +275,9 @@ export function pickLook(
   const ids: string[] = win ? [...win.ids] : [];
   // Weekday look is top + bottom + footwear. Empty slots omitted, never invented.
   if (cool) {
-    // Outerwear only when it's actually cool, not on a warm morning.
-    const outer = best(by("outerwear"));
+    // Outerwear only when it's actually cool. Hoodie is not a coat.
+    const coats = by("outerwear").filter((g) => !isHoodiePiece(g));
+    const outer = best(coats);
     if (outer && !(warm && outer.warmth >= 5)) ids.push(outer.id);
   }
   const acc = by("accessory");
@@ -282,14 +311,20 @@ export function pickLook(
         const nextPieces = nextIds
           .map((id) => pool.find((x) => x.id === id))
           .filter((g): g is Garment => Boolean(g));
-        const hNow = harmony(
-          ids.map((id) => pool.find((x) => x.id === id)).filter((g): g is Garment => Boolean(g)),
-          { occasion: opts.occasion, f },
-        );
-        const hNext = harmony(nextPieces, { occasion: opts.occasion, f });
-        if (hNext >= 0 || hNext >= hNow) ids[slot] = candidate.id;
+        if (houseMixPenalty(nextPieces) < -8) {
+          // keep the occupant — don't drop a 90s hoodie onto pleats + loafer
+        } else {
+          const hNow = harmony(
+            ids.map((id) => pool.find((x) => x.id === id)).filter((g): g is Garment => Boolean(g)),
+            { occasion: opts.occasion, f },
+          );
+          const hNext = harmony(nextPieces, { occasion: opts.occasion, f });
+          if (hNext >= 0 || hNext >= hNow) ids[slot] = candidate.id;
+        }
       }
-    } else if (candSlot === "accessory" || candSlot === "outerwear") {
+    } else if (candSlot === "accessory") {
+      ids.push(candidate.id);
+    } else if (candSlot === "outerwear" && !isHoodiePiece(candidate)) {
       ids.push(candidate.id);
     }
   }

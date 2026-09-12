@@ -1,8 +1,12 @@
 import { canonicalize, type PaletteColor } from "./color.ts";
-import { housesOf, slotOf } from "./style.ts";
+import { daysIdle, HOUSE_LABEL, housesOf, lookHouses, slotOf } from "./style.ts";
 import type { Garment } from "./types.ts";
 
-const EVEN = "The rack is even. Wear what’s sitting.";
+export type RackNote = {
+  title: string;
+  body: string;
+  finishes: string[];
+};
 
 function blobOf(g: Garment): string {
   return `${g.subtype} ${g.name} ${g.material}`.toLowerCase();
@@ -102,18 +106,37 @@ function paleOxford(g: Garment): boolean {
   return isOxford(g) && hasColor(g, "white", "light blue", "ivory");
 }
 
+function pair(a: Garment, b: Garment): string {
+  return `${a.name} + ${b.name}`;
+}
+
+function houseOf(pieces: Garment[]): string {
+  const h = lookHouses(pieces)[0] ?? housesOf(pieces[0]!)[0];
+  return h ? HOUSE_LABEL[h] : "Ralph";
+}
+
+const EVEN: RackNote = {
+  title: "The rack is even",
+  body: "Wear what’s sitting.",
+  finishes: [],
+};
+
 /**
- * Outfit holes: name the plates he owns, then the missing type + color.
- * No shop, no cart, no brand. Recomputes from garments — no persist key.
+ * Stylist notes: missing type + color, why, which of HIS plates it finishes.
+ * 3–6 when there are holes. No shop, no cart, no brand. No persist key.
  */
-export function rackGaps(garments: Garment[]): string[] {
+export function rackNotes(garments: Garment[]): RackNote[] {
   const pool = his(garments);
   if (!pool.length) return [];
 
-  const lines: string[] = [];
-  const push = (s: string) => {
-    if (lines.length >= 8) return;
-    if (!lines.includes(s)) lines.push(s);
+  const notes: RackNote[] = [];
+  const seen = new Set<string>();
+  const push = (n: RackNote) => {
+    if (notes.length >= 6) return;
+    if (seen.has(n.title)) return;
+    if (/navy knit/i.test(n.title)) return;
+    seen.add(n.title);
+    notes.push(n);
   };
 
   const tops = pool.filter((g) => wearOf(g) === "top");
@@ -131,11 +154,14 @@ export function rackGaps(garments: Garment[]): string[] {
   const creamTrousers = trousers.filter((g) => hasColor(g, "cream", "ivory"));
   const navyLoafers = loafers.filter((g) => hasColor(g, "navy"));
   const navyKnits = knits.filter((g) => hasColor(g, "navy"));
-  const oliveKhakiBottoms = bottoms.filter((g) => hasColor(g, "olive", "khaki", "forest"));
+  const oliveKhakiBottoms = bottoms.filter((g) =>
+    hasColor(g, "olive", "khaki", "forest"),
+  );
   const dressLoafers = loafers.filter((g) =>
     hasColor(g, "brown", "chocolate", "tan", "camel", "burgundy", "wine", "maroon"),
   );
   const paleOx = oxfords.filter(paleOxford);
+  const idle = pool.filter((g) => daysIdle(g) >= 21);
   const summer =
     pool.filter((g) => g.warmth <= 2).length >= 4 ||
     pool.some((g) => g.seasons.some((s) => /summer|spring/i.test(s))) ||
@@ -144,44 +170,133 @@ export function rackGaps(garments: Garment[]): string[] {
       return hs.includes("faloni") || hs.includes("fiveFourFive");
     });
 
+  if (idle.length >= 5) {
+    const names = [...idle]
+      .sort((a, b) => daysIdle(b) - daysIdle(a))
+      .slice(0, 3)
+      .map((g) => g.name);
+    push({
+      title: "Wear what’s sitting",
+      body: `${idle.length} pieces haven’t been out in three weeks. ${names.join(", ")}. Wear them before anything new.`,
+      finishes: names,
+    });
+  }
+
   const dressedBottom =
     creamTrousers[0] ?? trousers[0] ?? chinos[0] ?? cords[0];
   const dressedShoe = navyLoafers[0] ?? leather[0];
   if (dressedBottom && dressedShoe && paleOx.length === 0) {
-    push(
-      `Light blue or white oxford would finish the ${dressedBottom.name} + ${dressedShoe.name}.`,
-    );
+    const house = houseOf([dressedBottom, dressedShoe]);
+    const knit = knits[0];
+    const navyOx = oxfords.find((g) => hasColor(g, "navy"));
+    const extra = navyOx
+      ? ` You already have the ${navyOx.name}; white or light blue is the one that finishes this.`
+      : knit
+        ? ` The ${knit.name} is doing the shirt’s job.`
+        : "";
+    push({
+      title: "White oxford",
+      body: `Tucked into the ${dressedBottom.name} with the ${dressedShoe.name} — ${house} weekday. You have the bottom and the shoe.${extra}`,
+      finishes: [pair(dressedBottom, dressedShoe)],
+    });
   }
 
   if (trousers.length > 0 && leather.length === 0 && (knits.length > 0 || sneakers.length > 0)) {
     const t = trousers[0]!;
-    const verb = /s$/i.test(t.name.trim()) ? "are" : "is";
-    push(`${t.name} ${verb} waiting on a loafer, not another knit.`);
+    const knit = knits[0];
+    const sn = sneakers[0];
+    const why = knit
+      ? `Not another knit. The ${knit.name} already covers the top.`
+      : "Not another trainer.";
+    const shoeNow = sn ? ` ${sn.name} is the only shoe on them now.` : "";
+    push({
+      title: "Brown loafer",
+      body: `The ${t.name} are waiting on leather. ${why}${shoeNow} Ralph doesn’t sit on a sneaker.`,
+      finishes: [knit ? pair(t, knit) : t.name],
+    });
   }
 
   if (cords.length > 0 && dressLoafers.length === 0 && sneakers.length > 0) {
     const c = cords[0]!;
-    push(
-      `Brown or burgundy loafer would dress the ${c.name}. Sneakers are the only shoe on them now.`,
-    );
+    const sn = sneakers[0]!;
+    if (!seen.has("Brown loafer")) {
+      push({
+        title: "Brown loafer",
+        body: `The ${c.name} want brown or burgundy leather, not ${sn.name}. Sweet Stable doesn’t sit on a sneaker. You have the cords; the shoe is the hole.`,
+        finishes: [c.name],
+      });
+    } else {
+      push({
+        title: "Burgundy loafer",
+        body: `The ${c.name} want brown or burgundy leather. ${sn.name} is the only shoe on them now. Sweet Stable, not a trainer.`,
+        finishes: [c.name],
+      });
+    }
   }
 
-  if (navyKnits.length >= 3 && oliveKhakiBottoms.length === 0) {
-    push("Navy knits have no khaki/olive bottom — weekday is navy-on-navy.");
+  if (navyKnits.length >= 4 && oliveKhakiBottoms.length === 0) {
+    const k = navyKnits[0]!;
+    const sh = leather[0] ?? sneakers[0];
+    push({
+      title: "Khaki chino",
+      body: `${k.name} and the rest of the navy knits have no khaki or olive bottom — weekday is navy-on-navy. Ralph wants earth under navy. Not another navy knit.`,
+      finishes: [sh ? pair(k, sh) : k.name],
+    });
   }
 
   const heatBottom = creamTrousers[0] ?? bottoms.find((g) => g.warmth <= 2);
-  if (linens.length === 0 && knits.length > 0 && heatBottom && (summer || creamTrousers.length > 0)) {
-    push(
-      `Linen shirt would unlock the ${heatBottom.name} in heat. Knits are doing that job now.`,
-    );
+  if (
+    linens.length === 0 &&
+    knits.length > 0 &&
+    heatBottom &&
+    (summer || creamTrousers.length > 0)
+  ) {
+    const sh = leather[0] ?? sneakers[0];
+    push({
+      title: "Linen camp shirt",
+      body: `Heat would put the ${heatBottom.name} with a linen camp collar, not a knit. Faloni in summer. The knits are doing that job now.`,
+      finishes: [sh ? pair(heatBottom, sh) : heatBottom.name],
+    });
   }
 
-  if (!lines.length) return [EVEN];
-  return lines.slice(0, 8);
+  if (!notes.length) return [EVEN];
+  return notes.slice(0, 6);
 }
 
 export function rackLine(garments: Garment[]): string | null {
-  const lines = rackGaps(garments);
-  return lines[0] ?? null;
+  const notes = rackNotes(garments);
+  const n = notes[0];
+  if (!n) return null;
+  if (n.title === EVEN.title) return "The rack is even. Wear what’s sitting.";
+  if (n.finishes[0]) return `${n.title} — ${n.finishes[0]}`;
+  return n.title;
+}
+
+export function rackGaps(garments: Garment[]): string[] {
+  return rackNotes(garments).map((n) =>
+    n.finishes[0] ? `${n.title} — ${n.finishes[0]}` : n.title,
+  );
+}
+
+/** One hole the current look still doesn’t fill, or null. */
+export function lookMissing(
+  pieces: Garment[],
+  garments: Garment[],
+): { title: string; finishes: string } | null {
+  for (const n of rackNotes(garments)) {
+    if (!n.finishes.length) continue;
+    if (n.title === "Wear what’s sitting") continue;
+    const t = n.title.toLowerCase();
+    if (t.includes("oxford") && pieces.some(paleOxford)) continue;
+    if (t.includes("loafer") && pieces.some(isLeatherShoe)) continue;
+    if (
+      t.includes("chino") &&
+      pieces.some((g) => wearOf(g) === "bottom" && hasColor(g, "olive", "khaki", "forest"))
+    ) {
+      continue;
+    }
+    if (t.includes("linen") && pieces.some(isLinenShirt)) continue;
+    return { title: n.title, finishes: n.finishes[0]! };
+  }
+  return null;
 }

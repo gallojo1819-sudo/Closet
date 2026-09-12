@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
-import { defaultOccasion, HOUSE_LABEL, lookHouses, momentOfDay, pickLook } from "./style";
+import { lookMissing } from "./gaps";
+import { defaultOccasion, HOUSE_LABEL, houseMixPenalty, lookHouses, momentOfDay, pickLook } from "./style";
 import type { Category, Garment, Occasion } from "./types";
 
 export type TagResult = {
@@ -292,51 +293,64 @@ function resolveStylistLook(
   const skip = /skip/.test(prompt.toLowerCase());
   const valid = new Set(garments.map((g) => g.id));
   let ids = grokText ? parseLookLine(grokText, valid) : [];
-  if (ids.length < 2) {
+  let pieces = ids
+    .map((id) => garments.find((g) => g.id === id))
+    .filter((g): g is Garment => Boolean(g));
+  if (ids.length < 2 || houseMixPenalty(pieces) < -8) {
     ids = pickLook(garments, {
       occasion,
       moment: momentOfDay(),
       weather: { f, label: "Fair", code: 2 },
       recentWorn: skip ? [] : undefined,
     });
+    pieces = ids
+      .map((id) => garments.find((g) => g.id === id))
+      .filter((g): g is Garment => Boolean(g));
   }
-  const pieces = ids
-    .map((id) => garments.find((g) => g.id === id))
-    .filter((g): g is Garment => Boolean(g));
   const houses = lookHouses(pieces)
     .slice(0, 2)
     .map((h) => HOUSE_LABEL[h])
     .join(" × ");
   const line = houses ? `${houses} — ${occasion} ${f}°` : `${occasion} ${f}°`;
-  const bullets = pieces.map((g) => `• ${g.name}`).join("\n");
-  const stripped = grokText
+  const names = pieces.map((g) => g.name).join("\n");
+  let stripped = grokText
     ? grokText.replace(/\n?LOOK:\s*[^\n]+/i, "").trim()
     : "";
+  const hole = lookMissing(pieces, garments);
+  const missing = hole
+    ? `MISSING: ${hole.title.toLowerCase()} — ${hole.finishes}`
+    : "";
+  if (stripped && missing && !/MISSING:/i.test(stripped)) {
+    stripped = `${stripped}\n${missing}`;
+  }
   const text = stripped
     ? stripped
-    : `${line}\n${bullets}${grokText ? "" : "\n(Grok was blocked — this is from your rack.)"}`;
+    : `${line}\n${names}${missing ? `\n${missing}` : ""}`;
   return { text, garmentIds: ids, occasion };
 }
 
 const CHAT_MODELS = ["grok-4.5", "grok-4.3", "grok-4"] as const;
 
-const STYLIST_SYSTEM = `You are Joe's designer. HIS garments only. Never invent a piece, layer, or shop.
+const STYLIST_SYSTEM = `You are Joe's master stylist. HIS houses only. Never invent a piece, layer, or shop.
 
-HOUSES (mix when honest, never costume)
-- Ralph: oxford, polo, chino, navy, cable, loafer, blazer. Formality 3–4.
-- ALD: rugby, oversized oxford, relaxed jean, Yankees/cap, 990 or loafer, earth/navy/cream. Formality 2–3. High-low ok.
-- Faloni / Italian summer: linen, silk-cotton, light trouser, loafer no-show. Warmth ≤2. Prefer above 75°F.
-- Italian winter: cashmere, flannel, merino, suede, overcoat. Below 55°F.
-- FiveFourFive: linen, sangallo, light cashmere, tailored short, Italian street-luxury. Weekend/travel.
-- Sweet Stable: rugby, gingham, cord, horse/equestrian, ski-prep. Weekend.
+HOUSES (tight)
+- Ralph: oxford, polo, chino, cable, navy blazer, loafer. Clean tuck. No graphic hoodie.
+- ALD: rugby, oversized oxford, jean, 990 or loafer, graphic hoodie ONLY with jean/sneaker.
+- Faloni / Italian summer: linen, camp collar, light trouser, mule/loafer, no-show. Heat.
+- Italian winter: merino, flannel, cashmere, suede, overcoat.
+- FiveFourFive: linen, sangallo, light cashmere, tailored.
+- Sweet Stable: fair isle, gingham, cord, rugby. Not under a 90s hoodie.
+
+Never put a 90s hoodie with pleated trousers and loafers. Hoodie is not a coat.
 
 FORMAT
-Line 1 only: {House} × {House} — {occasion} {temp}°
-Example: Ralph × Faloni — weekday 77°
-Then 2–5 short lines naming closet pieces by exact name. No lecture. No emoji. Pixels beat names. No invented oxford under a knit.
+Line 1: {House} × {House} — {occasion} {temp}°
+Then 2–5 lines: HIS exact names.
+Then MISSING: one hole if the look would be better with a type he does not own (e.g. "MISSING: white oxford — under the cream cable"). Omit MISSING if the look is complete from this closet.
 Last line MUST be exactly:
 LOOK: g_xxx,g_yyy,g_zzz
-IDs from the closet list only, in order top, bottom, footwear (outer optional). Never invent an id.`;
+IDs from the closet list only, in order top, bottom, footwear (outer optional). Never invent an id.
+Voice: quiet, sure, no emoji, no lecture. Pixels beat names. No invented layers.`;
 
 export const askStylist = createServerFn({ method: "POST" })
   .validator(

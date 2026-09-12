@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { FlatLay } from "@/components/closet/flat-lay";
-import { dressLook } from "@/components/closet/on-me";
+import { ensureLookOnMe } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { askStylist } from "@/lib/ai";
 import { nameLook } from "@/lib/look";
 import { daysIdle, defaultOccasion, HOUSE_LABEL, housesOf, momentOfDay } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import type { Garment, Occasion } from "@/lib/types";
-import { dataUrlToBlob, lookOnMeKey, putImage } from "@/lib/images";
+import { dataUrlToBlob, lookOnMeKey } from "@/lib/images";
+import { useImageSrc } from "@/lib/use-image";
 import { todayISO } from "@/lib/utils";
 
 export const Route = createFileRoute("/stylist")({ component: StylistPage });
@@ -21,18 +22,26 @@ function StylistLookFrame({
   lookId: string;
   pieces: Garment[];
 }) {
+  const cacheKey = lookOnMeKey(lookId);
+  const cachedSrc = useImageSrc(cacheKey);
   const [frame, setFrame] = useState<string | null>(null);
-  const [dressing, setDressing] = useState(true);
+  const [dressing, setDressing] = useState(!cachedSrc);
   const [error, setError] = useState<string | null>(null);
+  const painted = frame || cachedSrc;
+  const ids = pieces.map((p) => p.id).join(",");
 
   useEffect(() => {
+    if (cachedSrc) {
+      setDressing(false);
+      return;
+    }
     let live = true;
     let url: string | null = null;
+    setDressing(true);
     void (async () => {
       try {
-        const image = await dressLook(pieces);
+        const image = await ensureLookOnMe(lookId, pieces);
         if (!live) return;
-        await putImage(lookOnMeKey(lookId), dataUrlToBlob(image));
         url = URL.createObjectURL(dataUrlToBlob(image));
         setFrame(url);
       } catch (e) {
@@ -45,28 +54,58 @@ function StylistLookFrame({
       live = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [lookId, pieces.map((p) => p.id).join(",")]);
+  }, [lookId, ids, cachedSrc]);
 
   return (
     <div className="relative mt-3 border border-champagne/20 bg-paper aspect-[4/5] overflow-hidden max-w-sm">
       <FlatLay pieces={pieces} className="border-0" />
-      {frame && (
+      {painted && (
         <img
-          src={frame}
+          src={painted}
           alt="On you"
           className="absolute inset-0 z-10 h-full w-full object-cover bg-paper"
         />
       )}
-      {dressing && !frame && (
+      {dressing && !painted && (
         <p className="absolute inset-x-0 bottom-0 z-20 micro bg-paper/90 px-2 py-2 text-ink-soft">
           Dressing you…
         </p>
       )}
-      {error && !frame && (
+      {error && !painted && (
         <p className="absolute inset-x-0 bottom-0 z-20 micro bg-paper/90 px-2 py-2 text-accent">
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+function StylistNote({ text }: { text: string }) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const missing = lines.filter((l) => /^MISSING:/i.test(l));
+  const body = lines.filter((l) => !/^MISSING:/i.test(l) && !/^LOOK:/i.test(l));
+  return (
+    <div className="space-y-1">
+      {body.map((l, i) => (
+        <p
+          key={`${i}-${l}`}
+          className={
+            i === 0
+              ? "text-sm leading-relaxed text-champagne"
+              : "text-sm leading-relaxed text-champagne/80"
+          }
+        >
+          {l}
+        </p>
+      ))}
+      {missing.map((l) => (
+        <p key={l} className="mt-2 text-sm text-champagne/70">
+          {l.replace(/^MISSING:\s*/i, "Missing: ")}
+        </p>
+      ))}
     </div>
   );
 }
@@ -224,7 +263,11 @@ function StylistPage() {
             }
           >
             {m.role === "user" && <p className="micro text-champagne/50 mb-1">You</p>}
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</p>
+            {m.role === "stylist" ? (
+              <StylistNote text={m.text} />
+            ) : (
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</p>
+            )}
             {m.role === "stylist" && m.garmentIds && m.garmentIds.length > 0 && (
               <StylistLookFrame
                 lookId={m.lookId ?? m.id}

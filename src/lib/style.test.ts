@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { pickLook, slotOf } from "./style.ts";
+import { houseMixPenalty, pickLook, slotOf } from "./style.ts";
 import type { Garment } from "./types.ts";
 
 function piece(
@@ -159,5 +159,73 @@ describe("pickLook", () => {
     assert.ok(ids.includes("fake"));
     assert.equal(slotOf(tiny[1]!), "footwear");
     assert.equal(ids.length, 2, "no real bottom — omit that slot");
+  });
+
+  it("does not mix a 90s hoodie with pleated trousers and loafers", () => {
+    const mix = [
+      piece({
+        id: "hood",
+        name: "Black 90s hoodie",
+        category: "outerwear",
+        subtype: "hoodie",
+        formality: 2,
+      }),
+      piece({
+        id: "ox",
+        name: "White oxford",
+        category: "top",
+        subtype: "oxford",
+        formality: 3,
+      }),
+      piece({
+        id: "pleat",
+        name: "Cream pleated trousers",
+        category: "bottom",
+        subtype: "trouser",
+        formality: 4,
+      }),
+      piece({
+        id: "jean",
+        name: "Indigo jeans",
+        category: "bottom",
+        subtype: "jean",
+        formality: 2,
+      }),
+      piece({
+        id: "lf",
+        name: "Navy loafers",
+        category: "footwear",
+        subtype: "loafer",
+        formality: 3,
+      }),
+      piece({
+        id: "sn",
+        name: "White sneakers",
+        category: "footwear",
+        subtype: "sneaker",
+        formality: 1,
+      }),
+    ];
+    const clash = houseMixPenalty([
+      mix[0]!,
+      mix[2]!,
+      mix[4]!,
+    ]);
+    assert.ok(clash < -8, `penalty ${clash}`);
+    const cool = {
+      occasion: "weekday" as const,
+      moment: "day" as const,
+      weather: { f: 50, label: "Cool", code: 3 },
+    };
+    for (let i = 0; i < 16; i++) {
+      const ids = pickLook(mix, cool);
+      const hasHood = ids.includes("hood");
+      const hasPleat = ids.includes("pleat");
+      const hasLf = ids.includes("lf");
+      assert.ok(
+        !(hasHood && hasPleat && hasLf),
+        `hoodie + pleat + loafer: ${ids.join(",")}`,
+      );
+    }
   });
 });

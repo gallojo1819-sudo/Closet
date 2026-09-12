@@ -11,7 +11,7 @@ import {
   isIdbKey,
   stashDataUrl,
 } from "@/lib/images";
-import { rackGaps } from "@/lib/gaps";
+import { rackNotes } from "@/lib/gaps";
 import { daysIdle } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { CATEGORIES, type Category, type Garment } from "@/lib/types";
@@ -116,7 +116,7 @@ function ClosetPage() {
     () => garments.filter((g) => daysIdle(g) >= 21),
     [garments],
   );
-  const rack = useMemo(() => rackGaps(garments), [garments]);
+  const rack = useMemo(() => rackNotes(garments), [garments]);
   const list = useMemo(() => {
     if (filter === "all") return garments;
     if (filter === "waiting") return waiting;
@@ -201,18 +201,6 @@ function ClosetPage() {
               This URL’s closet is empty. localhost and Vercel are different closets. Open closet-ten-hazel.vercel.app if you uploaded there.
             </p>
           )}
-          {hydrated && rack.length > 0 && (
-            <div className="mt-4 max-w-xl">
-              <p className="micro text-ink-soft">The rack</p>
-              <ul className="mt-2 space-y-1">
-                {rack.map((line) => (
-                  <li key={line} className="text-sm text-ink-soft">
-                    {line}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {selecting ? (
@@ -286,6 +274,25 @@ function ClosetPage() {
           </Link>
         </div>
       </div>
+      {hydrated && rack.length > 0 && (
+        <section className="mt-8">
+          <p className="micro text-ink-soft">The rack</p>
+          <ul className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {rack.map((n) => (
+              <li
+                key={n.title}
+                className="border border-hairline bg-paper p-4"
+              >
+                <p className="font-editorial text-2xl tracking-tight">{n.title}</p>
+                <p className="mt-2 text-sm text-ink-soft leading-relaxed">{n.body}</p>
+                {n.finishes.length > 0 && (
+                  <p className="mt-3 text-sm text-ink">{n.finishes.join(" · ")}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {importError && (
         <p className="mt-4 max-w-xl text-sm text-accent border border-accent/40 bg-card px-4 py-3">
           {importError}

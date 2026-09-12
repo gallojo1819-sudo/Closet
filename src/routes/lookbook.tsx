@@ -218,7 +218,7 @@ function LookbookPage() {
         Best outfits from this closet, on paper. Dress you when a card is on screen.
       </p>
       {gap && (
-        <p className="mt-3 micro text-ink-soft">{gap}</p>
+        <p className="mt-3 text-sm text-ink-soft max-w-xl">{gap}</p>
       )}
       {book.length > 0 && (
         <>
