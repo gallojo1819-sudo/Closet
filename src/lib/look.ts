@@ -50,19 +50,19 @@ export function dropNote(
     .join(" × ");
   const sitting = [...pieces].sort((a, b) => daysIdle(b) - daysIdle(a))[0];
   const idle = sitting ? daysIdle(sitting) : 0;
-  const when = [occasion, moment].filter(Boolean).join(" · ");
-  const head = when ? `${when}. ` : "";
+  void moment;
+  const lead = [occasion, `${f}°`, sky].filter(Boolean).join(" · ");
 
   if (idle >= 21 && sitting) {
-    return `${head}${f}° ${sky}. Putting the ${sitting.name.toLowerCase()} back in — it has sat ${idle} days. ${houses}.`;
+    return `${lead}. Putting the ${sitting.name.toLowerCase()} back in — it has sat ${idle} days. ${houses}.`;
   }
   if (f < 55) {
-    return `${head}${f}°. Coat weather. ${houses || "From the closet"}.`;
+    return `${lead}. Coat weather. ${houses || "From the closet"}.`;
   }
   if (f > 78) {
-    return `${head}${f}°. Keep it light. ${houses}.`;
+    return `${lead}. Keep it light. ${houses}.`;
   }
-  return `${head}${f}° ${sky}. ${houses || "Built from what you own"}.`;
+  return `${lead}. ${houses || "Built from what you own"}.`;
 }
 
 export function neglectedPiece(

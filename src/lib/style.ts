@@ -45,9 +45,51 @@ export function housesOf(g: Garment): House[] {
 
 function formalityTarget(occasion: Occasion, moment: Moment): number {
   if (occasion === "client") return 4;
-  if (occasion === "dinner") return moment === "evening" ? 4 : 3;
+  if (occasion === "dinner") return 4;
   if (occasion === "weekend" || occasion === "travel") return 2;
+  void moment;
   return 3;
+}
+
+function blobOf(g: Garment): string {
+  return `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
+}
+
+/** Occasion briefs: mixed houses, not costume. Penalties beat idle. */
+function occasionScore(g: Garment, occasion: Occasion): number {
+  const b = blobOf(g);
+  const sneaker = /sneaker|trainer/.test(b);
+  const gym = /gym|runner|running|athletic/.test(b);
+  const tee = /\btee\b|t-shirt|hoodie/.test(b);
+  const jean = /\bjeans?\b|denim/.test(b);
+  const cargo = /cargo/.test(b);
+  const oxford = /oxford/.test(b);
+  const polo = /polo/.test(b);
+  const loafer = /loafer/.test(b);
+  const trouser = /trouser/.test(b);
+  const knit = /knit|sweater|merino/.test(b);
+  const overshirt = /overshirt/.test(b);
+  const distressed = /distress|ripped|destroyed/.test(b);
+  let s = 0;
+  if (occasion === "client") {
+    if (sneaker || tee || gym) s -= 5;
+    if (jean || distressed) s -= 4;
+    if (trouser || oxford || loafer) s += 3;
+  } else if (occasion === "dinner") {
+    if (gym || (sneaker && gym)) s -= 5;
+    if (sneaker) s -= 3.5;
+    if (cargo) s -= 5;
+    if (jean) s -= 2.5;
+    if (tee) s -= 2;
+    if (loafer) s += 2.5;
+    if (trouser) s += 2;
+    if (oxford) s += 1.5;
+  } else if (occasion === "weekend") {
+    if (jean || sneaker || polo) s += 1.5;
+  } else if (occasion === "travel") {
+    if (knit || overshirt || sneaker || loafer) s += 1.5;
+  }
+  return s;
 }
 
 const KNOWN_SLOTS = [
@@ -117,13 +159,7 @@ export function pickLook(
     s -= Math.min(avoid[g.id] ?? 0, 4) * 1.6;
     if (previous.has(g.id)) s -= 8;
     s += Math.min(daysIdle(g), 90) / 10;
-    if (opts.occasion === "client" || opts.occasion === "dinner") {
-      if (g.subtype === "sneakers") s -= 2;
-      if (g.subtype === "loafers" || g.subtype === "trousers") s += 1.5;
-    }
-    if (opts.occasion === "weekend" || opts.occasion === "travel") {
-      if (g.subtype === "sneakers" || g.subtype === "jeans") s += 1.2;
-    }
+    s += occasionScore(g, opts.occasion);
     return s + Math.random() * 0.25;
   };
 
@@ -178,8 +214,9 @@ export function pickLook(
     });
     if (slot >= 0) {
       const occupant = pool.find((x) => x.id === ids[slot]);
-      // Only bump a recently worn occupant. If the whole rack has sat, scoring already prefers idle.
-      if (occupant && daysIdle(occupant) < 21) ids[slot] = candidate.id;
+      // Don't swap a dinner trouser for idle jeans. Client/dinner stay brief-driven.
+      const formal = opts.occasion === "client" || opts.occasion === "dinner";
+      if (occupant && daysIdle(occupant) < 21 && !formal) ids[slot] = candidate.id;
     } else if (candSlot === "accessory" || candSlot === "outerwear") {
       ids.push(candidate.id);
     }

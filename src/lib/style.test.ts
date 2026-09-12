@@ -121,6 +121,29 @@ describe("pickLook", () => {
     }
   });
 
+  it("dinner prefers trousers and loafers over jeans and sneakers", () => {
+    const mix = [
+      piece({ id: "tee", name: "Striped shirt", category: "top", subtype: "shirt", formality: 3 }),
+      piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford", formality: 3 }),
+      piece({ id: "jeans", name: "Cream jeans", category: "bottom", subtype: "jean", formality: 2 }),
+      piece({ id: "tr", name: "Navy trousers", category: "bottom", subtype: "trouser", formality: 4 }),
+      piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker", formality: 1 }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer", formality: 3 }),
+    ];
+    const prev = ["tee", "jeans", "sn"];
+    for (let i = 0; i < 12; i++) {
+      const ids = pickLook(mix, {
+        occasion: "dinner",
+        moment: "day",
+        weather: opts.weather,
+        previousIds: prev,
+      });
+      assert.ok(ids.includes("tr"), `bottom should be trousers: ${ids.join(",")}`);
+      assert.ok(ids.includes("lf"), `shoes should be loafers: ${ids.join(",")}`);
+      assert.ok(!ids.includes("jeans"), `dinner kept jeans: ${ids.join(",")}`);
+    }
+  });
+
   it("does not put a loafer on the legs when it is the only 'bottom' tag", () => {
     const tiny = [
       piece({ id: "t", name: "Olive shirt", category: "top", subtype: "shirt" }),

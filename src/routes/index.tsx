@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { FitBoard } from "@/components/closet/fit";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
+import { LookBuilder } from "@/components/closet/look-builder";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, nameLook, neglectedPiece, sortLook } from "@/lib/look";
@@ -26,6 +27,7 @@ function Today() {
   const saveLook = useCloset((s) => s.saveLook);
   const hydrated = useCloset((s) => s.hydrated);
   const [view, setView] = useState<"paper" | "fit" | "me">("paper");
+  const [play, setPlay] = useState(false);
 
   const ownedCount = garments.filter((g) => !g.archived).length;
 
@@ -87,7 +89,7 @@ function Today() {
   const done = drop?.worn || drop?.verdict === "worn";
 
   const setOccasion = (occasion: Occasion) => {
-    rerollDrop(weather, occasion);
+    rerollDrop(weather, occasion, drop?.garmentIds);
   };
 
   const owned = garments.filter((g) => !g.archived);
@@ -305,6 +307,14 @@ function Today() {
               Ask the stylist
             </Link>
           </div>
+          <button
+            type="button"
+            onClick={() => setPlay((v) => !v)}
+            className="micro text-ink-soft hover:text-ink"
+          >
+            {play ? "Close builder" : "Make a look"}
+          </button>
+          {play && <LookBuilder onClose={() => setPlay(false)} />}
           {neglected && !done && (
             <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
               Still waiting:{" "}

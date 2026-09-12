@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { FlatLay } from "@/components/closet/flat-lay";
+import { LookBuilder } from "@/components/closet/look-builder";
 import { OnMeButton } from "@/components/closet/on-me";
 import { lookbookPool, lookbookStats } from "@/lib/lookbook";
 import { slotOf } from "@/lib/style";
@@ -16,6 +17,7 @@ function LookbookPage() {
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
   const wearToday = useCloset((s) => s.wearToday);
   const saveLook = useCloset((s) => s.saveLook);
+  const [play, setPlay] = useState(false);
 
   useEffect(() => {
     if (hydrated) ensureLookbook();
@@ -54,6 +56,18 @@ function LookbookPage() {
           {stats.looks} looks · {stats.pieces} pieces
           {stats.everyPieceUsed ? " · every piece used." : "."}
         </p>
+      )}
+      <button
+        type="button"
+        onClick={() => setPlay((v) => !v)}
+        className="mt-4 micro text-ink-soft hover:text-ink"
+      >
+        {play ? "Close builder" : "Make a look"}
+      </button>
+      {play && (
+        <div className="mt-4">
+          <LookBuilder onClose={() => setPlay(false)} />
+        </div>
       )}
 
       {!canBuild ? (
