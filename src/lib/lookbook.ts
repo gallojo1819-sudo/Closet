@@ -3,7 +3,7 @@ import { daysIdle, housesOf, slotOf } from "./style.ts";
 import type { Garment, Look } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
-const CAP = 48;
+const CAP = 96;
 const PER = 2;
 const PARTNER_K = 4;
 const LOUD =
@@ -98,8 +98,8 @@ function attachOuter(core: Garment[], outers: Garment[], today: string): Garment
 
 /**
  * Best looks from this closet — not every combo.
- * A look is top + bottom + footwear. Outerwear only when it scores.
- * Cap 48. Every slotted top/bottom/shoe appears at least once (twice if partners exist).
+ * cover(1) places every slotted top, bottom, shoe, and outer once (no cap).
+ * Then cover(2) up to CAP. Harmony cannot exile a piece from cover(1).
  */
 export function buildLookbook(garments: Garment[], today = todayISO()): Look[] {
   const pool = lookbookPool(garments);
@@ -118,14 +118,15 @@ export function buildLookbook(garments: Garment[], today = todayISO()): Look[] {
     for (const id of ids) count.set(id, (count.get(id) ?? 0) + 1);
   };
 
-  const tryAdd = (core: Garment[]): boolean => {
+  const tryAdd = (core: Garment[], mustCover = false): boolean => {
     if (core.length < 3) return false;
-    if (clashes(core)) return false;
-    const pieces = attachOuter(core, outers, todayWorn);
+    if (!mustCover && clashes(core)) return false;
+    const hasOuter = core.some((g) => slotOf(g) === "outerwear");
+    const pieces = hasOuter ? core : attachOuter(core, outers, todayWorn);
     const ids = pieces.map((g) => g.id);
     const key = lookId(ids);
     if (used.has(key)) return false;
-    if (drafts.length >= CAP) return false;
+    if (!mustCover && drafts.length >= CAP) return false;
     used.add(key);
     drafts.push({
       id: key,
@@ -140,7 +141,7 @@ export function buildLookbook(garments: Garment[], today = todayISO()): Look[] {
     return true;
   };
 
-  const partnersFor = (focus: Garment): Garment[][] => {
+  const partnersFor = (focus: Garment, mustCover: boolean): Garment[][] => {
     const slot = slotOf(focus);
     const tCands = slot === "top" || slot === "dress" ? [focus] : rank(tops, todayWorn).slice(0, PARTNER_K);
     const bCands = slot === "bottom" ? [focus] : rank(bottoms, todayWorn).slice(0, PARTNER_K);
@@ -150,33 +151,39 @@ export function buildLookbook(garments: Garment[], today = todayISO()): Look[] {
       for (const b of bCands) {
         for (const f of fCands) {
           if (new Set([t.id, b.id, f.id]).size < 3) continue;
-          const core = [t, b, f];
-          if (clashes(core)) continue;
+          let core: Garment[] = [t, b, f];
+          if (slot === "outerwear") core = [...core, focus];
+          if (!mustCover && clashes(core)) continue;
           const h = harmony(core);
           const uncovered = core.filter((g) => (count.get(g.id) ?? 0) === 0).length;
           scored.push({ core, s: comboScore(core, todayWorn) + uncovered * 3, h });
         }
       }
     }
-    scored.sort((a, b) => (b.s !== a.s ? b.s - a.s : lookId(a.core.map((g) => g.id)).localeCompare(lookId(b.core.map((g) => g.id)))));
+    scored.sort((a, b) =>
+      b.s !== a.s
+        ? b.s - a.s
+        : lookId(a.core.map((g) => g.id)).localeCompare(lookId(b.core.map((g) => g.id))),
+    );
+    if (mustCover) return scored.map((x) => x.core);
     const good = scored.filter((x) => x.h >= 0);
     return (good.length ? good : scored).map((x) => x.core);
   };
 
-  const slotted = [...tops, ...bottoms, ...shoes];
-  const cover = (need: number) => {
+  const cover = (need: number, slotted: Garment[], mustCover: boolean) => {
     for (const g of rank(slotted, todayWorn)) {
-      if (drafts.length >= CAP) break;
+      if (!mustCover && drafts.length >= CAP) break;
       if ((count.get(g.id) ?? 0) >= need) continue;
-      for (const core of partnersFor(g)) {
+      for (const core of partnersFor(g, mustCover)) {
         if ((count.get(g.id) ?? 0) >= need) break;
-        tryAdd(core);
+        tryAdd(core, mustCover);
       }
     }
   };
 
-  cover(1);
-  cover(PER);
+  const mustSlot = [...tops, ...bottoms, ...shoes, ...outers];
+  cover(1, mustSlot, true);
+  cover(PER, mustSlot, false);
 
   return drafts;
 }
@@ -184,17 +191,27 @@ export function buildLookbook(garments: Garment[], today = todayISO()): Look[] {
 export function lookbookStats(
   looks: Look[],
   garments: Garment[],
-): { looks: number; pieces: number; everyPieceUsed: boolean } {
+): {
+  looks: number;
+  used: number;
+  total: number;
+  unusedNames: string[];
+  everyPieceUsed: boolean;
+} {
   const pool = lookbookPool(garments);
   const slotted = pool.filter((g) => {
     const s = slotOf(g);
-    return s === "top" || s === "bottom" || s === "footwear" || s === "dress";
+    return s === "top" || s === "bottom" || s === "footwear" || s === "dress" || s === "outerwear";
   });
-  const used = new Set(looks.flatMap((l) => l.garmentIds));
+  const usedIds = new Set(looks.flatMap((l) => l.garmentIds));
+  const unused = slotted.filter((g) => !usedIds.has(g.id));
+  const used = slotted.filter((g) => usedIds.has(g.id)).length;
   return {
     looks: looks.length,
-    pieces: slotted.length,
-    everyPieceUsed: slotted.length > 0 && slotted.every((g) => used.has(g.id)),
+    used,
+    total: pool.length,
+    unusedNames: unused.map((g) => g.name),
+    everyPieceUsed: slotted.length > 0 && unused.length === 0,
   };
 }
 

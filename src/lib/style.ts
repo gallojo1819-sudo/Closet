@@ -158,13 +158,20 @@ export function slotOf(g: Garment): Slot | null {
   const blob = `${g.subtype} ${g.name}`.toLowerCase();
   const footwear = /\b(shoes?|loafers?|mules?|sneakers?|boots?|booties)\b/.test(blob);
   const bottom = /\b(pants?|chinos?|jeans?|trousers?|shorts?)\b/.test(blob);
-  const top = /\b(t-shirts?|tees?|shirts?|oxfords?|polos?|knits?|sweaters?)\b/.test(blob);
-  const outer = /\b(jackets?|coats?|overshirts?)\b/.test(blob);
+  const top =
+    /\b(t-shirts?|tees?|shirts?|oxfords?|polos?|knits?|sweaters?|rugbys?|cardigans?|jumpers?|pullovers?|crewnecks?|henleys?)\b/.test(
+      blob,
+    );
+  const outer =
+    /\b(jackets?|coats?|overshirts?|blazers?|bombers?|parkas?|trench|puffers?|windbreakers?|anoraks?|hoodies?)\b/.test(
+      blob,
+    );
   // "boot cut jeans" is bottom; a lone "loafer" is never pants.
   if (footwear && !bottom) return "footwear";
   if (bottom) return "bottom";
   if (top) return "top";
   if (outer) return "outerwear";
+  if (g.category === "other") return null;
   if ((KNOWN_SLOTS as readonly string[]).includes(g.category)) {
     return g.category as Slot;
   }

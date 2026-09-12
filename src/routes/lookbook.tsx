@@ -300,7 +300,7 @@ function LookbookPage() {
     return m;
   }, [garments]);
   const book = useMemo(
-    () => looksAll.filter((l) => l.lookbook).slice(0, 48),
+    () => looksAll.filter((l) => l.lookbook).slice(0, 96),
     [looksAll],
   );
   const pool = lookbookPool(garments);
@@ -325,10 +325,18 @@ function LookbookPage() {
         Best outfits from this closet, on paper. Dress you when a card is on screen.
       </p>
       {book.length > 0 && (
-        <p className="mt-3 micro text-ink-soft">
-          {stats.looks} looks · {stats.pieces} pieces
-          {stats.everyPieceUsed ? " · every piece used." : "."}
-        </p>
+        <>
+          <p className="mt-3 micro text-ink-soft">
+            {stats.looks} looks · {stats.used} of {stats.total} pieces in looks
+            {stats.everyPieceUsed ? "." : "."}
+          </p>
+          {stats.unusedNames.length > 0 && (
+            <p className="mt-1 micro text-ink-soft">
+              Not in a look yet: {stats.unusedNames.slice(0, 12).join(", ")}
+              {stats.unusedNames.length > 12 ? "…" : ""}
+            </p>
+          )}
+        </>
       )}
       <button
         type="button"

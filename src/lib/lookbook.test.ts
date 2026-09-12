@@ -54,7 +54,8 @@ describe("buildLookbook", () => {
     const used = new Set(looks.flatMap((l) => l.garmentIds));
     for (const id of ids) assert.ok(used.has(id), `missing ${id}`);
     const stats = lookbookStats(looks, g);
-    assert.equal(stats.pieces, 15);
+    assert.equal(stats.total, 15);
+    assert.equal(stats.used, 15);
     assert.equal(stats.everyPieceUsed, true);
     for (const l of looks) {
       assert.equal(l.lookbook, true);
@@ -93,5 +94,30 @@ describe("buildLookbook", () => {
 
   it("empty without a full weekday trio", () => {
     assert.equal(buildLookbook(closet(5, 5, 0)).length, 0);
+  });
+
+  it("covers jackets and other-tagged loafers in cover(1)", () => {
+    const g = [
+      ...closet(3, 3, 3),
+      piece({
+        id: "j1",
+        name: "Navy blazer",
+        category: "other",
+        subtype: "",
+      }),
+      piece({
+        id: "j2",
+        name: "Camel overcoat",
+        category: "other",
+        subtype: "coat",
+      }),
+    ];
+    const looks = buildLookbook(g, "2026-09-12");
+    const used = new Set(looks.flatMap((l) => l.garmentIds));
+    assert.ok(used.has("j1"), "blazer tagged other must appear");
+    assert.ok(used.has("j2"), "overcoat tagged other must appear");
+    assert.ok(used.has("s1"), "loafer tagged other must appear");
+    const stats = lookbookStats(looks, g);
+    assert.equal(stats.unusedNames.length, 0);
   });
 });
