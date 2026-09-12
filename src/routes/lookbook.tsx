@@ -107,6 +107,7 @@ function LookCard({
   const [showMe, setShowMe] = useState(false);
   const [dressing, setDressing] = useState(false);
   const [timeoutHint, setTimeoutHint] = useState(false);
+  const [dressError, setDressError] = useState<string | null>(null);
   const started = useRef(false);
   const rootRef = useRef<HTMLLIElement>(null);
   const layer = extra ? null : suggestShirt(pieces, closet);
@@ -124,6 +125,7 @@ function LookCard({
         started.current = true;
         setDressing(true);
         setTimeoutHint(false);
+        setDressError(null);
         const shot = pieces;
         enqueueDress(async () => {
           try {
@@ -131,8 +133,9 @@ function LookCard({
             if (hit) return;
             const image = await withTimeout(dressLook(shot), 20_000);
             await putImage(cacheKey, dataUrlToBlob(image));
-          } catch {
+          } catch (e) {
             setTimeoutHint(true);
+            setDressError(e instanceof Error ? e.message : "Could not dress you.");
           } finally {
             setDressing(false);
           }
@@ -156,13 +159,15 @@ function LookCard({
     started.current = true;
     setDressing(true);
     setTimeoutHint(false);
+    setDressError(null);
     enqueueDress(async () => {
       try {
         await deleteImage(cacheKey);
         const image = await withTimeout(dressLook(pieces), 20_000);
         await putImage(cacheKey, dataUrlToBlob(image));
-      } catch {
+      } catch (e) {
         setTimeoutHint(true);
+        setDressError(e instanceof Error ? e.message : "Could not dress you.");
       } finally {
         setDressing(false);
       }
@@ -185,13 +190,14 @@ function LookCard({
             <div className="h-full w-1/3 bg-ink animate-pulse" />
           </div>
         )}
-        {timeoutHint && !hasCache && (
+        {(timeoutHint || dressError) && !hasCache && (
           <button
             type="button"
             onClick={tapDress}
-            className="absolute inset-x-0 bottom-0 micro bg-paper/90 px-2 py-2 text-ink-soft"
+            className="absolute inset-x-0 bottom-0 micro bg-paper/90 px-2 py-2 text-ink-soft text-left"
           >
             Tap to dress you
+            {dressError && <span className="block mt-1">{dressError}</span>}
           </button>
         )}
       </div>
@@ -219,7 +225,7 @@ function LookCard({
             On you
           </button>
         )}
-        {!hasCache && canPrint && refPhoto && (
+        {!hasCache && refPhoto && (
           <button
             type="button"
             onClick={tapDress}

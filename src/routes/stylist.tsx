@@ -75,7 +75,15 @@ function StylistPage() {
     ]
       .filter(Boolean)
       .join(" · ");
-    const res = await askStylist({ data: { prompt: q, closet, context } });
+    const res = await askStylist({
+      data: {
+        prompt: q,
+        closet,
+        context,
+        garments: forStylist,
+        weatherF: drop?.weather?.f ?? 68,
+      },
+    });
     pushMessage({
       role: "stylist",
       text: res.ok ? res.text : res.error,

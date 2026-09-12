@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { Category } from "./types";
+import { defaultOccasion, HOUSE_LABEL, lookHouses, momentOfDay, pickLook } from "./style";
+import type { Category, Garment, Occasion } from "./types";
 
 export type TagResult = {
   ok: true;
@@ -13,6 +14,60 @@ export type TagResult = {
   formality: 1 | 2 | 3 | 4 | 5;
   warmth: 1 | 2 | 3 | 4 | 5;
 } | { ok: false; error: string };
+
+type XaiResult = {
+  ok: boolean;
+  status: number;
+  error: string;
+  json: unknown;
+};
+
+function xaiErrorMessage(json: unknown, text: string, status: number): string {
+  if (json && typeof json === "object") {
+    const o = json as { error?: unknown; message?: unknown };
+    if (typeof o.error === "string" && o.error.trim()) return o.error.trim();
+    if (o.error && typeof o.error === "object") {
+      const m = (o.error as { message?: unknown }).message;
+      if (typeof m === "string" && m.trim()) return m.trim();
+    }
+    if (typeof o.message === "string" && o.message.trim()) return o.message.trim();
+  }
+  const t = text.replace(/\s+/g, " ").trim();
+  if (t && t.length < 400 && !t.startsWith("<")) return t;
+  return `xAI request failed (${status})`;
+}
+
+async function xaiFetch(url: string, body: unknown): Promise<XaiResult> {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) {
+    return { ok: false, status: 0, error: "Set XAI_API_KEY.", json: null };
+  }
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let json: unknown = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  return {
+    ok: res.ok,
+    status: res.status,
+    error: xaiErrorMessage(json, text, res.status),
+    json,
+  };
+}
+
+function imageUrlPart(url: string) {
+  return { url, type: "image_url" as const };
+}
 
 const CATEGORY_SET = new Set([
   "top",
@@ -45,28 +100,21 @@ export const tagGarment = createServerFn({ method: "POST" })
           : " Brand only if a label or logo is legible on the garment itself, else empty."),
     });
 
-    const res = await fetch("https://api.x.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "grok-4.5",
-        max_tokens: 400,
-        temperature: 0.1,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You tag ONE garment (or one pair of shoes) in the photo. Catalog voice. A pair of mules, loafers, or sneakers photographed from above is footwear — never pants. Read the insole/label brand if it is printed (Giuseppe Zanotti, Golden Goose, AMI). Never a filename. Never a shop name or page ID. Never invent a brand that is not visible. JSON only.",
-          },
-          { role: "user", content: userContent },
-        ],
-      }),
+    const tagged = await xaiFetch("https://api.x.ai/v1/chat/completions", {
+      model: "grok-4.5",
+      max_tokens: 400,
+      temperature: 0.1,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You tag ONE garment (or one pair of shoes) in the photo. Catalog voice. A pair of mules, loafers, or sneakers photographed from above is footwear — never pants. Read the insole/label brand if it is printed (Giuseppe Zanotti, Golden Goose, AMI). Never a filename. Never a shop name or page ID. Never invent a brand that is not visible. JSON only.",
+        },
+        { role: "user", content: userContent },
+      ],
     });
-    if (!res.ok) return { ok: false, error: `Tag failed (${res.status})` };
-    const body = (await res.json()) as {
+    if (!tagged.ok) return { ok: false, error: tagged.error };
+    const body = tagged.json as {
       choices?: { message?: { content?: string } }[];
     };
     const text = body.choices?.[0]?.message?.content ?? "";
@@ -102,16 +150,11 @@ export const tagGarment = createServerFn({ method: "POST" })
 
 type EditResult = { ok: true; image: string } | { ok: false; error: string };
 
-async function readEditedImage(res: Response): Promise<EditResult> {
-  if (!res.ok) return { ok: false, error: `Edit failed (${res.status})` };
-  const body = (await res.json()) as {
-    data?: { b64_json?: string; url?: string }[];
-  };
+async function imageFromEditJson(json: unknown): Promise<EditResult> {
+  const body = json as { data?: { b64_json?: string; url?: string }[] };
   const first = body.data?.[0];
   if (first?.b64_json) return { ok: true, image: `data:image/png;base64,${first.b64_json}` };
   if (first?.url) {
-    // The imgen URL is temporary and not CORS-open — pull the pixels
-    // server-side and hand back a data URL.
     try {
       const img = await fetch(first.url);
       if (!img.ok) return { ok: false, error: "Could not download the edit." };
@@ -125,103 +168,132 @@ async function readEditedImage(res: Response): Promise<EditResult> {
   return { ok: false, error: "Edit came back empty." };
 }
 
-export const aiStatus = createServerFn({ method: "GET" }).handler(async () => ({
-  /** Catalog prints + on-me previews need the xAI key server-side. */
-  print: Boolean(process.env.XAI_API_KEY),
-}));
+async function imagineEdit(prompt: string, urls: string[]): Promise<EditResult> {
+  const all = urls.filter(Boolean).slice(0, 5);
+  if (!all.length) return { ok: false, error: "No image to edit." };
+  const first = all[0]!;
+  const parts = all.map(imageUrlPart);
+  let r = await xaiFetch("https://api.x.ai/v1/images/edits", {
+    model: "grok-imagine-image-2.0",
+    prompt,
+    image: imageUrlPart(first),
+    images: parts,
+  });
+  if (!r.ok && (r.status === 403 || r.status === 422)) {
+    r = await xaiFetch("https://api.x.ai/v1/images/edits", {
+      model: "grok-imagine-image-2.0",
+      prompt,
+      image: parts,
+    });
+  }
+  if (!r.ok) return { ok: false, error: r.error };
+  return imageFromEditJson(r.json);
+}
+
+export const aiStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) return { print: false, chat: false };
+  let chat = false;
+  let print = false;
+  try {
+    const res = await fetch("https://api.x.ai/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const json = (await res.json()) as { data?: { id?: string }[] };
+    const ids = (json.data ?? []).map((m) => m.id ?? "");
+    chat = ids.some((id) => /grok-4/.test(id));
+    print = ids.some((id) => /imagine/.test(id));
+  } catch {
+    /* ping below */
+  }
+  if (!chat) {
+    const ping = await xaiFetch("https://api.x.ai/v1/chat/completions", {
+      model: "grok-4.3",
+      max_tokens: 1,
+      messages: [{ role: "user", content: "ok" }],
+    });
+    chat = ping.ok;
+  }
+  return { print, chat };
+});
 
 export const printGarment = createServerFn({ method: "POST" })
   .validator((input: { image: string }) => input)
   .handler(async ({ data }): Promise<EditResult> => {
-    const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) return { ok: false, error: "Set XAI_API_KEY for catalog covers." };
-    const res = await fetch("https://api.x.ai/v1/images/edits", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "grok-imagine-image-2.0",
-        image: { url: data.image },
-        prompt:
-          "Product photograph of the SINGLE garment only. Keep the exact garment: color, fabric, stitching, hardware, logos, wear. Remove floor, walls, hangers, people, webpage chrome, prices, IDs, buttons, color swatches, text. Lay the garment (or pair of shoes) neatly on a solid #F4EFE6 paper, 4:5, garment filling ~80% of the frame, even light, no shadow theater. Do not invent a different item, brand, or color.",
-      }),
-    });
-    return readEditedImage(res);
+    if (!process.env.XAI_API_KEY) return { ok: false, error: "Set XAI_API_KEY for catalog covers." };
+    return imagineEdit(
+      "Product photograph of the SINGLE garment only. Keep the exact garment: color, fabric, stitching, hardware, logos, wear. Remove floor, walls, hangers, people, webpage chrome, prices, IDs, buttons, color swatches, text. Lay the garment (or pair of shoes) neatly on a solid #F4EFE6 paper, 4:5, garment filling ~80% of the frame, even light, no shadow theater. Do not invent a different item, brand, or color.",
+      [data.image],
+    );
   });
 
 export const recolorCover = createServerFn({ method: "POST" })
   .validator((input: { image: string; color: string }) => input)
   .handler(async ({ data }): Promise<EditResult> => {
-    const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) return { ok: false, error: "Set XAI_API_KEY to recolor a cover." };
+    if (!process.env.XAI_API_KEY) return { ok: false, error: "Set XAI_API_KEY to recolor a cover." };
     const color = data.color.trim();
     if (!color) return { ok: false, error: "Pick a color first." };
-    const res = await fetch("https://api.x.ai/v1/images/edits", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "grok-imagine-image-2.0",
-        image: { url: data.image },
-        prompt: `This is the SAME garment. Change ONLY the fabric color to ${color}.
+    return imagineEdit(
+      `This is the SAME garment. Change ONLY the fabric color to ${color}.
 Keep cut, stitching, pockets, hardware, wrinkles, logos. Do not turn pants into a shirt.
 Lay on #F4EFE6 paper, 4:5, fill ~80%. No extra garments, no model, no text.`,
-      }),
-    });
-    return readEditedImage(res);
+      [data.image],
+    );
   });
 
 export const onMePreview = createServerFn({ method: "POST" })
   .validator((input: { refImage: string; cutouts: string[]; pieces: string }) => input)
-  .handler(async ({ data }): Promise<{ ok: true; image: string } | { ok: false; error: string }> => {
-    const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
-
-    const res = await fetch("https://api.x.ai/v1/images/edits", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "grok-imagine-image-2.0",
-        // Image 1 is always Joe (idb:me:ref). Images 2+ are this look's cutouts.
-        images: [{ url: data.refImage }, ...data.cutouts.slice(0, 4).map((c) => ({ url: c }))],
-        prompt: `Image 1 is THIS man — the only person. Keep his face, hair, beard or none, skin, 5′8 regular body.
+  .handler(async ({ data }): Promise<EditResult> => {
+    if (!process.env.XAI_API_KEY) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
+    const urls = [data.refImage, ...data.cutouts.slice(0, 4)];
+    return imagineEdit(
+      `Image 1 is THIS man — the only person. Keep his face, hair, beard or none, skin, 5′8 regular body.
 Hands EMPTY. No phone, no camera, no selfie pose, no screen.
 Full-body editorial, standing, both arms relaxed, plain studio #F4EFE6 or light grey. No text, no logo invented.
 Images 2+ are the EXACT garments. Put ONLY those on him. Do not add a shirt under a sweater, a belt, a watch, or a second shoe unless that piece is one of the images.
 If a knit is in the look and no shirt image was sent, the knit is the only top — no invented oxford.
 ${data.pieces}`,
-      }),
-    });
-    return readEditedImage(res);
+      urls,
+    );
   });
 
-export const askStylist = createServerFn({ method: "POST" })
-  .validator((input: { prompt: string; closet: string; context?: string }) => input)
-  .handler(async ({ data }): Promise<{ ok: true; text: string } | { ok: false; error: string }> => {
-    const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) return { ok: false, error: "The stylist is unavailable in this environment." };
+function occasionFromPrompt(prompt: string): Occasion {
+  const p = prompt.toLowerCase();
+  if (/client/.test(p)) return "client";
+  if (/dinner/.test(p)) return "dinner";
+  if (/saturday|weekend/.test(p)) return "weekend";
+  if (/travel/.test(p)) return "travel";
+  return defaultOccasion();
+}
 
-    const res = await fetch("https://api.x.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "grok-4.5",
-        max_tokens: 400,
-        temperature: 0.4,
-        messages: [
-          {
-            role: "system",
-            content: `You are Joe's designer. HIS garments only. Never invent a piece, layer, or shop.
+function localStylistLook(
+  garments: Garment[],
+  prompt: string,
+  f: number,
+): string {
+  const occasion = occasionFromPrompt(prompt);
+  const skip = /skip/.test(prompt.toLowerCase());
+  const ids = pickLook(garments, {
+    occasion,
+    moment: momentOfDay(),
+    weather: { f, label: "Fair", code: 2 },
+    recentWorn: skip ? [] : undefined,
+  });
+  const pieces = ids
+    .map((id) => garments.find((g) => g.id === id))
+    .filter((g): g is Garment => Boolean(g));
+  const houses = lookHouses(pieces)
+    .slice(0, 2)
+    .map((h) => HOUSE_LABEL[h])
+    .join(" × ");
+  const line = houses ? `${houses} — ${occasion} ${f}°` : `${occasion} ${f}°`;
+  const bullets = pieces.map((g) => `• ${g.name}`).join("\n");
+  return `${line}\n${bullets}\n(Grok was blocked — this is from your rack.)`;
+}
+
+const CHAT_MODELS = ["grok-4.5", "grok-4.3", "grok-4"] as const;
+
+const STYLIST_SYSTEM = `You are Joe's designer. HIS garments only. Never invent a piece, layer, or shop.
 
 HOUSES (mix when honest, never costume)
 - Ralph: oxford, polo, chino, navy, cable, loafer, blazer. Formality 3–4.
@@ -234,19 +306,55 @@ HOUSES (mix when honest, never costume)
 FORMAT
 Line 1 only: {House} × {House} — {occasion} {temp}°
 Example: Ralph × Faloni — weekday 77°
-Then 2–5 short lines naming closet pieces by exact name. No lecture. No emoji. Pixels beat names. No invented oxford under a knit.
+Then 2–5 short lines naming closet pieces by exact name. No lecture. No emoji. Pixels beat names. No invented oxford under a knit.`;
+
+export const askStylist = createServerFn({ method: "POST" })
+  .validator(
+    (input: {
+      prompt: string;
+      closet: string;
+      context?: string;
+      garments?: Garment[];
+      weatherF?: number;
+    }) => input,
+  )
+  .handler(async ({ data }): Promise<{ ok: true; text: string } | { ok: false; error: string }> => {
+    const rack = (data.garments ?? []).filter((g) => !g.archived);
+    const f = data.weatherF ?? 68;
+    const fallback = () =>
+      rack.length
+        ? { ok: true as const, text: localStylistLook(rack, data.prompt, f) }
+        : { ok: false as const, error: "The stylist has nothing to dress." };
+
+    if (!process.env.XAI_API_KEY) return fallback();
+
+    const messages = [
+      {
+        role: "system",
+        content: `${STYLIST_SYSTEM}
 
 ${data.context ? `TODAY\n${data.context}\n` : ""}
 CLOSET
 ${data.closet.slice(0, 6000)}`,
-          },
-          { role: "user", content: data.prompt.slice(0, 1200) },
-        ],
-      }),
-    });
-    if (!res.ok) return { ok: false, error: `Stylist failed (${res.status})` };
-    const body = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    return { ok: true, text: body.choices?.[0]?.message?.content ?? "" };
+      },
+      { role: "user", content: data.prompt.slice(0, 1200) },
+    ];
+
+    for (const model of CHAT_MODELS) {
+      const r = await xaiFetch("https://api.x.ai/v1/chat/completions", {
+        model,
+        max_tokens: 400,
+        temperature: 0.4,
+        messages,
+      });
+      if (r.ok) {
+        const body = r.json as { choices?: { message?: { content?: string } }[] };
+        const text = body.choices?.[0]?.message?.content ?? "";
+        if (text.trim()) return { ok: true, text };
+      }
+      if (r.status !== 403 && r.status !== 404 && r.status !== 422) {
+        return fallback();
+      }
+    }
+    return fallback();
   });
