@@ -159,11 +159,11 @@ export function slotOf(g: Garment): Slot | null {
   const footwear = /\b(shoes?|loafers?|mules?|sneakers?|boots?|booties)\b/.test(blob);
   const bottom = /\b(pants?|chinos?|jeans?|trousers?|shorts?)\b/.test(blob);
   const top =
-    /\b(t-shirts?|tees?|shirts?|oxfords?|polos?|knits?|sweaters?|rugbys?|cardigans?|jumpers?|pullovers?|crewnecks?|henleys?)\b/.test(
+    /\b(t-shirts?|tees?|shirts?|oxfords?|polos?|knits?|sweaters?|rugbys?|cardigans?|jumpers?|pullovers?|crewnecks?|henleys?|cable[- ]?knits?|zip[- ]?(up)?\s*(sweater|knit)?)\b/.test(
       blob,
     );
   const outer =
-    /\b(jackets?|coats?|overshirts?|blazers?|bombers?|parkas?|trench|puffers?|windbreakers?|anoraks?|hoodies?)\b/.test(
+    /\b(jackets?|coats?|overshirts?|blazers?|bombers?|parkas?|trench|puffers?|windbreakers?|anoraks?|hoodies?|shearlings?)\b/.test(
       blob,
     );
   // "boot cut jeans" is bottom; a lone "loafer" is never pants.

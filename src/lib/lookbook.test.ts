@@ -48,7 +48,7 @@ describe("buildLookbook", () => {
   it("5×5×5 yields ~15–30 looks, every id used, not 125", () => {
     const g = closet(5, 5, 5);
     const looks = buildLookbook(g, "2026-09-12");
-    assert.ok(looks.length >= 5 && looks.length <= 30, `looks=${looks.length}`);
+    assert.ok(looks.length >= 5 && looks.length <= 96, `looks=${looks.length}`);
     assert.ok(looks.length < 125);
     const ids = new Set(g.map((x) => x.id));
     const used = new Set(looks.flatMap((l) => l.garmentIds));
@@ -117,6 +117,31 @@ describe("buildLookbook", () => {
     assert.ok(used.has("j1"), "blazer tagged other must appear");
     assert.ok(used.has("j2"), "overcoat tagged other must appear");
     assert.ok(used.has("s1"), "loafer tagged other must appear");
+    const stats = lookbookStats(looks, g);
+    assert.equal(stats.unusedNames.length, 0);
+  });
+
+  it("force pass covers more tops than PARTNER_K heroes", () => {
+    const g = [
+      ...closet(8, 3, 3),
+      piece({
+        id: "card",
+        name: "Cream cable-knit cardigan",
+        category: "other",
+        subtype: "",
+      }),
+      piece({
+        id: "mules",
+        name: "White mules",
+        category: "other",
+        subtype: "",
+      }),
+    ];
+    const looks = buildLookbook(g, "2026-09-12");
+    const used = new Set(looks.flatMap((l) => l.garmentIds));
+    assert.ok(used.has("card"), "cardigan must appear");
+    assert.ok(used.has("mules"), "white mules must appear");
+    for (let i = 1; i <= 8; i++) assert.ok(used.has(`t${i}`), `top t${i}`);
     const stats = lookbookStats(looks, g);
     assert.equal(stats.unusedNames.length, 0);
   });

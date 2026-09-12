@@ -11,10 +11,15 @@ import {
   lookOnMeKey,
   putImage,
 } from "@/lib/images";
-import { lookbookPool, lookbookStats } from "@/lib/lookbook";
+import {
+  lookbookPool,
+  lookbookStats,
+  lookFitsOccasion,
+  lookHasColor,
+} from "@/lib/lookbook";
 import { slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import type { Garment, Look } from "@/lib/types";
+import { OCCASIONS, type Garment, type Look } from "@/lib/types";
 import { useImageSrc } from "@/lib/use-image";
 import { cn } from "@/lib/utils";
 
@@ -277,6 +282,9 @@ function LookbookPage() {
   const [play, setPlay] = useState(false);
   const [canPrint, setCanPrint] = useState(false);
   const [extras, setExtras] = useState<Record<string, string>>({});
+  const [occasion, setOccasion] = useState<"all" | (typeof OCCASIONS)[number]["id"]>("all");
+  const [color, setColor] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
   const { look: focusLook } = Route.useSearch();
 
   useEffect(() => {
@@ -299,21 +307,35 @@ function LookbookPage() {
     for (const g of garments) m.set(g.id, g);
     return m;
   }, [garments]);
-  const book = useMemo(
-    () => looksAll.filter((l) => l.lookbook).slice(0, 96),
-    [looksAll],
-  );
+  const book = useMemo(() => looksAll.filter((l) => l.lookbook), [looksAll]);
   const pool = lookbookPool(garments);
   const canBuild = ["top", "bottom", "footwear"].every((slot) =>
     pool.some((g) => slotOf(g) === slot || (slot === "top" && slotOf(g) === "dress")),
   );
   const stats = lookbookStats(book, garments);
+  const colorChips = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of garments) for (const c of g.colors) if (c) set.add(c.toLowerCase());
+    return [...set].sort();
+  }, [garments]);
 
   const piecesFor = (look: Look) => {
     const extra = extras[look.id];
     const ids = extra ? [...look.garmentIds, extra] : look.garmentIds;
     return ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
   };
+
+  const shown = useMemo(() => {
+    return book.filter((look) => {
+      const pieces = piecesFor(look);
+      if (pieces.length < 3) return false;
+      if (!lookFitsOccasion(pieces, occasion)) return false;
+      if (color && !lookHasColor(pieces, color)) return false;
+      return true;
+    });
+  }, [book, extras, occasion, color, byId]);
+
+  const highlightId = focusId ?? focusLook ?? null;
 
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-6 py-8 md:py-12 rise">
@@ -331,20 +353,89 @@ function LookbookPage() {
             {stats.everyPieceUsed ? "." : "."}
           </p>
           {stats.unusedNames.length > 0 && (
-            <p className="mt-1 micro text-ink-soft">
-              Not in a look yet: {stats.unusedNames.slice(0, 12).join(", ")}
-              {stats.unusedNames.length > 12 ? "…" : ""}
-            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="micro text-ink-soft self-center">Not in a look yet:</span>
+              {stats.unusedNames.map((name) => {
+                const g = garments.find((x) => x.name === name);
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    className="micro border border-hairline px-2 py-1 text-ink-soft hover:border-hairline-strong"
+                    onClick={() => {
+                      if (!g) return;
+                      const hit = book.find((l) => l.garmentIds.includes(g.id));
+                      if (hit) {
+                        setFocusId(hit.id);
+                        return;
+                      }
+                      ensureLookbook(Date.now());
+                      const again = useCloset
+                        .getState()
+                        .looks.find((l) => l.lookbook && l.garmentIds.includes(g.id));
+                      if (again) setFocusId(again.id);
+                    }}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
           )}
         </>
       )}
+      <div className="mt-6 flex flex-wrap gap-2">
+        {(["all", ...OCCASIONS.map((o) => o.id)] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setOccasion(id)}
+            className={cn(
+              "micro border px-3 py-2",
+              occasion === id
+                ? "border-ink bg-ink text-paper"
+                : "border-hairline text-ink-soft",
+            )}
+          >
+            {id === "all" ? "All" : OCCASIONS.find((o) => o.id === id)?.label}
+          </button>
+        ))}
+      </div>
+      {colorChips.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {colorChips.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setColor((cur) => (cur === c ? null : c))}
+              className={cn(
+                "micro border px-3 py-2",
+                color === c
+                  ? "border-ink bg-ink text-paper"
+                  : "border-hairline text-ink-soft",
+              )}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="mt-4 flex flex-wrap gap-3">
+      <button
+        type="button"
+        onClick={() => ensureLookbook(Date.now())}
+        className="micro text-ink-soft hover:text-ink"
+      >
+        Shuffle
+      </button>
       <button
         type="button"
         onClick={() => setPlay((v) => !v)}
-        className="mt-4 micro text-ink-soft hover:text-ink"
+        className="micro text-ink-soft hover:text-ink"
       >
         {play ? "Close builder" : "Make a look"}
       </button>
+      </div>
       {play && (
         <div className="mt-4">
           <LookBuilder onClose={() => setPlay(false)} />
@@ -377,7 +468,7 @@ function LookbookPage() {
         </div>
       ) : (
         <ul className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {book.map((look) => {
+          {shown.map((look) => {
             const pieces = piecesFor(look);
             if (pieces.length < 3) return null;
             return (
@@ -389,7 +480,7 @@ function LookbookPage() {
                 canPrint={canPrint}
                 refPhoto={refPhoto}
                 closet={garments}
-                highlight={focusLook === look.id}
+                highlight={highlightId === look.id}
                 onWear={() => wearToday(pieces.map((g) => g.id))}
                 onLayer={(shirt) => setExtras((cur) => ({ ...cur, [look.id]: shirt.id }))}
               />

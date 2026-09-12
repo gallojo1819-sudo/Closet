@@ -45,11 +45,24 @@ function comboScore(pieces: Garment[], today: string): number {
   return s;
 }
 
-function rank(list: Garment[], today: string): Garment[] {
+function hashSalt(id: string, salt: number): number {
+  let h = salt >>> 0;
+  for (const c of id) h = (Math.imul(h, 33) + c.charCodeAt(0)) >>> 0;
+  return h;
+}
+
+function rank(list: Garment[], today: string, salt = 0): Garment[] {
   return [...list].sort((a, b) => {
     const d = pieceScore(b, today) - pieceScore(a, today);
-    return d !== 0 ? d : a.id.localeCompare(b.id);
+    if (d !== 0 && salt === 0) return d;
+    return hashSalt(a.id, salt) - hashSalt(b.id, salt) || a.id.localeCompare(b.id);
   });
+}
+
+function rotate<T>(list: T[], salt: number): T[] {
+  if (list.length < 2) return list;
+  const n = salt % list.length;
+  return [...list.slice(n), ...list.slice(0, n)];
 }
 
 function occasionOf(pieces: Garment[]): string {
@@ -101,7 +114,11 @@ function attachOuter(core: Garment[], outers: Garment[], today: string): Garment
  * cover(1) places every slotted top, bottom, shoe, and outer once (no cap).
  * Then cover(2) up to CAP. Harmony cannot exile a piece from cover(1).
  */
-export function buildLookbook(garments: Garment[], today = todayISO()): Look[] {
+export function buildLookbook(
+  garments: Garment[],
+  today = todayISO(),
+  salt = 0,
+): Look[] {
   const pool = lookbookPool(garments);
   const tops = [...bySlot(pool, "top"), ...bySlot(pool, "dress")];
   const bottoms = bySlot(pool, "bottom");
@@ -143,9 +160,12 @@ export function buildLookbook(garments: Garment[], today = todayISO()): Look[] {
 
   const partnersFor = (focus: Garment, mustCover: boolean): Garment[][] => {
     const slot = slotOf(focus);
-    const tCands = slot === "top" || slot === "dress" ? [focus] : rank(tops, todayWorn).slice(0, PARTNER_K);
-    const bCands = slot === "bottom" ? [focus] : rank(bottoms, todayWorn).slice(0, PARTNER_K);
-    const fCands = slot === "footwear" ? [focus] : rank(shoes, todayWorn).slice(0, PARTNER_K);
+    const tAll = slot === "top" || slot === "dress" ? [focus] : rank(tops, todayWorn, salt);
+    const bAll = slot === "bottom" ? [focus] : rank(bottoms, todayWorn, salt);
+    const fAll = slot === "footwear" ? [focus] : rank(shoes, todayWorn, salt);
+    const tCands = mustCover ? tAll : tAll.slice(0, PARTNER_K);
+    const bCands = mustCover ? bAll : bAll.slice(0, PARTNER_K);
+    const fCands = mustCover ? fAll : fAll.slice(0, PARTNER_K);
     const scored: { core: Garment[]; s: number; h: number }[] = [];
     for (const t of tCands) {
       for (const b of bCands) {
@@ -171,7 +191,7 @@ export function buildLookbook(garments: Garment[], today = todayISO()): Look[] {
   };
 
   const cover = (need: number, slotted: Garment[], mustCover: boolean) => {
-    for (const g of rank(slotted, todayWorn)) {
+    for (const g of rank(slotted, todayWorn, salt)) {
       if (!mustCover && drafts.length >= CAP) break;
       if ((count.get(g.id) ?? 0) >= need) continue;
       for (const core of partnersFor(g, mustCover)) {
@@ -185,7 +205,64 @@ export function buildLookbook(garments: Garment[], today = todayISO()): Look[] {
   cover(1, mustSlot, true);
   cover(PER, mustSlot, false);
 
+  // Force: every leftover slotted piece gets a look. Clash is better than invisible.
+  let forceSalt = salt + 1;
+  for (const g of mustSlot) {
+    if ((count.get(g.id) ?? 0) >= 1) continue;
+    const slot = slotOf(g);
+    if (!slot) continue;
+    const Ts = rotate(slot === "top" || slot === "dress" ? [g] : tops.filter((x) => x.id !== g.id), forceSalt);
+    const Bs = rotate(slot === "bottom" ? [g] : bottoms.filter((x) => x.id !== g.id), forceSalt + 3);
+    const Fs = rotate(slot === "footwear" ? [g] : shoes.filter((x) => x.id !== g.id), forceSalt + 7);
+    forceSalt += 11;
+    if (!Ts.length || !Bs.length || !Fs.length) continue;
+    let placed = false;
+    outer: for (const t of Ts) {
+      for (const b of Bs) {
+        for (const f of Fs) {
+          if (new Set([t.id, b.id, f.id]).size < 3) continue;
+          const core = slot === "outerwear" ? [t, b, f, g] : [t, b, f];
+          if (tryAdd(core, true)) {
+            placed = true;
+            break outer;
+          }
+        }
+      }
+    }
+    void placed;
+  }
+
   return drafts;
+}
+
+/** Two looks starring this piece — unused-rail tap. */
+export function forceLooksForPiece(
+  garmentId: string,
+  garments: Garment[],
+  n = 2,
+): Look[] {
+  const looks = buildLookbook(garments);
+  return looks.filter((l) => l.garmentIds.includes(garmentId)).slice(0, n);
+}
+
+export function lookFitsOccasion(pieces: Garment[], occ: string): boolean {
+  if (occ === "all") return true;
+  const blob = pieces.map((g) => `${g.subtype} ${g.name}`).join(" ").toLowerCase();
+  if (occ === "dinner") {
+    if (/gym|runner|running|athletic/.test(blob)) return false;
+    if (/\bsneakers?\b/.test(blob) && !/loafer/.test(blob)) return false;
+    return true;
+  }
+  if (occ === "client") {
+    if (/hoodie|\btee\b|t-shirt/.test(blob)) return false;
+    return true;
+  }
+  return true;
+}
+
+export function lookHasColor(pieces: Garment[], color: string): boolean {
+  const want = color.toLowerCase();
+  return pieces.some((g) => g.colors.some((c) => c.toLowerCase() === want));
 }
 
 export function lookbookStats(

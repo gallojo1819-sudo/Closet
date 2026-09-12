@@ -62,7 +62,7 @@ type ClosetState = {
   setRefPhoto: (key: string | null, backup?: string | null) => void;
   restoreRefPhoto: () => Promise<void>;
   restoreFromIdbMeta: () => Promise<void>;
-  ensureLookbook: () => void;
+  ensureLookbook: (salt?: number) => void;
   loadSample: () => void;
   emptyCloset: () => void;
   importCloset: (payload: {
@@ -328,11 +328,11 @@ export const useCloset = create<ClosetState>()(
             { ...m, id: uid("m"), createdAt: new Date().toISOString() },
           ],
         })),
-      ensureLookbook: () => {
+      ensureLookbook: (salt) => {
         const s = get();
         if (!s.hydrated) return;
         if (s.garments.length === 0) return;
-        const book = buildLookbook(s.garments);
+        const book = buildLookbook(s.garments, undefined, salt ?? 0);
         const next = mergeLookbook(s.looks, book);
         const key = (looks: Look[]) =>
           looks.map((l) => `${l.lookbook ? "b" : "k"}:${l.id}`).join("|");
