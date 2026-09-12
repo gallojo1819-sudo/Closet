@@ -191,11 +191,11 @@ export const onMePreview = createServerFn({ method: "POST" })
         model: "grok-imagine-image-2.0",
         // Image 1 is always Joe (idb:me:ref). Images 2+ are this look's cutouts.
         images: [{ url: data.refImage }, ...data.cutouts.slice(0, 4).map((c) => ({ url: c }))],
-        prompt: `Image 1 is THIS man — the only person allowed. Keep his exact face, hair, beard or none, skin, 5′8 regular body.
-Images 2+ are photographs of the EXACT garments to put on him. Copy color, fabric, pattern, shoes FROM THOSE IMAGES.
-Do not invent a catalog model or a Ralph Lauren campaign. Do not recolor.
-If image 3 is navy loafers, the shoes are navy loafers even if the text says chinos.
-Plain studio, full body, no text.
+        prompt: `Image 1 is THIS man — the only person. Keep his face, hair, beard or none, skin, 5′8 regular body.
+Hands EMPTY. No phone, no camera, no selfie pose, no screen.
+Full-body editorial, standing, both arms relaxed, plain studio #F4EFE6 or light grey. No text, no logo invented.
+Images 2+ are the EXACT garments. Put ONLY those on him. Do not add a shirt under a sweater, a belt, a watch, or a second shoe unless that piece is one of the images.
+If a knit is in the look and no shirt image was sent, the knit is the only top — no invented oxford.
 ${data.pieces}`,
       }),
     });

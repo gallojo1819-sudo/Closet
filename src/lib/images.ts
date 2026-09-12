@@ -140,8 +140,32 @@ export function refImageKey(): string {
   return REF_KEY;
 }
 
-export function lookOnMeKey(lookId: string): string {
-  return `${KEY_PREFIX}lb:${lookId}`;
+export function lookOnMeKey(lookId: string, extra?: string): string {
+  return extra ? `${KEY_PREFIX}lb:${lookId}:${extra}` : `${KEY_PREFIX}lb:${lookId}`;
+}
+
+/** JPEG data URL, long edge capped. Used to shrink On-me payloads. */
+export async function jpegDataUrl(src: Blob | string, maxEdge: number, quality = 0.8): Promise<string> {
+  const url = typeof src === "string" ? src : URL.createObjectURL(src);
+  const revoke = typeof src !== "string";
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("jpeg"));
+      el.src = url;
+    });
+    const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight, 1));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = c.getContext("2d");
+    if (!ctx) throw new Error("canvas");
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", quality);
+  } finally {
+    if (revoke) URL.revokeObjectURL(url);
+  }
 }
 
 /** JPEG data URL, long edge ≤900, payload ≤400KB — persist backup for Joe's body photo. */

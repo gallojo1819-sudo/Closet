@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { onMePreview } from "@/lib/ai";
-import { blobToDataUrl, getImage, resolveImage } from "@/lib/images";
+import { blobToDataUrl, getImage, jpegDataUrl, resolveImage } from "@/lib/images";
 import { useCloset } from "@/lib/store";
 import type { Garment } from "@/lib/types";
 import { sortLook } from "@/lib/look";
@@ -13,11 +13,13 @@ export async function dressLook(pieces: Garment[]): Promise<string> {
   if (!refPhoto) throw new Error("No reference photo yet. Tap Fit · 5′8 reg up top to add one.");
   const blob = await getImage(refPhoto);
   if (!blob) throw new Error("Reference photo is missing — set it again.");
-  const refImage = await blobToDataUrl(blob);
+  const refImage = await jpegDataUrl(blob, 768, 0.8);
   const layers: { name: string; category: string; url: string }[] = [];
   for (const g of sortLook(pieces).slice(0, 4)) {
-    const url = await asDataUrl(g.cutoutSrc || g.imageSrc);
-    if (url) layers.push({ name: g.name, category: g.category, url });
+    const raw = await asDataUrl(g.cutoutSrc || g.imageSrc);
+    if (!raw) continue;
+    const url = await jpegDataUrl(raw, 512, 0.8);
+    layers.push({ name: g.name, category: g.category, url });
   }
   const cutouts = layers.map((l) => l.url);
   const list = layers
