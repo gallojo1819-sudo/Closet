@@ -5,7 +5,7 @@ import { onMePreview } from "@/lib/ai";
 import { blobToDataUrl, getImage, jpegDataUrl, resolveImage } from "@/lib/images";
 import { useCloset } from "@/lib/store";
 import type { Garment } from "@/lib/types";
-import { sortLook } from "@/lib/look";
+import { layersForOnMe } from "@/lib/look";
 
 /** Dress Joe in these exact cutouts. Never writes cutoutSrc. */
 export async function dressLook(pieces: Garment[]): Promise<string> {
@@ -21,7 +21,7 @@ export async function dressLook(pieces: Garment[]): Promise<string> {
   }
   const refImage = await jpegDataUrl(blob, 768, 0.8);
   const layers: { name: string; category: string; url: string }[] = [];
-  for (const g of sortLook(pieces).slice(0, 4)) {
+  for (const g of layersForOnMe(pieces)) {
     const raw = await asDataUrl(g.cutoutSrc || g.imageSrc);
     if (!raw) continue;
     const url = await jpegDataUrl(raw, 512, 0.8);

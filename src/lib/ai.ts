@@ -237,11 +237,12 @@ export const onMePreview = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<EditResult> => {
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
     if (!data.refImage) return { ok: false, error: "No reference photo." };
-    const prompt = `Image 1 is THIS man — the only person. Keep his face, hair, beard or none, skin, 5′8 regular body.
-Hands EMPTY. No phone, no camera, no selfie pose, no screen.
-Full-body editorial, standing, both arms relaxed, plain studio #F4EFE6 or light grey. No text, no logo invented.
-Images 2+ are the EXACT garments. Put ONLY those on him. Do not add a shirt under a sweater, a belt, a watch, or a second shoe unless that piece is one of the images.
-If a knit is in the look and no shirt image was sent, the knit is the only top — no invented oxford.
+    const prompt = `Image 1 is THIS man. Images 2+ are separate garments.
+Put them on him as layers: outer on top of top, top on bottom, shoes on feet.
+Do NOT morph two garments into one.
+Do NOT copy a logo, stripe, flag, or "90s" from garment A onto garment B.
+Do NOT invent a hybrid knit. If only one top image is sent, that is the only top — no extra hoodie.
+Keep his face, hair, beard or none, skin, 5′8 regular body. Hands EMPTY. No phone, no selfie. Full-body editorial, plain studio #F4EFE6. No text.
 ${data.pieces}`;
     const urls = [data.refImage, ...data.cutouts.slice(0, 4)].filter(Boolean);
     const images = urls.map(imageUrlPart);

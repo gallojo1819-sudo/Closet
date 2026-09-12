@@ -1,6 +1,6 @@
-import type { Garment, Moment, Occasion, WeatherSnap } from "./types";
-import { colorLine } from "./color";
-import { HOUSE_LABEL, daysIdle, lookHouses, slotOf } from "./style";
+import type { Garment, Moment, Occasion, WeatherSnap } from "./types.ts";
+import { colorLine } from "./color.ts";
+import { HOUSE_LABEL, daysIdle, lookHouses, slotOf } from "./style.ts";
 
 const ORDER: Garment["category"][] = [
   "top",
@@ -28,6 +28,60 @@ export function sortLook(pieces: Garment[]): Garment[] {
     const sb = ORDER.indexOf((slotOf(b) ?? b.category) as Garment["category"]);
     return (sa < 0 ? 99 : sa) - (sb < 0 ? 99 : sb);
   });
+}
+
+function blobOf(g: Garment): string {
+  return `${g.subtype} ${g.name}`.toLowerCase();
+}
+
+function isTrueOuter(g: Garment): boolean {
+  const b = blobOf(g);
+  if (/\bhoodies?\b/.test(b)) return false;
+  return /\b(coats?|bombers?|jackets?|blazers?|parkas?|trench|shearlings?|overshirts?)\b/.test(b);
+}
+
+/** Jacket / zip / cardigan beats hoodie / tee. Equal knits: first in the look name. */
+function outerMostScore(g: Garment): number {
+  const b = blobOf(g);
+  if (/\b(jackets?|zips?|zip[- ]?up|cardigans?|bombers?|coats?)\b/.test(b)) return 3;
+  if (/\b(hoodies?|sweaters?|knits?|crewnecks?|fair\s*isle)\b/.test(b)) return 2;
+  if (/\b(tees?|t-shirts?|polos?|oxfords?|shirts?)\b/.test(b)) return 1;
+  return 2;
+}
+
+function isLayerTop(g: Garment): boolean {
+  const s = slotOf(g);
+  if (s === "top" || s === "dress") return true;
+  if (/\bhoodies?\b/.test(blobOf(g))) return true;
+  return false;
+}
+
+/**
+ * Cutouts for Imagine: at most one top, one bottom, one footwear,
+ * one true outer. Extra hoodies stay on paper — never fused.
+ */
+export function layersForOnMe(pieces: Garment[]): Garment[] {
+  const sorted = sortLook(pieces);
+  const bottoms = sorted.filter((g) => slotOf(g) === "bottom");
+  const feet = sorted.filter((g) => slotOf(g) === "footwear");
+  const tops = sorted.filter(isLayerTop);
+  const outers = sorted.filter(isTrueOuter);
+
+  let top: Garment | undefined;
+  if (tops.length === 1) top = tops[0];
+  else if (tops.length > 1) {
+    const ranked = [...tops].sort((a, b) => outerMostScore(b) - outerMostScore(a));
+    top =
+      outerMostScore(ranked[0]!) > outerMostScore(ranked[1]!)
+        ? ranked[0]
+        : tops[0];
+  }
+
+  const bottom = bottoms[0];
+  const shoe = feet[0];
+  const outer = outers.find((g) => g.id !== top?.id);
+
+  return [top, bottom, shoe, outer].filter((g): g is Garment => Boolean(g)).slice(0, 4);
 }
 
 export function nameLook(pieces: Garment[]): string {
