@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { FlatLay } from "@/components/closet/flat-lay";
+import { IdleMount } from "@/components/closet/idle-mount";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { dressLook } from "@/components/closet/on-me";
 import { aiStatus } from "@/lib/ai";
@@ -97,20 +98,18 @@ function LookCard({
   look,
   pieces,
   extra,
-  canPrint,
-  refPhoto,
   closet,
   highlight,
+  index,
   onWear,
   onLayer,
 }: {
   look: Look;
   pieces: Garment[];
   extra?: string;
-  canPrint: boolean;
-  refPhoto: string | null;
   closet: Garment[];
   highlight?: boolean;
+  index: number;
   onWear: () => void;
   onLayer: (shirt: Garment) => void;
 }) {
@@ -120,11 +119,9 @@ function LookCard({
   const [showMe, setShowMe] = useState(false);
   const [dressing, setDressing] = useState(false);
   const [dressError, setDressError] = useState<string | null>(null);
-  const started = useRef(false);
   const rootRef = useRef<HTMLLIElement>(null);
   const layer = extra ? null : suggestShirt(pieces, closet);
   const painted = frame || cachedSrc;
-  const pieceIds = pieces.map((p) => p.id).join(",");
 
   useEffect(() => {
     return () => {
@@ -152,7 +149,6 @@ function LookCard({
 
   const runDress = (force = false) => {
     if (dressing) return;
-    started.current = true;
     setDressing(true);
     setDressError(null);
     const shot = pieces;
@@ -179,35 +175,16 @@ function LookCard({
   };
 
   useEffect(() => {
-    started.current = false;
-    const el = rootRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting || started.current) return;
-        void getImage(cacheKey).then((hit) => {
-          if (hit) {
-            setShowMe(true);
-            return;
-          }
-          if (!canPrint || !refPhoto) return;
-          runDress(false);
-        });
-      },
-      { rootMargin: "240px", threshold: 0.05 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canPrint, refPhoto, cacheKey, pieceIds]);
+    void getImage(cacheKey).then((hit) => {
+      if (hit) setShowMe(true);
+    });
+  }, [cacheKey]);
 
   useEffect(() => {
     if (!highlight) return;
     rootRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
     if (painted) setShowMe(true);
-    else runDress(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [highlight]);
+  }, [highlight, painted]);
 
   return (
     <li
@@ -215,6 +192,13 @@ function LookCard({
       id={`look-${look.id}`}
       className={highlight ? "outline outline-1 outline-ink" : undefined}
     >
+      <IdleMount
+        index={index}
+        always={12}
+        placeholder={
+          <div className="aspect-[4/5] border border-hairline bg-paper" />
+        }
+      >
       <div className="relative border border-hairline bg-paper aspect-[4/5] overflow-hidden">
         <FlatLay pieces={pieces} className="border-0" />
         {showMe && painted && (
@@ -268,6 +252,7 @@ function LookCard({
           </button>
         )}
       </div>
+      </IdleMount>
     </li>
   );
 }
@@ -292,11 +277,6 @@ function LookbookPage() {
       .then((s) => setCanPrint(s.print))
       .catch(() => setCanPrint(false));
   }, []);
-
-  useEffect(() => {
-    if (!hydrated || garmentsAll.length === 0) return;
-    ensureLookbook();
-  }, [hydrated, garmentsAll, ensureLookbook]);
 
   const garments = useMemo(
     () => garmentsAll.filter((g) => !g.archived),
@@ -468,7 +448,7 @@ function LookbookPage() {
         </div>
       ) : (
         <ul className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {shown.map((look) => {
+          {shown.map((look, i) => {
             const pieces = piecesFor(look);
             if (pieces.length < 3) return null;
             return (
@@ -477,9 +457,8 @@ function LookbookPage() {
                 look={look}
                 pieces={pieces}
                 extra={extras[look.id]}
-                canPrint={canPrint}
-                refPhoto={refPhoto}
                 closet={garments}
+                index={i}
                 highlight={highlightId === look.id}
                 onWear={() => wearToday(pieces.map((g) => g.id))}
                 onLayer={(shirt) => setExtras((cur) => ({ ...cur, [look.id]: shirt.id }))}

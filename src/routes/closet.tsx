@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentDetail } from "@/components/closet/detail";
+import { IdleMount } from "@/components/closet/idle-mount";
 import { GarmentTile } from "@/components/closet/tile";
 import {
   blobToDataUrl,
@@ -312,6 +313,13 @@ function ClosetPage() {
                 else tileEls.current.delete(g.id);
               }}
             >
+              <IdleMount
+                index={i}
+                always={24}
+                placeholder={
+                  <div className="aspect-page border border-hairline bg-paper-deep" />
+                }
+              >
               <GarmentTile
                 garment={g}
                 selecting={selecting}
@@ -324,6 +332,7 @@ function ClosetPage() {
                   setOpenId((cur) => (cur === g.id ? null : g.id));
                 }}
               />
+              </IdleMount>
             </li>
           ))}
         </ul>

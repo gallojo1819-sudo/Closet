@@ -23,7 +23,7 @@ function open(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
-export function imageKey(id: string, kind: "o" | "c"): string {
+export function imageKey(id: string, kind: "o" | "c" | "t"): string {
   return `${KEY_PREFIX}${id}:${kind}`;
 }
 
@@ -249,6 +249,27 @@ export async function compressRefBackup(blob: Blob): Promise<string> {
     return data;
   } finally {
     URL.revokeObjectURL(url);
+  }
+}
+
+/** Grid thumbnail: JPEG long edge 480, q 0.7. Does not block ingest. */
+export async function putThumb(id: string, src: Blob | string): Promise<void> {
+  const data = await jpegDataUrl(src, 480, 0.7);
+  await putImage(imageKey(id, "t"), dataUrlToBlob(data));
+}
+
+export async function ensureThumb(id: string, cutoutSrc: string): Promise<void> {
+  try {
+    const hit = await getImage(imageKey(id, "t"));
+    if (hit) return;
+    if (isIdbKey(cutoutSrc)) {
+      const blob = await getImage(cutoutSrc);
+      if (blob) await putThumb(id, blob);
+      return;
+    }
+    if (cutoutSrc) await putThumb(id, cutoutSrc);
+  } catch {
+    /* thumb is optional */
   }
 }
 

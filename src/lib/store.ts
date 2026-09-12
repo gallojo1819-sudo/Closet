@@ -6,6 +6,7 @@ import {
   deleteImage,
   getClosetMeta,
   getImage,
+  imageKey,
   isIdbKey,
   putClosetMeta,
   putImage,
@@ -199,7 +200,7 @@ export const useCloset = create<ClosetState>()(
       },
       removeGarment: (id) => {
         const g = get().garments.find((x) => x.id === id);
-        for (const src of [g?.imageSrc, g?.cutoutSrc]) {
+        for (const src of [g?.imageSrc, g?.cutoutSrc, g ? imageKey(g.id, "t") : ""]) {
           if (isIdbKey(src)) void deleteImage(src).catch(() => {});
         }
         set((s) => ({

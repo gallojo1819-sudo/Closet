@@ -9,6 +9,7 @@ import { TopBar } from "./top-bar";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const night = pathname.startsWith("/stylist");
+  const hydrated = useCloset((s) => s.hydrated);
 
   useEffect(() => {
     let live = true;
@@ -30,7 +31,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       const s = useCloset.getState();
       if (s.garments.length > 0) {
         useCloset.setState({ garments: s.garments });
-        s.ensureLookbook();
       }
       void migrateImagesToIdb().catch(() => {});
     })();
@@ -38,6 +38,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       live = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (pathname !== "/lookbook" || !hydrated) return;
+    const run = () => {
+      if (useCloset.getState().garments.length > 0) {
+        useCloset.getState().ensureLookbook();
+      }
+    };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(run);
+      return () => cancelIdleCallback(id);
+    }
+    const t = window.setTimeout(run, 0);
+    return () => window.clearTimeout(t);
+  }, [pathname, hydrated]);
 
   return (
     <div

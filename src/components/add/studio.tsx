@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, ClipboardPaste, Link2, Loader2, Tag, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { imageKey, putImage, dataUrlToBlob, fileFingerprint } from "@/lib/images";
+import { imageKey, putImage, putThumb, dataUrlToBlob, fileFingerprint } from "@/lib/images";
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
 import { aiStatus, printGarment, tagGarment } from "@/lib/ai";
 import { nameWithColor, preferPixels, sampleCover } from "@/lib/color";
@@ -104,6 +104,7 @@ export function Studio() {
       const id = opts.id;
       await putImage(imageKey(id, "o"), dataUrlToBlob(opts.original));
       await putImage(imageKey(id, "c"), dataUrlToBlob(opts.cover));
+      void putThumb(id, opts.cover).catch(() => {});
       addGarment(
         {
           id,
@@ -437,6 +438,7 @@ export function Studio() {
       const matte = await matteToPaper(raw);
       if (forId) {
         await putImage(imageKey(forId, "c"), dataUrlToBlob(matte.cutoutSrc));
+        void putThumb(forId, matte.cutoutSrc).catch(() => {});
         updateGarment(forId, {
           cutoutSrc: imageKey(forId, "c"),
           imageSource: "official",

@@ -11,6 +11,7 @@ import {
   imageKey,
   isIdbKey,
   putImage,
+  putThumb,
 } from "@/lib/images";
 import { costPerWear, money } from "@/lib/look";
 import { PALETTE, nameWithColor } from "@/lib/color";
@@ -191,6 +192,7 @@ export function GarmentDetail({
       if (!res.ok) throw new Error(res.error);
       const key = imageKey(garment.id, "c");
       await putImage(key, dataUrlToBlob(res.image));
+      void putThumb(garment.id, res.image).catch(() => {});
       const named = nameWithColor(garment.name, next);
       updateGarment(garment.id, {
         cutoutSrc: key,
@@ -245,6 +247,7 @@ export function GarmentDetail({
               {view === "print" ? (
                 <GarmentImg
                   garment={garment}
+                  thumb={false}
                   className="h-full w-full object-contain p-[8%]"
                 />
               ) : originalSrc ? (
