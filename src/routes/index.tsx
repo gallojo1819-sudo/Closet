@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FitBoard } from "@/components/closet/fit";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
 import { LookBuilder } from "@/components/closet/look-builder";
@@ -26,7 +25,7 @@ function Today() {
   const skipDrop = useCloset((s) => s.skipDrop);
   const saveLook = useCloset((s) => s.saveLook);
   const hydrated = useCloset((s) => s.hydrated);
-  const [view, setView] = useState<"paper" | "fit" | "me">("paper");
+  const [view, setView] = useState<"paper" | "me">("paper");
   const [play, setPlay] = useState(false);
 
   const ownedCount = garments.filter((g) => !g.archived).length;
@@ -203,7 +202,6 @@ function Today() {
               {(
                 [
                   { id: "paper", label: "On paper" },
-                  { id: "fit", label: "5′8" },
                   { id: "me", label: "On me" },
                 ] as const
               ).map((v) => (
@@ -225,8 +223,6 @@ function Today() {
           )}
           {view === "me" && pieces.length > 0 ? (
             <OnMePanel pieces={pieces} onUsePaper={() => setView("paper")} />
-          ) : view === "fit" && pieces.length > 0 ? (
-            <FitBoard pieces={pieces} />
           ) : (
             <FlatLay pieces={pieces} />
           )}

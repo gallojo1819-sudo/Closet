@@ -43,7 +43,6 @@ export function dropNote(
   moment?: Moment,
 ): string {
   const f = weather?.f ?? 68;
-  const sky = (weather?.label ?? "fair").toLowerCase();
   const houses = lookHouses(pieces)
     .slice(0, 2)
     .map((h) => HOUSE_LABEL[h])
@@ -51,18 +50,14 @@ export function dropNote(
   const sitting = [...pieces].sort((a, b) => daysIdle(b) - daysIdle(a))[0];
   const idle = sitting ? daysIdle(sitting) : 0;
   void moment;
-  const lead = [occasion, `${f}°`, sky].filter(Boolean).join(" · ");
+  void weather?.label;
+  const occ = occasion ?? "weekday";
+  const line = houses ? `${houses} — ${occ} ${f}°` : `${occ} ${f}°`;
 
   if (idle >= 21 && sitting) {
-    return `${lead}. Putting the ${sitting.name.toLowerCase()} back in — it has sat ${idle} days. ${houses}.`;
+    return `${line}. Putting the ${sitting.name.toLowerCase()} back in.`;
   }
-  if (f < 55) {
-    return `${lead}. Coat weather. ${houses || "From the closet"}.`;
-  }
-  if (f > 78) {
-    return `${lead}. Keep it light. ${houses}.`;
-  }
-  return `${lead}. ${houses || "Built from what you own"}.`;
+  return line;
 }
 
 export function neglectedPiece(

@@ -2,13 +2,31 @@ import type { Garment, Moment, Occasion, WeatherSnap } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
 export type { Moment, Occasion };
-export type House = "prep" | "italian" | "street";
+export type House =
+  | "ralph"
+  | "ald"
+  | "faloni"
+  | "italianWinter"
+  | "fiveFourFive"
+  | "sweetStable";
 
 export const HOUSE_LABEL: Record<House, string> = {
-  prep: "Ralph Lauren",
-  italian: "Italian",
-  street: "Street",
+  ralph: "Ralph",
+  ald: "ALD",
+  faloni: "Faloni",
+  italianWinter: "Italian winter",
+  fiveFourFive: "FiveFourFive",
+  sweetStable: "Sweet Stable",
 };
+
+const HOUSES: House[] = [
+  "ralph",
+  "ald",
+  "faloni",
+  "italianWinter",
+  "fiveFourFive",
+  "sweetStable",
+];
 
 export function defaultOccasion(d = new Date()): Occasion {
   const day = d.getDay();
@@ -31,16 +49,43 @@ export function daysIdle(g: Garment, today = todayISO()): number {
 }
 
 export function housesOf(g: Garment): House[] {
-  const blob = `${g.subtype} ${g.name} ${g.material}`.toLowerCase();
+  const blob = `${g.subtype} ${g.name} ${g.material} ${g.colors.join(" ")} ${g.notes}`.toLowerCase();
   const houses = new Set<House>();
-  if (/oxford|polo|chino|loafer|cable|navy cap|belt/.test(blob)) houses.add("prep");
-  if (/knit|merino|wool|camel|trouser|loafer|overcoat|linen/.test(blob)) houses.add("italian");
-  if (/sneaker|tee|t-shirt|jean|denim|hoodie|cap|overshirt/.test(blob)) houses.add("street");
-  if (g.formality >= 4) houses.add("italian");
-  if (g.formality <= 2) houses.add("street");
-  if (g.formality === 3) houses.add("prep");
-  if (houses.size === 0) houses.add("prep");
+  if (/oxford|polo|chino|cable|blazer/.test(blob)) houses.add("ralph");
+  if (/loafer/.test(blob) && g.formality >= 3) houses.add("ralph");
+  if (/navy/.test(blob) && g.formality >= 3 && g.formality <= 4) houses.add("ralph");
+  if (/rugby|oversized|yankee|\b990\b|new balance/.test(blob)) houses.add("ald");
+  if (g.formality >= 2 && g.formality <= 3 && /jean|cap|loafer|cream/.test(blob)) {
+    houses.add("ald");
+  }
+  if (g.warmth <= 2 && /linen|silk|no-show/.test(blob)) houses.add("faloni");
+  if (g.warmth <= 2 && /trouser/.test(blob) && /light|linen/.test(blob)) houses.add("faloni");
+  if (/cashmere|flannel|merino|suede|overcoat/.test(blob)) houses.add("italianWinter");
+  if (/linen|sangallo|tailored short|light cashmere/.test(blob)) houses.add("fiveFourFive");
+  if (/rugby|gingham|cord|horse|equestrian|ski/.test(blob)) houses.add("sweetStable");
+  if (houses.size === 0) houses.add(g.formality >= 3 ? "ralph" : "ald");
   return [...houses];
+}
+
+function houseClimateScore(g: Garment, f: number, occasion: Occasion): number {
+  const hs = housesOf(g);
+  let s = 0;
+  if (f > 75 && hs.includes("faloni")) s += 2;
+  if (f < 55 && hs.includes("italianWinter")) s += 2;
+  if (
+    (occasion === "weekend" || occasion === "travel") &&
+    (hs.includes("fiveFourFive") || hs.includes("sweetStable"))
+  ) {
+    s += 1.4;
+  }
+  if (
+    (occasion === "weekday" || occasion === "client" || occasion === "dinner") &&
+    hs.includes("ralph")
+  ) {
+    s += 1.1;
+  }
+  if (occasion === "weekend" && hs.includes("ald")) s += 1.2;
+  return s;
 }
 
 function formalityTarget(occasion: Occasion, moment: Moment): number {
@@ -160,6 +205,7 @@ export function pickLook(
     if (previous.has(g.id)) s -= 8;
     s += Math.min(daysIdle(g), 90) / 10;
     s += occasionScore(g, opts.occasion);
+    s += houseClimateScore(g, f, opts.occasion);
     return s + Math.random() * 0.25;
   };
 
@@ -226,11 +272,9 @@ export function pickLook(
 }
 
 export function lookHouses(pieces: Garment[]): House[] {
-  const counts: Record<House, number> = { prep: 0, italian: 0, street: 0 };
+  const counts = Object.fromEntries(HOUSES.map((h) => [h, 0])) as Record<House, number>;
   for (const g of pieces) {
     for (const h of housesOf(g)) counts[h] += 1;
   }
-  return (Object.keys(counts) as House[])
-    .filter((h) => counts[h] > 0)
-    .sort((a, b) => counts[b] - counts[a]);
+  return HOUSES.filter((h) => counts[h] > 0).sort((a, b) => counts[b] - counts[a]);
 }
