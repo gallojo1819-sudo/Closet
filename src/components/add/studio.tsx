@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { imageKey, putImage, dataUrlToBlob, fileFingerprint } from "@/lib/images";
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
 import { aiStatus, printGarment, tagGarment } from "@/lib/ai";
+import { nameWithColor, preferPixels, sampleCover } from "@/lib/color";
 import { guessGarment, looksLikeFilename } from "@/lib/guess";
 import {
   fetchListing,
@@ -208,6 +209,13 @@ export function Studio() {
           subtype = subtype || guess.subtype;
           colors = colors.length ? colors : guess.colors;
         }
+      }
+      try {
+        const sampled = await sampleCover(cutout);
+        colors = preferPixels(sampled, colors);
+        if (colors[0]) name = nameWithColor(name, colors[0]);
+      } catch {
+        /* keep tag colors */
       }
       return await commit({
         id,

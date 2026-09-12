@@ -1,4 +1,5 @@
 import type { Garment, Moment, Occasion, WeatherSnap } from "./types";
+import { colorLine } from "./color";
 import { HOUSE_LABEL, daysIdle, lookHouses, slotOf } from "./style";
 
 const ORDER: Garment["category"][] = [
@@ -42,22 +43,12 @@ export function dropNote(
   occasion?: Occasion,
   moment?: Moment,
 ): string {
-  const f = weather?.f ?? 68;
-  const houses = lookHouses(pieces)
-    .slice(0, 2)
-    .map((h) => HOUSE_LABEL[h])
-    .join(" × ");
-  const sitting = [...pieces].sort((a, b) => daysIdle(b) - daysIdle(a))[0];
-  const idle = sitting ? daysIdle(sitting) : 0;
+  void weather;
+  void occasion;
   void moment;
-  void weather?.label;
-  const occ = occasion ?? "weekday";
-  const line = houses ? `${houses} — ${occ} ${f}°` : `${occ} ${f}°`;
-
-  if (idle >= 21 && sitting) {
-    return `${line}. Putting the ${sitting.name.toLowerCase()} back in.`;
-  }
-  return line;
+  const house = lookHouses(pieces)[0];
+  const label = house ? HOUSE_LABEL[house] : "";
+  return colorLine(pieces, label) || (label ? label : "From the closet.");
 }
 
 export function neglectedPiece(

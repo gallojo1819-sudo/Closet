@@ -1,3 +1,4 @@
+import { harmony } from "./color.ts";
 import { daysIdle, housesOf, slotOf } from "./style.ts";
 import type { Garment, Look } from "./types.ts";
 import { todayISO } from "./utils.ts";
@@ -40,8 +41,7 @@ function comboScore(pieces: Garment[], today: string): number {
   const houseLists = pieces.map((p) => housesOf(p));
   const shared = houseLists.reduce((acc, hs) => acc.filter((h) => hs.includes(h)));
   if (shared.length) s += 1.5;
-  const colors = pieces.flatMap((p) => p.colors.map((c) => c.toLowerCase()));
-  if (colors.length > new Set(colors).size) s += 1;
+  s += harmony(pieces);
   return s;
 }
 
@@ -145,20 +145,22 @@ export function buildLookbook(garments: Garment[], today = todayISO()): Look[] {
     const tCands = slot === "top" || slot === "dress" ? [focus] : rank(tops, todayWorn).slice(0, PARTNER_K);
     const bCands = slot === "bottom" ? [focus] : rank(bottoms, todayWorn).slice(0, PARTNER_K);
     const fCands = slot === "footwear" ? [focus] : rank(shoes, todayWorn).slice(0, PARTNER_K);
-    const scored: { core: Garment[]; s: number }[] = [];
+    const scored: { core: Garment[]; s: number; h: number }[] = [];
     for (const t of tCands) {
       for (const b of bCands) {
         for (const f of fCands) {
           if (new Set([t.id, b.id, f.id]).size < 3) continue;
           const core = [t, b, f];
           if (clashes(core)) continue;
+          const h = harmony(core);
           const uncovered = core.filter((g) => (count.get(g.id) ?? 0) === 0).length;
-          scored.push({ core, s: comboScore(core, todayWorn) + uncovered * 3 });
+          scored.push({ core, s: comboScore(core, todayWorn) + uncovered * 3, h });
         }
       }
     }
     scored.sort((a, b) => (b.s !== a.s ? b.s - a.s : lookId(a.core.map((g) => g.id)).localeCompare(lookId(b.core.map((g) => g.id)))));
-    return scored.map((x) => x.core);
+    const good = scored.filter((x) => x.h >= 0);
+    return (good.length ? good : scored).map((x) => x.core);
   };
 
   const slotted = [...tops, ...bottoms, ...shoes];

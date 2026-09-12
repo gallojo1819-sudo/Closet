@@ -13,47 +13,14 @@ import {
   putImage,
 } from "@/lib/images";
 import { costPerWear, money } from "@/lib/look";
+import { PALETTE, nameWithColor } from "@/lib/color";
 import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
 import { CATEGORIES, type Category, type Garment } from "@/lib/types";
 import { useCloset } from "@/lib/store";
 import { useImageSrc } from "@/lib/use-image";
 import { cn, todayISO } from "@/lib/utils";
 
-const COLOR_CHIPS = [
-  "navy",
-  "olive",
-  "khaki",
-  "cream",
-  "white",
-  "black",
-  "brown",
-  "maroon",
-  "burgundy",
-  "pink",
-  "light blue",
-  "grey",
-  "tan",
-  "camel",
-] as const;
-
-const COLOR_LEAD =
-  /^(?:(?:dark|light|pale|bright|deep|off)\s+)?(?:navy|olive|khaki|cream|white|black|brown|maroon|burgundy|pink|blue|grey|gray|tan|camel|ivory|red|green|charcoal|beige|stone|ecru|wine|rust|mustard|yellow|orange|purple|lilac|teal)\s+/i;
-
-function titleColor(color: string): string {
-  return color
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(" ");
-}
-
-function nameWithColor(name: string, color: string): string {
-  const titled = titleColor(color);
-  if (!titled) return name;
-  if (COLOR_LEAD.test(name)) return name.replace(COLOR_LEAD, `${titled} `);
-  return name;
-}
+const COLOR_CHIPS = PALETTE;
 
 async function coverDataUrl(src: string): Promise<string | null> {
   try {

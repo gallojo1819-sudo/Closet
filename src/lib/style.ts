@@ -1,3 +1,4 @@
+import { harmony } from "./color.ts";
 import type { Garment, Moment, Occasion, WeatherSnap } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
@@ -211,27 +212,33 @@ export function pickLook(
 
   const best = (list: Garment[]) =>
     [...list].sort((a, b) => score(b) - score(a))[0];
+  const rank = (slot: Slot) => [...by(slot)].sort((a, b) => score(b) - score(a));
 
-  const ids: string[] = [];
-  const top = best(by("top"));
-  const bottom = best(by("bottom"));
-  const shoes = best(by("footwear"));
-  // Weekday look is top + bottom + footwear. Empty slots are omitted, never invented.
-  if (top) {
-    ids.push(top.id);
-  } else {
-    // No shirt/oxford/polo/tee/knit in the pool — a dress may stand in.
-    const dress = best(by("dress"));
-    if (dress) ids.push(dress.id);
+  const tops = rank("top").slice(0, 7);
+  const topList = tops.length ? tops : rank("dress").slice(0, 4);
+  const bottoms = rank("bottom").slice(0, 7);
+  const shoeList = rank("footwear").slice(0, 7);
+
+  type Combo = { ids: string[]; s: number; h: number; pieces: Garment[] };
+  const combos: Combo[] = [];
+  for (const t of topList) {
+    const bottomsOr = bottoms.length ? bottoms : [undefined];
+    const shoesOr = shoeList.length ? shoeList : [undefined];
+    for (const b of bottomsOr) {
+      for (const sh of shoesOr) {
+        const pieces = [t, b, sh].filter((g): g is Garment => Boolean(g));
+        if (pieces.length < 2) continue;
+        const h = harmony(pieces, { occasion: opts.occasion, f });
+        const s = pieces.reduce((n, g) => n + score(g), 0) + h;
+        combos.push({ ids: pieces.map((g) => g.id), s, h, pieces });
+      }
+    }
   }
-  if (bottom) {
-    ids.push(bottom.id);
-  }
-  // else: no pant/chino/jean/trouser inferred — omit rather than put loafers on the legs.
-  if (shoes) {
-    ids.push(shoes.id);
-  }
-  // else: no shoe/loafer/mule/sneaker/boot inferred — omit.
+  const ok = combos.filter((c) => c.h >= 0);
+  const poolC = (ok.length ? ok : combos).sort((a, b) => b.s - a.s);
+  const win = poolC[0];
+  const ids: string[] = win ? [...win.ids] : [];
+  // Weekday look is top + bottom + footwear. Empty slots omitted, never invented.
   if (cool) {
     // Outerwear only when it's actually cool, not on a warm morning.
     const outer = best(by("outerwear"));
@@ -239,6 +246,7 @@ export function pickLook(
   }
   const acc = by("accessory");
   const belt = acc.find((a) => a.subtype === "belt");
+  const shoes = win?.pieces.find((g) => slotOf(g) === "footwear");
   if (
     belt &&
     shoes &&
@@ -262,7 +270,18 @@ export function pickLook(
       const occupant = pool.find((x) => x.id === ids[slot]);
       // Don't swap a dinner trouser for idle jeans. Client/dinner stay brief-driven.
       const formal = opts.occasion === "client" || opts.occasion === "dinner";
-      if (occupant && daysIdle(occupant) < 21 && !formal) ids[slot] = candidate.id;
+      if (occupant && daysIdle(occupant) < 21 && !formal) {
+        const nextIds = ids.map((id, i) => (i === slot ? candidate.id : id));
+        const nextPieces = nextIds
+          .map((id) => pool.find((x) => x.id === id))
+          .filter((g): g is Garment => Boolean(g));
+        const hNow = harmony(
+          ids.map((id) => pool.find((x) => x.id === id)).filter((g): g is Garment => Boolean(g)),
+          { occasion: opts.occasion, f },
+        );
+        const hNext = harmony(nextPieces, { occasion: opts.occasion, f });
+        if (hNext >= 0 || hNext >= hNow) ids[slot] = candidate.id;
+      }
     } else if (candSlot === "accessory" || candSlot === "outerwear") {
       ids.push(candidate.id);
     }
