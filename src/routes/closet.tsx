@@ -11,6 +11,7 @@ import {
   isIdbKey,
   stashDataUrl,
 } from "@/lib/images";
+import { rackGaps } from "@/lib/gaps";
 import { daysIdle } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { CATEGORIES, type Category, type Garment } from "@/lib/types";
@@ -115,6 +116,7 @@ function ClosetPage() {
     () => garments.filter((g) => daysIdle(g) >= 21),
     [garments],
   );
+  const rack = useMemo(() => rackGaps(garments), [garments]);
   const list = useMemo(() => {
     if (filter === "all") return garments;
     if (filter === "waiting") return waiting;
@@ -199,10 +201,17 @@ function ClosetPage() {
               This URL’s closet is empty. localhost and Vercel are different closets. Open closet-ten-hazel.vercel.app if you uploaded there.
             </p>
           )}
-          {waiting.length > 0 && (
-            <p className="mt-3 text-sm text-ink-soft">
-              {waiting.length} sitting idle. Wear them, don’t buy more.
-            </p>
+          {hydrated && rack.length > 0 && (
+            <div className="mt-4 max-w-xl">
+              <p className="micro text-ink-soft">The rack</p>
+              <ul className="mt-2 space-y-1">
+                {rack.map((line) => (
+                  <li key={line} className="text-sm text-ink-soft">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-3">

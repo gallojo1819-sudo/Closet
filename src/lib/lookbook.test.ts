@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildLookbook, mergeLookbook, lookbookStats } from "./lookbook.ts";
+import { buildLookbook, mergeLookbook, lookbookStats, moreLikeThis } from "./lookbook.ts";
 import type { Garment, Look } from "./types.ts";
 
 function piece(
@@ -144,5 +144,73 @@ describe("buildLookbook", () => {
     for (let i = 1; i <= 8; i++) assert.ok(used.has(`t${i}`), `top t${i}`);
     const stats = lookbookStats(looks, g);
     assert.equal(stats.unusedNames.length, 0);
+  });
+});
+
+describe("moreLikeThis", () => {
+  const garments: Garment[] = [
+    piece({ id: "oxn", name: "Navy oxford", category: "top", subtype: "oxford", colors: ["navy"], wornOn: ["2026-09-10"] }),
+    piece({ id: "oxc", name: "Cream knit", category: "top", subtype: "knit", colors: ["cream"], wornOn: ["2026-09-10"] }),
+    piece({ id: "oxb", name: "Light blue oxford", category: "top", subtype: "oxford", colors: ["light blue"], wornOn: ["2026-09-10"] }),
+    piece({ id: "polo", name: "Navy polo", category: "top", subtype: "polo", colors: ["navy"], wornOn: ["2026-09-10"] }),
+    piece({
+      id: "idle-top",
+      name: "Grey polo",
+      category: "top",
+      subtype: "polo",
+      colors: ["grey", "navy"],
+      wornOn: [],
+      createdAt: "2026-01-01T12:00:00.000Z",
+    }),
+    piece({ id: "chino", name: "Khaki chinos", category: "bottom", subtype: "chino", colors: ["khaki"], wornOn: ["2026-09-10"] }),
+    piece({ id: "olive", name: "Olive chinos", category: "bottom", subtype: "chino", colors: ["olive"], wornOn: ["2026-09-10"] }),
+    piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean", colors: ["navy"], wornOn: ["2026-09-10"] }),
+    piece({
+      id: "idle-b",
+      name: "Brown trousers",
+      category: "bottom",
+      subtype: "trouser",
+      colors: ["brown"],
+      wornOn: [],
+    }),
+    piece({ id: "loafer", name: "Brown loafers", category: "footwear", subtype: "loafer", colors: ["brown"], wornOn: ["2026-09-10"] }),
+    piece({ id: "mule", name: "White mules", category: "footwear", subtype: "mule", colors: ["white"], wornOn: ["2026-09-10"] }),
+    piece({ id: "sneaker", name: "White sneakers", category: "footwear", subtype: "sneaker", colors: ["white"], wornOn: ["2026-09-10"] }),
+  ];
+
+  const look = (id: string, occasion: string, ids: string[]): Look => ({
+    id,
+    name: id,
+    occasion,
+    garmentIds: ids,
+    source: "ai",
+    lookbook: true,
+    createdAt: "2026-09-12T00:00:00.000Z",
+  });
+
+  const seed = look("seed", "weekday", ["oxn", "chino", "loafer"]);
+  const oneSlot = look("one", "weekday", ["oxc", "chino", "loafer"]);
+  const a = look("a", "weekday", ["oxc", "olive", "loafer"]);
+  const b = look("b", "weekday", ["polo", "chino", "sneaker"]);
+  const c = look("c", "weekday", ["oxb", "jean", "loafer"]);
+  const idle = look("idle", "weekday", ["idle-top", "idle-b", "mule"]);
+  const weekend = look("wk", "weekend", ["polo", "jean", "sneaker"]);
+  const book = [seed, oneSlot, a, b, c, idle, weekend];
+
+  it("returns 3 looks, two slots different, prefers idle", () => {
+    const alts = moreLikeThis(seed, book, garments, 3);
+    assert.equal(alts.length, 3);
+    assert.ok(!alts.some((l) => l.id === "seed"));
+    assert.ok(!alts.some((l) => l.id === "one"), "one slot different is not an alternative");
+    assert.equal(alts[0]?.id, "idle");
+    assert.ok(alts.every((l) => l.occasion === "weekday"));
+  });
+
+  it("stays in lookbook, never invents ids", () => {
+    const alts = moreLikeThis(seed, book, garments, 3);
+    for (const l of alts) {
+      assert.ok(book.some((x) => x.id === l.id));
+      for (const id of l.garmentIds) assert.ok(garments.some((g) => g.id === id));
+    }
   });
 });

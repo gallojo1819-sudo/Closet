@@ -1,5 +1,5 @@
-import { harmony } from "./color.ts";
-import { daysIdle, housesOf, slotOf } from "./style.ts";
+import { canonicalize, harmony } from "./color.ts";
+import { daysIdle, housesOf, lookHouses, slotOf } from "./style.ts";
 import type { Garment, Look } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
@@ -298,4 +298,95 @@ export function mergeLookbook(existing: Look[], book: Look[]): Look[] {
   const keys = new Set(kept.map((l) => [...l.garmentIds].sort().join("|")));
   const extra = book.filter((b) => !keys.has([...b.garmentIds].sort().join("|")));
   return [...kept, ...extra];
+}
+
+type WearSlot = "top" | "bottom" | "footwear" | "outer";
+
+function wearSlot(g: Garment): WearSlot | null {
+  const s = slotOf(g);
+  if (s === "top" || s === "dress") return "top";
+  if (s === "bottom") return "bottom";
+  if (s === "footwear") return "footwear";
+  if (s === "outerwear") return "outer";
+  return null;
+}
+
+function lookWear(pieces: Garment[]): Map<WearSlot, string> {
+  const m = new Map<WearSlot, string>();
+  for (const g of pieces) {
+    const slot = wearSlot(g);
+    if (!slot || m.has(slot)) continue;
+    m.set(slot, g.id);
+  }
+  return m;
+}
+
+function slotsDifferent(a: Garment[], b: Garment[]): number {
+  const A = lookWear(a);
+  const B = lookWear(b);
+  const keys = new Set<WearSlot>([...A.keys(), ...B.keys()]);
+  let n = 0;
+  for (const k of keys) {
+    if (A.get(k) !== B.get(k)) n += 1;
+  }
+  return n;
+}
+
+function lookColors(pieces: Garment[]): Set<string> {
+  const s = new Set<string>();
+  for (const g of pieces) {
+    for (const c of g.colors) {
+      const n = canonicalize(c);
+      if (n) s.add(n);
+    }
+  }
+  return s;
+}
+
+/**
+ * Same occasion + shared colors/houses. At least two wear-slots different.
+ * Prefers idle pieces. Returns up to `n` looks, never the seed.
+ */
+export function moreLikeThis(
+  look: Look,
+  looks: Look[],
+  garments: Garment[],
+  n = 3,
+): Look[] {
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  const pieces = look.garmentIds
+    .map((id) => byId.get(id))
+    .filter((g): g is Garment => Boolean(g));
+  if (pieces.length < 2) return [];
+  const houses = new Set(lookHouses(pieces));
+  const colors = lookColors(pieces);
+  const occ = look.occasion;
+
+  const resolve = (l: Look) =>
+    l.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+
+  const score = (cand: Look): number => {
+    if (cand.id === look.id) return Number.NEGATIVE_INFINITY;
+    const p = resolve(cand);
+    if (p.length < 3) return Number.NEGATIVE_INFINITY;
+    if (slotsDifferent(pieces, p) < 2) return Number.NEGATIVE_INFINITY;
+    const sharedH = lookHouses(p).filter((h) => houses.has(h)).length;
+    let sharedC = 0;
+    for (const c of lookColors(p)) if (colors.has(c)) sharedC += 1;
+    if (sharedH === 0 && sharedC === 0) return Number.NEGATIVE_INFINITY;
+    const idleN = p.filter((g) => daysIdle(g) >= 21).length;
+    const idleDays = p.reduce((n, g) => n + daysIdle(g), 0);
+    let s = sharedH * 3 + sharedC * 2 + idleN * 5 + idleDays / 20;
+    if (cand.occasion === occ) s += 10;
+    return s;
+  };
+
+  const ranked = looks
+    .map((l) => ({ l, s: score(l) }))
+    .filter((x) => x.s > Number.NEGATIVE_INFINITY)
+    .sort((a, b) => b.s - a.s || a.l.id.localeCompare(b.l.id));
+
+  const same = ranked.filter((x) => x.l.occasion === occ);
+  const rest = ranked.filter((x) => x.l.occasion !== occ);
+  return [...same, ...rest].slice(0, n).map((x) => x.l);
 }

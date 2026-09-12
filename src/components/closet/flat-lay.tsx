@@ -26,14 +26,16 @@ const STACK: Record<
 export function FlatLay({
   pieces,
   className,
+  passive,
 }: {
   pieces: Garment[];
   className?: string;
+  passive?: boolean;
 }) {
   const seen: Record<string, number> = {};
   return (
     <div
-      tabIndex={0}
+      tabIndex={passive ? undefined : 0}
       className={cn(
         "group relative aspect-[4/5] border border-hairline bg-paper overflow-hidden outline-none",
         className,

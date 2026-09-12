@@ -1,17 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { IdleMount } from "@/components/closet/idle-mount";
 import { LookBuilder } from "@/components/closet/look-builder";
-import { dressLook } from "@/components/closet/on-me";
-import { aiStatus } from "@/lib/ai";
-import {
-  dataUrlToBlob,
-  deleteImage,
-  getImage,
-  lookOnMeKey,
-  putImage,
-} from "@/lib/images";
+import { LookSheet } from "@/components/closet/look-sheet";
+import { rackLine } from "@/lib/gaps";
 import {
   lookbookPool,
   lookbookStats,
@@ -21,7 +14,6 @@ import {
 import { slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, type Garment, type Look } from "@/lib/types";
-import { useImageSrc } from "@/lib/use-image";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/lookbook")({
@@ -31,160 +23,27 @@ export const Route = createFileRoute("/lookbook")({
   }),
 });
 
-type Job = () => Promise<void>;
-const dressQ: Job[] = [];
-let dressN = 0;
-function enqueueDress(job: Job) {
-  dressQ.push(job);
-  pumpDress();
-}
-function pumpDress() {
-  while (dressN < 2 && dressQ.length) {
-    const job = dressQ.shift()!;
-    dressN += 1;
-    void job().finally(() => {
-      dressN -= 1;
-      pumpDress();
-    });
-  }
-}
-
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const t = window.setTimeout(() => reject(new Error("timeout")), ms);
-    p.then(
-      (v) => {
-        window.clearTimeout(t);
-        resolve(v);
-      },
-      (e) => {
-        window.clearTimeout(t);
-        reject(e);
-      },
-    );
-  });
-}
-
-function blobOf(g: Garment): string {
-  return `${g.subtype} ${g.name}`.toLowerCase();
-}
-function isKnit(g: Garment): boolean {
-  return /knit|sweater|crewneck|pullover|merino|cashmere/.test(blobOf(g));
-}
-function isOxfordShirt(g: Garment): boolean {
-  if (isKnit(g)) return false;
-  return /oxford|\bshirts?\b/.test(blobOf(g));
-}
-function knitWithoutShirt(pieces: Garment[]): boolean {
-  const tops = pieces.filter((g) => slotOf(g) === "top" || slotOf(g) === "dress");
-  return tops.some(isKnit) && !pieces.some(isOxfordShirt);
-}
-function suggestShirt(pieces: Garment[], closet: Garment[]): Garment | null {
-  if (!knitWithoutShirt(pieces)) return null;
-  const used = new Set(pieces.map((g) => g.id));
-  const shirts = closet.filter(
-    (g) => !used.has(g.id) && !g.archived && slotOf(g) === "top" && isOxfordShirt(g),
-  );
-  return (
-    shirts.find((g) =>
-      /white|ivory|cream/.test(`${g.name} ${g.colors.join(" ")}`.toLowerCase()),
-    ) ??
-    shirts[0] ??
-    null
-  );
-}
-
 function LookCard({
   look,
   pieces,
-  extra,
-  closet,
   highlight,
   index,
-  onWear,
-  onLayer,
+  onOpen,
+  cardRef,
 }: {
   look: Look;
   pieces: Garment[];
-  extra?: string;
-  closet: Garment[];
   highlight?: boolean;
   index: number;
-  onWear: () => void;
-  onLayer: (shirt: Garment) => void;
+  onOpen: () => void;
+  cardRef: (el: HTMLElement | null) => void;
 }) {
-  const cacheKey = lookOnMeKey(look.id, extra);
-  const cachedSrc = useImageSrc(cacheKey);
-  const [frame, setFrame] = useState<string | null>(null);
-  const [showMe, setShowMe] = useState(false);
-  const [dressing, setDressing] = useState(false);
-  const [dressError, setDressError] = useState<string | null>(null);
   const rootRef = useRef<HTMLLIElement>(null);
-  const layer = extra ? null : suggestShirt(pieces, closet);
-  const painted = frame || cachedSrc;
-
-  useEffect(() => {
-    return () => {
-      if (frame) URL.revokeObjectURL(frame);
-    };
-  }, [frame]);
-
-  useEffect(() => {
-    if (cachedSrc) setShowMe(true);
-  }, [cachedSrc]);
-
-  const paint = (dataUrl: string) => {
-    const url = URL.createObjectURL(dataUrlToBlob(dataUrl));
-    setFrame((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return url;
-    });
-    setShowMe(true);
-  };
-
-  const fail = (e: unknown) => {
-    const msg = e instanceof Error ? e.message : "Could not dress you.";
-    setDressError(msg === "timeout" ? "Imagine timed out after 45s." : msg);
-  };
-
-  const runDress = (force = false) => {
-    if (dressing) return;
-    setDressing(true);
-    setDressError(null);
-    const shot = pieces;
-    enqueueDress(async () => {
-      try {
-        if (!force) {
-          const hit = await getImage(cacheKey);
-          if (hit) {
-            setShowMe(true);
-            return;
-          }
-        } else {
-          await deleteImage(cacheKey);
-        }
-        const image = await withTimeout(dressLook(shot), 45_000);
-        await putImage(cacheKey, dataUrlToBlob(image));
-        paint(image);
-      } catch (e) {
-        fail(e);
-      } finally {
-        setDressing(false);
-      }
-    });
-  };
-
-  useEffect(() => {
-    void getImage(cacheKey).then((hit) => {
-      if (hit) setShowMe(true);
-    });
-  }, [cacheKey]);
 
   useEffect(() => {
     if (!highlight) return;
     rootRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-    if (painted) setShowMe(true);
-  }, [highlight, painted]);
+  }, [highlight]);
 
   return (
     <li
@@ -196,59 +55,27 @@ function LookCard({
         index={index}
         always={12}
         placeholder={
-          <div className="aspect-[4/5] border border-hairline bg-paper" />
-        }
-      >
-      <div className="relative border border-hairline bg-paper aspect-[4/5] overflow-hidden">
-        <FlatLay pieces={pieces} className="border-0" />
-        {showMe && painted && (
-          <img
-            key={painted}
-            src={painted}
-            alt={look.name}
-            className="on-you-glass absolute inset-0 z-10 h-full w-full object-cover bg-paper"
-          />
-        )}
-      </div>
-      <p className="mt-3">{look.name}</p>
-      <p className="micro text-ink-soft">{look.occasion}</p>
-      {dressError && (
-        <p className="mt-1 text-sm text-accent">{dressError}</p>
-      )}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={onWear}
-          className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-        >
-          Wear this
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (painted && !dressError) setShowMe((v) => !v);
-            else runDress(Boolean(dressError));
-          }}
-          className={cn(
-            "micro border px-3 py-2",
-            showMe && painted
-              ? "border-ink bg-ink text-paper"
-              : "border-hairline text-ink-soft hover:border-hairline-strong",
-          )}
-        >
-          {dressing ? "On you…" : "On you"}
-        </button>
-        {layer && (
           <button
             type="button"
-            onClick={() => onLayer(layer)}
-            className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-          >
-            Layer? {layer.name}
-          </button>
-        )}
-      </div>
+            ref={cardRef}
+            onClick={onOpen}
+            aria-label={look.name}
+            className="block w-full aspect-[4/5] border border-hairline bg-paper"
+          />
+        }
+      >
+        <button
+          type="button"
+          ref={cardRef}
+          onClick={onOpen}
+          aria-label={look.name}
+          className="relative block w-full border border-hairline bg-paper aspect-[4/5] overflow-hidden"
+        >
+          <FlatLay pieces={pieces} className="border-0 pointer-events-none" passive />
+        </button>
       </IdleMount>
+      <p className="mt-3">{look.name}</p>
+      <p className="micro text-ink-soft">{look.occasion}</p>
     </li>
   );
 }
@@ -257,22 +84,15 @@ function LookbookPage() {
   const hydrated = useCloset((s) => s.hydrated);
   const garmentsAll = useCloset((s) => s.garments);
   const looksAll = useCloset((s) => s.looks);
-  const refPhoto = useCloset((s) => s.refPhoto);
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
   const wearToday = useCloset((s) => s.wearToday);
   const [play, setPlay] = useState(false);
-  const [canPrint, setCanPrint] = useState(false);
-  const [extras, setExtras] = useState<Record<string, string>>({});
   const [occasion, setOccasion] = useState<"all" | (typeof OCCASIONS)[number]["id"]>("all");
   const [color, setColor] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const cardEls = useRef(new Map<string, HTMLElement>());
   const { look: focusLook } = Route.useSearch();
-
-  useEffect(() => {
-    aiStatus()
-      .then((s) => setCanPrint(s.print))
-      .catch(() => setCanPrint(false));
-  }, []);
 
   const garments = useMemo(
     () => garmentsAll.filter((g) => !g.archived),
@@ -289,17 +109,15 @@ function LookbookPage() {
     pool.some((g) => slotOf(g) === slot || (slot === "top" && slotOf(g) === "dress")),
   );
   const stats = lookbookStats(book, garments);
+  const gap = useMemo(() => rackLine(garments), [garments]);
   const colorChips = useMemo(() => {
     const set = new Set<string>();
     for (const g of garments) for (const c of g.colors) if (c) set.add(c.toLowerCase());
     return [...set].sort();
   }, [garments]);
 
-  const piecesFor = (look: Look) => {
-    const extra = extras[look.id];
-    const ids = extra ? [...look.garmentIds, extra] : look.garmentIds;
-    return ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
-  };
+  const piecesFor = (look: Look) =>
+    look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
   const shown = useMemo(() => {
     return book.filter((look) => {
@@ -309,9 +127,21 @@ function LookbookPage() {
       if (color && !lookHasColor(pieces, color)) return false;
       return true;
     });
-  }, [book, extras, occasion, color, byId]);
+  }, [book, occasion, color, byId]);
 
   const highlightId = focusId ?? focusLook ?? null;
+
+  useEffect(() => {
+    if (focusLook) setOpenId(focusLook);
+  }, [focusLook]);
+
+  const getOpenCard = useCallback(
+    () => (openId ? cardEls.current.get(openId) ?? null : null),
+    [openId],
+  );
+
+  const openLook = shown.find((l) => l.id === openId) ?? book.find((l) => l.id === openId) ?? null;
+  const openPieces = openLook ? piecesFor(openLook) : [];
 
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-6 py-8 md:py-12 rise">
@@ -322,6 +152,9 @@ function LookbookPage() {
       <p className="mt-3 text-ink-soft max-w-xl">
         Best outfits from this closet, on paper. Dress you when a card is on screen.
       </p>
+      {gap && (
+        <p className="mt-3 micro text-ink-soft">{gap}</p>
+      )}
       {book.length > 0 && (
         <>
           <p className="mt-3 micro text-ink-soft">
@@ -343,13 +176,17 @@ function LookbookPage() {
                       const hit = book.find((l) => l.garmentIds.includes(g.id));
                       if (hit) {
                         setFocusId(hit.id);
+                        setOpenId(hit.id);
                         return;
                       }
                       ensureLookbook(Date.now());
                       const again = useCloset
                         .getState()
                         .looks.find((l) => l.lookbook && l.garmentIds.includes(g.id));
-                      if (again) setFocusId(again.id);
+                      if (again) {
+                        setFocusId(again.id);
+                        setOpenId(again.id);
+                      }
                     }}
                   >
                     {name}
@@ -452,16 +289,29 @@ function LookbookPage() {
                 key={look.id}
                 look={look}
                 pieces={pieces}
-                extra={extras[look.id]}
-                closet={garments}
                 index={i}
                 highlight={highlightId === look.id}
-                onWear={() => wearToday(pieces.map((g) => g.id))}
-                onLayer={(shirt) => setExtras((cur) => ({ ...cur, [look.id]: shirt.id }))}
+                onOpen={() => setOpenId(look.id)}
+                cardRef={(el) => {
+                  if (el) cardEls.current.set(look.id, el);
+                  else cardEls.current.delete(look.id);
+                }}
               />
             );
           })}
         </ul>
+      )}
+      {openLook && openPieces.length >= 2 && (
+        <LookSheet
+          look={openLook}
+          pieces={openPieces}
+          book={book}
+          closet={garments}
+          getCard={getOpenCard}
+          onClose={() => setOpenId(null)}
+          onWear={() => wearToday(openPieces.map((g) => g.id))}
+          onOpenLook={(next) => setOpenId(next.id)}
+        />
       )}
     </div>
   );

@@ -38,7 +38,7 @@ async function coverDataUrl(src: string): Promise<string | null> {
   }
 }
 
-function useMdUp() {
+export function useMdUp() {
   const [md, setMd] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches,
   );
