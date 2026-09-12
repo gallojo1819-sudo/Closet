@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentDetail } from "@/components/closet/detail";
 import { GarmentTile } from "@/components/closet/tile";
@@ -38,6 +38,7 @@ function ClosetPage() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const importRef = useRef<HTMLInputElement>(null);
+  const tileEls = useRef(new Map<string, HTMLElement>());
 
   const exportCloset = async () => {
     setBusy(true);
@@ -122,15 +123,24 @@ function ClosetPage() {
   const selectedCount = selected.size;
 
   useEffect(() => {
-    if (!selecting) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (openId) {
+        setOpenId(null);
+        return;
+      }
+      if (!selecting) return;
       setSelecting(false);
       setSelected(new Set());
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selecting]);
+  }, [selecting, openId]);
+
+  const getOpenTile = useCallback(
+    () => (openId ? tileEls.current.get(openId) ?? null : null),
+    [openId],
+  );
 
   const exitSelect = () => {
     setSelecting(false);
@@ -297,21 +307,34 @@ function ClosetPage() {
               key={g.id}
               className="rise"
               style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
+              ref={(el) => {
+                if (el) tileEls.current.set(g.id, el);
+                else tileEls.current.delete(g.id);
+              }}
             >
               <GarmentTile
                 garment={g}
                 selecting={selecting}
-                selected={selected.has(g.id)}
-                onClick={() =>
-                  selecting ? toggleSelected(g.id) : setOpenId(g.id)
-                }
+                selected={selected.has(g.id) || openId === g.id}
+                onClick={() => {
+                  if (selecting) {
+                    toggleSelected(g.id);
+                    return;
+                  }
+                  setOpenId((cur) => (cur === g.id ? null : g.id));
+                }}
               />
             </li>
           ))}
         </ul>
       )}
       {open && (
-        <GarmentDetail key={open.id} garment={open} onClose={() => setOpenId(null)} />
+        <GarmentDetail
+          key={open.id}
+          garment={open}
+          getTile={getOpenTile}
+          onClose={() => setOpenId(null)}
+        />
       )}
     </div>
   );

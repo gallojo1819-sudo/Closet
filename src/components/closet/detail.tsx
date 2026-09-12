@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
@@ -70,12 +70,52 @@ async function coverDataUrl(src: string): Promise<string | null> {
   }
 }
 
+function useMdUp() {
+  const [md, setMd] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 768px)");
+    const onChange = () => setMd(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return md;
+}
+
+/** Prefer right of the tile, then left, then over it. Clamp to the viewport. */
+export function placeBesideTile(tile: DOMRect): {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+} {
+  const pad = 12;
+  const gap = 8;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const width = Math.min(tile.width * 2 + 16, vw - pad * 2);
+  const maxHeight = Math.min(vh - pad * 2, Math.round(vh * 0.92));
+
+  let left: number;
+  if (tile.right + gap + width <= vw - pad) left = tile.right + gap;
+  else if (tile.left - gap - width >= pad) left = tile.left - gap - width;
+  else left = Math.min(Math.max(pad, tile.left), vw - pad - width);
+
+  let top = tile.top;
+  if (top + maxHeight > vh - pad) top = vh - pad - maxHeight;
+  if (top < pad) top = pad;
+  return { top, left, width, maxHeight };
+}
+
 export function GarmentDetail({
   garment,
   onClose,
+  getTile,
 }: {
   garment: Garment;
   onClose: () => void;
+  getTile?: () => HTMLElement | null;
 }) {
   const wearToday = useCloset((s) => s.wearToday);
   const removeGarment = useCloset((s) => s.removeGarment);
@@ -95,6 +135,40 @@ export function GarmentDetail({
   const originalSrc = useImageSrc(garment.imageSrc);
   const usingOriginal = garment.cutoutSrc === garment.imageSrc;
   const cpw = costPerWear(garment);
+  const md = useMdUp();
+  const [pos, setPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!md) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const el = getTile?.();
+      if (!el) return;
+      setPos(placeBesideTile(el.getBoundingClientRect()));
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [md, garment.id, getTile]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   useEffect(() => {
     aiStatus()
@@ -167,14 +241,35 @@ export function GarmentDetail({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+    <div
+      className={cn("fixed inset-0 z-50", !md && "flex items-end")}
+    >
       <button
         type="button"
-        className="absolute inset-0 bg-ink/40"
+        className={cn(
+          "absolute inset-0",
+          md ? "bg-ink/10" : "bg-ink/30",
+        )}
         aria-label="Close"
         onClick={onClose}
       />
-      <div className="relative z-10 w-full max-w-3xl max-h-[92dvh] overflow-auto bg-paper border border-hairline md:grid md:grid-cols-2">
+      <div
+        className={cn(
+          "relative z-10 overflow-auto bg-paper border border-hairline",
+          md ? "md:grid md:grid-cols-2" : "w-full max-h-[92dvh]",
+        )}
+        style={
+          md && pos
+            ? {
+                position: "fixed",
+                top: pos.top,
+                left: pos.left,
+                width: pos.width,
+                maxHeight: pos.maxHeight,
+              }
+            : undefined
+        }
+      >
         <div>
           {view === "me" ? (
             <OnMePanel pieces={[garment]} onUsePaper={() => setView("print")} />
