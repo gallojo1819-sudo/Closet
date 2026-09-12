@@ -104,105 +104,113 @@ function LookCard({
 }) {
   const cacheKey = lookOnMeKey(look.id, extra);
   const cachedSrc = useImageSrc(cacheKey);
+  const [frame, setFrame] = useState<string | null>(null);
   const [showMe, setShowMe] = useState(false);
   const [dressing, setDressing] = useState(false);
-  const [timeoutHint, setTimeoutHint] = useState(false);
   const [dressError, setDressError] = useState<string | null>(null);
   const started = useRef(false);
   const rootRef = useRef<HTMLLIElement>(null);
   const layer = extra ? null : suggestShirt(pieces, closet);
-  const hasCache = Boolean(cachedSrc);
+  const painted = frame || cachedSrc;
   const pieceIds = pieces.map((p) => p.id).join(",");
 
   useEffect(() => {
-    started.current = false;
-    if (hasCache || !canPrint || !refPhoto) return;
-    const el = rootRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting || started.current) return;
-        started.current = true;
-        setDressing(true);
-        setTimeoutHint(false);
-        setDressError(null);
-        const shot = pieces;
-        enqueueDress(async () => {
-          try {
-            const hit = await getImage(cacheKey);
-            if (hit) return;
-            const image = await withTimeout(dressLook(shot), 20_000);
-            await putImage(cacheKey, dataUrlToBlob(image));
-          } catch (e) {
-            setTimeoutHint(true);
-            setDressError(e instanceof Error ? e.message : "Could not dress you.");
-          } finally {
-            setDressing(false);
-          }
-        });
-      },
-      { rootMargin: "240px", threshold: 0.05 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-    // pieceIds stands in for pieces identity
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasCache, canPrint, refPhoto, cacheKey, pieceIds]);
+    return () => {
+      if (frame) URL.revokeObjectURL(frame);
+    };
+  }, [frame]);
 
-  const tapDress = () => {
-    if (hasCache) {
-      setShowMe(true);
-      setTimeoutHint(false);
-      return;
-    }
-    if (!canPrint || !refPhoto || dressing) return;
+  useEffect(() => {
+    if (cachedSrc) setShowMe(true);
+  }, [cachedSrc]);
+
+  const paint = (dataUrl: string) => {
+    const url = URL.createObjectURL(dataUrlToBlob(dataUrl));
+    setFrame((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return url;
+    });
+    setShowMe(true);
+  };
+
+  const fail = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : "Could not dress you.";
+    setDressError(msg === "timeout" ? "Imagine timed out after 45s." : msg);
+  };
+
+  const runDress = (force = false) => {
+    if (dressing) return;
     started.current = true;
     setDressing(true);
-    setTimeoutHint(false);
     setDressError(null);
+    const shot = pieces;
     enqueueDress(async () => {
       try {
-        await deleteImage(cacheKey);
-        const image = await withTimeout(dressLook(pieces), 20_000);
+        if (!force) {
+          const hit = await getImage(cacheKey);
+          if (hit) {
+            setShowMe(true);
+            return;
+          }
+        } else {
+          await deleteImage(cacheKey);
+        }
+        const image = await withTimeout(dressLook(shot), 45_000);
         await putImage(cacheKey, dataUrlToBlob(image));
+        paint(image);
       } catch (e) {
-        setTimeoutHint(true);
-        setDressError(e instanceof Error ? e.message : "Could not dress you.");
+        fail(e);
       } finally {
         setDressing(false);
       }
     });
   };
 
+  useEffect(() => {
+    started.current = false;
+    const el = rootRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting || started.current) return;
+        void getImage(cacheKey).then((hit) => {
+          if (hit) {
+            setShowMe(true);
+            return;
+          }
+          if (!canPrint || !refPhoto) return;
+          runDress(false);
+        });
+      },
+      { rootMargin: "240px", threshold: 0.05 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canPrint, refPhoto, cacheKey, pieceIds]);
+
   return (
     <li ref={rootRef}>
       <div className="relative border border-hairline bg-paper aspect-[4/5] overflow-hidden">
         <FlatLay pieces={pieces} className="border-0" />
-        {showMe && cachedSrc && (
+        {showMe && painted && (
           <img
-            src={cachedSrc}
+            src={painted}
             alt={look.name}
-            className="absolute inset-0 h-full w-full object-contain bg-paper"
+            className="absolute inset-0 z-10 h-full w-full object-cover bg-paper"
           />
         )}
         {dressing && (
-          <div className="absolute inset-x-0 bottom-0 h-0.5 bg-hairline">
+          <div className="absolute inset-x-0 bottom-0 z-20 h-0.5 bg-hairline">
             <div className="h-full w-1/3 bg-ink animate-pulse" />
           </div>
-        )}
-        {(timeoutHint || dressError) && !hasCache && (
-          <button
-            type="button"
-            onClick={tapDress}
-            className="absolute inset-x-0 bottom-0 micro bg-paper/90 px-2 py-2 text-ink-soft text-left"
-          >
-            Tap to dress you
-            {dressError && <span className="block mt-1">{dressError}</span>}
-          </button>
         )}
       </div>
       <p className="mt-3">{look.name}</p>
       <p className="micro text-ink-soft">{look.occasion}</p>
+      {dressError && (
+        <p className="mt-1 text-sm text-accent">{dressError}</p>
+      )}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -211,29 +219,21 @@ function LookCard({
         >
           Wear this
         </button>
-        {hasCache && (
-          <button
-            type="button"
-            onClick={() => setShowMe((v) => !v)}
-            className={cn(
-              "micro border px-3 py-2",
-              showMe
-                ? "border-ink bg-ink text-paper"
-                : "border-hairline text-ink-soft hover:border-hairline-strong",
-            )}
-          >
-            On you
-          </button>
-        )}
-        {!hasCache && refPhoto && (
-          <button
-            type="button"
-            onClick={tapDress}
-            className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-          >
-            {dressing ? "Dressing you…" : "Tap to dress you"}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (painted && !dressError) setShowMe((v) => !v);
+            else runDress(Boolean(dressError));
+          }}
+          className={cn(
+            "micro border px-3 py-2",
+            showMe && painted
+              ? "border-ink bg-ink text-paper"
+              : "border-hairline text-ink-soft hover:border-hairline-strong",
+          )}
+        >
+          {dressing ? "Dressing you…" : "On you"}
+        </button>
         {layer && (
           <button
             type="button"

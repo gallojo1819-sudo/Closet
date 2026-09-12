@@ -245,16 +245,32 @@ export const onMePreview = createServerFn({ method: "POST" })
   .validator((input: { refImage: string; cutouts: string[]; pieces: string }) => input)
   .handler(async ({ data }): Promise<EditResult> => {
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
-    const urls = [data.refImage, ...data.cutouts.slice(0, 4)];
-    return imagineEdit(
-      `Image 1 is THIS man — the only person. Keep his face, hair, beard or none, skin, 5′8 regular body.
+    if (!data.refImage) return { ok: false, error: "No reference photo." };
+    const prompt = `Image 1 is THIS man — the only person. Keep his face, hair, beard or none, skin, 5′8 regular body.
 Hands EMPTY. No phone, no camera, no selfie pose, no screen.
 Full-body editorial, standing, both arms relaxed, plain studio #F4EFE6 or light grey. No text, no logo invented.
 Images 2+ are the EXACT garments. Put ONLY those on him. Do not add a shirt under a sweater, a belt, a watch, or a second shoe unless that piece is one of the images.
 If a knit is in the look and no shirt image was sent, the knit is the only top — no invented oxford.
-${data.pieces}`,
-      urls,
-    );
+${data.pieces}`;
+    const joe = imageUrlPart(data.refImage);
+    const images = [joe, ...data.cutouts.slice(0, 4).map(imageUrlPart)];
+    let r = await xaiFetch("https://api.x.ai/v1/images/edits", {
+      model: "grok-imagine-image-2.0",
+      prompt,
+      image: joe,
+      images,
+    });
+    if (!r.ok && (r.status === 403 || r.status === 422)) {
+      r = await xaiFetch("https://api.x.ai/v1/images/edits", {
+        model: "grok-imagine-image-2.0",
+        prompt,
+        image: images,
+      });
+    }
+    if (!r.ok) return { ok: false, error: r.error };
+    const got = await imageFromEditJson(r.json);
+    if (!got.ok) return { ok: false, error: r.error || got.error };
+    return got;
   });
 
 function occasionFromPrompt(prompt: string): Occasion {

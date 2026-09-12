@@ -10,9 +10,15 @@ import { sortLook } from "@/lib/look";
 /** Dress Joe in these exact cutouts. Never writes cutoutSrc. */
 export async function dressLook(pieces: Garment[]): Promise<string> {
   const refPhoto = useCloset.getState().refPhoto;
-  if (!refPhoto) throw new Error("No reference photo yet. Tap Fit · 5′8 reg up top to add one.");
+  if (!refPhoto) {
+    openRefPhotoDialog();
+    throw new Error("No reference photo yet. Tap Fit · 5′8 reg up top to add one.");
+  }
   const blob = await getImage(refPhoto);
-  if (!blob) throw new Error("Reference photo is missing — set it again.");
+  if (!blob) {
+    openRefPhotoDialog();
+    throw new Error("Reference photo is missing — set it again.");
+  }
   const refImage = await jpegDataUrl(blob, 768, 0.8);
   const layers: { name: string; category: string; url: string }[] = [];
   for (const g of sortLook(pieces).slice(0, 4)) {
