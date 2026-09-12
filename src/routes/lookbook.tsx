@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { IdleMount } from "@/components/closet/idle-mount";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { LookSheet } from "@/components/closet/look-sheet";
+import { ensureLookOnMe } from "@/components/closet/on-me";
 import { rackLine } from "@/lib/gaps";
+import { lookOnMeKey } from "@/lib/images";
+import { useImageSrc } from "@/lib/use-image";
 import {
   lookbookPool,
   lookbookStats,
@@ -22,6 +25,76 @@ export const Route = createFileRoute("/lookbook")({
     look: typeof raw.look === "string" ? raw.look : undefined,
   }),
 });
+
+function LookCardFace({
+  look,
+  pieces,
+  onOpen,
+  cardRef,
+}: {
+  look: Look;
+  pieces: Garment[];
+  onOpen: () => void;
+  cardRef: (el: HTMLElement | null) => void;
+}) {
+  const cacheKey = lookOnMeKey(look.id);
+  const cachedSrc = useImageSrc(cacheKey);
+  const [dressing, setDressing] = useState(false);
+  const [dressError, setDressError] = useState<string | null>(null);
+
+  const onYou = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dressing) return;
+    setDressing(true);
+    setDressError(null);
+    void (async () => {
+      try {
+        await ensureLookOnMe(look.id, pieces);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Could not dress you.";
+        setDressError(msg === "timeout" ? "Imagine timed out after 45s." : msg);
+      } finally {
+        setDressing(false);
+      }
+    })();
+  };
+
+  return (
+    <>
+      <div
+        ref={cardRef}
+        className="relative w-full border border-hairline bg-paper aspect-[4/5] overflow-hidden"
+      >
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={look.name}
+          className="absolute inset-0 block"
+        >
+          <FlatLay pieces={pieces} className="h-full border-0 pointer-events-none" passive />
+          {cachedSrc && (
+            <img
+              src={cachedSrc}
+              alt=""
+              className="on-you-glass absolute inset-0 z-10 h-full w-full object-cover bg-paper pointer-events-none"
+            />
+          )}
+        </button>
+        {!cachedSrc && (
+          <button
+            type="button"
+            onClick={onYou}
+            className="absolute bottom-2 left-2 z-20 micro border border-hairline bg-paper px-2 py-1 text-ink-soft hover:border-hairline-strong"
+          >
+            {dressing ? "On you…" : "On you"}
+          </button>
+        )}
+      </div>
+      {dressError && <p className="mt-1 text-sm text-accent">{dressError}</p>}
+    </>
+  );
+}
 
 function LookCard({
   look,
@@ -64,15 +137,7 @@ function LookCard({
           />
         }
       >
-        <button
-          type="button"
-          ref={cardRef}
-          onClick={onOpen}
-          aria-label={look.name}
-          className="relative block w-full border border-hairline bg-paper aspect-[4/5] overflow-hidden"
-        >
-          <FlatLay pieces={pieces} className="border-0 pointer-events-none" passive />
-        </button>
+        <LookCardFace look={look} pieces={pieces} onOpen={onOpen} cardRef={cardRef} />
       </IdleMount>
       <p className="mt-3">{look.name}</p>
       <p className="micro text-ink-soft">{look.occasion}</p>

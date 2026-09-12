@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { onMePreview } from "@/lib/ai";
-import { blobToDataUrl, getImage, jpegDataUrl, resolveImage } from "@/lib/images";
+import {
+  blobToDataUrl,
+  dataUrlToBlob,
+  getImage,
+  jpegDataUrl,
+  lookOnMeKey,
+  putImage,
+  resolveImage,
+} from "@/lib/images";
 import { useCloset } from "@/lib/store";
 import type { Garment } from "@/lib/types";
 import { layersForOnMe } from "@/lib/look";
@@ -34,6 +42,46 @@ export async function dressLook(pieces: Garment[]): Promise<string> {
   const res = await onMePreview({ data: { refImage, cutouts, pieces: list } });
   if (!res.ok) throw new Error(res.error);
   return res.image;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = window.setTimeout(() => reject(new Error("timeout")), ms);
+    p.then(
+      (v) => {
+        window.clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        window.clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
+const inflight = new Map<string, Promise<string>>();
+
+/** Cache-first On you. One Imagine per look. Card and sheet share the job. */
+export async function ensureLookOnMe(
+  lookId: string,
+  pieces: Garment[],
+  ms = 45_000,
+): Promise<string> {
+  const key = lookOnMeKey(lookId);
+  const hit = await getImage(key);
+  if (hit) return blobToDataUrl(hit);
+  const pending = inflight.get(lookId);
+  if (pending) return pending;
+  const job = (async () => {
+    const image = await withTimeout(dressLook(pieces), ms);
+    await putImage(key, dataUrlToBlob(image));
+    return image;
+  })().finally(() => {
+    inflight.delete(lookId);
+  });
+  inflight.set(lookId, job);
+  return job;
 }
 
 /** Stored src (idb key, path, or data URL) -> data URL for the edit request. */

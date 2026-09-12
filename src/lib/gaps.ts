@@ -1,5 +1,5 @@
 import { canonicalize, type PaletteColor } from "./color.ts";
-import { daysIdle, housesOf, slotOf } from "./style.ts";
+import { housesOf, slotOf } from "./style.ts";
 import type { Garment } from "./types.ts";
 
 const EVEN = "The rack is even. Wear what’s sitting.";
@@ -29,7 +29,9 @@ function colorsOf(g: Garment): PaletteColor[] {
       "khaki",
       "olive",
       "brown",
+      "burgundy",
       "maroon",
+      "black",
     ] as const) {
       if (b.includes(p) && !out.includes(p)) out.push(p);
     }
@@ -42,63 +44,67 @@ function hasColor(g: Garment, ...names: PaletteColor[]): boolean {
   return names.some((n) => cs.includes(n));
 }
 
-type Kind =
-  | "oxford"
-  | "polo"
-  | "knit"
-  | "chino"
-  | "jean"
-  | "loafer"
-  | "mule"
-  | "sneaker"
-  | "linen"
-  | "rugby"
-  | "trouser";
+type Wear = "top" | "bottom" | "footwear" | "outer";
 
-function isKind(g: Garment, kind: Kind): boolean {
-  const b = blobOf(g);
-  const slot = slotOf(g);
-  switch (kind) {
-    case "oxford":
-      if (/knit|sweater|polo|hoodie|\btee\b|t-shirt|rugby/.test(b)) return false;
-      return /oxford/.test(b);
-    case "polo":
-      return /polo/.test(b);
-    case "knit":
-      return /knit|sweater|crewneck|pullover|merino|cashmere|cardigan|v-?neck/.test(b);
-    case "chino":
-      return /chino/.test(b);
-    case "jean":
-      return /\bjeans?\b|denim/.test(b);
-    case "loafer":
-      return /loafer/.test(b);
-    case "mule":
-      return /mule/.test(b);
-    case "sneaker":
-      return /sneaker|trainer/.test(b);
-    case "linen":
-      if (!/linen/.test(b)) return false;
-      return slot === "top" || slot === "dress";
-    case "rugby":
-      return /rugby/.test(b);
-    case "trouser":
-      return /trouser/.test(b);
-  }
+function wearOf(g: Garment): Wear | null {
+  const s = slotOf(g);
+  if (s === "top" || s === "dress") return "top";
+  if (s === "bottom") return "bottom";
+  if (s === "footwear") return "footwear";
+  if (s === "outerwear") return "outer";
+  return null;
 }
 
-function slotCount(pool: Garment[], slot: "top" | "bottom" | "footwear" | "outerwear"): number {
-  if (slot === "top") {
-    return pool.filter((g) => {
-      const s = slotOf(g);
-      return s === "top" || s === "dress";
-    }).length;
-  }
-  return pool.filter((g) => slotOf(g) === slot).length;
+function isOxford(g: Garment): boolean {
+  const b = blobOf(g);
+  if (/knit|sweater|polo|hoodie|\btee\b|t-shirt|rugby/.test(b)) return false;
+  return /oxford/.test(b);
+}
+
+function isKnit(g: Garment): boolean {
+  return /knit|sweater|crewneck|pullover|merino|cashmere|cardigan|v-?neck/.test(blobOf(g));
+}
+
+function isLinenShirt(g: Garment): boolean {
+  if (!/linen/.test(blobOf(g))) return false;
+  return wearOf(g) === "top";
+}
+
+function isLoafer(g: Garment): boolean {
+  return /loafer/.test(blobOf(g));
+}
+
+function isMule(g: Garment): boolean {
+  return /mule/.test(blobOf(g));
+}
+
+function isSneaker(g: Garment): boolean {
+  return /sneaker|trainer/.test(blobOf(g));
+}
+
+function isTrouser(g: Garment): boolean {
+  return /trouser/.test(blobOf(g));
+}
+
+function isChino(g: Garment): boolean {
+  return /chino/.test(blobOf(g));
+}
+
+function isCord(g: Garment): boolean {
+  return /cord/.test(blobOf(g));
+}
+
+function isLeatherShoe(g: Garment): boolean {
+  return isLoafer(g) || isMule(g);
+}
+
+function paleOxford(g: Garment): boolean {
+  return isOxford(g) && hasColor(g, "white", "light blue", "ivory");
 }
 
 /**
- * 4–8 catalog lines about holes in HIS closet. No shop, no cart, no brand to buy.
- * Recomputes from garments — no persist key.
+ * Outfit holes: name the plates he owns, then the missing type + color.
+ * No shop, no cart, no brand. Recomputes from garments — no persist key.
  */
 export function rackGaps(garments: Garment[]): string[] {
   const pool = his(garments);
@@ -110,25 +116,26 @@ export function rackGaps(garments: Garment[]): string[] {
     if (!lines.includes(s)) lines.push(s);
   };
 
-  const tops = slotCount(pool, "top");
-  const shoes = slotCount(pool, "footwear");
-  const oxfords = pool.filter((g) => isKind(g, "oxford"));
-  const knits = pool.filter((g) => isKind(g, "knit"));
-  const polos = pool.filter((g) => isKind(g, "polo"));
-  const linens = pool.filter((g) => isKind(g, "linen"));
-  const loafers = pool.filter((g) => isKind(g, "loafer"));
-  const mules = pool.filter((g) => isKind(g, "mule"));
-  const trousers = pool.filter((g) => isKind(g, "trouser"));
-  const idle = pool.filter((g) => daysIdle(g) >= 21);
-  const navy = pool.filter((g) => hasColor(g, "navy"));
-  const cream = pool.filter((g) => hasColor(g, "cream", "ivory"));
-  const brown = pool.filter((g) => hasColor(g, "brown", "chocolate", "camel", "tan"));
-  const whiteOxford = oxfords.filter((g) => hasColor(g, "white"));
-  const lightBlueOxford = oxfords.filter((g) => hasColor(g, "light blue"));
-  const navyOxford = oxfords.filter((g) => hasColor(g, "navy"));
+  const tops = pool.filter((g) => wearOf(g) === "top");
+  const bottoms = pool.filter((g) => wearOf(g) === "bottom");
+  const shoes = pool.filter((g) => wearOf(g) === "footwear");
+  const knits = tops.filter(isKnit);
+  const oxfords = tops.filter(isOxford);
+  const linens = tops.filter(isLinenShirt);
+  const trousers = bottoms.filter(isTrouser);
+  const chinos = bottoms.filter(isChino);
+  const cords = bottoms.filter(isCord);
+  const loafers = shoes.filter(isLoafer);
+  const sneakers = shoes.filter(isSneaker);
+  const leather = shoes.filter(isLeatherShoe);
+  const creamTrousers = trousers.filter((g) => hasColor(g, "cream", "ivory"));
+  const navyLoafers = loafers.filter((g) => hasColor(g, "navy"));
   const navyKnits = knits.filter((g) => hasColor(g, "navy"));
-  const oliveKhaki = pool.filter((g) => hasColor(g, "olive", "khaki", "forest"));
-  const ralph = pool.filter((g) => housesOf(g).includes("ralph"));
+  const oliveKhakiBottoms = bottoms.filter((g) => hasColor(g, "olive", "khaki", "forest"));
+  const dressLoafers = loafers.filter((g) =>
+    hasColor(g, "brown", "chocolate", "tan", "camel", "burgundy", "wine", "maroon"),
+  );
+  const paleOx = oxfords.filter(paleOxford);
   const summer =
     pool.filter((g) => g.warmth <= 2).length >= 4 ||
     pool.some((g) => g.seasons.some((s) => /summer|spring/i.test(s))) ||
@@ -137,48 +144,37 @@ export function rackGaps(garments: Garment[]): string[] {
       return hs.includes("faloni") || hs.includes("fiveFourFive");
     });
 
-  if (idle.length >= 5) {
-    push(`${idle.length} pieces sitting. Wear them before anything new.`);
+  const dressedBottom =
+    creamTrousers[0] ?? trousers[0] ?? chinos[0] ?? cords[0];
+  const dressedShoe = navyLoafers[0] ?? leather[0];
+  if (dressedBottom && dressedShoe && paleOx.length === 0) {
+    push(
+      `Light blue or white oxford would finish the ${dressedBottom.name} + ${dressedShoe.name}.`,
+    );
   }
 
-  if (tops > 3 * shoes) {
-    push(`${tops} tops, ${shoes} shoes — the rack is waiting on footwear.`);
+  if (trousers.length > 0 && leather.length === 0 && (knits.length > 0 || sneakers.length > 0)) {
+    const t = trousers[0]!;
+    const verb = /s$/i.test(t.name.trim()) ? "are" : "is";
+    push(`${t.name} ${verb} waiting on a loafer, not another knit.`);
   }
 
-  if (trousers.length > 0 && loafers.length === 0 && mules.length === 0) {
-    push("Trousers without a leather shoe.");
+  if (cords.length > 0 && dressLoafers.length === 0 && sneakers.length > 0) {
+    const c = cords[0]!;
+    push(
+      `Brown or burgundy loafer would dress the ${c.name}. Sneakers are the only shoe on them now.`,
+    );
   }
 
-  let saidOxford = false;
-  if (oxfords.length === 0 && (knits.length > 0 || polos.length >= 5)) {
-    push("Need an oxford (white or light blue) under the knits.");
-    saidOxford = true;
-  } else if (
-    oxfords.length > 0 &&
-    navyOxford.length > 0 &&
-    whiteOxford.length === 0 &&
-    lightBlueOxford.length === 0
-  ) {
-    push("Light blue or white oxford — you already have the navy.");
-    saidOxford = true;
+  if (navyKnits.length >= 3 && oliveKhakiBottoms.length === 0) {
+    push("Navy knits have no khaki/olive bottom — weekday is navy-on-navy.");
   }
 
-  if (linens.length === 0 && summer) {
-    push("No linen shirt. Italian summer is knit-only until you add one.");
-  }
-
-  const navyN = navy.length;
-  const creamN = cream.length;
-  const brownN = brown.length;
-  const livesRalphColor =
-    (navyN >= 8 || creamN >= 6 || brownN >= 6 || navyN + creamN + brownN >= 12) &&
-    (ralph.length >= 4 || oxfords.length + polos.length >= 3);
-  if (livesRalphColor && whiteOxford.length === 0 && !saidOxford) {
-    push("No white oxford. Ralph looks stall without one.");
-  }
-
-  if (navyKnits.length >= 4 && oliveKhaki.length === 0) {
-    push("Navy is covered. Khaki or olive would unlock weekday.");
+  const heatBottom = creamTrousers[0] ?? bottoms.find((g) => g.warmth <= 2);
+  if (linens.length === 0 && knits.length > 0 && heatBottom && (summer || creamTrousers.length > 0)) {
+    push(
+      `Linen shirt would unlock the ${heatBottom.name} in heat. Knits are doing that job now.`,
+    );
   }
 
   if (!lines.length) return [EVEN];

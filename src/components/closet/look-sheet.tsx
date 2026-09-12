@@ -2,34 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
 import { placeBesideTile, useMdUp } from "@/components/closet/detail";
-import { dressLook } from "@/components/closet/on-me";
-import {
-  dataUrlToBlob,
-  deleteImage,
-  getImage,
-  lookOnMeKey,
-  putImage,
-} from "@/lib/images";
+import { ensureLookOnMe } from "@/components/closet/on-me";
+import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { moreLikeThis } from "@/lib/lookbook";
+import { useCloset } from "@/lib/store";
 import type { Garment, Look } from "@/lib/types";
 import { useImageSrc } from "@/lib/use-image";
 import { cn } from "@/lib/utils";
-
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const t = window.setTimeout(() => reject(new Error("timeout")), ms);
-    p.then(
-      (v) => {
-        window.clearTimeout(t);
-        resolve(v);
-      },
-      (e) => {
-        window.clearTimeout(t);
-        reject(e);
-      },
-    );
-  });
-}
 
 export function LookSheet({
   look,
@@ -58,6 +37,8 @@ export function LookSheet({
   const [dressError, setDressError] = useState<string | null>(null);
   const [showAlts, setShowAlts] = useState(false);
   const gen = useRef(0);
+  const piecesRef = useRef(pieces);
+  piecesRef.current = pieces;
   const md = useMdUp();
   const [pos, setPos] = useState<{
     top: number;
@@ -101,46 +82,69 @@ export function LookSheet({
   }, [frame]);
 
   useEffect(() => {
+    if (cachedSrc) setShowMe(true);
+  }, [cachedSrc]);
+
+  useEffect(() => {
     gen.current += 1;
-    setShowMe(false);
-    setDressing(false);
-    setDressError(null);
+    const n = gen.current;
     setFrame(null);
-  }, [look.id]);
+    setDressError(null);
+    setDressing(false);
+    let live = true;
+    void (async () => {
+      const hit = await getImage(cacheKey);
+      if (!live || n !== gen.current) return;
+      if (hit) {
+        setShowMe(true);
+        return;
+      }
+      setShowMe(false);
+      if (!useCloset.getState().refPhoto) return;
+      setDressing(true);
+      try {
+        const image = await ensureLookOnMe(look.id, piecesRef.current);
+        if (!live || n !== gen.current) return;
+        const url = URL.createObjectURL(dataUrlToBlob(image));
+        setFrame((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+        setShowMe(true);
+      } catch (e) {
+        if (!live || n !== gen.current) return;
+        const msg = e instanceof Error ? e.message : "Could not dress you.";
+        setDressError(msg === "timeout" ? "Imagine timed out after 45s." : msg);
+      } finally {
+        if (live && n === gen.current) setDressing(false);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [look.id, cacheKey]);
 
   const alts = showAlts ? moreLikeThis(look, book, closet, 3) : null;
 
-  const paint = (dataUrl: string) => {
-    const url = URL.createObjectURL(dataUrlToBlob(dataUrl));
-    setFrame((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return url;
-    });
-    setShowMe(true);
-  };
-
-  const runDress = (force = false) => {
+  const runDress = () => {
     if (dressing) return;
+    if (painted && !dressError) {
+      setShowMe((v) => !v);
+      return;
+    }
     const n = gen.current;
     setDressing(true);
     setDressError(null);
     void (async () => {
       try {
-        if (!force) {
-          const hit = await getImage(cacheKey);
-          if (n !== gen.current) return;
-          if (hit) {
-            setShowMe(true);
-            return;
-          }
-        } else {
-          await deleteImage(cacheKey);
-        }
-        const image = await withTimeout(dressLook(pieces), 45_000);
+        const image = await ensureLookOnMe(look.id, piecesRef.current);
         if (n !== gen.current) return;
-        await putImage(cacheKey, dataUrlToBlob(image));
-        if (n !== gen.current) return;
-        paint(image);
+        const url = URL.createObjectURL(dataUrlToBlob(image));
+        setFrame((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+        setShowMe(true);
       } catch (e) {
         if (n !== gen.current) return;
         const msg = e instanceof Error ? e.message : "Could not dress you.";
@@ -198,10 +202,7 @@ export function LookSheet({
           </div>
           <button
             type="button"
-            onClick={() => {
-              if (painted && !dressError) setShowMe((v) => !v);
-              else runDress(Boolean(dressError));
-            }}
+            onClick={runDress}
             className={cn(
               "micro border px-3 py-2 self-start",
               showMe && painted
@@ -247,8 +248,8 @@ export function LookSheet({
               Close
             </button>
           </div>
-          {alts && (
-            alts.length === 0 ? (
+          {alts &&
+            (alts.length === 0 ? (
               <p className="text-sm text-ink-soft">Nothing else in this register.</p>
             ) : (
               <ul className="grid grid-cols-3 gap-2">
@@ -272,8 +273,7 @@ export function LookSheet({
                   );
                 })}
               </ul>
-            )
-          )}
+            ))}
         </div>
       </div>
     </div>

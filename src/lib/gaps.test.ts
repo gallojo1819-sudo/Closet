@@ -49,17 +49,50 @@ describe("rackGaps", () => {
     assert.deepEqual(rackGaps(g), []);
   });
 
-  it("tops vs footwear", () => {
+  it("names cream trousers + navy loafers waiting on a pale oxford", () => {
     const g = [
-      ...Array.from({ length: 12 }, (_, i) =>
-        piece({
-          id: `t${i}`,
-          name: `Navy knit ${i}`,
-          category: "top",
-          subtype: "knit",
-          colors: ["navy"],
-        }),
-      ),
+      piece({
+        id: "k1",
+        name: "Navy knit",
+        category: "top",
+        subtype: "knit",
+        colors: ["navy"],
+      }),
+      piece({
+        id: "b1",
+        name: "Cream trousers",
+        category: "bottom",
+        subtype: "trouser",
+        colors: ["cream"],
+      }),
+      piece({
+        id: "s1",
+        name: "Navy loafers",
+        category: "footwear",
+        subtype: "loafer",
+        colors: ["navy"],
+      }),
+    ];
+    const lines = rackGaps(g);
+    const blob = lines.join(" | ");
+    assert.ok(
+      blob.includes("Light blue or white oxford would finish the Cream trousers + Navy loafers"),
+      blob,
+    );
+    assert.ok(!/\d+ tops/.test(blob), blob);
+    assert.ok(!/buy/i.test(blob), blob);
+    assert.ok(!/cart/i.test(blob), blob);
+  });
+
+  it("trousers + knits without leather want a loafer", () => {
+    const g = [
+      piece({
+        id: "k1",
+        name: "Cream knit",
+        category: "top",
+        subtype: "knit",
+        colors: ["cream"],
+      }),
       piece({
         id: "b1",
         name: "Charcoal trousers",
@@ -74,57 +107,55 @@ describe("rackGaps", () => {
         subtype: "sneaker",
         colors: ["white"],
       }),
+    ];
+    const lines = rackGaps(g);
+    const blob = lines.join(" | ");
+    assert.ok(blob.includes("Charcoal trousers are waiting on a loafer"), blob);
+    assert.ok(blob.includes("not another knit"), blob);
+    assert.ok(!/12 tops/.test(blob), blob);
+  });
+
+  it("cords with only sneakers want a brown or burgundy loafer", () => {
+    const g = [
       piece({
-        id: "s2",
-        name: "Grey sneakers",
+        id: "k1",
+        name: "Navy knit",
+        category: "top",
+        subtype: "knit",
+        colors: ["navy"],
+      }),
+      piece({
+        id: "b1",
+        name: "Burgundy cords",
+        category: "bottom",
+        subtype: "cord",
+        colors: ["burgundy"],
+      }),
+      piece({
+        id: "s1",
+        name: "Black sneakers",
         category: "footwear",
         subtype: "sneaker",
-        colors: ["grey"],
+        colors: ["black"],
       }),
     ];
     const lines = rackGaps(g);
-    assert.ok(
-      lines.some((l) => l.includes("12 tops, 2 shoes")),
-      lines.join(" | "),
-    );
-    assert.ok(lines.some((l) => l.includes("Trousers without a leather shoe")));
+    const blob = lines.join(" | ");
+    assert.ok(blob.includes("Brown or burgundy loafer would dress the Burgundy cords"), blob);
+    assert.ok(blob.includes("Sneakers are the only shoe"), blob);
   });
 
-  it("oxford holes and linen, not maroon nag", () => {
+  it("navy knits without khaki/olive bottoms", () => {
     const g = [
-      ...Array.from({ length: 6 }, (_, i) =>
+      ...Array.from({ length: 4 }, (_, i) =>
         piece({
           id: `k${i}`,
           name: `Navy knit ${i}`,
           category: "top",
           subtype: "knit",
           colors: ["navy"],
-          warmth: 2,
         }),
       ),
-      piece({
-        id: "maroon",
-        name: "Maroon knit",
-        category: "top",
-        subtype: "knit",
-        colors: ["maroon"],
-      }),
-      ...Array.from({ length: 4 }, (_, i) =>
-        piece({
-          id: `p${i}`,
-          name: `Navy polo ${i}`,
-          category: "top",
-          subtype: "polo",
-          colors: ["navy"],
-        }),
-      ),
-      piece({
-        id: "ox",
-        name: "Navy oxford",
-        category: "top",
-        subtype: "oxford",
-        colors: ["navy"],
-      }),
       piece({
         id: "b1",
         name: "Navy chinos",
@@ -142,80 +173,42 @@ describe("rackGaps", () => {
     ];
     const lines = rackGaps(g);
     const blob = lines.join(" | ");
-    assert.ok(blob.includes("Light blue or white oxford"), blob);
-    assert.ok(blob.includes("No linen shirt"), blob);
-    assert.ok(blob.includes("Khaki or olive"), blob);
+    assert.ok(blob.includes("Navy knits have no khaki/olive bottom"), blob);
+    assert.ok(blob.includes("navy-on-navy"), blob);
     assert.ok(!/maroon/i.test(blob), blob);
-    assert.ok(!/buy/i.test(blob), blob);
-    assert.ok(!/cart/i.test(blob), blob);
-    assert.ok(lines.length >= 1 && lines.length <= 8);
   });
 
-  it("zero oxford under knits", () => {
+  it("linen would unlock cream trousers in heat", () => {
     const g = [
       piece({
         id: "k1",
-        name: "Cream knit",
+        name: "Navy knit",
         category: "top",
         subtype: "knit",
-        colors: ["cream"],
+        colors: ["navy"],
+        warmth: 2,
       }),
       piece({
         id: "b1",
-        name: "Khaki chinos",
+        name: "Cream trousers",
         category: "bottom",
-        subtype: "chino",
-        colors: ["khaki"],
+        subtype: "trouser",
+        colors: ["cream"],
+        warmth: 1,
+        seasons: ["summer"],
       }),
       piece({
         id: "s1",
-        name: "Brown loafers",
+        name: "Navy loafers",
         category: "footwear",
         subtype: "loafer",
-        colors: ["brown"],
+        colors: ["navy"],
       }),
     ];
     const lines = rackGaps(g);
-    assert.ok(
-      lines.some((l) => l.includes("Need an oxford")),
-      lines.join(" | "),
-    );
-  });
-
-  it("idle sitting", () => {
-    const g = Array.from({ length: 6 }, (_, i) =>
-      piece({
-        id: `t${i}`,
-        name: i < 3 ? `White oxford ${i}` : `Olive chino ${i}`,
-        category: i < 3 ? "top" : "bottom",
-        subtype: i < 3 ? "oxford" : "chino",
-        colors: i < 3 ? ["white"] : ["olive"],
-        wornOn: [],
-        createdAt: "2026-01-01T12:00:00.000Z",
-      }),
-    ).concat([
-      piece({
-        id: "s1",
-        name: "Brown loafers",
-        category: "footwear",
-        subtype: "loafer",
-        colors: ["brown"],
-        wornOn: [],
-      }),
-      piece({
-        id: "s2",
-        name: "White mules",
-        category: "footwear",
-        subtype: "mule",
-        colors: ["white"],
-        wornOn: [],
-      }),
-    ]);
-    const lines = rackGaps(g);
-    assert.ok(
-      lines.some((l) => /pieces sitting/.test(l)),
-      lines.join(" | "),
-    );
+    const blob = lines.join(" | ");
+    assert.ok(blob.includes("Linen shirt would unlock the Cream trousers in heat"), blob);
+    assert.ok(blob.includes("Knits are doing that job now"), blob);
   });
 
   it("balanced rack is one even line", () => {
