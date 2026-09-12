@@ -1,6 +1,14 @@
 import type { Garment, Moment, Occasion, WeatherSnap } from "./types.ts";
 import { colorLine } from "./color.ts";
-import { HOUSE_LABEL, daysIdle, lookHouses, slotOf } from "./style.ts";
+import {
+  HOUSE_LABEL,
+  daysIdle,
+  isCampCollar,
+  isFairIsle,
+  isHoodiePiece,
+  lookHouses,
+  slotOf,
+} from "./style.ts";
 
 const ORDER: Garment["category"][] = [
   "top",
@@ -36,29 +44,36 @@ function blobOf(g: Garment): string {
 
 function isTrueOuter(g: Garment): boolean {
   const b = blobOf(g);
-  if (/\bhoodies?\b/.test(b)) return false;
+  if (isHoodiePiece(g)) return false;
   return /\b(coats?|bombers?|jackets?|blazers?|parkas?|trench|shearlings?|overshirts?)\b/.test(b);
-}
-
-/** Jacket / zip / cardigan beats hoodie / tee. Equal knits: first in the look name. */
-function outerMostScore(g: Garment): number {
-  const b = blobOf(g);
-  if (/\b(jackets?|zips?|zip[- ]?up|cardigans?|bombers?|coats?)\b/.test(b)) return 3;
-  if (/\b(hoodies?|sweaters?|knits?|crewnecks?|fair\s*isle)\b/.test(b)) return 2;
-  if (/\b(tees?|t-shirts?|polos?|oxfords?|shirts?)\b/.test(b)) return 1;
-  return 2;
 }
 
 function isLayerTop(g: Garment): boolean {
   const s = slotOf(g);
   if (s === "top" || s === "dress") return true;
-  if (/\bhoodies?\b/.test(blobOf(g))) return true;
+  if (isHoodiePiece(g)) return true;
   return false;
+}
+
+/** Camp collar / oxford / knit beats hoodie. One top only. */
+function pickTop(tops: Garment[]): Garment | undefined {
+  if (!tops.length) return undefined;
+  const camp = tops.find(isCampCollar);
+  if (camp) return camp;
+  const shirt = tops.find((g) => /oxford|polo|linen/.test(blobOf(g)) && !isHoodiePiece(g));
+  if (shirt) return shirt;
+  const knit = tops.find(
+    (g) =>
+      (isFairIsle(g) || /knit|\bsweaters?\b|merino|cable|crewneck/.test(blobOf(g))) &&
+      !isHoodiePiece(g),
+  );
+  if (knit) return knit;
+  return tops.find((g) => !isHoodiePiece(g)) ?? tops[0];
 }
 
 /**
  * Cutouts for Imagine: at most one top, one bottom, one footwear,
- * one true outer. Extra hoodies stay on paper — never fused.
+ * one true outer. Hoodie is not a coat. Extra hoodies stay on paper.
  */
 export function layersForOnMe(pieces: Garment[]): Garment[] {
   const sorted = sortLook(pieces);
@@ -67,16 +82,7 @@ export function layersForOnMe(pieces: Garment[]): Garment[] {
   const tops = sorted.filter(isLayerTop);
   const outers = sorted.filter(isTrueOuter);
 
-  let top: Garment | undefined;
-  if (tops.length === 1) top = tops[0];
-  else if (tops.length > 1) {
-    const ranked = [...tops].sort((a, b) => outerMostScore(b) - outerMostScore(a));
-    top =
-      outerMostScore(ranked[0]!) > outerMostScore(ranked[1]!)
-        ? ranked[0]
-        : tops[0];
-  }
-
+  const top = pickTop(tops);
   const bottom = bottoms[0];
   const shoe = feet[0];
   const outer = outers.find((g) => g.id !== top?.id);

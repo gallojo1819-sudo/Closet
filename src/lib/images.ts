@@ -195,7 +195,7 @@ export function refImageKey(): string {
 }
 
 export function lookOnMeKey(lookId: string, extra?: string): string {
-  return extra ? `${KEY_PREFIX}lb:${lookId}:${extra}` : `${KEY_PREFIX}lb:${lookId}`;
+  return extra ? `${KEY_PREFIX}lb:v2:${lookId}:${extra}` : `${KEY_PREFIX}lb:v2:${lookId}`;
 }
 
 /** JPEG data URL, long edge capped. Used to shrink On-me payloads. */

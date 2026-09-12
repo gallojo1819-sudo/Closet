@@ -1,5 +1,14 @@
 import { canonicalize, harmony } from "./color.ts";
-import { daysIdle, housesOf, lookHouses, slotOf } from "./style.ts";
+import {
+  daysIdle,
+  housesOf,
+  isCampCollar,
+  isFairIsle,
+  isGraphic,
+  leadHouse,
+  lookHouses,
+  slotOf,
+} from "./style.ts";
 import type { Garment, Look } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
@@ -19,11 +28,70 @@ function bySlot(pool: Garment[], slot: "top" | "bottom" | "footwear" | "outerwea
 }
 
 function loud(g: Garment): boolean {
-  return LOUD.test(`${g.name} ${g.subtype} ${g.notes}`);
+  return LOUD.test(`${g.name} ${g.subtype} ${g.notes}`) || isGraphic(g);
+}
+
+function blobOf(g: Garment): string {
+  return `${g.subtype} ${g.name}`.toLowerCase();
+}
+
+function isJeanOrChino(g: Garment): boolean {
+  return /\b(chinos?|jeans?|denim)\b/.test(blobOf(g));
+}
+
+function isSneaker(g: Garment): boolean {
+  return /sneaker|trainer|\b990\b/.test(blobOf(g));
+}
+
+function isLoaferOrMule(g: Garment): boolean {
+  return /loafer|mule/.test(blobOf(g));
+}
+
+function isPleatedOrTrouser(g: Garment): boolean {
+  const b = blobOf(g);
+  if (isJeanOrChino(g)) return false;
+  return /pleat|trouser/.test(b);
+}
+
+function isOxfordPiece(g: Garment): boolean {
+  return /oxford/.test(blobOf(g)) && slotOf(g) === "top";
+}
+
+function isDressKnit(g: Garment): boolean {
+  const b = blobOf(g);
+  if (isGraphic(g)) return false;
+  return /knit|sweater|merino|cable/.test(b) && (/burgundy|wine|dress|cable|merino/.test(b) || g.formality >= 3);
+}
+
+function isLayerTop(g: Garment): boolean {
+  const s = slotOf(g);
+  return s === "top" || s === "dress";
+}
+
+/** Graphic top + Italian/Ralph leather is costume. Two loud graphics don't share a look. */
+export function lookClashes(pieces: Garment[]): boolean {
+  if (pieces.filter(loud).length >= 2) return true;
+  if (pieces.filter(isGraphic).length >= 2) return true;
+  const camps = pieces.filter(isCampCollar);
+  if (camps.length && pieces.filter(isLayerTop).length > 1) return true;
+  const graphic = pieces.find(isGraphic);
+  if (!graphic) return false;
+  const rest = pieces.filter((g) => g.id !== graphic.id);
+  if (rest.some(isLoaferOrMule)) return true;
+  if (rest.some(isPleatedOrTrouser)) return true;
+  if (rest.some(isOxfordPiece)) return true;
+  if (rest.some(isCampCollar)) return true;
+  if (rest.some(isFairIsle)) return true;
+  if (rest.some(isDressKnit)) return true;
+  return false;
+}
+
+function graphicPartnersOk(bottom: Garment, shoe: Garment): boolean {
+  return isJeanOrChino(bottom) && isSneaker(shoe);
 }
 
 function clashes(pieces: Garment[]): boolean {
-  return pieces.filter(loud).length >= 2;
+  return lookClashes(pieces);
 }
 
 function pieceScore(g: Garment, today: string): number {
@@ -38,9 +106,11 @@ function comboScore(pieces: Garment[], today: string): number {
   const spread = Math.max(...forms) - Math.min(...forms);
   s += 4 - Math.min(spread, 4);
   for (const g of pieces) s += pieceScore(g, today);
+  const lead = leadHouse(pieces);
   const houseLists = pieces.map((p) => housesOf(p));
   const shared = houseLists.reduce((acc, hs) => acc.filter((h) => hs.includes(h)));
   if (shared.length) s += 1.5;
+  s += pieces.filter((g) => housesOf(g).includes(lead)).length * 0.4;
   s += harmony(pieces);
   return s;
 }
@@ -66,6 +136,7 @@ function rotate<T>(list: T[], salt: number): T[] {
 }
 
 function occasionOf(pieces: Garment[]): string {
+  if (pieces.some(isGraphic)) return "weekend";
   const avg = pieces.reduce((n, g) => n + g.formality, 0) / pieces.length;
   if (avg >= 4) return "client";
   if (avg <= 2) return "weekend";
@@ -86,7 +157,7 @@ function nameOf(pieces: Garment[]): string {
 }
 
 function lookId(ids: string[]): string {
-  return `lb_${ids.join("_")}`;
+  return `lb2_${ids.join("_")}`;
 }
 
 function shouldOuter(outer: Garment, core: Garment[]): boolean {
@@ -98,9 +169,11 @@ function shouldOuter(outer: Garment, core: Garment[]): boolean {
 }
 
 function attachOuter(core: Garment[], outers: Garment[], today: string): Garment[] {
+  if (core.some(isGraphic)) return core;
   const ranked = rank(outers, today);
   for (const o of ranked) {
     if (core.some((g) => g.id === o.id)) continue;
+    if (slotOf(o) !== "outerwear") continue;
     if (!shouldOuter(o, core)) continue;
     const next = [...core, o];
     if (clashes(next)) continue;
@@ -137,9 +210,11 @@ export function buildLookbook(
 
   const tryAdd = (core: Garment[], mustCover = false): boolean => {
     if (core.length < 3) return false;
-    if (!mustCover && clashes(core)) return false;
+    if (clashes(core)) return false;
+    void mustCover;
     const hasOuter = core.some((g) => slotOf(g) === "outerwear");
     const pieces = hasOuter ? core : attachOuter(core, outers, todayWorn);
+    if (clashes(pieces)) return false;
     const ids = pieces.map((g) => g.id);
     const key = lookId(ids);
     if (used.has(key)) return false;
@@ -171,9 +246,10 @@ export function buildLookbook(
       for (const b of bCands) {
         for (const f of fCands) {
           if (new Set([t.id, b.id, f.id]).size < 3) continue;
+          if (isGraphic(t) && !graphicPartnersOk(b, f)) continue;
           let core: Garment[] = [t, b, f];
           if (slot === "outerwear") core = [...core, focus];
-          if (!mustCover && clashes(core)) continue;
+          if (clashes(core)) continue;
           const h = harmony(core);
           const uncovered = core.filter((g) => (count.get(g.id) ?? 0) === 0).length;
           scored.push({ core, s: comboScore(core, todayWorn) + uncovered * 3, h });
@@ -221,6 +297,7 @@ export function buildLookbook(
       for (const b of Bs) {
         for (const f of Fs) {
           if (new Set([t.id, b.id, f.id]).size < 3) continue;
+          if (isGraphic(t) && !graphicPartnersOk(b, f)) continue;
           const core = slot === "outerwear" ? [t, b, f, g] : [t, b, f];
           if (tryAdd(core, true)) {
             placed = true;
@@ -292,11 +369,28 @@ export function lookbookStats(
   };
 }
 
-export function mergeLookbook(existing: Look[], book: Look[]): Look[] {
-  // Auto builder ids are lb_*. Stylist/manual lookbook cards must survive a rebuild.
-  const kept = existing.filter((l) => !l.lookbook || !l.id.startsWith("lb_"));
+export function mergeLookbook(
+  existing: Look[],
+  book: Look[],
+  garments: Garment[] = [],
+): Look[] {
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  const valid = (l: Look) => {
+    if (!garments.length) return true;
+    const pieces = l.garmentIds
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => Boolean(g));
+    if (pieces.length < 2) return true;
+    return !lookClashes(pieces);
+  };
+  // Auto builder ids are lb_*. Invalid hoodie+Italian looks drop even if saved.
+  const kept = existing.filter(
+    (l) => (!l.lookbook || !l.id.startsWith("lb_")) && valid(l),
+  );
   const keys = new Set(kept.map((l) => [...l.garmentIds].sort().join("|")));
-  const extra = book.filter((b) => !keys.has([...b.garmentIds].sort().join("|")));
+  const extra = book.filter(
+    (b) => valid(b) && !keys.has([...b.garmentIds].sort().join("|")),
+  );
   return [...kept, ...extra];
 }
 

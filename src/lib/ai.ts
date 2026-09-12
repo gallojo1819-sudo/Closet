@@ -238,8 +238,9 @@ export const onMePreview = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<EditResult> => {
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
     if (!data.refImage) return { ok: false, error: "No reference photo." };
-    const prompt = `Image 1 is THIS man. Images 2+ are separate garments.
-Put them on him as layers: outer on top of top, top on bottom, shoes on feet.
+    const prompt = `Image 1 is THIS man. Same face, hair, beard or none. Forbidden: stock campaign model, different man, invented "90s" knit, extra hoodie that was not sent.
+Images 2+ are separate garments. Only garments in images 2+. Put them on him as layers: outer on top of top, top on bottom, shoes on feet.
+If the top is a camp collar, he wears that camp collar — no hoodie.
 Do NOT morph two garments into one.
 Do NOT copy a logo, stripe, flag, or "90s" from garment A onto garment B.
 Do NOT invent a hybrid knit. If only one top image is sent, that is the only top — no extra hoodie.

@@ -333,8 +333,8 @@ export const useCloset = create<ClosetState>()(
         const s = get();
         if (!s.hydrated) return;
         if (s.garments.length === 0) return;
-        const book = buildLookbook(s.garments, undefined, salt ?? 0);
-        const next = mergeLookbook(s.looks, book);
+        const book = buildLookbook(s.garments, undefined, salt ?? 2);
+        const next = mergeLookbook(s.looks, book, s.garments);
         const key = (looks: Look[]) =>
           looks.map((l) => `${l.lookbook ? "b" : "k"}:${l.id}`).join("|");
         if (key(s.looks) === key(next)) return;

@@ -52,10 +52,20 @@ export function daysIdle(g: Garment, today = todayISO()): number {
 export function housesOf(g: Garment): House[] {
   const blob = `${g.subtype} ${g.name} ${g.material} ${g.colors.join(" ")} ${g.notes}`.toLowerCase();
   const houses = new Set<House>();
-  if (/oxford|polo|chino|cable|blazer/.test(blob)) houses.add("ralph");
+  if (/oxford|polo|chino|cable|blazer/.test(blob) && !/\bhoodies?\b/.test(blob)) {
+    houses.add("ralph");
+  }
   if (/trouser/.test(blob) && g.formality >= 3) houses.add("ralph");
   if (/loafer/.test(blob) && g.formality >= 3) houses.add("ralph");
-  if (/navy/.test(blob) && g.formality >= 3 && g.formality <= 4) houses.add("ralph");
+  if (
+    /navy/.test(blob) &&
+    g.formality >= 3 &&
+    g.formality <= 4 &&
+    !/\bhoodies?\b/.test(blob)
+  ) {
+    houses.add("ralph");
+  }
+  if (/\bhoodies?\b|graphic|90s|90's|\bflag\b/.test(blob)) houses.add("ald");
   if (/rugby|oversized|yankee|\b990\b|new balance/.test(blob)) houses.add("ald");
   if (g.formality >= 2 && g.formality <= 3 && /jean|cap|loafer|cream/.test(blob)) {
     houses.add("ald");
@@ -102,30 +112,26 @@ function blobOf(g: Garment): string {
   return `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
 }
 
-function isHoodiePiece(g: Garment): boolean {
-  return /\bhoodies?\b/.test(blobOf(g));
+export function isHoodiePiece(g: Garment): boolean {
+  return /\b(hoodies?|sweatshirts?)\b/.test(blobOf(g));
 }
 
-/**
- * Graphic / 90s hoodie with pleated trousers and loafers is costume.
- * ALD hoodie only with jean and sneaker. Hoodie is never a coat.
- */
-export function houseMixPenalty(pieces: Garment[]): number {
-  const hoodie = pieces.some(isHoodiePiece);
-  if (!hoodie) return 0;
-  const blob = pieces.map((g) => `${g.subtype} ${g.name}`).join(" ").toLowerCase();
-  const jean = /\bjeans?\b|denim/.test(blob);
-  const sneaker = /sneaker|trainer|\b990\b/.test(blob);
-  const loafer = /loafer/.test(blob);
-  const trouser = /trouser|pleat|chino/.test(blob);
-  const sweet = /fair\s*isle|gingham|cable|cord/.test(blob);
-  let p = 0;
-  if (trouser && loafer) p -= 16;
-  else if (trouser) p -= 10;
-  else if (loafer && !jean) p -= 10;
-  if (sweet) p -= 10;
-  if (jean && sneaker) p += 1;
-  return p;
+export function isCampCollar(g: Garment): boolean {
+  return /camp/.test(blobOf(g));
+}
+
+export function isFairIsle(g: Garment): boolean {
+  return /fair\s*isle/.test(blobOf(g));
+}
+
+/** 90s / flag / logo / hoodie / printed sweatshirt. Weekend ALD only. */
+export function isGraphic(g: Garment): boolean {
+  const b = blobOf(g);
+  if (/\bhoodies?\b/.test(b)) return true;
+  if (/90s|90's/.test(b)) return true;
+  if (/\bflag\b|\blogo\b|graphic/.test(b)) return true;
+  if (/\bsweatshirts?\b/.test(b) && /print|printed|graphic|flag|logo|90/.test(b)) return true;
+  return false;
 }
 
 /** Occasion briefs: mixed houses, not costume. Penalties beat idle. */
@@ -159,8 +165,15 @@ function occasionScore(g: Garment, occasion: Occasion): number {
     if (oxford) s += 1.5;
   } else if (occasion === "weekend") {
     if (jean || sneaker || polo) s += 1.5;
+    if (/\bhoodies?\b/.test(b)) s += 1;
   } else if (occasion === "travel") {
     if (knit || overshirt || sneaker || loafer) s += 1.5;
+  }
+  if (
+    (occasion === "weekday" || occasion === "client" || occasion === "dinner") &&
+    /\bhoodies?\b|90s|graphic/.test(b)
+  ) {
+    s -= 6;
   }
   return s;
 }
@@ -185,17 +198,21 @@ export function slotOf(g: Garment): Slot | null {
   const blob = `${g.subtype} ${g.name}`.toLowerCase();
   const footwear = /\b(shoes?|loafers?|mules?|sneakers?|boots?|booties)\b/.test(blob);
   const bottom = /\b(pants?|chinos?|jeans?|trousers?|shorts?)\b/.test(blob);
+  const hoodieTop = /\b(hoodies?|sweatshirts?|graphic\s*knits?)\b/.test(blob);
   const top =
+    hoodieTop ||
     /\b(t-shirts?|tees?|shirts?|oxfords?|polos?|knits?|sweaters?|rugbys?|cardigans?|jumpers?|pullovers?|crewnecks?|henleys?|cable[- ]?knits?|zip[- ]?(up)?\s*(sweater|knit)?)\b/.test(
       blob,
     );
   const outer =
-    /\b(jackets?|coats?|overshirts?|blazers?|bombers?|parkas?|trench|puffers?|windbreakers?|anoraks?|hoodies?|shearlings?)\b/.test(
+    /\b(jackets?|coats?|overshirts?|blazers?|bombers?|parkas?|trench|puffers?|windbreakers?|anoraks?|shearlings?)\b/.test(
       blob,
     );
   // "boot cut jeans" is bottom; a lone "loafer" is never pants.
   if (footwear && !bottom) return "footwear";
   if (bottom) return "bottom";
+  // Hoodie / sweatshirt / graphic knit is a top, never a coat.
+  if (hoodieTop) return "top";
   if (top) return "top";
   if (outer) return "outerwear";
   if (g.category === "other") return null;
@@ -203,6 +220,46 @@ export function slotOf(g: Garment): Slot | null {
     return g.category as Slot;
   }
   return null;
+}
+
+/**
+ * Graphic / 90s hoodie with pleated trousers and loafers is costume.
+ * ALD hoodie only with jean/chino and sneaker. Hoodie is never a coat.
+ */
+export function houseMixPenalty(pieces: Garment[]): number {
+  const graphic = pieces.find(isGraphic);
+  if (!graphic) return 0;
+  const rest = pieces.filter((g) => g.id !== graphic.id);
+  const blob = rest.map((g) => `${g.subtype} ${g.name}`).join(" ").toLowerCase();
+  let p = 0;
+  if (rest.some(isCampCollar) || rest.some(isFairIsle)) p -= 16;
+  if (/loafer|mule|pleat/.test(blob)) p -= 16;
+  if (/\boxfords?\b/.test(blob)) p -= 12;
+  if (/trouser/.test(blob) && !/\b(chinos?|jeans?)\b/.test(blob)) p -= 16;
+  const jean = /\bjeans?\b|denim/.test(blob);
+  const chino = /chino/.test(blob);
+  const sneaker = /sneaker|trainer|\b990\b/.test(blob);
+  if ((jean || chino) && sneaker) p += 2;
+  return p;
+}
+
+/** House the TOP belongs to. The look follows that house. */
+export function leadHouse(pieces: Garment[]): House {
+  const top =
+    pieces.find((g) => {
+      const s = slotOf(g);
+      return s === "top" || s === "dress";
+    }) ?? pieces[0];
+  if (!top) return "ralph";
+  const b = blobOf(top);
+  if (isGraphic(top)) return "ald";
+  if (/sangallo|light cashmere/.test(b)) return "fiveFourFive";
+  if (/camp|linen/.test(b) && top.warmth <= 2) return "faloni";
+  if (/fair\s*isle|gingham|cord/.test(b)) return "sweetStable";
+  if (/rugby/.test(b)) return "ald";
+  if (/merino|flannel|cashmere|suede/.test(b)) return "italianWinter";
+  if (/oxford|polo|cable|blazer/.test(b)) return "ralph";
+  return housesOf(top)[0] ?? "ralph";
 }
 
 export function pickLook(

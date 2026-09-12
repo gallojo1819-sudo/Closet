@@ -51,6 +51,18 @@ describe("slotOf", () => {
       slotOf(piece({ id: "x", name: "Boot cut jeans", category: "other", subtype: "jean" })),
       "bottom",
     );
+    assert.equal(
+      slotOf(piece({ id: "x", name: "Black 90s hoodie", category: "outerwear", subtype: "hoodie" })),
+      "top",
+    );
+    assert.equal(
+      slotOf(piece({ id: "x", name: "Flag sweatshirt", category: "top", subtype: "sweatshirt" })),
+      "top",
+    );
+    assert.equal(
+      slotOf(piece({ id: "x", name: "Navy bomber", category: "outerwear", subtype: "bomber" })),
+      "outerwear",
+    );
   });
 });
 

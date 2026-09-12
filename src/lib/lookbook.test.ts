@@ -145,6 +145,82 @@ describe("buildLookbook", () => {
     const stats = lookbookStats(looks, g);
     assert.equal(stats.unusedNames.length, 0);
   });
+
+  it("90s hoodie only with jean/sneaker, never cream pleated + loafer", () => {
+    const g = [
+      ...closet(2, 2, 2),
+      piece({
+        id: "hood",
+        name: "Black 90s hoodie",
+        category: "outerwear",
+        subtype: "hoodie",
+        formality: 2,
+      }),
+      piece({
+        id: "pleat",
+        name: "Cream pleated trousers",
+        category: "bottom",
+        subtype: "trouser",
+        formality: 4,
+      }),
+      piece({
+        id: "jean",
+        name: "Indigo jeans",
+        category: "bottom",
+        subtype: "jean",
+        formality: 2,
+      }),
+      piece({
+        id: "sn",
+        name: "White sneakers",
+        category: "footwear",
+        subtype: "sneaker",
+        formality: 1,
+      }),
+      piece({
+        id: "fair",
+        name: "Cream fair isle",
+        category: "top",
+        subtype: "knit",
+      }),
+      piece({
+        id: "camp",
+        name: "Linen camp collar",
+        category: "top",
+        subtype: "shirt",
+        warmth: 1,
+      }),
+    ];
+    const looks = buildLookbook(g, "2026-09-12");
+    const hoodLooks = looks.filter((l) => l.garmentIds.includes("hood"));
+    assert.ok(hoodLooks.length >= 1, "hoodie must still appear on weekend/jean");
+    for (const l of hoodLooks) {
+      assert.equal(l.occasion, "weekend");
+      assert.ok(!l.garmentIds.includes("pleat"), `hoodie on pleats: ${l.name}`);
+      assert.ok(!l.garmentIds.includes("s1"), `hoodie on loafers: ${l.name}`);
+      assert.ok(!l.garmentIds.includes("fair"), `hoodie on fair isle: ${l.name}`);
+      assert.ok(!l.garmentIds.includes("camp"), `hoodie on camp collar: ${l.name}`);
+      assert.ok(
+        l.garmentIds.includes("jean") || l.garmentIds.some((id) => /^b\d+$/.test(id)),
+        `hoodie without jean/chino: ${l.name}`,
+      );
+      assert.ok(l.garmentIds.includes("sn"), `hoodie without sneaker: ${l.name}`);
+    }
+    for (const l of looks.filter((x) => x.garmentIds.includes("fair"))) {
+      assert.ok(!l.garmentIds.includes("hood"), `fair isle look has 90s hoodie: ${l.name}`);
+    }
+    for (const l of looks.filter((x) => x.garmentIds.includes("camp"))) {
+      assert.ok(!l.garmentIds.includes("hood"), `camp look has hoodie: ${l.name}`);
+    }
+    const invalid = looks.filter(
+      (l) =>
+        l.lookbook &&
+        l.garmentIds.includes("hood") &&
+        (l.garmentIds.includes("pleat") || l.garmentIds.includes("s1")),
+    );
+    const dropped = mergeLookbook(invalid, looks, g);
+    assert.ok(!dropped.some((l) => l.garmentIds.includes("hood") && l.garmentIds.includes("pleat")));
+  });
 });
 
 describe("moreLikeThis", () => {

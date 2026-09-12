@@ -38,12 +38,22 @@ describe("layersForOnMe", () => {
     const topIds = sent.filter((x) => x.category === "top" || /hoodie|knit|fair/i.test(x.name));
     const ids = sent.map((x) => x.id);
     assert.ok(ids.includes("b") && ids.includes("s"));
-    assert.equal(
-      sent.filter((x) => x.id === "fair" || x.id === "hood").length,
-      1,
-      `sent both knits: ${ids.join(",")}`,
-    );
+    assert.ok(ids.includes("fair"), `fair isle missing: ${ids.join(",")}`);
+    assert.ok(!ids.includes("hood"), `90s hoodie sent with fair isle: ${ids.join(",")}`);
     assert.ok(topIds.length <= 2);
+  });
+
+  it("camp collar is the only top — no hoodie", () => {
+    const look = [
+      g({ id: "camp", name: "Linen camp collar", category: "top", subtype: "shirt" }),
+      g({ id: "hood", name: "Black 90s hoodie", category: "outerwear", subtype: "hoodie" }),
+      g({ id: "b", name: "Cream trousers", category: "bottom", subtype: "trouser" }),
+      g({ id: "s", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const sent = layersForOnMe(look);
+    const ids = sent.map((x) => x.id);
+    assert.ok(ids.includes("camp"));
+    assert.ok(!ids.includes("hood"), `hoodie sent on camp collar: ${ids.join(",")}`);
   });
 
   it("does not send hoodie as a second outer on a knit", () => {
