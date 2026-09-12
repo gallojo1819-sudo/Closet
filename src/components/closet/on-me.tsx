@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { onMePreview } from "@/lib/ai";
 import { blobToDataUrl, getImage, resolveImage } from "@/lib/images";
 import { useCloset } from "@/lib/store";
@@ -27,6 +28,11 @@ function useOnMe(pieces: Garment[]) {
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (refPhoto) return;
+    setImage(null);
+  }, [refPhoto]);
+
   const run = async () => {
     if (!refPhoto || !pieces.length) return;
     setBusy(true);
@@ -45,6 +51,7 @@ function useOnMe(pieces: Garment[]) {
         .map((g) => `${g.name} (${[g.colors.join("/"), g.subtype || g.category].filter(Boolean).join(" ")})`)
         .join(", ");
       const res = await onMePreview({ data: { refImage, cutouts, pieces: list } });
+      if (useCloset.getState().refPhoto !== refPhoto) return;
       if (res.ok) setImage(res.image);
       else setError(res.error);
     } catch (e) {
@@ -60,7 +67,6 @@ function useOnMe(pieces: Garment[]) {
     image,
     error,
     run,
-    noRef: () => setError(NO_REF),
     clear: () => setImage(null),
   };
 }
@@ -77,7 +83,7 @@ export function OnMeButton({ pieces }: { pieces: Garment[] }) {
         type="button"
         disabled={preview.busy || !pieces.length}
         title={preview.refPhoto ? undefined : NO_REF}
-        onClick={() => (preview.refPhoto ? void preview.run() : preview.noRef())}
+        onClick={() => (preview.refPhoto ? void preview.run() : openRefPhotoDialog())}
         className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40 inline-flex items-center gap-2"
       >
         {preview.busy && <Loader2 className="size-3 animate-spin" />}
@@ -107,6 +113,13 @@ export function OnMeButton({ pieces }: { pieces: Garment[] }) {
 /** Today's "On me" toggle view: the preview lives in the layout, not a modal. */
 export function OnMePanel({ pieces }: { pieces: Garment[] }) {
   const preview = useOnMe(pieces);
+  const hydrated = useCloset((s) => s.hydrated);
+
+  useEffect(() => {
+    if (!hydrated || preview.refPhoto) return;
+    openRefPhotoDialog();
+  }, [hydrated, preview.refPhoto]);
+
   return (
     <div className="border border-hairline bg-paper-deep aspect-[4/5] flex flex-col">
       {preview.image ? (
@@ -123,17 +136,21 @@ export function OnMePanel({ pieces }: { pieces: Garment[] }) {
                 ? "One editorial frame of you in this exact look. Generated on demand — never saved over your photos."
                 : NO_REF)}
           </p>
-          {preview.refPhoto && (
-            <button
-              type="button"
-              disabled={preview.busy || !pieces.length}
-              onClick={() => void preview.run()}
-              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40 inline-flex items-center gap-2"
-            >
-              {preview.busy && <Loader2 className="size-3 animate-spin" />}
-              {preview.busy ? "Dressing you…" : "Generate preview"}
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={preview.busy || (Boolean(preview.refPhoto) && !pieces.length)}
+            onClick={() =>
+              preview.refPhoto ? void preview.run() : openRefPhotoDialog()
+            }
+            className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40 inline-flex items-center gap-2"
+          >
+            {preview.busy && <Loader2 className="size-3 animate-spin" />}
+            {preview.busy
+              ? "Dressing you…"
+              : preview.refPhoto
+                ? "Generate preview"
+                : "Set reference photo"}
+          </button>
         </div>
       )}
       <p className="micro px-3 py-2 text-ink-soft border-t border-hairline">
