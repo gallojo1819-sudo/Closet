@@ -168,26 +168,17 @@ async function imageFromEditJson(json: unknown): Promise<EditResult> {
   return { ok: false, error: "Edit came back empty." };
 }
 
-async function imagineEdit(prompt: string, urls: string[]): Promise<EditResult> {
-  const all = urls.filter(Boolean).slice(0, 5);
-  if (!all.length) return { ok: false, error: "No image to edit." };
-  const first = all[0]!;
-  const parts = all.map(imageUrlPart);
-  let r = await xaiFetch("https://api.x.ai/v1/images/edits", {
+async function imagineEdit(prompt: string, url: string): Promise<EditResult> {
+  if (!url) return { ok: false, error: "No image to edit." };
+  const r = await xaiFetch("https://api.x.ai/v1/images/edits", {
     model: "grok-imagine-image-2.0",
     prompt,
-    image: imageUrlPart(first),
-    images: parts,
+    image: imageUrlPart(url),
   });
-  if (!r.ok && (r.status === 403 || r.status === 422)) {
-    r = await xaiFetch("https://api.x.ai/v1/images/edits", {
-      model: "grok-imagine-image-2.0",
-      prompt,
-      image: parts,
-    });
-  }
   if (!r.ok) return { ok: false, error: r.error };
-  return imageFromEditJson(r.json);
+  const got = await imageFromEditJson(r.json);
+  if (!got.ok) return { ok: false, error: r.error || got.error };
+  return got;
 }
 
 export const aiStatus = createServerFn({ method: "GET" }).handler(async () => {
@@ -223,7 +214,7 @@ export const printGarment = createServerFn({ method: "POST" })
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Set XAI_API_KEY for catalog covers." };
     return imagineEdit(
       "Product photograph of the SINGLE garment only. Keep the exact garment: color, fabric, stitching, hardware, logos, wear. Remove floor, walls, hangers, people, webpage chrome, prices, IDs, buttons, color swatches, text. Lay the garment (or pair of shoes) neatly on a solid #F4EFE6 paper, 4:5, garment filling ~80% of the frame, even light, no shadow theater. Do not invent a different item, brand, or color.",
-      [data.image],
+      data.image,
     );
   });
 
@@ -237,7 +228,7 @@ export const recolorCover = createServerFn({ method: "POST" })
       `This is the SAME garment. Change ONLY the fabric color to ${color}.
 Keep cut, stitching, pockets, hardware, wrinkles, logos. Do not turn pants into a shirt.
 Lay on #F4EFE6 paper, 4:5, fill ~80%. No extra garments, no model, no text.`,
-      [data.image],
+      data.image,
     );
   });
 
@@ -252,19 +243,18 @@ Full-body editorial, standing, both arms relaxed, plain studio #F4EFE6 or light 
 Images 2+ are the EXACT garments. Put ONLY those on him. Do not add a shirt under a sweater, a belt, a watch, or a second shoe unless that piece is one of the images.
 If a knit is in the look and no shirt image was sent, the knit is the only top — no invented oxford.
 ${data.pieces}`;
-    const joe = imageUrlPart(data.refImage);
-    const images = [joe, ...data.cutouts.slice(0, 4).map(imageUrlPart)];
+    const urls = [data.refImage, ...data.cutouts.slice(0, 4)].filter(Boolean);
+    const images = urls.map(imageUrlPart);
     let r = await xaiFetch("https://api.x.ai/v1/images/edits", {
       model: "grok-imagine-image-2.0",
       prompt,
-      image: joe,
       images,
     });
-    if (!r.ok && (r.status === 403 || r.status === 422)) {
+    if (!r.ok && r.status === 422) {
       r = await xaiFetch("https://api.x.ai/v1/images/edits", {
         model: "grok-imagine-image-2.0",
         prompt,
-        image: images,
+        images: urls,
       });
     }
     if (!r.ok) return { ok: false, error: r.error };
