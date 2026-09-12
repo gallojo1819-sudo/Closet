@@ -56,6 +56,7 @@ export function Studio() {
   const [failed, setFailed] = useState<string[]>([]);
   const [rejected, setRejected] = useState<string[]>([]);
   const [dupes, setDupes] = useState<string[]>([]);
+  const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved[]>([]);
   const [canPrint, setCanPrint] = useState<boolean | null>(null);
   const [url, setUrl] = useState("");
@@ -285,6 +286,8 @@ export function Studio() {
       ensureLookbook();
       setBusy(false);
       setProgress("");
+      const count = useCloset.getState().garments.filter((g) => !g.archived).length;
+      if (count > 0) setSavedFlash(`Saved on this URL · ${count} pieces.`);
       if (misses.length) setFailed((cur) => [...misses, ...cur]);
       if (pages.length) setRejected((cur) => [...pages, ...cur]);
       if (already.length) setDupes((cur) => [...already, ...cur]);
@@ -344,6 +347,9 @@ export function Studio() {
         productUrl: listing.pageUrl,
       });
       setSaved((cur) => [piece, ...cur]);
+      setSavedFlash(
+        `Saved on this URL · ${useCloset.getState().garments.filter((g) => !g.archived).length} pieces.`,
+      );
       setUrl("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not use that link.");
@@ -598,6 +604,11 @@ export function Studio() {
         <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
           No XAI_API_KEY here — listings still work. Hangtag identify and catalog
           covers need the key.
+        </p>
+      )}
+      {savedFlash && (
+        <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
+          {savedFlash}
         </p>
       )}
       {error && (

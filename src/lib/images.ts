@@ -31,6 +31,60 @@ export function isIdbKey(src: string | undefined | null): src is string {
   return typeof src === "string" && src.startsWith(KEY_PREFIX);
 }
 
+export const CLOSET_META_KEY = `${KEY_PREFIX}closet:meta`;
+
+export async function putClosetMeta(meta: {
+  garments: unknown[];
+  looks?: unknown;
+  journal?: unknown;
+  avoid?: unknown;
+  drop?: unknown;
+  refPhoto?: unknown;
+  refPhotoBackup?: unknown;
+  messages?: unknown;
+}): Promise<void> {
+  const blob = new Blob([JSON.stringify({ v: 6, ...meta })], {
+    type: "application/json",
+  });
+  await putImage(CLOSET_META_KEY, blob);
+}
+
+export async function getClosetMeta(): Promise<{
+  v?: number;
+  garments: unknown[];
+  looks?: unknown;
+  journal?: unknown;
+  avoid?: unknown;
+  drop?: unknown;
+  refPhoto?: unknown;
+  refPhotoBackup?: unknown;
+  messages?: unknown;
+} | null> {
+  const blob = await getImage(CLOSET_META_KEY);
+  if (!blob) return null;
+  try {
+    const data = JSON.parse(await blob.text()) as {
+      garments?: unknown;
+      looks?: unknown;
+      journal?: unknown;
+      avoid?: unknown;
+      drop?: unknown;
+      refPhoto?: unknown;
+      refPhotoBackup?: unknown;
+      messages?: unknown;
+      v?: number;
+    };
+    if (!Array.isArray(data.garments) || data.garments.length === 0) return null;
+    return { ...data, garments: data.garments };
+  } catch {
+    return null;
+  }
+}
+
+export async function clearClosetMeta(): Promise<void> {
+  await deleteImage(CLOSET_META_KEY);
+}
+
 export async function putImage(key: string, blob: Blob): Promise<void> {
   const db = await open();
   await new Promise<void>((resolve, reject) => {

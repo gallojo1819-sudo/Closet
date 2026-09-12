@@ -1,6 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mergeClosetPersist, persistGate, type PersistedCloset } from "./store-persist.ts";
+import {
+  mergeClosetPersist,
+  openPersistGate,
+  packPersist,
+  persistGate,
+  persistHasGarments,
+  type PersistedCloset,
+} from "./store-persist.ts";
 import type { Garment } from "./types.ts";
 
 function g(id: string): Garment {
@@ -73,8 +80,29 @@ describe("mergeClosetPersist", () => {
   });
 });
 
-describe("persistGate", () => {
-  it("starts closed so a pre-hydrate empty set cannot write", () => {
+describe("persistGate", { concurrency: false }, () => {
+  it("openPersistGate allows writes after a closed gate", () => {
+    persistGate.open = false;
     assert.equal(persistGate.open, false);
+    openPersistGate();
+    assert.equal(persistGate.open, true);
+    persistGate.open = false;
+  });
+});
+
+describe("persistHasGarments", () => {
+  it("treats missing or empty persist as empty", () => {
+    assert.equal(persistHasGarments(null), false);
+    assert.equal(
+      persistHasGarments(packPersist({ ...empty, garments: [] })),
+      false,
+    );
+  });
+
+  it("sees garments in packed closet.v6 JSON", () => {
+    assert.equal(
+      persistHasGarments(packPersist({ ...empty, garments: [g("a")] })),
+      true,
+    );
   });
 });

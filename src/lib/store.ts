@@ -1,18 +1,32 @@
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
-import { dataUrlToBlob, deleteImage, getImage, isIdbKey, putImage, refImageKey } from "./images";
+import {
+  clearClosetMeta,
+  dataUrlToBlob,
+  deleteImage,
+  getClosetMeta,
+  getImage,
+  isIdbKey,
+  putClosetMeta,
+  putImage,
+  refImageKey,
+} from "./images";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
 import { buildLookbook, mergeLookbook } from "./lookbook";
 import {
   mergeClosetPersist,
+  openPersistGate,
+  packPersist,
   persistGate,
+  persistHasGarments,
+  unpackPersist,
   type PersistedCloset,
 } from "./store-persist";
 import { daysIdle, defaultOccasion, momentOfDay, pickLook, slotOf } from "./style";
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry, WeatherSnap } from "./types";
 import { todayISO, uid } from "./utils";
 
-export { mergeClosetPersist, persistGate };
+export { mergeClosetPersist, openPersistGate, persistGate };
 export type { PersistedCloset };
 
 type ClosetState = {
@@ -47,6 +61,7 @@ type ClosetState = {
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
   setRefPhoto: (key: string | null, backup?: string | null) => void;
   restoreRefPhoto: () => Promise<void>;
+  restoreFromIdbMeta: () => Promise<void>;
   ensureLookbook: () => void;
   loadSample: () => void;
   emptyCloset: () => void;
@@ -78,21 +93,51 @@ function pickDrop(
 }
 
 const guardedStorage: StateStorage = {
-  getItem: (name) => {
-    if (typeof localStorage === "undefined") return null;
-    try {
-      return localStorage.getItem(name);
-    } catch {
-      return null;
+  getItem: async (name) => {
+    let raw: string | null = null;
+    if (typeof localStorage !== "undefined") {
+      try {
+        raw = localStorage.getItem(name);
+      } catch {
+        raw = null;
+      }
     }
+    if (persistHasGarments(raw)) {
+      openPersistGate();
+      return raw;
+    }
+    try {
+      const meta = await getClosetMeta();
+      if (meta && Array.isArray(meta.garments) && meta.garments.length > 0) {
+        const packed = packPersist(meta as PersistedCloset);
+        if (typeof localStorage !== "undefined") {
+          try {
+            localStorage.setItem(name, packed);
+          } catch {
+            /* quota */
+          }
+        }
+        openPersistGate();
+        return packed;
+      }
+    } catch {
+      /* IDB unavailable */
+    }
+    openPersistGate();
+    return raw;
   },
   setItem: (name, value) => {
-    if (typeof localStorage === "undefined") return;
     if (!persistGate.open) return;
-    try {
-      localStorage.setItem(name, value);
-    } catch {
-      /* quota / private mode */
+    if (typeof localStorage !== "undefined") {
+      try {
+        localStorage.setItem(name, value);
+      } catch {
+        /* quota / private mode */
+      }
+    }
+    const state = unpackPersist(value);
+    if (state && state.garments.length > 0) {
+      void putClosetMeta(state).catch(() => {});
     }
   },
   removeItem: (name) => {
@@ -306,6 +351,32 @@ export const useCloset = create<ClosetState>()(
           ...(backup !== undefined ? { refPhotoBackup: backup } : {}),
         });
       },
+      restoreFromIdbMeta: async () => {
+        if (get().garments.length > 0) return;
+        const meta = await getClosetMeta();
+        if (!meta || !Array.isArray(meta.garments) || meta.garments.length === 0) return;
+        set({
+          garments: meta.garments as Garment[],
+          looks: Array.isArray(meta.looks) ? (meta.looks as Look[]) : get().looks,
+          journal: Array.isArray(meta.journal) ? (meta.journal as WearEntry[]) : get().journal,
+          avoid:
+            meta.avoid && typeof meta.avoid === "object"
+              ? (meta.avoid as Record<string, number>)
+              : get().avoid,
+          drop: "drop" in meta ? ((meta.drop as DailyDrop | null) ?? null) : get().drop,
+          refPhoto:
+            typeof meta.refPhoto === "string" || meta.refPhoto === null
+              ? (meta.refPhoto as string | null)
+              : get().refPhoto,
+          refPhotoBackup:
+            typeof meta.refPhotoBackup === "string" || meta.refPhotoBackup === null
+              ? (meta.refPhotoBackup as string | null)
+              : get().refPhotoBackup,
+          messages: Array.isArray(meta.messages)
+            ? (meta.messages as StylistMessage[])
+            : get().messages,
+        });
+      },
       restoreRefPhoto: async () => {
         const s = get();
         const key = s.refPhoto && isIdbKey(s.refPhoto) ? s.refPhoto : refImageKey();
@@ -347,6 +418,7 @@ export const useCloset = create<ClosetState>()(
           journal: [],
           avoid: {},
         });
+        void clearClosetMeta().catch(() => {});
         // Joe's body photo stays. Only Fit → Remove deletes it.
       },
       importCloset: (payload) => {
@@ -377,7 +449,7 @@ export const useCloset = create<ClosetState>()(
       merge: (persisted, current) => mergeClosetPersist(persisted, current),
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.error("[closet] rehydrate failed", error);
-        persistGate.open = true;
+        openPersistGate();
       },
     },
   ),

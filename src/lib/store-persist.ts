@@ -17,6 +17,31 @@ export type ClosetSnapshot = PersistedCloset & { hydrated: boolean };
 /** No localStorage writes until rehydrate finishes — empty first tick must not clobber closet.v6. */
 export const persistGate = { open: false };
 
+export function openPersistGate() {
+  persistGate.open = true;
+}
+
+export function packPersist(state: PersistedCloset): string {
+  return JSON.stringify({ state, version: 0 });
+}
+
+export function unpackPersist(raw: string | null): PersistedCloset | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { state?: PersistedCloset } | PersistedCloset;
+    const state = "state" in parsed && parsed.state ? parsed.state : (parsed as PersistedCloset);
+    if (!state || !Array.isArray(state.garments)) return null;
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+export function persistHasGarments(raw: string | null): boolean {
+  const state = unpackPersist(raw);
+  return Boolean(state && state.garments.length > 0);
+}
+
 export function mergeClosetPersist<T extends ClosetSnapshot>(
   persisted: unknown,
   current: T,

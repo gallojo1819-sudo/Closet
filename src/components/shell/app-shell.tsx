@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { migrateImagesToIdb } from "@/lib/migrate";
-import { useCloset } from "@/lib/store";
+import { openPersistGate, useCloset } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "./bottom-nav";
 import { TopBar } from "./top-bar";
@@ -18,12 +18,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.error("[closet] rehydrate failed", e);
       }
+      openPersistGate();
+      if (!live) return;
+      if (useCloset.getState().garments.length === 0) {
+        await useCloset.getState().restoreFromIdbMeta();
+      }
       if (!live) return;
       await useCloset.getState().restoreRefPhoto();
       if (!live) return;
       useCloset.setState({ hydrated: true });
       const s = useCloset.getState();
-      if (s.garments.length > 0) s.ensureLookbook();
+      if (s.garments.length > 0) {
+        useCloset.setState({ garments: s.garments });
+        s.ensureLookbook();
+      }
       void migrateImagesToIdb().catch(() => {});
     })();
     return () => {

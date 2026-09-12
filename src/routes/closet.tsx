@@ -175,7 +175,7 @@ function ClosetPage() {
           )}
           {hydrated && garments.length === 0 && (
             <p className="mt-2 micro text-ink-soft">
-              This browser/URL has an empty closet. Uploads live on the URL you added them on.
+              This URL’s closet is empty. localhost and Vercel are different closets. Open closet-ten-hazel.vercel.app if you uploaded there.
             </p>
           )}
           {waiting.length > 0 && (
