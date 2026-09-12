@@ -1,13 +1,14 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Layers, Shirt, Sparkles, SquarePlus, Sun } from "lucide-react";
+import { BookOpen, Layers, Shirt, Sparkles, SquarePlus, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { to: "/", label: "Today", icon: Sun },
   { to: "/closet", label: "Closet", icon: Shirt },
   { to: "/add", label: "Add", icon: SquarePlus },
-  { to: "/stylist", label: "Stylist", icon: Sparkles },
+  { to: "/lookbook", label: "Lookbook", icon: BookOpen },
   { to: "/outfits", label: "Outfits", icon: Layers },
+  { to: "/stylist", label: "Stylist", icon: Sparkles },
 ] as const;
 
 export function BottomNav() {
@@ -24,7 +25,7 @@ export function BottomNav() {
       )}
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <ul className="grid grid-cols-5 h-14">
+      <ul className="grid grid-cols-6 h-14">
         {TABS.map((tab) => {
           const active =
             tab.to === "/" ? pathname === "/" : pathname.startsWith(tab.to);

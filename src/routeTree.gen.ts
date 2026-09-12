@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AddRouteImport } from './routes/add'
 import { Route as ClosetRouteImport } from './routes/closet'
+import { Route as LookbookRouteImport } from './routes/lookbook'
 import { Route as OutfitsRouteImport } from './routes/outfits'
 import { Route as StylistRouteImport } from './routes/stylist'
 
@@ -30,6 +31,11 @@ const ClosetRoute = ClosetRouteImport.update({
   path: '/closet',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LookbookRoute = LookbookRouteImport.update({
+  id: '/lookbook',
+  path: '/lookbook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OutfitsRoute = OutfitsRouteImport.update({
   id: '/outfits',
   path: '/outfits',
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/closet': typeof ClosetRoute
+  '/lookbook': typeof LookbookRoute
   '/outfits': typeof OutfitsRoute
   '/stylist': typeof StylistRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/closet': typeof ClosetRoute
+  '/lookbook': typeof LookbookRoute
   '/outfits': typeof OutfitsRoute
   '/stylist': typeof StylistRoute
 }
@@ -60,21 +68,30 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
   '/closet': typeof ClosetRoute
+  '/lookbook': typeof LookbookRoute
   '/outfits': typeof OutfitsRoute
   '/stylist': typeof StylistRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/add' | '/closet' | '/outfits' | '/stylist'
+  fullPaths: '/' | '/add' | '/closet' | '/lookbook' | '/outfits' | '/stylist'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/closet' | '/outfits' | '/stylist'
-  id: '__root__' | '/' | '/add' | '/closet' | '/outfits' | '/stylist'
+  to: '/' | '/add' | '/closet' | '/lookbook' | '/outfits' | '/stylist'
+  id:
+    | '__root__'
+    | '/'
+    | '/add'
+    | '/closet'
+    | '/lookbook'
+    | '/outfits'
+    | '/stylist'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRoute
   ClosetRoute: typeof ClosetRoute
+  LookbookRoute: typeof LookbookRoute
   OutfitsRoute: typeof OutfitsRoute
   StylistRoute: typeof StylistRoute
 }
@@ -102,6 +119,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClosetRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lookbook': {
+      id: '/lookbook'
+      path: '/lookbook'
+      fullPath: '/lookbook'
+      preLoaderRoute: typeof LookbookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/outfits': {
       id: '/outfits'
       path: '/outfits'
@@ -123,6 +147,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRoute,
   ClosetRoute: ClosetRoute,
+  LookbookRoute: LookbookRoute,
   OutfitsRoute: OutfitsRoute,
   StylistRoute: StylistRoute,
 }

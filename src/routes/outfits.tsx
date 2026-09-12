@@ -11,7 +11,11 @@ import { useCloset } from "@/lib/store";
 export const Route = createFileRoute("/outfits")({ component: OutfitsPage });
 
 function OutfitsPage() {
-  const looks = useCloset((s) => s.looks);
+  const looksAll = useCloset((s) => s.looks);
+  const looks = useMemo(
+    () => looksAll.filter((l) => !l.lookbook),
+    [looksAll],
+  );
   const garmentsAll = useCloset((s) => s.garments);
   const garments = useMemo(
     () => garmentsAll.filter((g) => !g.archived),

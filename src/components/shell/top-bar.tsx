@@ -9,8 +9,9 @@ const NAV = [
   { to: "/", label: "Today" },
   { to: "/closet", label: "Closet" },
   { to: "/add", label: "Add" },
-  { to: "/stylist", label: "Stylist" },
+  { to: "/lookbook", label: "Lookbook" },
   { to: "/outfits", label: "Outfits" },
+  { to: "/stylist", label: "Stylist" },
 ];
 
 const REF_KEY = "idb:me:ref";

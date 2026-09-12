@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { deleteImage, isIdbKey } from "./images";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
+import { buildLookbook, mergeLookbook } from "./lookbook";
 import { daysIdle, defaultOccasion, momentOfDay, pickLook, slotOf } from "./style";
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry, WeatherSnap } from "./types";
 import { todayISO, uid } from "./utils";
@@ -34,6 +35,7 @@ type ClosetState = {
   swapDropPiece: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
   setRefPhoto: (key: string | null) => void;
+  ensureLookbook: () => void;
   loadSample: () => void;
   emptyCloset: () => void;
   importCloset: (payload: {
@@ -100,12 +102,15 @@ export const useCloset = create<ClosetState>()(
             avoid: replacingDemo ? {} : s.avoid,
           };
         });
+        get().ensureLookbook();
         return id;
       },
-      updateGarment: (id, patch) =>
+      updateGarment: (id, patch) => {
         set((s) => ({
           garments: s.garments.map((g) => (g.id === id ? { ...g, ...patch } : g)),
-        })),
+        }));
+        get().ensureLookbook();
+      },
       removeGarment: (id) => {
         const g = get().garments.find((x) => x.id === id);
         for (const src of [g?.imageSrc, g?.cutoutSrc]) {
@@ -124,6 +129,7 @@ export const useCloset = create<ClosetState>()(
               }
             : s.drop,
         }));
+        get().ensureLookbook();
       },
       wearToday: (ids) => {
         const day = todayISO();
@@ -236,6 +242,15 @@ export const useCloset = create<ClosetState>()(
             { ...m, id: uid("m"), createdAt: new Date().toISOString() },
           ],
         })),
+      ensureLookbook: () => {
+        const s = get();
+        const book = buildLookbook(s.garments);
+        const next = mergeLookbook(s.looks, book);
+        const key = (looks: Look[]) =>
+          looks.map((l) => `${l.lookbook ? "b" : "k"}:${l.id}`).join("|");
+        if (key(s.looks) === key(next)) return;
+        set({ looks: next });
+      },
       setRefPhoto: (key) => {
         const prev = get().refPhoto;
         if (prev && prev !== key && isIdbKey(prev)) {
@@ -243,7 +258,7 @@ export const useCloset = create<ClosetState>()(
         }
         set({ refPhoto: key });
       },
-      loadSample: () =>
+      loadSample: () => {
         set({
           garments: SEED_GARMENTS,
           looks: SEED_LOOKS,
@@ -251,8 +266,10 @@ export const useCloset = create<ClosetState>()(
           drop: null,
           journal: [],
           avoid: {},
-        }),
-      emptyCloset: () =>
+        });
+        get().ensureLookbook();
+      },
+      emptyCloset: () => {
         set({
           garments: [],
           looks: [],
@@ -260,15 +277,18 @@ export const useCloset = create<ClosetState>()(
           drop: null,
           journal: [],
           avoid: {},
-        }),
-      importCloset: (payload) =>
+        });
+      },
+      importCloset: (payload) => {
         set({
           garments: payload.garments,
           looks: payload.looks,
           journal: payload.journal,
           avoid: payload.avoid,
           drop: payload.drop,
-        }),
+        });
+        get().ensureLookbook();
+      },
     }),
     {
       name: "closet.v6",

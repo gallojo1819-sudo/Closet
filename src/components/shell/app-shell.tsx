@@ -13,6 +13,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void Promise.resolve(useCloset.persist.rehydrate()).finally(() => {
       useCloset.setState({ hydrated: true });
+      useCloset.getState().ensureLookbook();
       void migrateImagesToIdb().catch(() => {});
     });
   }, []);

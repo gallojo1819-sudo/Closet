@@ -50,6 +50,8 @@ export type Look = {
   occasion: string;
   garmentIds: string[];
   source: "ai" | "manual";
+  /** Auto Lookbook entry. Rebuilds may replace these; never wipe source "manual". */
+  lookbook?: boolean;
   createdAt: string;
 };
 
