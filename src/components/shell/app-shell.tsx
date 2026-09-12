@@ -40,6 +40,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    document.documentElement.classList.toggle("vt-night", night);
+  }, [night]);
+
+  useEffect(() => {
+    if (typeof document.startViewTransition === "function") return;
+    const main = document.querySelector("main");
+    if (!main) return;
+    main.classList.remove("route-enter");
+    void main.offsetWidth;
+    main.classList.add("route-enter");
+  }, [pathname]);
+
+  useEffect(() => {
     if (pathname !== "/lookbook" || !hydrated) return;
     const run = () => {
       if (useCloset.getState().garments.length > 0) {

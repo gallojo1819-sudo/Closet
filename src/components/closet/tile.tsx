@@ -24,7 +24,14 @@ export function GarmentTile({
         selected && "outline outline-1 outline-ink",
       )}
     >
-      <div className="relative bg-paper-deep border border-hairline overflow-hidden aspect-page transition-all duration-300 ease-[var(--ease-atelier)] group-hover:-translate-y-1.5 group-hover:shadow-[0_16px_36px_-14px_rgb(23_20_15/0.3)]">
+      <div
+        className="relative bg-paper-deep border border-hairline overflow-hidden aspect-page transition-all duration-300 ease-[var(--ease-atelier)] group-hover:-translate-y-1.5 group-hover:shadow-[0_16px_36px_-14px_rgb(23_20_15/0.3)]"
+        style={
+          selected && !selecting
+            ? undefined
+            : { viewTransitionName: `piece-${garment.id}` }
+        }
+      >
         <GarmentImg
           garment={garment}
           className="absolute inset-0 h-full w-full object-contain p-[8%]"

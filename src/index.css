@@ -1,0 +1,81 @@
+/* Motion: paper page-turn, night stays night, no bounce. */
+
+html {
+  background: var(--color-paper);
+}
+html.vt-night {
+  background: var(--color-night);
+  color: var(--color-champagne);
+}
+
+.theme-night {
+  transition:
+    background-color 280ms var(--ease-atelier),
+    color 280ms var(--ease-atelier);
+}
+
+::view-transition-group(root) {
+  animation-duration: 400ms;
+  animation-timing-function: var(--ease-atelier);
+  background: inherit;
+}
+
+::view-transition-old(root) {
+  animation: vt-spine-out 400ms var(--ease-atelier) both;
+}
+::view-transition-new(root) {
+  animation: vt-spine-in 400ms var(--ease-atelier) both;
+}
+
+@keyframes vt-spine-out {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(50% 0 50% 0);
+  }
+}
+@keyframes vt-spine-in {
+  from {
+    clip-path: inset(50% 0 50% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.route-enter {
+  animation: rise 280ms var(--ease-atelier) both;
+}
+
+.on-you-glass {
+  animation: glass-in 160ms var(--ease-atelier) both;
+}
+
+@keyframes glass-in {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+    background-color: rgb(255 255 255 / 0.08);
+  }
+  100% {
+    opacity: 1;
+    background-color: var(--color-paper);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+  .route-enter,
+  .on-you-glass {
+    animation: none;
+  }
+  .theme-night {
+    transition: none;
+  }
+}

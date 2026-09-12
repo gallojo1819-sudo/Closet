@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./index.css";
 @import "@fontsource/fraunces/latin-400.css";
 @import "@fontsource/fraunces/latin-400-italic.css";
 @import "@fontsource/fraunces/latin-600.css";

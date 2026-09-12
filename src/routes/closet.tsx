@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentDetail } from "@/components/closet/detail";
 import { IdleMount } from "@/components/closet/idle-mount";
@@ -127,7 +128,7 @@ function ClosetPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (openId) {
-        setOpenId(null);
+        setOpenPiece(null);
         return;
       }
       if (!selecting) return;
@@ -142,6 +143,15 @@ function ClosetPage() {
     () => (openId ? tileEls.current.get(openId) ?? null : null),
     [openId],
   );
+
+  const setOpenPiece = (id: string | null) => {
+    const go = () => flushSync(() => setOpenId(id));
+    if (typeof document !== "undefined" && "startViewTransition" in document) {
+      document.startViewTransition(go);
+      return;
+    }
+    go();
+  };
 
   const exitSelect = () => {
     setSelecting(false);
@@ -329,7 +339,7 @@ function ClosetPage() {
                     toggleSelected(g.id);
                     return;
                   }
-                  setOpenId((cur) => (cur === g.id ? null : g.id));
+                  setOpenPiece(openId === g.id ? null : g.id);
                 }}
               />
               </IdleMount>
@@ -342,7 +352,7 @@ function ClosetPage() {
           key={open.id}
           garment={open}
           getTile={getOpenTile}
-          onClose={() => setOpenId(null)}
+          onClose={() => setOpenPiece(null)}
         />
       )}
     </div>

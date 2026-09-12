@@ -243,7 +243,10 @@ export function GarmentDetail({
           {view === "me" ? (
             <OnMePanel pieces={[garment]} onUsePaper={() => setView("print")} />
           ) : (
-            <div className="bg-paper-deep aspect-page">
+            <div
+              className="bg-paper-deep aspect-page"
+              style={{ viewTransitionName: `piece-${garment.id}` }}
+            >
               {view === "print" ? (
                 <GarmentImg
                   garment={garment}

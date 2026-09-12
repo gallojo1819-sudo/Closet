@@ -203,15 +203,11 @@ function LookCard({
         <FlatLay pieces={pieces} className="border-0" />
         {showMe && painted && (
           <img
+            key={painted}
             src={painted}
             alt={look.name}
-            className="absolute inset-0 z-10 h-full w-full object-cover bg-paper"
+            className="on-you-glass absolute inset-0 z-10 h-full w-full object-cover bg-paper"
           />
-        )}
-        {dressing && (
-          <div className="absolute inset-x-0 bottom-0 z-20 h-0.5 bg-hairline">
-            <div className="h-full w-1/3 bg-ink animate-pulse" />
-          </div>
         )}
       </div>
       <p className="mt-3">{look.name}</p>
@@ -240,7 +236,7 @@ function LookCard({
               : "border-hairline text-ink-soft hover:border-hairline-strong",
           )}
         >
-          {dressing ? "Dressing you…" : "On you"}
+          {dressing ? "On you…" : "On you"}
         </button>
         {layer && (
           <button
