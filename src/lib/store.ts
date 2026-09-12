@@ -1,11 +1,19 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import { deleteImage, isIdbKey } from "./images";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
 import { buildLookbook, mergeLookbook } from "./lookbook";
+import {
+  mergeClosetPersist,
+  persistGate,
+  type PersistedCloset,
+} from "./store-persist";
 import { daysIdle, defaultOccasion, momentOfDay, pickLook, slotOf } from "./style";
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry, WeatherSnap } from "./types";
 import { todayISO, uid } from "./utils";
+
+export { mergeClosetPersist, persistGate };
+export type { PersistedCloset };
 
 type ClosetState = {
   garments: Garment[];
@@ -65,6 +73,34 @@ function pickDrop(
     previousIds,
   });
 }
+
+const guardedStorage: StateStorage = {
+  getItem: (name) => {
+    if (typeof localStorage === "undefined") return null;
+    try {
+      return localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    if (typeof localStorage === "undefined") return;
+    if (!persistGate.open) return;
+    try {
+      localStorage.setItem(name, value);
+    } catch {
+      /* quota / private mode */
+    }
+  },
+  removeItem: (name) => {
+    if (typeof localStorage === "undefined") return;
+    try {
+      localStorage.removeItem(name);
+    } catch {
+      /* */
+    }
+  },
+};
 
 export const useCloset = create<ClosetState>()(
   persist(
@@ -245,6 +281,8 @@ export const useCloset = create<ClosetState>()(
         })),
       ensureLookbook: () => {
         const s = get();
+        if (!s.hydrated) return;
+        if (s.garments.length === 0) return;
         const book = buildLookbook(s.garments);
         const next = mergeLookbook(s.looks, book);
         const key = (looks: Look[]) =>
@@ -294,6 +332,21 @@ export const useCloset = create<ClosetState>()(
     {
       name: "closet.v6",
       skipHydration: true,
+      storage: createJSONStorage(() => guardedStorage),
+      partialize: (s): PersistedCloset => ({
+        garments: s.garments,
+        looks: s.looks,
+        journal: s.journal,
+        avoid: s.avoid,
+        drop: s.drop,
+        refPhoto: s.refPhoto,
+        messages: s.messages,
+      }),
+      merge: (persisted, current) => mergeClosetPersist(persisted, current),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.error("[closet] rehydrate failed", error);
+        persistGate.open = true;
+      },
     },
   ),
 );

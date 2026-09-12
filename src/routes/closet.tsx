@@ -26,6 +26,7 @@ async function embedSrc(src: string): Promise<string> {
 }
 
 function ClosetPage() {
+  const hydrated = useCloset((s) => s.hydrated);
   const garmentsAll = useCloset((s) => s.garments);
   const importCloset = useCloset((s) => s.importCloset);
   const setRefPhoto = useCloset((s) => s.setRefPhoto);
@@ -170,6 +171,11 @@ function ClosetPage() {
           {garments.length === 0 && (
             <p className="mt-3 text-sm text-ink-soft">
               Nothing in here yet. The grid is yours once you photograph a piece.
+            </p>
+          )}
+          {hydrated && garments.length === 0 && (
+            <p className="mt-2 micro text-ink-soft">
+              This browser/URL has an empty closet. Uploads live on the URL you added them on.
             </p>
           )}
           {waiting.length > 0 && (

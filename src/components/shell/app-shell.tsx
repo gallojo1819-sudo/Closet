@@ -11,11 +11,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const night = pathname.startsWith("/stylist");
 
   useEffect(() => {
-    void Promise.resolve(useCloset.persist.rehydrate()).finally(() => {
+    let live = true;
+    void (async () => {
+      try {
+        await useCloset.persist.rehydrate();
+      } catch (e) {
+        console.error("[closet] rehydrate failed", e);
+      }
+      if (!live) return;
       useCloset.setState({ hydrated: true });
-      useCloset.getState().ensureLookbook();
+      const s = useCloset.getState();
+      if (s.garments.length > 0) s.ensureLookbook();
       void migrateImagesToIdb().catch(() => {});
-    });
+    })();
+    return () => {
+      live = false;
+    };
   }, []);
 
   return (

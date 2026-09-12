@@ -20,7 +20,8 @@ function LookbookPage() {
   const [play, setPlay] = useState(false);
 
   useEffect(() => {
-    if (hydrated) ensureLookbook();
+    if (!hydrated || garmentsAll.length === 0) return;
+    ensureLookbook();
   }, [hydrated, garmentsAll, ensureLookbook]);
 
   const garments = useMemo(
@@ -70,7 +71,19 @@ function LookbookPage() {
         </div>
       )}
 
-      {!canBuild ? (
+      {hydrated && garments.length === 0 ? (
+        <div className="mt-10 border border-hairline bg-card px-4 py-5">
+          <p className="text-sm text-ink-soft">
+            Lookbook is this closet. Add pieces on Add — don’t re-upload here.
+          </p>
+          <Link
+            to="/add"
+            className="mt-4 inline-flex h-11 items-center bg-accent px-4 text-sm text-paper"
+          >
+            Add a piece
+          </Link>
+        </div>
+      ) : !canBuild ? (
         <div className="mt-10 border border-hairline bg-card px-4 py-5">
           <p className="text-sm text-ink-soft">
             Need a top, a bottom, and shoes.
