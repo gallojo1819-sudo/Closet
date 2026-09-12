@@ -222,7 +222,7 @@ function Today() {
             </div>
           )}
           {view === "me" && pieces.length > 0 ? (
-            <OnMePanel pieces={pieces} />
+            <OnMePanel pieces={pieces} onUsePaper={() => setView("paper")} />
           ) : view === "fit" && pieces.length > 0 ? (
             <FitBoard pieces={pieces} />
           ) : (

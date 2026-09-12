@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentDetail } from "@/components/closet/detail";
 import { GarmentTile } from "@/components/closet/tile";
@@ -29,10 +29,13 @@ function ClosetPage() {
   const garmentsAll = useCloset((s) => s.garments);
   const importCloset = useCloset((s) => s.importCloset);
   const setRefPhoto = useCloset((s) => s.setRefPhoto);
+  const removeGarment = useCloset((s) => s.removeGarment);
   const [filter, setFilter] = useState<Filter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const importRef = useRef<HTMLInputElement>(null);
 
   const exportCloset = async () => {
@@ -115,6 +118,45 @@ function ClosetPage() {
   }, [garments, waiting, filter]);
   const open = garments.find((g) => g.id === openId) ?? null;
   const showingDemo = garments.some((g) => g.demo);
+  const selectedCount = selected.size;
+
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setSelecting(false);
+      setSelected(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selecting]);
+
+  const exitSelect = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelected(new Set(list.map((g) => g.id)));
+  };
+
+  const deleteSelected = () => {
+    const n = selected.size;
+    if (!n) return;
+    const noun = n === 1 ? "piece" : "pieces";
+    if (!confirm(`Remove ${n} ${noun} and their photos?`)) return;
+    for (const id of selected) removeGarment(id);
+    exitSelect();
+  };
 
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-6 py-8 md:py-12 rise">
@@ -137,6 +179,43 @@ function ClosetPage() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {selecting ? (
+            <>
+              <button
+                type="button"
+                onClick={selectAll}
+                disabled={list.length === 0}
+                className="micro border border-hairline px-3 h-11 text-ink-soft hover:border-hairline-strong disabled:opacity-40"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={deleteSelected}
+                disabled={selectedCount === 0}
+                className="micro border border-hairline px-3 h-11 text-accent hover:border-hairline-strong disabled:opacity-40"
+              >
+                Delete {selectedCount}
+              </button>
+              <button
+                type="button"
+                onClick={exitSelect}
+                className="micro border border-hairline px-3 h-11 text-ink-soft hover:border-hairline-strong"
+              >
+                Done
+              </button>
+            </>
+          ) : (
+            garments.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelecting(true)}
+                className="micro border border-hairline px-3 h-11 text-ink-soft hover:border-hairline-strong"
+              >
+                Select
+              </button>
+            )
+          )}
           <button
             type="button"
             onClick={() => void exportCloset()}
@@ -213,7 +292,14 @@ function ClosetPage() {
               className="rise"
               style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
             >
-              <GarmentTile garment={g} onClick={() => setOpenId(g.id)} />
+              <GarmentTile
+                garment={g}
+                selecting={selecting}
+                selected={selected.has(g.id)}
+                onClick={() =>
+                  selecting ? toggleSelected(g.id) : setOpenId(g.id)
+                }
+              />
             </li>
           ))}
         </ul>

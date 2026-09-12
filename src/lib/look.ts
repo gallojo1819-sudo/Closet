@@ -1,5 +1,5 @@
 import type { Garment, Moment, Occasion, WeatherSnap } from "./types";
-import { HOUSE_LABEL, daysIdle, lookHouses } from "./style";
+import { HOUSE_LABEL, daysIdle, lookHouses, slotOf } from "./style";
 
 const ORDER: Garment["category"][] = [
   "top",
@@ -22,9 +22,11 @@ export function money(n: number): string {
 }
 
 export function sortLook(pieces: Garment[]): Garment[] {
-  return [...pieces].sort(
-    (a, b) => ORDER.indexOf(a.category) - ORDER.indexOf(b.category),
-  );
+  return [...pieces].sort((a, b) => {
+    const sa = ORDER.indexOf((slotOf(a) ?? a.category) as Garment["category"]);
+    const sb = ORDER.indexOf((slotOf(b) ?? b.category) as Garment["category"]);
+    return (sa < 0 ? 99 : sa) - (sb < 0 ? 99 : sb);
+  });
 }
 
 export function nameLook(pieces: Garment[]): string {
@@ -81,11 +83,13 @@ export function alternatives(
   dropIds: string[],
 ): Garment[] {
   const used = new Set(dropIds);
+  const slot = slotOf(current) ?? current.category;
   return garments
     .filter(
       (g) =>
         !g.archived &&
-        g.category === current.category &&
+        (!g.demo || current.demo) &&
+        (slotOf(g) ?? g.category) === slot &&
         g.id !== current.id &&
         !used.has(g.id),
     )

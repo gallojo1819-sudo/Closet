@@ -41,15 +41,15 @@ function useOnMe(pieces: Garment[]) {
       const blob = await getImage(refPhoto);
       if (!blob) throw new Error("Reference photo is missing — set it again.");
       const refImage = await blobToDataUrl(blob);
-      const ordered = sortLook(pieces);
-      const cutouts = (
-        await Promise.all(
-          ordered.slice(0, 4).map((g) => asDataUrl(g.cutoutSrc || g.imageSrc)),
-        )
-      ).filter((c): c is string => Boolean(c));
-      const list = ordered
-        .map((g) => `${g.name} (${[g.colors.join("/"), g.subtype || g.category].filter(Boolean).join(" ")})`)
-        .join(", ");
+      const layers: { name: string; category: string; url: string }[] = [];
+      for (const g of sortLook(pieces).slice(0, 4)) {
+        const url = await asDataUrl(g.cutoutSrc || g.imageSrc);
+        if (url) layers.push({ name: g.name, category: g.category, url });
+      }
+      const cutouts = layers.map((l) => l.url);
+      const list = layers
+        .map((l, i) => `image ${i + 2} = ${l.name} (${l.category})`)
+        .join(". ");
       const res = await onMePreview({ data: { refImage, cutouts, pieces: list } });
       if (useCloset.getState().refPhoto !== refPhoto) return;
       if (res.ok) setImage(res.image);
@@ -101,8 +101,25 @@ export function OnMeButton({ pieces }: { pieces: Garment[] }) {
           <figure className="relative z-10 w-full max-w-md bg-paper border border-hairline">
             <img src={preview.image} alt="Preview on you" className="w-full" />
             <figcaption className="micro px-3 py-2 text-ink-soft border-t border-hairline">
-              Preview — the paper tiles are the garment.
+              Preview drifted — paper tiles are the garment.
             </figcaption>
+            <div className="flex gap-2 px-3 pb-3">
+              <button
+                type="button"
+                disabled={preview.busy}
+                onClick={() => void preview.run()}
+                className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+              >
+                Try again
+              </button>
+              <button
+                type="button"
+                onClick={preview.clear}
+                className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+              >
+                Use paper
+              </button>
+            </div>
           </figure>
         </div>
       )}
@@ -111,7 +128,13 @@ export function OnMeButton({ pieces }: { pieces: Garment[] }) {
 }
 
 /** Today's "On me" toggle view: the preview lives in the layout, not a modal. */
-export function OnMePanel({ pieces }: { pieces: Garment[] }) {
+export function OnMePanel({
+  pieces,
+  onUsePaper,
+}: {
+  pieces: Garment[];
+  onUsePaper?: () => void;
+}) {
   const preview = useOnMe(pieces);
   const hydrated = useCloset((s) => s.hydrated);
 
@@ -154,8 +177,33 @@ export function OnMePanel({ pieces }: { pieces: Garment[] }) {
         </div>
       )}
       <p className="micro px-3 py-2 text-ink-soft border-t border-hairline">
-        Preview — the paper tiles are the garment.
+        {preview.image
+          ? "Preview drifted — paper tiles are the garment."
+          : "Preview — the paper tiles are the garment."}
       </p>
+      {preview.image && (
+        <div className="flex gap-2 px-3 pb-3">
+          <button
+            type="button"
+            disabled={preview.busy}
+            onClick={() => void preview.run()}
+            className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40 inline-flex items-center gap-2"
+          >
+            {preview.busy && <Loader2 className="size-3 animate-spin" />}
+            Try again
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              preview.clear();
+              onUsePaper?.();
+            }}
+            className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+          >
+            Use paper
+          </button>
+        </div>
+      )}
     </div>
   );
 }

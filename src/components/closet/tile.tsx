@@ -7,15 +7,18 @@ export function GarmentTile({
   garment,
   onClick,
   selected,
+  selecting,
 }: {
   garment: Garment;
   onClick?: () => void;
   selected?: boolean;
+  selecting?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={selecting ? Boolean(selected) : undefined}
       className={cn(
         "group text-left w-full",
         selected && "outline outline-1 outline-ink",
@@ -26,6 +29,15 @@ export function GarmentTile({
           garment={garment}
           className="absolute inset-0 h-full w-full object-contain p-[8%]"
         />
+        {selecting && (
+          <span
+            className={cn(
+              "absolute right-2 top-2 size-4 border",
+              selected ? "bg-ink border-ink" : "bg-paper border-hairline",
+            )}
+            aria-hidden
+          />
+        )}
         {garment.demo && (
           <span className="absolute left-2 top-2 micro bg-paper px-2 py-1 text-ink-soft border border-hairline">
             Sample

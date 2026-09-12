@@ -165,9 +165,14 @@ export const onMePreview = createServerFn({ method: "POST" })
       },
       body: JSON.stringify({
         model: "grok-imagine-image-2.0",
-        // Joe's reference first, then the actual cutouts of this look (max 4).
+        // Image 1 is always Joe (idb:me:ref). Images 2+ are this look's cutouts.
         images: [{ url: data.refImage }, ...data.cutouts.slice(0, 4).map((c) => ({ url: c }))],
-        prompt: `Dress THIS man — the man in the first image, same face, same 5'8 regular build — in THESE exact garments from the following images: ${data.pieces}. Editorial full-body photograph on plain warm paper. Do not invent clothing, logos, or colors. If a piece is unclear, omit it. No text.`,
+        prompt: `Image 1 is THIS man — the only person allowed. Keep his exact face, hair, beard or none, skin, 5′8 regular body.
+Images 2+ are photographs of the EXACT garments to put on him. Copy color, fabric, pattern, shoes FROM THOSE IMAGES.
+Do not invent a catalog model or a Ralph Lauren campaign. Do not recolor.
+If image 3 is navy loafers, the shoes are navy loafers even if the text says chinos.
+Plain studio, full body, no text.
+${data.pieces}`,
       }),
     });
     return readEditedImage(res);

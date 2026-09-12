@@ -1,5 +1,5 @@
-import type { Garment, Moment, Occasion, WeatherSnap } from "./types";
-import { todayISO } from "./utils";
+import type { Garment, Moment, Occasion, WeatherSnap } from "./types.ts";
+import { todayISO } from "./utils.ts";
 
 export type { Moment, Occasion };
 export type House = "prep" | "italian" | "street";
@@ -50,6 +50,39 @@ function formalityTarget(occasion: Occasion, moment: Moment): number {
   return 3;
 }
 
+const KNOWN_SLOTS = [
+  "top",
+  "bottom",
+  "outerwear",
+  "dress",
+  "footwear",
+  "accessory",
+] as const;
+
+type Slot = (typeof KNOWN_SLOTS)[number];
+
+/**
+ * Wear slot for pickLook. Name/subtype win when they name a garment
+ * (a loafer tagged "bottom" is still footwear). True unknowns stay out
+ * so they are never parked on the legs.
+ */
+export function slotOf(g: Garment): Slot | null {
+  const blob = `${g.subtype} ${g.name}`.toLowerCase();
+  const footwear = /\b(shoes?|loafers?|mules?|sneakers?|boots?|booties)\b/.test(blob);
+  const bottom = /\b(pants?|chinos?|jeans?|trousers?|shorts?)\b/.test(blob);
+  const top = /\b(t-shirts?|tees?|shirts?|oxfords?|polos?|knits?|sweaters?)\b/.test(blob);
+  const outer = /\b(jackets?|coats?|overshirts?)\b/.test(blob);
+  // "boot cut jeans" is bottom; a lone "loafer" is never pants.
+  if (footwear && !bottom) return "footwear";
+  if (bottom) return "bottom";
+  if (top) return "top";
+  if (outer) return "outerwear";
+  if ((KNOWN_SLOTS as readonly string[]).includes(g.category)) {
+    return g.category as Slot;
+  }
+  return null;
+}
+
 export function pickLook(
   garments: Garment[],
   opts: {
@@ -58,10 +91,14 @@ export function pickLook(
     moment: Moment;
     avoid?: Record<string, number>;
     recentWorn?: string[];
+    /** Last drop's ids — one reroll only, scored −8. Avoid still caps separately. */
+    previousIds?: string[];
   },
 ): string[] {
-  const active = garments.filter((g) => !g.archived);
-  const by = (cat: Garment["category"]) => active.filter((g) => g.category === cat);
+  const real = garments.filter((g) => !g.archived && !g.demo);
+  // Real closet only. Samples fill Today only when nothing real is on the rack.
+  const pool = real.length ? real : garments.filter((g) => !g.archived);
+  const by = (slot: Slot) => pool.filter((g) => slotOf(g) === slot);
   const f = opts.weather?.f ?? 68;
   const cool = f < 62;
   const warm = f > 78;
@@ -69,14 +106,16 @@ export function pickLook(
 
   const avoid = opts.avoid ?? {};
   const recent = new Set(opts.recentWorn ?? []);
+  const previous = new Set(opts.previousIds ?? []);
   const score = (g: Garment) => {
     let s = 0;
     s += 4 - Math.abs(g.formality - target);
     if (cool) s += g.warmth;
     if (warm) s += 6 - g.warmth;
     if (g.wornOn.at(-1) === todayISO()) s -= 6;
-    if (recent.has(g.id) && g.category !== "accessory") s -= 2.5;
+    if (recent.has(g.id) && slotOf(g) !== "accessory") s -= 2.5;
     s -= Math.min(avoid[g.id] ?? 0, 4) * 1.6;
+    if (previous.has(g.id)) s -= 8;
     s += Math.min(daysIdle(g), 90) / 10;
     if (opts.occasion === "client" || opts.occasion === "dinner") {
       if (g.subtype === "sneakers") s -= 2;
@@ -94,35 +133,54 @@ export function pickLook(
   const ids: string[] = [];
   const top = best(by("top"));
   const bottom = best(by("bottom"));
-  const dress = best(by("dress"));
   const shoes = best(by("footwear"));
-  if (dress && (!top || score(dress) > score(top))) {
-    ids.push(dress.id);
-  } else if (top) {
+  // Weekday look is top + bottom + footwear. Empty slots are omitted, never invented.
+  if (top) {
     ids.push(top.id);
-    if (bottom) ids.push(bottom.id);
+  } else {
+    // No shirt/oxford/polo/tee/knit in the pool — a dress may stand in.
+    const dress = best(by("dress"));
+    if (dress) ids.push(dress.id);
   }
-  if (shoes) ids.push(shoes.id);
-  if (cool || opts.moment === "morning") {
+  if (bottom) {
+    ids.push(bottom.id);
+  }
+  // else: no pant/chino/jean/trouser inferred — omit rather than put loafers on the legs.
+  if (shoes) {
+    ids.push(shoes.id);
+  }
+  // else: no shoe/loafer/mule/sneaker/boot inferred — omit.
+  if (cool) {
+    // Outerwear only when it's actually cool, not on a warm morning.
     const outer = best(by("outerwear"));
     if (outer && !(warm && outer.warmth >= 5)) ids.push(outer.id);
   }
   const acc = by("accessory");
   const belt = acc.find((a) => a.subtype === "belt");
-  if (belt && shoes?.subtype === "loafers") ids.push(belt.id);
+  if (
+    belt &&
+    shoes &&
+    /loafer/.test(`${shoes.subtype} ${shoes.name}`.toLowerCase())
+  ) {
+    ids.push(belt.id);
+  }
 
   const used = new Set(ids);
-  const idle = [...active]
-    .filter((g) => !used.has(g.id) && daysIdle(g) >= 21)
+  const idle = [...pool]
+    .filter((g) => !used.has(g.id) && !previous.has(g.id) && daysIdle(g) >= 21)
     .sort((a, b) => daysIdle(b) - daysIdle(a));
   const candidate = idle[0];
   if (candidate) {
+    const candSlot = slotOf(candidate);
     const slot = ids.findIndex((id) => {
-      const g = active.find((x) => x.id === id);
-      return g?.category === candidate.category;
+      const g = pool.find((x) => x.id === id);
+      return g && slotOf(g) === candSlot;
     });
-    if (slot >= 0) ids[slot] = candidate.id;
-    else if (candidate.category === "accessory" || candidate.category === "outerwear") {
+    if (slot >= 0) {
+      const occupant = pool.find((x) => x.id === ids[slot]);
+      // Only bump a recently worn occupant. If the whole rack has sat, scoring already prefers idle.
+      if (occupant && daysIdle(occupant) < 21) ids[slot] = candidate.id;
+    } else if (candSlot === "accessory" || candSlot === "outerwear") {
       ids.push(candidate.id);
     }
   }

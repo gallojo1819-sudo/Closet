@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { deleteImage, isIdbKey } from "./images";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
-import { daysIdle, defaultOccasion, momentOfDay, pickLook } from "./style";
+import { daysIdle, defaultOccasion, momentOfDay, pickLook, slotOf } from "./style";
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry, WeatherSnap } from "./types";
 import { todayISO, uid } from "./utils";
 
@@ -26,7 +26,11 @@ type ClosetState = {
   saveLook: (look: Omit<Look, "id" | "createdAt">) => string;
   removeLook: (id: string) => void;
   setDrop: (drop: DailyDrop) => void;
-  rerollDrop: (weather?: WeatherSnap, occasion?: Occasion) => void;
+  rerollDrop: (
+    weather?: WeatherSnap,
+    occasion?: Occasion,
+    previousIds?: string[],
+  ) => void;
   swapDropPiece: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
   setRefPhoto: (key: string | null) => void;
@@ -47,6 +51,7 @@ function pickDrop(
   occasion?: Occasion,
   avoid?: Record<string, number>,
   recentWorn?: string[],
+  previousIds?: string[],
 ): string[] {
   return pickLook(garments, {
     weather,
@@ -54,6 +59,7 @@ function pickDrop(
     moment: momentOfDay(),
     avoid,
     recentWorn,
+    previousIds,
   });
 }
 
@@ -111,6 +117,12 @@ export const useCloset = create<ClosetState>()(
             ...l,
             garmentIds: l.garmentIds.filter((gid) => gid !== id),
           })),
+          drop: s.drop
+            ? {
+                ...s.drop,
+                garmentIds: s.drop.garmentIds.filter((gid) => gid !== id),
+              }
+            : s.drop,
         }));
       },
       wearToday: (ids) => {
@@ -140,11 +152,12 @@ export const useCloset = create<ClosetState>()(
       skipDrop: () => {
         const drop = get().drop;
         if (!drop || drop.worn) return;
+        const skipped = drop.garmentIds;
         const avoid = { ...get().avoid };
-        for (const id of drop.garmentIds) avoid[id] = (avoid[id] ?? 0) + 1;
+        for (const id of skipped) avoid[id] = (avoid[id] ?? 0) + 1;
         const entry: WearEntry = {
           date: todayISO(),
-          garmentIds: drop.garmentIds,
+          garmentIds: skipped,
           verdict: "skipped",
           occasion: drop.occasion,
         };
@@ -152,7 +165,8 @@ export const useCloset = create<ClosetState>()(
           avoid,
           journal: [entry, ...get().journal.filter((j) => j.date !== todayISO())].slice(0, 60),
         });
-        get().rerollDrop(drop.weather, drop.occasion);
+        // previousIds is this reroll only — avoid stays capped, not an exile.
+        get().rerollDrop(drop.weather, drop.occasion, skipped);
       },
       saveLook: (look) => {
         const id = uid("l");
@@ -163,7 +177,7 @@ export const useCloset = create<ClosetState>()(
       },
       removeLook: (id) => set((s) => ({ looks: s.looks.filter((l) => l.id !== id) })),
       setDrop: (drop) => set({ drop }),
-      rerollDrop: (weather, occasion) => {
+      rerollDrop: (weather, occasion, previousIds) => {
         const occ = occasion ?? get().drop?.occasion ?? defaultOccasion();
         const moment = momentOfDay();
         const lastWorn = get().journal.find((j) => j.verdict === "worn")?.garmentIds;
@@ -173,6 +187,7 @@ export const useCloset = create<ClosetState>()(
           occ,
           get().avoid,
           lastWorn,
+          previousIds,
         );
         set({
           drop: {
@@ -192,11 +207,13 @@ export const useCloset = create<ClosetState>()(
         const current = get().garments.find((g) => g.id === id);
         if (!current) return;
         const used = new Set(drop.garmentIds);
+        const slot = slotOf(current) ?? current.category;
         const pool = get()
           .garments.filter(
             (g) =>
               !g.archived &&
-              g.category === current.category &&
+              (!g.demo || current.demo) &&
+              (slotOf(g) ?? g.category) === slot &&
               !used.has(g.id),
           )
           .sort((a, b) => daysIdle(b) - daysIdle(a));

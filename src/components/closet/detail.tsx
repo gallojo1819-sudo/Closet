@@ -54,7 +54,7 @@ export function GarmentDetail({
       <div className="relative z-10 w-full max-w-3xl max-h-[92dvh] overflow-auto bg-paper border border-hairline md:grid md:grid-cols-2">
         <div>
           {view === "me" ? (
-            <OnMePanel pieces={[garment]} />
+            <OnMePanel pieces={[garment]} onUsePaper={() => setView("print")} />
           ) : (
             <div className="bg-paper-deep aspect-page">
               {view === "print" ? (
