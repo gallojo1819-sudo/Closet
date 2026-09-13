@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
@@ -40,6 +40,17 @@ async function coverDataUrl(src: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** md+ centered card. Phone stays a bottom sheet. */
+export function sheetPanelClass(md: boolean, extra?: string) {
+  return cn(
+    "relative z-10 overflow-auto bg-paper border border-hairline",
+    md
+      ? "fixed left-1/2 top-1/2 w-[min(100%-2rem,42rem)] max-w-2xl max-h-[90dvh] -translate-x-1/2 -translate-y-1/2"
+      : "w-full max-h-[92dvh]",
+    extra,
+  );
 }
 
 export function useMdUp() {
@@ -114,31 +125,7 @@ export function GarmentDetail({
   const usingOriginal = garment.cutoutSrc === garment.imageSrc;
   const cpw = costPerWear(garment);
   const md = useMdUp();
-  const [pos, setPos] = useState<{
-    top: number;
-    left: number;
-    width: number;
-    maxHeight: number;
-  } | null>(null);
-
-  useLayoutEffect(() => {
-    if (!md) {
-      setPos(null);
-      return;
-    }
-    const place = () => {
-      const el = getTile?.();
-      if (!el) return;
-      setPos(placeBesideTile(el.getBoundingClientRect()));
-    };
-    place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
-  }, [md, garment.id, getTile]);
+  void getTile;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -319,23 +306,7 @@ export function GarmentDetail({
         aria-label="Close"
         onClick={onClose}
       />
-      <div
-        className={cn(
-          "relative z-10 overflow-auto bg-paper border border-hairline",
-          md ? "md:grid md:grid-cols-2" : "w-full max-h-[92dvh]",
-        )}
-        style={
-          md && pos
-            ? {
-                position: "fixed",
-                top: pos.top,
-                left: pos.left,
-                width: pos.width,
-                maxHeight: pos.maxHeight,
-              }
-            : undefined
-        }
-      >
+      <div className={sheetPanelClass(md, md ? "md:grid md:grid-cols-2" : undefined)}>
         <div>
           {view === "me" ? (
             <OnMePanel pieces={[garment]} onUsePaper={() => setView("print")} />

@@ -6,6 +6,7 @@ import {
   blobToDataUrl,
   dataUrlToBlob,
   getImage,
+  imageKey,
   jpegDataUrl,
   lookOnMeKey,
   putImage,
@@ -35,7 +36,9 @@ export async function dressLook(
   const worn = layersForOnMe(pieces);
   const layers: { name: string; category: string; url: string }[] = [];
   for (const g of worn) {
-    const raw = await asDataUrl(g.cutoutSrc || g.imageSrc);
+    const cover =
+      g.cutoutSrc && g.cutoutSrc !== g.imageSrc ? g.cutoutSrc : imageKey(g.id, "c");
+    const raw = await asDataUrl(cover);
     if (!raw) continue;
     const url = await jpegDataUrl(raw, 512, 0.8);
     layers.push({ name: g.name, category: g.category, url });
@@ -45,9 +48,55 @@ export async function dressLook(
     .map((l, i) => `image ${i + 2} = ${l.name} (${l.category})`)
     .join(". ");
   const tuck = tuckDressingLines(worn, occasion);
-  const res = await onMePreview({ data: { refImage, cutouts, pieces: list, tuck } });
+  const gurkha = worn.some((g) =>
+    /gurkha/.test(`${g.subtype} ${g.notes} ${g.name}`.toLowerCase()),
+  );
+  const gurkhaLine = gurkha
+    ? "NO drawstring ties at the hem. Gurkha waist. Trousers break on the shoe."
+    : "";
+  const res = await onMePreview({
+    data: { refImage, cutouts, pieces: list, tuck: `${tuck} ${gurkhaLine}`.trim() },
+  });
   if (!res.ok) throw new Error(res.error);
+  if (await isLegsOnlyBody(res.image)) {
+    throw new Error("On you cropped to the legs — keeping the kit.");
+  }
   return res.image;
+}
+
+/** True when the top of the plate is empty paper — a feet crop, not Joe. */
+export async function isLegsOnlyBody(dataUrl: string): Promise<boolean> {
+  if (typeof document === "undefined") return false;
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("image"));
+      el.src = dataUrl;
+    });
+    const w = 48;
+    const h = 60;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return false;
+    ctx.drawImage(img, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, Math.max(1, Math.round(h * 0.2))).data;
+    let person = 0;
+    const n = data.length / 4;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i]!;
+      const g = data[i + 1]!;
+      const b = data[i + 2]!;
+      const paper = Math.abs(r - 244) < 28 && Math.abs(g - 239) < 28 && Math.abs(b - 230) < 28;
+      const white = r > 232 && g > 232 && b > 228;
+      if (!paper && !white) person += 1;
+    }
+    return n > 0 && person / n < 0.03;
+  } catch {
+    return false;
+  }
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {

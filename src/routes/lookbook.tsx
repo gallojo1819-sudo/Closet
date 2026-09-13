@@ -12,12 +12,13 @@ import {
   comboKey,
   enforcePieceCap,
   lookbookPool,
+  lookFitsHouse,
   lookFitsOccasion,
   lookHasColor,
   stripRepeatBlazers,
 } from "@/lib/lookbook";
 import { lookFitsSeason, seasonFromWeather } from "@/lib/season";
-import { slotOf } from "@/lib/style";
+import { HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -91,7 +92,7 @@ function LookCardFace({
           <img
             src={cachedSrc}
             alt=""
-            className="on-you-glass absolute inset-0 z-10 h-full w-full object-cover bg-paper pointer-events-none"
+            className="on-you-glass absolute inset-0 z-10 h-full w-full object-contain bg-paper pointer-events-none"
           />
         )}
       </button>
@@ -161,6 +162,7 @@ function LookbookPage() {
   const [play, setPlay] = useState(false);
   const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]["id"]>("weekday");
   const [seasonChip, setSeasonChip] = useState<"auto" | Season>("auto");
+  const [houseChip, setHouseChip] = useState<"all" | House>("all");
   const [color, setColor] = useState<string | null>(null);
   const drop = useCloset((s) => s.drop);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -208,11 +210,14 @@ function LookbookPage() {
         return false;
       }
       if (!lookFitsSeason(pieces, season)) return false;
+      if (houseChip !== "all" && !lookFitsHouse(pieces, houseChip, occasion, pool)) {
+        return false;
+      }
       if (color && !lookHasColor(pieces, color)) return false;
       return true;
     });
     return enforcePieceCap(stripRepeatBlazers(rows, garments), garments);
-  }, [book, occasion, color, byId, pool, season, garments]);
+  }, [book, occasion, color, byId, pool, season, garments, houseChip]);
 
   const highlightId = focusLook ?? null;
 
@@ -227,16 +232,21 @@ function LookbookPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    ensureOccasionBook(occasion, season);
-  }, [hydrated, occasion, season, garments.length, ensureOccasionBook]);
+    ensureOccasionBook(
+      occasion,
+      season,
+      houseChip === "all" ? undefined : houseChip,
+    );
+  }, [hydrated, occasion, season, houseChip, garments.length, ensureOccasionBook]);
 
   useEffect(() => {
     if (!hydrated || shown.length === 0) return;
     markSeen(
       occasion,
       shown.map((l) => comboKey(l.garmentIds)),
+      houseChip === "all" ? undefined : houseChip,
     );
-  }, [hydrated, occasion, shown, markSeen]);
+  }, [hydrated, occasion, houseChip, shown, markSeen]);
 
   const getOpenCard = useCallback(
     () => (openId ? cardEls.current.get(openId) ?? null : null),
@@ -313,6 +323,41 @@ function LookbookPage() {
           </button>
         ))}
       </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setHouseChip("all");
+            setExhausted(false);
+          }}
+          className={cn(
+            "micro border px-3 py-2",
+            houseChip === "all"
+              ? "border-ink bg-ink text-paper"
+              : "border-hairline text-ink-soft",
+          )}
+        >
+          All
+        </button>
+        {HOUSE_CHIPS.map((h) => (
+          <button
+            key={h.id}
+            type="button"
+            onClick={() => {
+              setHouseChip(h.id);
+              setExhausted(false);
+            }}
+            className={cn(
+              "micro border px-3 py-2",
+              houseChip === h.id
+                ? "border-ink bg-ink text-paper"
+                : "border-hairline text-ink-soft",
+            )}
+          >
+            {h.label}
+          </button>
+        ))}
+      </div>
       {colorChips.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {colorChips.map((c) => (
@@ -336,7 +381,11 @@ function LookbookPage() {
       <button
         type="button"
         onClick={() => {
-          const n = shuffleChapter(occasion, season);
+          const n = shuffleChapter(
+            occasion,
+            season,
+            houseChip === "all" ? undefined : houseChip,
+          );
           setExhausted(n < 3);
         }}
         className="micro text-ink-soft hover:text-ink"
@@ -391,7 +440,11 @@ function LookbookPage() {
           <button
             type="button"
             onClick={() => {
-              resetChapter(occasion, season);
+              resetChapter(
+                occasion,
+                season,
+                houseChip === "all" ? undefined : houseChip,
+              );
               setExhausted(false);
             }}
             className="mt-4 micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"

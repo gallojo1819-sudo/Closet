@@ -9,6 +9,7 @@ import {
   enforcePieceCap,
   fillOccasionLooks,
   lookAllowsBlazer,
+  lookFitsHouse,
   lookFitsOccasion,
   looksForHero,
   mergeLookbook,
@@ -415,6 +416,45 @@ describe("buildLookbook", () => {
       ],
     );
     assert.ok(!dropped.some((l) => l.garmentIds.includes("hood") && l.garmentIds.includes("pleat")));
+  });
+});
+
+describe("lookFitsHouse", () => {
+  it("Ralph weekday refuses sneakers when a loafer exists", () => {
+    const ralph = [
+      piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      piece({
+        id: "aj",
+        name: "Cream AJ4",
+        category: "footwear",
+        subtype: "sneaker",
+        formality: 1,
+      }),
+    ];
+    const pool = [
+      ...ralph,
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    assert.equal(lookFitsHouse(ralph, "ralph", "weekday", pool), false);
+    const withLoafer = [ralph[0]!, ralph[1]!, pool[3]!];
+    assert.equal(lookFitsHouse(withLoafer, "ralph", "weekday", pool), true);
+  });
+
+  it("ALD allows sneakers", () => {
+    const ald = [
+      piece({ id: "hood", name: "Black 90s hoodie", category: "top", subtype: "hoodie", formality: 2 }),
+      piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean", formality: 2 }),
+      piece({
+        id: "sn",
+        name: "White sneakers",
+        category: "footwear",
+        subtype: "sneaker",
+        formality: 1,
+      }),
+    ];
+    assert.equal(lookFitsHouse(ald, "ald", "weekday", ald), true);
+    assert.equal(lookFitsHouse(ald, "ald", "weekend", ald), true);
   });
 });
 

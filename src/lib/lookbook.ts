@@ -9,6 +9,7 @@ import {
   lookHouses,
   pickLook,
   slotOf,
+  type House,
 } from "./style.ts";
 import { lookFitsSeason, weatherForSeason, type Season } from "./season.ts";
 import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "./types.ts";
@@ -295,6 +296,7 @@ export function lookFitsOccasion(
   pieces: Garment[],
   occ: string,
   pool?: Garment[],
+  house?: House,
 ): boolean {
   if (occ === "all") return true;
   const o = mapOccasion(occ);
@@ -319,6 +321,11 @@ export function lookFitsOccasion(
   const fairIsle = pieces.some(isFairIsle);
   const camp = pieces.some(isCampCollar);
   const cleanSneaker = sneaker && !gymShoe;
+
+  if (o === "weekday" && house && house !== "ralph") {
+    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
+    return true;
+  }
 
   if (o === "weekday") {
     if (hoodie || graphic) return false;
@@ -360,6 +367,38 @@ export function lookFitsOccasion(
   }
 
   return true;
+}
+
+export function lookFitsHouse(
+  pieces: Garment[],
+  house: House,
+  occasion: Occasion,
+  pool?: Garment[],
+): boolean {
+  if (leadHouse(pieces) !== house) return false;
+  if (house === "ralph") {
+    const rack = pool ?? [];
+    const hasLoafer = rack.some((g) => /loafer/.test(`${g.subtype} ${g.name}`.toLowerCase()));
+    const sneaker = shoesOf(pieces).some((g) =>
+      /sneaker|trainer|\b990\b|jordan|\baj4\b/.test(`${g.subtype} ${g.name}`.toLowerCase()),
+    );
+    if (hasLoafer && sneaker) return false;
+  }
+  if (house === "faloni") {
+    if (pieces.some((g) => /blazer|sport\s*coats?|cord/.test(`${g.subtype} ${g.name}`.toLowerCase()))) {
+      return false;
+    }
+    const top = topsOf(pieces)[0];
+    if (top && !(isCampCollar(top) || /linen/.test(`${top.subtype} ${top.name}`.toLowerCase()))) {
+      return false;
+    }
+  }
+  return lookFitsOccasion(pieces, occasion, pool, house);
+}
+
+export function seenKey(occasion: Occasion, house?: House | "all" | null): string {
+  if (!house || house === "all") return occasion;
+  return `${occasion}:${house}`;
 }
 
 export function pieceLookCap(slotCount: number): number {
@@ -477,6 +516,7 @@ export function buildChapter(
     usedCount?: Map<string, number>;
     blazerLooks?: number;
     usedBlazers?: Set<string>;
+    house?: House;
   },
 ): Look[] {
   const cap = opts?.cap ?? CHAPTER_CAP;
@@ -484,6 +524,7 @@ export function buildChapter(
   const today = opts?.today ?? todayISO();
   const salt = opts?.salt ?? 0;
   const season = opts?.season;
+  const house = opts?.house;
   const pool = lookbookPool(garments);
   const outers = bySlot(pool, "outerwear");
   const byId = new Map(pool.map((g) => [g.id, g]));
@@ -512,7 +553,11 @@ export function buildChapter(
 
   const tryPush = (pieces: Garment[], force = false): boolean => {
     if (pieces.length < 3) return false;
-    if (!lookFitsOccasion(pieces, occasion, pool)) return false;
+    if (house) {
+      if (!lookFitsHouse(pieces, house, occasion, pool)) return false;
+    } else if (!lookFitsOccasion(pieces, occasion, pool)) {
+      return false;
+    }
     if (season && !lookFitsSeason(pieces, season)) return false;
     if (beigePlateCount(pieces) >= 3) return false;
     if (!force) {
@@ -620,16 +665,19 @@ export function fillOccasionLooks(
   min = CHAPTER_CAP,
   exclude?: Set<string>,
   season?: Season,
+  house?: House,
 ): Look[] {
   const occ = mapOccasion(occasion);
   const byId = new Map(garments.map((g) => [g.id, g]));
   const have = looks.filter((l) => {
     if (mapOccasion(l.occasion) !== occ) return false;
-    if (!season) return true;
     const pieces = l.garmentIds
       .map((id) => byId.get(id))
       .filter((g): g is Garment => Boolean(g));
-    return pieces.length >= 3 && lookFitsSeason(pieces, season);
+    if (pieces.length < 3) return false;
+    if (season && !lookFitsSeason(pieces, season)) return false;
+    if (house && !lookFitsHouse(pieces, house, occ, garments)) return false;
+    return true;
   });
   if (have.length >= min) return [];
   const keys = new Set([
@@ -656,6 +704,7 @@ export function fillOccasionLooks(
     usedCount,
     blazerLooks,
     usedBlazers,
+    house,
   });
 }
 
@@ -687,6 +736,7 @@ export function applyShuffle(
   seen: string[],
   today?: string,
   season?: Season,
+  house?: House,
 ): { looks: Look[]; added: Look[]; seen: string[] } {
   const occ = mapOccasion(occasion);
   const kept = looksToKeepOnShuffle(looks, occ, garments, season);
@@ -715,6 +765,7 @@ export function applyShuffle(
     usedCount,
     blazerLooks,
     usedBlazers,
+    house,
   });
   const nextSeen = [...new Set([...seen, ...added.map((l) => comboKey(l.garmentIds))])];
   return { looks: [...kept, ...added], added, seen: nextSeen };

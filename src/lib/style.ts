@@ -22,6 +22,15 @@ export const HOUSE_LABEL: Record<House, string> = {
   sweetStable: "Sweet Stable",
 };
 
+export const HOUSE_CHIPS: { id: House; label: string }[] = [
+  { id: "ralph", label: "Ralph" },
+  { id: "ald", label: "ALD" },
+  { id: "faloni", label: "Faloni" },
+  { id: "fiveFourFive", label: "545" },
+  { id: "sweetStable", label: "Sweet Stable" },
+  { id: "italianWinter", label: "Italian winter" },
+];
+
 const HOUSES: House[] = [
   "ralph",
   "ald",

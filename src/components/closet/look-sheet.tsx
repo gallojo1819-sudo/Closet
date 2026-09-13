@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { LookKit } from "@/components/closet/look-kit";
-import { placeBesideTile, useMdUp } from "@/components/closet/detail";
+import { sheetPanelClass, useMdUp } from "@/components/closet/detail";
 import { ensureLookOnMe, queueLookOnMe } from "@/components/closet/on-me";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { nameLook } from "@/lib/look";
@@ -62,32 +62,8 @@ export function LookSheet({
   piecesRef.current = activePieces;
   const keepLook = useCloset((s) => s.keepLook);
   const md = useMdUp();
-  const [pos, setPos] = useState<{
-    top: number;
-    left: number;
-    width: number;
-    maxHeight: number;
-  } | null>(null);
   const painted = frame || cachedSrc;
-
-  useLayoutEffect(() => {
-    if (!md) {
-      setPos(null);
-      return;
-    }
-    const place = () => {
-      const el = getCard?.();
-      if (!el) return;
-      setPos(placeBesideTile(el.getBoundingClientRect()));
-    };
-    place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
-  }, [md, look.id, getCard]);
+  void getCard;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -187,23 +163,7 @@ export function LookSheet({
         aria-label="Close"
         onClick={onClose}
       />
-      <div
-        className={cn(
-          "relative z-10 overflow-auto bg-paper border border-hairline",
-          md ? "" : "w-full max-h-[92dvh]",
-        )}
-        style={
-          md && pos
-            ? {
-                position: "fixed",
-                top: pos.top,
-                left: pos.left,
-                width: pos.width,
-                maxHeight: pos.maxHeight,
-              }
-            : undefined
-        }
-      >
+      <div className={sheetPanelClass(md)}>
         <div className="relative border-b border-hairline bg-paper aspect-[4/5] overflow-hidden">
           <LookKit pieces={activePieces} className="border-0" />
           {showMe && painted && (
@@ -211,7 +171,7 @@ export function LookSheet({
               key={painted}
               src={painted}
               alt={look.name}
-              className="on-you-glass absolute inset-0 z-10 h-full w-full object-cover bg-paper"
+              className="on-you-glass absolute inset-0 z-10 h-full w-full object-contain bg-paper"
             />
           )}
         </div>

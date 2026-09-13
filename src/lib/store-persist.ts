@@ -1,6 +1,6 @@
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry } from "./types.ts";
 
-export type SeenLooks = Partial<Record<Occasion, string[]>>;
+export type SeenLooks = Record<string, string[]>;
 
 export type PersistedCloset = {
   garments: Garment[];

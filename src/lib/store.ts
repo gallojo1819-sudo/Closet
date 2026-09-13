@@ -21,6 +21,8 @@ import {
   comboKey,
   enforcePieceCap,
   fillOccasionLooks,
+  lookFitsHouse,
+  seenKey,
   stripRepeatBlazers,
 } from "./lookbook";
 import { lookFitsSeason } from "./season";
@@ -41,6 +43,7 @@ import {
   pickLook,
   slotOf,
   weekUniformKeys,
+  type House,
 } from "./style";
 import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { todayISO, uid } from "./utils";
@@ -85,10 +88,10 @@ type ClosetState = {
   restoreRefPhoto: () => Promise<void>;
   restoreFromIdbMeta: () => Promise<void>;
   ensureLookbook: (salt?: number) => void;
-  ensureOccasionBook: (occasion: Occasion, season?: Season) => void;
-  shuffleChapter: (occasion: Occasion, season?: Season) => number;
-  resetChapter: (occasion: Occasion, season?: Season) => void;
-  markSeen: (occasion: Occasion, keys: string[]) => void;
+  ensureOccasionBook: (occasion: Occasion, season?: Season, house?: House) => void;
+  shuffleChapter: (occasion: Occasion, season?: Season, house?: House) => number;
+  resetChapter: (occasion: Occasion, season?: Season, house?: House) => void;
+  markSeen: (occasion: Occasion, keys: string[], house?: House) => void;
   keepLook: (id: string, patch?: { garmentIds?: string[]; name?: string }) => void;
   loadSample: () => void;
   emptyCloset: () => void;
@@ -467,7 +470,7 @@ export const useCloset = create<ClosetState>()(
         if (key(s.looks) === key(looks)) return;
         set({ looks, seenLooks });
       },
-      ensureOccasionBook: (occasion, season) => {
+      ensureOccasionBook: (occasion, season, house) => {
         const s = get();
         if (!s.hydrated) return;
         const occ = mapOccasion(occasion);
@@ -478,23 +481,27 @@ export const useCloset = create<ClosetState>()(
         const byId = new Map(s.garments.map((g) => [g.id, g]));
         const fitting = trimmed.filter((l) => {
           if (!l.lookbook || mapOccasion(l.occasion) !== occ) return false;
-          if (!season) return l.source !== "manual";
           const pieces = l.garmentIds
             .map((id) => byId.get(id))
             .filter((g): g is Garment => Boolean(g));
-          return pieces.length >= 3 && lookFitsSeason(pieces, season);
+          if (pieces.length < 3) return false;
+          if (season && !lookFitsSeason(pieces, season)) return false;
+          if (house && !lookFitsHouse(pieces, house, occ, s.garments)) return false;
+          return true;
         });
         if (fitting.length >= CHAPTER_CAP) {
           if (trimmed.length !== s.looks.length) set({ looks: trimmed });
           return;
         }
+        const bucket = seenKey(occ, house);
         const extra = fillOccasionLooks(
           s.garments,
           trimmed,
           occ,
           CHAPTER_CAP,
-          new Set(s.seenLooks[occ] ?? []),
+          new Set(s.seenLooks[bucket] ?? []),
           season,
+          house,
         );
         if (!extra.length) {
           if (trimmed.length !== s.looks.length) set({ looks: trimmed });
@@ -504,48 +511,52 @@ export const useCloset = create<ClosetState>()(
           looks: [...trimmed, ...extra],
           seenLooks: {
             ...s.seenLooks,
-            [occ]: [
+            [bucket]: [
               ...new Set([
-                ...(s.seenLooks[occ] ?? []),
+                ...(s.seenLooks[bucket] ?? []),
                 ...extra.map((l) => comboKey(l.garmentIds)),
               ]),
             ],
           },
         });
       },
-      shuffleChapter: (occasion, season) => {
+      shuffleChapter: (occasion, season, house) => {
         const s = get();
         const occ = mapOccasion(occasion);
+        const bucket = seenKey(occ, house);
         const next = applyShuffle(
           s.garments,
           s.looks,
           occ,
-          s.seenLooks[occ] ?? [],
+          s.seenLooks[bucket] ?? [],
           undefined,
           season,
+          house,
         );
         set({
           looks: next.looks,
-          seenLooks: { ...s.seenLooks, [occ]: next.seen },
+          seenLooks: { ...s.seenLooks, [bucket]: next.seen },
         });
         return next.added.length;
       },
-      resetChapter: (occasion, season) => {
+      resetChapter: (occasion, season, house) => {
         const s = get();
         const occ = mapOccasion(occasion);
-        const next = applyShuffle(s.garments, s.looks, occ, [], undefined, season);
+        const bucket = seenKey(occ, house);
+        const next = applyShuffle(s.garments, s.looks, occ, [], undefined, season, house);
         set({
           looks: next.looks,
-          seenLooks: { ...s.seenLooks, [occ]: next.seen },
+          seenLooks: { ...s.seenLooks, [bucket]: next.seen },
         });
       },
-      markSeen: (occasion, keys) => {
+      markSeen: (occasion, keys, house) => {
         const occ = mapOccasion(occasion);
+        const bucket = seenKey(occ, house);
         set((s) => {
-          const prev = s.seenLooks[occ] ?? [];
+          const prev = s.seenLooks[bucket] ?? [];
           const merged = [...new Set([...prev, ...keys])];
           if (merged.length === prev.length) return s;
-          return { seenLooks: { ...s.seenLooks, [occ]: merged } };
+          return { seenLooks: { ...s.seenLooks, [bucket]: merged } };
         });
       },
       setRefPhoto: (key, backup) => {
