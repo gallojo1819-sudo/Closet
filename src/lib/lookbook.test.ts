@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildLookbook, fillOccasionLooks, lookFitsOccasion, mergeLookbook, lookbookStats, moreLikeThis } from "./lookbook.ts";
+import { buildLookbook, fillOccasionLooks, lookFitsOccasion, looksForHero, mergeLookbook, lookbookStats, moreLikeThis } from "./lookbook.ts";
 import type { Garment, Look } from "./types.ts";
 
 function piece(
@@ -277,6 +277,31 @@ describe("lookFitsOccasion", () => {
       assert.ok(l.garmentIds.includes("tr"));
       assert.ok(l.garmentIds.includes("lf"));
     }
+  });
+
+  it("looksForHero trousers include the trousers on different occasions", () => {
+    const g = [
+      piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "polo", name: "Navy polo", category: "top", subtype: "polo" }),
+      piece({ id: "knit", name: "Cream knit", category: "top", subtype: "knit" }),
+      piece({
+        id: "tr",
+        name: "Cream trousers",
+        category: "bottom",
+        subtype: "trouser",
+        formality: 4,
+      }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+      piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker", formality: 1 }),
+    ];
+    const looks = looksForHero(g.find((x) => x.id === "tr")!, g);
+    assert.ok(looks.length >= 1 && looks.length <= 5, `count ${looks.length}`);
+    const occs = new Set(looks.map((l) => l.occasion));
+    for (const l of looks) {
+      assert.ok(l.garmentIds.includes("tr"), l.occasion);
+    }
+    assert.ok(occs.size >= 1);
   });
 });
 

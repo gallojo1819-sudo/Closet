@@ -36,6 +36,7 @@ export function LookSheet({
   const [dressing, setDressing] = useState(false);
   const [dressError, setDressError] = useState<string | null>(null);
   const [showAlts, setShowAlts] = useState(false);
+  const [lockedIds, setLockedIds] = useState<string[]>([]);
   const gen = useRef(0);
   const piecesRef = useRef(pieces);
   piecesRef.current = pieces;
@@ -100,31 +101,17 @@ export function LookSheet({
         return;
       }
       setShowMe(false);
-      if (!useCloset.getState().refPhoto) return;
-      setDressing(true);
-      try {
-        const image = await ensureLookOnMe(look.id, piecesRef.current);
-        if (!live || n !== gen.current) return;
-        const url = URL.createObjectURL(dataUrlToBlob(image));
-        setFrame((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return url;
-        });
-        setShowMe(true);
-      } catch (e) {
-        if (!live || n !== gen.current) return;
-        const msg = e instanceof Error ? e.message : "Could not dress you.";
-        setDressError(msg === "timeout" ? "Imagine timed out after 45s." : msg);
-      } finally {
-        if (live && n === gen.current) setDressing(false);
-      }
     })();
     return () => {
       live = false;
     };
   }, [look.id, cacheKey]);
 
-  const alts = showAlts ? moreLikeThis(look, book, closet, 3) : null;
+  useEffect(() => {
+    setLockedIds((prev) => prev.filter((id) => look.garmentIds.includes(id)));
+  }, [look.id]);
+
+  const alts = showAlts ? moreLikeThis(look, book, closet, 3, lockedIds) : null;
 
   const runDress = () => {
     if (dressing) return;
@@ -214,16 +201,35 @@ export function LookSheet({
           </button>
           {dressError && <p className="text-sm text-accent">{dressError}</p>}
           <ul className="flex gap-2 overflow-x-auto">
-            {pieces.map((g) => (
-              <li key={g.id} className="w-16 shrink-0">
-                <div className="aspect-page border border-hairline bg-paper-deep overflow-hidden">
-                  <GarmentImg
-                    garment={g}
-                    className="h-full w-full object-contain p-[8%]"
-                  />
-                </div>
-              </li>
-            ))}
+            {pieces.map((g) => {
+              const locked = lockedIds.includes(g.id);
+              return (
+                <li key={g.id} className="w-16 shrink-0">
+                  <div className="relative aspect-page border border-hairline bg-paper-deep overflow-hidden">
+                    <GarmentImg
+                      garment={g}
+                      className="h-full w-full object-contain p-[8%]"
+                    />
+                    {locked && (
+                      <span className="absolute left-1 top-1 micro bg-paper px-1 py-0.5 text-ink border border-hairline">
+                        Lock
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLockedIds((cur) =>
+                        cur.includes(g.id) ? cur.filter((id) => id !== g.id) : [...cur, g.id],
+                      )
+                    }
+                    className="micro mt-1 text-ink-soft hover:text-ink"
+                  >
+                    {locked ? "Unlock" : "Lock"}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
           <div className="flex flex-wrap gap-2">
             <button

@@ -23,7 +23,14 @@ import {
   unpackPersist,
   type PersistedCloset,
 } from "./store-persist";
-import { daysIdle, defaultOccasion, momentOfDay, pickLook, slotOf } from "./style";
+import {
+  daysIdle,
+  defaultOccasion,
+  momentOfDay,
+  pickLook,
+  slotOf,
+  weekUniformKeys,
+} from "./style";
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry, WeatherSnap } from "./types";
 import { todayISO, uid } from "./utils";
 
@@ -59,6 +66,7 @@ type ClosetState = {
     previousIds?: string[],
   ) => void;
   swapDropPiece: (id: string) => void;
+  toggleLock: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
   setRefPhoto: (key: string | null, backup?: string | null) => void;
   restoreRefPhoto: () => Promise<void>;
@@ -83,6 +91,8 @@ function pickDrop(
   avoid?: Record<string, number>,
   recentWorn?: string[],
   previousIds?: string[],
+  lockedIds?: string[],
+  repeatPairs?: Set<string>,
 ): string[] {
   return pickLook(garments, {
     weather,
@@ -91,6 +101,8 @@ function pickDrop(
     avoid,
     recentWorn,
     previousIds,
+    lockedIds,
+    repeatPairs,
   });
 }
 
@@ -247,7 +259,10 @@ export const useCloset = create<ClosetState>()(
         if (!drop || drop.worn) return;
         const skipped = drop.garmentIds;
         const avoid = { ...get().avoid };
-        for (const id of skipped) avoid[id] = (avoid[id] ?? 0) + 1;
+        const locked = new Set(drop.lockedIds ?? []);
+        for (const id of skipped) {
+          if (!locked.has(id)) avoid[id] = (avoid[id] ?? 0) + 1;
+        }
         const entry: WearEntry = {
           date: todayISO(),
           garmentIds: skipped,
@@ -259,7 +274,11 @@ export const useCloset = create<ClosetState>()(
           journal: [entry, ...get().journal.filter((j) => j.date !== todayISO())].slice(0, 60),
         });
         // previousIds is this reroll only — avoid stays capped, not an exile.
-        get().rerollDrop(drop.weather, drop.occasion, skipped);
+        get().rerollDrop(
+          drop.weather,
+          drop.occasion,
+          skipped.filter((id) => !locked.has(id)),
+        );
       },
       saveLook: (look) => {
         const id = uid("l");
@@ -271,32 +290,65 @@ export const useCloset = create<ClosetState>()(
       removeLook: (id) => set((s) => ({ looks: s.looks.filter((l) => l.id !== id) })),
       setDrop: (drop) => set({ drop }),
       rerollDrop: (weather, occasion, previousIds) => {
-        const occ = occasion ?? get().drop?.occasion ?? defaultOccasion();
+        const prev = get().drop;
+        const occ = occasion ?? prev?.occasion ?? defaultOccasion();
         const moment = momentOfDay();
         const lastWorn = get().journal.find((j) => j.verdict === "worn")?.garmentIds;
+        const sameDay = prev?.date === todayISO();
+        const lockedIds = sameDay ? (prev?.lockedIds ?? []) : [];
+        const repeats = weekUniformKeys(get().journal, get().garments);
         const ids = pickDrop(
           get().garments,
-          weather ?? get().drop?.weather,
+          weather ?? prev?.weather,
           occ,
           get().avoid,
           lastWorn,
           previousIds,
+          lockedIds,
+          repeats,
         );
+        let lockNote: string | null = null;
+        if (lockedIds.length && previousIds?.length) {
+          const unlockedPrev = previousIds.filter((id) => !lockedIds.includes(id));
+          const unlockedNext = ids.filter((id) => !lockedIds.includes(id));
+          const moved = unlockedPrev.some((id) => !unlockedNext.includes(id));
+          if (moved) {
+            const names = lockedIds
+              .map((id) => get().garments.find((g) => g.id === id)?.name)
+              .filter((n): n is string => Boolean(n));
+            if (names.length) {
+              lockNote = `Locked: ${names.join(", ")} — rest of the look moved.`;
+            }
+          }
+        }
         set({
           drop: {
             date: todayISO(),
             garmentIds: ids,
             worn: false,
             verdict: "pending",
-            weather: weather ?? get().drop?.weather,
+            weather: weather ?? prev?.weather,
             occasion: occ,
             moment,
+            lockedIds,
+            lockNote,
           },
+        });
+      },
+      toggleLock: (id) => {
+        const drop = get().drop;
+        if (!drop || !drop.garmentIds.includes(id)) return;
+        const locked = new Set(drop.lockedIds ?? []);
+        if (locked.has(id)) locked.delete(id);
+        else locked.add(id);
+        set({
+          drop: { ...drop, lockedIds: [...locked], lockNote: drop.lockNote ?? null },
         });
       },
       swapDropPiece: (id) => {
         const drop = get().drop;
         if (!drop) return;
+        if ((drop.lockedIds ?? []).includes(id)) return;
         const current = get().garments.find((g) => g.id === id);
         if (!current) return;
         const used = new Set(drop.garmentIds);

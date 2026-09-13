@@ -6,7 +6,7 @@ import { LookBuilder } from "@/components/closet/look-builder";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, nameLook, neglectedPiece, sortLook } from "@/lib/look";
-import { HOUSE_LABEL, daysIdle, lookHouses } from "@/lib/style";
+import { HOUSE_LABEL, avoidedUniformLine, daysIdle, lookHouses } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, type Occasion } from "@/lib/types";
 import { getNycWeather } from "@/lib/weather";
@@ -21,6 +21,7 @@ function Today() {
   const setDrop = useCloset((s) => s.setDrop);
   const rerollDrop = useCloset((s) => s.rerollDrop);
   const swapDropPiece = useCloset((s) => s.swapDropPiece);
+  const toggleLock = useCloset((s) => s.toggleLock);
   const wearToday = useCloset((s) => s.wearToday);
   const skipDrop = useCloset((s) => s.skipDrop);
   const saveLook = useCloset((s) => s.saveLook);
@@ -83,6 +84,13 @@ function Today() {
   const sample = garments.some((g) => g.demo);
   const lookName = nameLook(pieces);
   const note = dropNote(pieces, weather, drop?.occasion, drop?.moment);
+  const avoided = useMemo(
+    () =>
+      drop
+        ? avoidedUniformLine(journal, drop.garmentIds, garments)
+        : null,
+    [journal, drop, garments],
+  );
   const houses = lookHouses(pieces);
   const week = lastDays(7);
   const done = drop?.worn || drop?.verdict === "worn";
@@ -234,21 +242,35 @@ function Today() {
             </p>
             <h2 className="mt-1 font-editorial text-3xl tracking-tight">{lookName}</h2>
             <p className="mt-3 text-sm text-ink-soft leading-relaxed">{note}</p>
+            {drop?.lockNote && (
+              <p className="mt-2 text-sm text-ink-soft">{drop.lockNote}</p>
+            )}
+            {avoided && (
+              <p className="mt-2 text-sm text-ink-soft">{avoided}</p>
+            )}
           </div>
           <ol className="space-y-3">
             {pieces.map((g) => {
               const canSwap = alternatives(garments, g, drop?.garmentIds ?? []).length > 0;
               const idle = daysIdle(g);
+              const locked = (drop?.lockedIds ?? []).includes(g.id);
               return (
                 <li
                   key={g.id}
                   className="flex items-center gap-3 border-b border-hairline pb-3"
                 >
-                  <GarmentImg
-                    garment={g}
-                    alt=""
-                    className="size-14 object-contain bg-paper-deep"
-                  />
+                  <div className="relative">
+                    <GarmentImg
+                      garment={g}
+                      alt=""
+                      className="size-14 object-contain bg-paper-deep"
+                    />
+                    {locked && (
+                      <span className="absolute left-0 top-0 micro bg-paper px-1 py-0.5 text-ink border border-hairline">
+                        Lock
+                      </span>
+                    )}
+                  </div>
                   <div className="min-w-0 flex-1">
                     <p>{g.name}</p>
                     <p className="micro text-ink-soft">
@@ -258,7 +280,15 @@ function Today() {
                   </div>
                   <button
                     type="button"
-                    disabled={!canSwap || done}
+                    disabled={done}
+                    onClick={() => toggleLock(g.id)}
+                    className="micro text-ink-soft hover:text-ink disabled:opacity-30"
+                  >
+                    {locked ? "Unlock" : "Lock"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canSwap || done || locked}
                     onClick={() => swapDropPiece(g.id)}
                     className="micro text-ink-soft hover:text-ink disabled:opacity-30"
                   >

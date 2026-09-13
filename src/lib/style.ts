@@ -1,6 +1,6 @@
 import { harmony } from "./color.ts";
-import type { Garment, Moment, Occasion, WeatherSnap } from "./types.ts";
-import { todayISO } from "./utils.ts";
+import type { Garment, Moment, Occasion, WearEntry, WeatherSnap } from "./types.ts";
+import { lastDays, todayISO } from "./utils.ts";
 
 export type { Moment, Occasion };
 export type House =
@@ -262,6 +262,62 @@ export function leadHouse(pieces: Garment[]): House {
   return housesOf(top)[0] ?? "ralph";
 }
 
+export function pairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/** Bottom+shoe and top+bottom pairs worn in the last 7 days. */
+export function weekUniformKeys(
+  journal: WearEntry[],
+  garments: Garment[],
+  today = todayISO(),
+): Set<string> {
+  const week = new Set(lastDays(7, today));
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  const keys = new Set<string>();
+  for (const j of journal) {
+    if (j.verdict !== "worn" || !week.has(j.date)) continue;
+    const pieces = j.garmentIds
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => Boolean(g));
+    const top = pieces.find((g) => {
+      const s = slotOf(g);
+      return s === "top" || s === "dress";
+    });
+    const bottom = pieces.find((g) => slotOf(g) === "bottom");
+    const shoe = pieces.find((g) => slotOf(g) === "footwear");
+    if (bottom && shoe) keys.add(pairKey(bottom.id, shoe.id));
+    if (top && bottom) keys.add(pairKey(top.id, bottom.id));
+  }
+  return keys;
+}
+
+export function avoidedUniformLine(
+  journal: WearEntry[],
+  currentIds: string[],
+  garments: Garment[],
+  today = todayISO(),
+): string | null {
+  const week = lastDays(7, today);
+  const worn = journal.filter((j) => j.verdict === "worn" && week.includes(j.date));
+  if (!worn.length) return null;
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  const of = (ids: string[]) => {
+    const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    return {
+      bottom: pieces.find((g) => slotOf(g) === "bottom"),
+      shoe: pieces.find((g) => slotOf(g) === "footwear"),
+    };
+  };
+  const cur = of(currentIds);
+  const last = of(worn[0]!.garmentIds);
+  if (!cur.bottom || !cur.shoe || !last.bottom || !last.shoe) return null;
+  if (pairKey(cur.bottom.id, cur.shoe.id) === pairKey(last.bottom.id, last.shoe.id)) {
+    return null;
+  }
+  return `Not the ${last.bottom.name} + ${last.shoe.name} again.`;
+}
+
 export function pickLook(
   garments: Garment[],
   opts: {
@@ -272,6 +328,10 @@ export function pickLook(
     recentWorn?: string[];
     /** Last drop's ids — one reroll only, scored −8. Avoid still caps separately. */
     previousIds?: string[];
+    /** These ids stay in their slots. Reroll only the rest. */
+    lockedIds?: string[];
+    /** Pair keys (bottom|shoe, top|bottom) worn this week — score −12 unless locked. */
+    repeatPairs?: Set<string> | string[];
   },
 ): string[] {
   const real = garments.filter((g) => !g.archived && !g.demo);
@@ -286,6 +346,22 @@ export function pickLook(
   const avoid = opts.avoid ?? {};
   const recent = new Set(opts.recentWorn ?? []);
   const previous = new Set(opts.previousIds ?? []);
+  const lockedSet = new Set(opts.lockedIds ?? []);
+  const lockedGs = [...lockedSet]
+    .map((id) => pool.find((g) => g.id === id))
+    .filter((g): g is Garment => Boolean(g));
+  const pin = new Map<Slot, Garment>();
+  for (const g of lockedGs) {
+    const s = slotOf(g);
+    if (!s) continue;
+    if (s === "dress") pin.set("top", g);
+    else if (!pin.has(s)) pin.set(s, g);
+  }
+  const repeats = opts.repeatPairs
+    ? opts.repeatPairs instanceof Set
+      ? opts.repeatPairs
+      : new Set(opts.repeatPairs)
+    : new Set<string>();
   const score = (g: Garment) => {
     let s = 0;
     s += 4 - Math.abs(g.formality - target);
@@ -305,10 +381,13 @@ export function pickLook(
     [...list].sort((a, b) => score(b) - score(a))[0];
   const rank = (slot: Slot) => [...by(slot)].sort((a, b) => score(b) - score(a));
 
-  const tops = rank("top").slice(0, 7);
-  const topList = tops.length ? tops : rank("dress").slice(0, 4);
-  const bottoms = rank("bottom").slice(0, 7);
-  const shoeList = rank("footwear").slice(0, 7);
+  const pinnedTop = pin.get("top") ?? pin.get("dress" as Slot);
+  const tops = pinnedTop ? [pinnedTop] : rank("top").slice(0, 7);
+  const topList = tops.length ? tops : pinnedTop ? [pinnedTop] : rank("dress").slice(0, 4);
+  const bottoms = pin.get("bottom") ? [pin.get("bottom")!] : rank("bottom").slice(0, 7);
+  const shoeList = pin.get("footwear")
+    ? [pin.get("footwear")!]
+    : rank("footwear").slice(0, 7);
 
   type Combo = { ids: string[]; s: number; h: number; pieces: Garment[] };
   const combos: Combo[] = [];
@@ -320,18 +399,36 @@ export function pickLook(
         const pieces = [t, b, sh].filter((g): g is Garment => Boolean(g));
         if (pieces.length < 2) continue;
         const h = harmony(pieces, { occasion: opts.occasion, f });
-        const s =
+        let s =
           pieces.reduce((n, g) => n + score(g), 0) + h + houseMixPenalty(pieces);
+        const topG = pieces.find((g) => {
+          const sl = slotOf(g);
+          return sl === "top" || sl === "dress";
+        });
+        const botG = pieces.find((g) => slotOf(g) === "bottom");
+        const shoeG = pieces.find((g) => slotOf(g) === "footwear");
+        if (botG && shoeG && repeats.has(pairKey(botG.id, shoeG.id))) {
+          if (!lockedSet.has(botG.id) && !lockedSet.has(shoeG.id)) s -= 12;
+        }
+        if (topG && botG && repeats.has(pairKey(topG.id, botG.id))) {
+          if (!lockedSet.has(topG.id) && !lockedSet.has(botG.id)) s -= 12;
+        }
         combos.push({ ids: pieces.map((g) => g.id), s, h, pieces });
       }
     }
   }
-  const ok = combos.filter((c) => c.h >= 0);
-  const poolC = (ok.length ? ok : combos).sort((a, b) => b.s - a.s);
+  const legal = combos.filter((c) => houseMixPenalty(c.pieces) >= -8);
+  const ok = (legal.length ? legal : combos).filter((c) => c.h >= 0);
+  const poolC = (ok.length ? ok : legal.length ? legal : combos).sort(
+    (a, b) => b.s - a.s,
+  );
   const win = poolC[0];
-  const ids: string[] = win ? [...win.ids] : [];
+  const ids: string[] = win ? [...win.ids] : lockedGs.map((g) => g.id);
   // Weekday look is top + bottom + footwear. Empty slots omitted, never invented.
-  if (cool) {
+  if (pin.get("outerwear")) {
+    const o = pin.get("outerwear")!;
+    if (!ids.includes(o.id)) ids.push(o.id);
+  } else if (cool) {
     // Outerwear only when it's actually cool. Hoodie is not a coat.
     const coats = by("outerwear").filter((g) => !isHoodiePiece(g));
     const outer = best(coats);
@@ -361,22 +458,26 @@ export function pickLook(
     });
     if (slot >= 0) {
       const occupant = pool.find((x) => x.id === ids[slot]);
-      // Don't swap a dinner trouser for idle jeans. Client/dinner stay brief-driven.
-      const formal = opts.occasion === "client" || opts.occasion === "dinner";
-      if (occupant && daysIdle(occupant) < 21 && !formal) {
-        const nextIds = ids.map((id, i) => (i === slot ? candidate.id : id));
-        const nextPieces = nextIds
-          .map((id) => pool.find((x) => x.id === id))
-          .filter((g): g is Garment => Boolean(g));
-        if (houseMixPenalty(nextPieces) < -8) {
-          // keep the occupant — don't drop a 90s hoodie onto pleats + loafer
-        } else {
-          const hNow = harmony(
-            ids.map((id) => pool.find((x) => x.id === id)).filter((g): g is Garment => Boolean(g)),
-            { occasion: opts.occasion, f },
-          );
-          const hNext = harmony(nextPieces, { occasion: opts.occasion, f });
-          if (hNext >= 0 || hNext >= hNow) ids[slot] = candidate.id;
+      if (occupant && lockedSet.has(occupant.id)) {
+        // locked slot stays
+      } else {
+        // Don't swap a dinner trouser for idle jeans. Client/dinner stay brief-driven.
+        const formal = opts.occasion === "client" || opts.occasion === "dinner";
+        if (occupant && daysIdle(occupant) < 21 && !formal) {
+          const nextIds = ids.map((id, i) => (i === slot ? candidate.id : id));
+          const nextPieces = nextIds
+            .map((id) => pool.find((x) => x.id === id))
+            .filter((g): g is Garment => Boolean(g));
+          if (houseMixPenalty(nextPieces) < -8) {
+            // keep the occupant — don't drop a 90s hoodie onto pleats + loafer
+          } else {
+            const hNow = harmony(
+              ids.map((id) => pool.find((x) => x.id === id)).filter((g): g is Garment => Boolean(g)),
+              { occasion: opts.occasion, f },
+            );
+            const hNext = harmony(nextPieces, { occasion: opts.occasion, f });
+            if (hNext >= 0 || hNext >= hNow) ids[slot] = candidate.id;
+          }
         }
       }
     } else if (candSlot === "accessory") {
@@ -384,6 +485,20 @@ export function pickLook(
     } else if (candSlot === "outerwear" && !isHoodiePiece(candidate)) {
       ids.push(candidate.id);
     }
+  }
+
+  for (const g of lockedGs) {
+    const s = slotOf(g);
+    if (!s) {
+      if (!ids.includes(g.id)) ids.push(g.id);
+      continue;
+    }
+    const idx = ids.findIndex((id) => {
+      const x = pool.find((p) => p.id === id);
+      return x && slotOf(x) === s;
+    });
+    if (idx >= 0) ids[idx] = g.id;
+    else if (!ids.includes(g.id)) ids.push(g.id);
   }
 
   return ids;

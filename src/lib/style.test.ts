@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { houseMixPenalty, pickLook, slotOf } from "./style.ts";
-import type { Garment } from "./types.ts";
+import { avoidedUniformLine, houseMixPenalty, pairKey, pickLook, slotOf } from "./style.ts";
+import type { Garment, WearEntry } from "./types.ts";
 
 function piece(
   partial: Pick<Garment, "id" | "name" | "category" | "subtype"> &
@@ -238,6 +238,87 @@ describe("pickLook", () => {
         !(hasHood && hasPleat && hasLf),
         `hoodie + pleat + loafer: ${ids.join(",")}`,
       );
+    }
+  });
+
+  it("locked loafer stays when occasion changes", () => {
+    const closet = [
+      piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "polo", name: "Navy polo", category: "top", subtype: "polo" }),
+      piece({ id: "tr", name: "Charcoal trousers", category: "bottom", subtype: "trouser", formality: 4 }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+      piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker", formality: 1 }),
+    ];
+    const dinner = pickLook(closet, {
+      occasion: "dinner",
+      moment: "day",
+      weather: opts.weather,
+      lockedIds: ["lf"],
+    });
+    assert.ok(dinner.includes("lf"), `dinner lost loafer: ${dinner.join(",")}`);
+    assert.ok(!dinner.includes("hood"));
+    const week = pickLook(closet, {
+      occasion: "weekday",
+      moment: "day",
+      weather: opts.weather,
+      lockedIds: ["lf"],
+      previousIds: dinner,
+    });
+    assert.ok(week.includes("lf"), `weekday lost loafer: ${week.join(",")}`);
+  });
+
+  it("avoids last week's chino + loafer pair unless locked", () => {
+    const closet = [
+      piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "polo", name: "Navy polo", category: "top", subtype: "polo" }),
+      piece({ id: "ch", name: "Cream chino", category: "bottom", subtype: "chino" }),
+      piece({ id: "tr", name: "Navy trousers", category: "bottom", subtype: "trouser", formality: 4 }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+      piece({ id: "lf2", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const repeats = new Set([pairKey("ch", "lf")]);
+    let other = 0;
+    for (let i = 0; i < 12; i++) {
+      const ids = pickLook(closet, {
+        occasion: "weekday",
+        moment: "day",
+        weather: opts.weather,
+        repeatPairs: repeats,
+      });
+      const hasPair = ids.includes("ch") && ids.includes("lf");
+      if (!hasPair) other += 1;
+    }
+    assert.ok(other >= 1, "should sometimes pick a different pair");
+    const journal: WearEntry[] = [
+      {
+        date: "2026-09-12",
+        garmentIds: ["ox", "ch", "lf"],
+        verdict: "worn",
+      },
+    ];
+    const line = avoidedUniformLine(journal, ["polo", "tr", "lf2"], closet, "2026-09-13");
+    assert.equal(line, "Not the Cream chino + Navy loafers again.");
+  });
+
+  it("locked hoodie pairs with jean and sneaker, not pleat + loafer", () => {
+    const closet = [
+      piece({ id: "hood", name: "Black 90s hoodie", category: "top", subtype: "hoodie", formality: 2 }),
+      piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "pleat", name: "Cream pleated trousers", category: "bottom", subtype: "trouser", formality: 4 }),
+      piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean", formality: 2 }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+      piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker", formality: 1 }),
+    ];
+    for (let i = 0; i < 8; i++) {
+      const ids = pickLook(closet, {
+        occasion: "weekend",
+        moment: "day",
+        weather: opts.weather,
+        lockedIds: ["hood"],
+      });
+      assert.ok(ids.includes("hood"));
+      assert.ok(!(ids.includes("pleat") && ids.includes("lf")), `clash: ${ids.join(",")}`);
     }
   });
 });

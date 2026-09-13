@@ -597,6 +597,7 @@ export function moreLikeThis(
   looks: Look[],
   garments: Garment[],
   n = 3,
+  lockedIds: string[] = [],
 ): Look[] {
   const byId = new Map(garments.map((g) => [g.id, g]));
   const pieces = look.garmentIds
@@ -614,7 +615,11 @@ export function moreLikeThis(
     if (cand.id === look.id) return Number.NEGATIVE_INFINITY;
     const p = resolve(cand);
     if (p.length < 3) return Number.NEGATIVE_INFINITY;
-    if (slotsDifferent(pieces, p) < 2) return Number.NEGATIVE_INFINITY;
+    if (lockedIds.length && lockedIds.some((id) => !cand.garmentIds.includes(id))) {
+      return Number.NEGATIVE_INFINITY;
+    }
+    const minDiff = lockedIds.length ? 1 : 2;
+    if (slotsDifferent(pieces, p) < minDiff) return Number.NEGATIVE_INFINITY;
     const sharedH = lookHouses(p).filter((h) => houses.has(h)).length;
     let sharedC = 0;
     for (const c of lookColors(p)) if (colors.has(c)) sharedC += 1;
@@ -634,4 +639,80 @@ export function moreLikeThis(
   const same = ranked.filter((x) => x.l.occasion === occ);
   const rest = ranked.filter((x) => x.l.occasion !== occ);
   return [...same, ...rest].slice(0, n).map((x) => x.l);
+}
+
+function heroOccasions(g: Garment): Occasion[] {
+  const b = `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
+  const slot = slotOf(g);
+  if (isGraphic(g) || isHoodiePiece(g)) return ["weekend"];
+  if (isCampCollar(g)) return ["weekday", "weekend", "travel"];
+  if (slot === "footwear" && /loafer/.test(b)) {
+    return ["weekday", "client", "dinner", "weekend", "travel"];
+  }
+  if (slot === "bottom" && /trouser|gurkha/.test(b)) {
+    return ["weekday", "client", "dinner", "travel", "weekend"];
+  }
+  if (slot === "bottom" && /chino/.test(b)) {
+    return ["weekday", "client", "weekend", "travel"];
+  }
+  return ["weekday", "client", "dinner", "weekend", "travel"];
+}
+
+function heroHonest(g: Garment, occ: Occasion, pieces: Garment[]): boolean {
+  if (lookFitsOccasion(pieces, occ)) return true;
+  const blob = pieces.map((p) => `${p.subtype} ${p.name}`).join(" ").toLowerCase();
+  const hoodie = pieces.some(isHoodiePiece) || pieces.some(isGraphic);
+  const loafer = /loafer/.test(blob);
+  if (occ === "weekend" && /trouser|gurkha/.test(`${g.subtype} ${g.name}`) && loafer && !hoodie) {
+    return true;
+  }
+  if (occ === "weekend" && slotOf(g) === "footwear" && /loafer/.test(`${g.subtype} ${g.name}`) && !hoodie) {
+    return true;
+  }
+  return false;
+}
+
+/** Up to 5 looks that include this piece — one per occasion that can wear it. */
+export function looksForHero(g: Garment, garments: Garment[]): Look[] {
+  const pool = lookbookPool(garments);
+  const byId = new Map(pool.map((x) => [x.id, x]));
+  const out: Look[] = [];
+  const keys = new Set<string>();
+  for (const occasion of heroOccasions(g)) {
+    const weather =
+      occasion === "dinner"
+        ? { f: 62, label: "Mild", code: 2 }
+        : occasion === "weekend" || occasion === "travel"
+          ? { f: 72, label: "Fair", code: 2 }
+          : { f: 68, label: "Fair", code: 2 };
+    const ids = pickLook(pool, {
+      occasion,
+      moment: "day",
+      weather,
+      lockedIds: [g.id],
+    });
+    if (!ids.includes(g.id)) continue;
+    const pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
+    if (pieces.length < 3) continue;
+    if (!heroHonest(g, occasion, pieces)) continue;
+    if (occasion === "weekend" && (isHoodiePiece(g) || isGraphic(g))) {
+      const jean = pieces.some((p) => /\bjeans?\b|denim/.test(`${p.subtype} ${p.name}`));
+      const sneaker = pieces.some((p) => /sneaker|trainer|\b990\b/.test(`${p.subtype} ${p.name}`));
+      if (!jean || !sneaker) continue;
+    }
+    const key = [...ids].sort().join("|");
+    if (keys.has(key)) continue;
+    keys.add(key);
+    out.push({
+      id: `hero_${g.id}_${occasion}`,
+      name: nameOf(pieces),
+      occasion,
+      garmentIds: ids,
+      source: "ai",
+      lookbook: true,
+      createdAt: `${todayISO()}T00:00:00.000Z`,
+    });
+    if (out.length >= 5) break;
+  }
+  return out;
 }

@@ -3,7 +3,10 @@ import { flushSync } from "react-dom";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentDetail } from "@/components/closet/detail";
 import { IdleMount } from "@/components/closet/idle-mount";
+import { FlatLay } from "@/components/closet/flat-lay";
+import { LookSheet } from "@/components/closet/look-sheet";
 import { GarmentTile } from "@/components/closet/tile";
+import { looksForHero } from "@/lib/lookbook";
 import {
   blobToDataUrl,
   getImage,
@@ -14,7 +17,7 @@ import {
 import { rackNotes } from "@/lib/gaps";
 import { daysIdle } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import { CATEGORIES, type Category, type Garment } from "@/lib/types";
+import { CATEGORIES, type Category, type Garment, type Look } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/closet")({ component: ClosetPage });
@@ -34,8 +37,11 @@ function ClosetPage() {
   const importCloset = useCloset((s) => s.importCloset);
   const setRefPhoto = useCloset((s) => s.setRefPhoto);
   const removeGarment = useCloset((s) => s.removeGarment);
+  const wearToday = useCloset((s) => s.wearToday);
   const [filter, setFilter] = useState<Filter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [heroLooks, setHeroLooks] = useState<Look[]>([]);
+  const [heroOpen, setHeroOpen] = useState<Look | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selecting, setSelecting] = useState(false);
@@ -368,7 +374,76 @@ function ClosetPage() {
           key={open.id}
           garment={open}
           getTile={getOpenTile}
-          onClose={() => setOpenPiece(null)}
+          onClose={() => {
+            setOpenPiece(null);
+            setHeroLooks([]);
+            setHeroOpen(null);
+          }}
+          onLooks={() => {
+            setHeroLooks(looksForHero(open, garments));
+            setHeroOpen(null);
+          }}
+        />
+      )}
+      {heroLooks.length > 0 && !heroOpen && (
+        <div className="fixed inset-0 z-[55] flex items-end md:items-center justify-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-ink/20"
+            aria-label="Close"
+            onClick={() => setHeroLooks([])}
+          />
+          <div className="relative z-10 w-full max-h-[92dvh] overflow-auto bg-paper border border-hairline p-4 md:max-w-lg">
+            <p className="micro text-ink-soft">With this</p>
+            <p className="mt-1 font-editorial text-2xl tracking-tight">
+              5 looks with {open?.name ?? "this"}
+            </p>
+            <ul className="mt-4 grid grid-cols-2 gap-3">
+              {heroLooks.map((look) => {
+                const pieces = look.garmentIds
+                  .map((id) => garments.find((g) => g.id === id))
+                  .filter((g): g is Garment => Boolean(g));
+                return (
+                  <li key={look.id}>
+                    <button
+                      type="button"
+                      onClick={() => setHeroOpen(look)}
+                      className="block w-full text-left"
+                    >
+                      <FlatLay pieces={pieces} className="pointer-events-none" passive />
+                      <p className="mt-2 text-sm">{look.name}</p>
+                      <p className="micro text-ink-soft">{look.occasion}</p>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setHeroLooks([])}
+              className="micro mt-4 text-ink-soft hover:text-ink"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      {heroOpen && (
+        <LookSheet
+          look={heroOpen}
+          pieces={heroOpen.garmentIds
+            .map((id) => garments.find((g) => g.id === id))
+            .filter((g): g is Garment => Boolean(g))}
+          book={heroLooks}
+          closet={garments}
+          onClose={() => setHeroOpen(null)}
+          onWear={() => {
+            wearToday(
+              heroOpen.garmentIds.filter((id) => garments.some((g) => g.id === id)),
+            );
+            setHeroOpen(null);
+          }}
+          onOpenLook={(next) => setHeroOpen(next)}
         />
       )}
     </div>

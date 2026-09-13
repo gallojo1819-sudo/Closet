@@ -91,6 +91,10 @@ export type DailyDrop = {
   weather?: WeatherSnap;
   occasion?: Occasion;
   moment?: Moment;
+  /** Piece ids pinned on Today. Survive skip / occasion / reroll. */
+  lockedIds?: string[];
+  /** Quiet line when a lock forced the rest of the look to move. */
+  lockNote?: string | null;
 };
 
 export type WearEntry = {
