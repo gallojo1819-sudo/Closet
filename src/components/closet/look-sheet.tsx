@@ -48,11 +48,13 @@ export function LookSheet({
     [ids, closetById],
   );
   const extra = comboKey(activePieces.map((p) => p.id));
+  const originalExtra = comboKey(look.garmentIds);
+  const sameSet = extra === originalExtra;
   const cacheKey = lookOnMeKey(look.id, extra);
-  const cachedSrc =
-    useImageSrc(cacheKey) ||
-    useImageSrc(lookOnMeKey(look.id)) ||
-    useImageSrc(`idb:lb:v2:${look.id}`);
+  const liveSrc = useImageSrc(cacheKey);
+  const oldSrc = useImageSrc(lookOnMeKey(look.id));
+  const v2Src = useImageSrc(`idb:lb:v2:${look.id}`);
+  const cachedSrc = liveSrc || (sameSet ? oldSrc || v2Src : "");
   const [frame, setFrame] = useState<string | null>(null);
   const [showMe, setShowMe] = useState(false);
   const [dressing, setDressing] = useState(false);

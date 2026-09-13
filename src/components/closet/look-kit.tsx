@@ -1,5 +1,5 @@
 import { GarmentImg } from "@/components/closet/gimg";
-import { layersForOnMe } from "@/lib/look";
+import { kitCells } from "@/lib/look";
 import type { Garment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -11,31 +11,31 @@ export function LookKit({
   pieces: Garment[];
   className?: string;
 }) {
-  const cells = layersForOnMe(pieces);
+  const cells = kitCells(pieces);
   const n = cells.length;
   if (n === 0) {
-    return <div className={cn("aspect-[4/5] bg-paper", className)} />;
+    return <div className={cn("h-full w-full bg-paper", className)} />;
   }
   const three = n === 3;
   return (
     <div
-      className={cn(
-        "grid h-full w-full aspect-[4/5] bg-paper",
-        n <= 1 ? "grid-rows-1" : n === 2 ? "grid-rows-2" : "grid-cols-2 grid-rows-2",
-        className,
-      )}
+      className={cn("grid h-full w-full min-h-0 bg-paper", className)}
+      style={
+        n <= 2
+          ? { gridTemplateRows: n === 1 ? "1fr" : "1fr 1fr" }
+          : { gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr" }
+      }
     >
       {cells.map((g, i) => (
         <div
           key={g.id}
-          className={cn(
-            "min-h-0 min-w-0 flex items-center justify-center p-1",
-            three && i === 2 ? "col-span-2" : null,
-          )}
+          className="relative min-h-0 min-w-0 overflow-hidden"
+          style={three && i === 2 ? { gridColumn: "1 / -1" } : undefined}
         >
           <GarmentImg
             garment={g}
-            className="max-h-full max-w-full h-full w-full object-contain"
+            eager
+            className="absolute inset-0 h-full w-full object-contain"
           />
         </div>
       ))}

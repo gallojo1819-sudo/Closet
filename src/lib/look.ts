@@ -90,6 +90,19 @@ export function layersForOnMe(pieces: Garment[]): Garment[] {
   return [top, bottom, shoe, outer].filter((g): g is Garment => Boolean(g)).slice(0, 4);
 }
 
+/** Kit tiles: one top, one bottom, one blazer, one shoe. No stack. */
+export function kitCells(pieces: Garment[]): Garment[] {
+  const layers = layersForOnMe(pieces);
+  const top = layers.find((g) => {
+    const s = slotOf(g);
+    return s === "top" || s === "dress" || isHoodiePiece(g);
+  });
+  const bottom = layers.find((g) => slotOf(g) === "bottom");
+  const outer = layers.find((g) => slotOf(g) === "outerwear" && !isHoodiePiece(g));
+  const shoe = layers.find((g) => slotOf(g) === "footwear");
+  return [top, bottom, outer, shoe].filter((g): g is Garment => Boolean(g));
+}
+
 export function nameLook(pieces: Garment[]): string {
   const sorted = sortLook(pieces);
   if (sorted.length === 0) return "Nothing on the rack";

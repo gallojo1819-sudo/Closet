@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { layersForOnMe } from "./look.ts";
+import { kitCells, layersForOnMe } from "./look.ts";
 import type { Garment } from "./types.ts";
 
 function g(
@@ -69,6 +69,34 @@ describe("layersForOnMe", () => {
       [ids.includes("flag"), ids.includes("hood")].filter(Boolean).length,
       1,
       `fused graphics: ${ids.join(",")}`,
+    );
+  });
+});
+
+describe("kitCells", () => {
+  it("shows polo, trousers, blazer, loafers as four tiles", () => {
+    const look = [
+      g({ id: "polo", name: "Pink polo", category: "top", subtype: "polo" }),
+      g({ id: "tr", name: "Blue trousers", category: "bottom", subtype: "trouser" }),
+      g({ id: "blz", name: "Navy blazer", category: "outerwear", subtype: "blazer" }),
+      g({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const cells = kitCells(look);
+    assert.deepEqual(
+      cells.map((x) => x.id),
+      ["polo", "tr", "blz", "lf"],
+    );
+  });
+
+  it("three pieces put footwear on the full second row", () => {
+    const look = [
+      g({ id: "polo", name: "Pink polo", category: "top", subtype: "polo" }),
+      g({ id: "tr", name: "Blue trousers", category: "bottom", subtype: "trouser" }),
+      g({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    assert.deepEqual(
+      kitCells(look).map((x) => x.id),
+      ["polo", "tr", "lf"],
     );
   });
 });

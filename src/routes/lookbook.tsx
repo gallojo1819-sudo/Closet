@@ -43,31 +43,36 @@ function LookCardFace({
   const oldSrc = useImageSrc(lookOnMeKey(look.id));
   const v2Src = useImageSrc(`idb:lb:v2:${look.id}`);
   const cachedSrc = liveSrc || oldSrc || v2Src;
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
-  const asked = useRef(false);
+  const asked = useRef("");
+  const ioRef = useRef<IntersectionObserver | null>(null);
 
   const setRefs = (el: HTMLDivElement | null) => {
-    rootRef.current = el;
     cardRef(el);
-  };
-
-  useEffect(() => {
-    const el = rootRef.current;
+    ioRef.current?.disconnect();
+    ioRef.current = null;
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => setVisible(Boolean(entry?.isIntersecting)),
-      { rootMargin: "80px" },
+      { rootMargin: "40px" },
     );
     io.observe(el);
-    return () => io.disconnect();
-  }, []);
+    ioRef.current = io;
+  };
+
+  useEffect(() => () => ioRef.current?.disconnect(), []);
 
   useEffect(() => {
-    if (!visible || cachedSrc || asked.current) return;
-    asked.current = true;
+    asked.current = "";
+  }, [look.id]);
+
+  useEffect(() => {
+    if (!visible || cachedSrc) return;
+    const token = `${look.id}:${extra}`;
+    if (asked.current === token) return;
+    asked.current = token;
     void queueLookOnMe(look.id, pieces, 45_000, look.occasion as Occasion);
-  }, [visible, cachedSrc, look.id, look.occasion, pieces]);
+  }, [visible, cachedSrc, look.id, look.occasion, extra, pieces]);
 
   return (
     <div

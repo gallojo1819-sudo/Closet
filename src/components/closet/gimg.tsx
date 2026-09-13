@@ -10,11 +10,13 @@ export function GarmentImg({
   className,
   alt,
   thumb = true,
+  eager = false,
 }: {
   garment: Garment;
   className?: string;
   alt?: string;
   thumb?: boolean;
+  eager?: boolean;
 }) {
   const fullKey = garment.cutoutSrc || garment.imageSrc;
   const thumbKey = imageKey(garment.id, "t");
@@ -33,7 +35,7 @@ export function GarmentImg({
       src={src}
       alt={alt ?? garment.name}
       className={className}
-      loading="lazy"
+      loading={eager ? "eager" : "lazy"}
       decoding="async"
     />
   );
