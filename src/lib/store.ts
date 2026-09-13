@@ -21,6 +21,7 @@ import {
   comboKey,
   enforcePieceCap,
   fillOccasionLooks,
+  stripRepeatBlazers,
 } from "./lookbook";
 import { lookFitsSeason } from "./season";
 import {
@@ -429,7 +430,10 @@ export const useCloset = create<ClosetState>()(
         const s = get();
         if (!s.hydrated) return;
         if (s.garments.length === 0) return;
-        let looks = enforcePieceCap(capChapterLooks(s.looks), s.garments);
+        let looks = enforcePieceCap(
+          stripRepeatBlazers(capChapterLooks(s.looks), s.garments),
+          s.garments,
+        );
         const seenLooks: SeenLooks = { ...s.seenLooks };
         for (const { id: occ } of OCCASIONS) {
           const chapter = looks.filter((l) => mapOccasion(l.occasion) === occ);
@@ -467,7 +471,10 @@ export const useCloset = create<ClosetState>()(
         const s = get();
         if (!s.hydrated) return;
         const occ = mapOccasion(occasion);
-        const trimmed = enforcePieceCap(s.looks, s.garments);
+        const trimmed = enforcePieceCap(
+          stripRepeatBlazers(s.looks, s.garments),
+          s.garments,
+        );
         const byId = new Map(s.garments.map((g) => [g.id, g]));
         const fitting = trimmed.filter((l) => {
           if (!l.lookbook || mapOccasion(l.occasion) !== occ) return false;

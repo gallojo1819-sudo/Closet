@@ -14,6 +14,7 @@ import {
   lookbookPool,
   lookFitsOccasion,
   lookHasColor,
+  stripRepeatBlazers,
 } from "@/lib/lookbook";
 import { lookFitsSeason, seasonFromWeather } from "@/lib/season";
 import { slotOf } from "@/lib/style";
@@ -212,7 +213,7 @@ function LookbookPage() {
       if (color && !lookHasColor(pieces, color)) return false;
       return true;
     });
-    return enforcePieceCap(rows, garments);
+    return enforcePieceCap(stripRepeatBlazers(rows, garments), garments);
   }, [book, occasion, color, byId, pool, season, garments]);
 
   const highlightId = focusLook ?? null;

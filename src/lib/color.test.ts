@@ -65,6 +65,21 @@ describe("harmony", () => {
     assert.ok(harmony(look) < 0);
   });
 
+  it("three beige plates are illegal", () => {
+    const look = [
+      g({ id: "t", name: "Cream cable-knit", category: "top", subtype: "cable", colors: ["cream"] }),
+      g({ id: "b", name: "Beige chino", category: "bottom", subtype: "chino", colors: ["beige"] }),
+      g({
+        id: "j",
+        name: "Beige cord blazer",
+        category: "outerwear",
+        subtype: "blazer",
+        colors: ["beige"],
+      }),
+    ];
+    assert.ok(harmony(look) < 0);
+  });
+
   it("color line is quiet", () => {
     const look = [
       g({ id: "t", name: "Cream oxford", category: "top", subtype: "oxford", colors: ["cream"] }),

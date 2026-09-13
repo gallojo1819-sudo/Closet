@@ -5,6 +5,7 @@ import {
   isFairIsle,
   isGraphic,
   isHoodiePiece,
+  leadHouse,
   lookHouses,
   pickLook,
   slotOf,
@@ -117,6 +118,50 @@ function isBlazer(g: Garment): boolean {
   return /blazer|sport\s*coats?/.test(blobOf(g));
 }
 
+const SAND =
+  /beige|cream|tan|camel|khaki|sand|ecru|stone|bone|ivory/;
+
+function isSandPiece(g: Garment): boolean {
+  if (g.colors.some((c) => SAND.test(canonicalize(c) || c))) return true;
+  return SAND.test(`${g.name} ${g.subtype} ${g.colors.join(" ")}`.toLowerCase());
+}
+
+function beigePlateCount(pieces: Garment[]): number {
+  return pieces.filter(
+    (g) => slotOf(g) !== "accessory" && isSandPiece(g),
+  ).length;
+}
+
+/** Jacket only when the house wants one. Default look is three pieces. */
+export function lookAllowsBlazer(core: Garment[], jacket: Garment, occasion?: Occasion): boolean {
+  if (!isBlazer(jacket)) return false;
+  if (core.some((g) => slotOf(g) === "outerwear")) return false;
+  if (core.some(isHoodiePiece) || core.some(isGraphic)) return false;
+  const top = topsOf(core)[0];
+  const bottom = bottomsOf(core)[0];
+  const shoe = shoesOf(core)[0];
+  if (!top || !shoe) return false;
+  const tb = pieceBlob(top);
+  const sb = pieceBlob(shoe);
+  if (/mule|sneaker|trainer|\b990\b/.test(sb)) return false;
+  if (!/loafer|oxford/.test(sb)) return false;
+  if (isCampCollar(top) || /linen/.test(tb)) return false;
+  if (/cable|chunky|aran|fisherman/.test(tb)) return false;
+  const shirt =
+    /oxford|polo/.test(tb) ||
+    ((/merino|fine|silk/.test(tb) || /knit|sweater/.test(tb)) &&
+      !/cable|chunky|fair\s*isle/.test(tb));
+  if (!shirt) return false;
+  const house = leadHouse(core);
+  if (house === "ralph" && /cable/.test(tb)) return false;
+  if (occasion === "weekend" && isFairIsle(top)) return false;
+  if (bottom && isSandPiece(top) && isSandPiece(bottom) && isSandPiece(jacket)) {
+    return false;
+  }
+  if (beigePlateCount([...core, jacket]) >= 3) return false;
+  return true;
+}
+
 const NAME_ORDER = ["top", "dress", "bottom", "outerwear", "footwear", "accessory"];
 
 function nameOf(pieces: Garment[]): string {
@@ -138,46 +183,56 @@ function shouldOuter(outer: Garment, core: Garment[]): boolean {
   return outer.warmth >= 3 && Math.abs(outer.formality - avg) <= 1;
 }
 
-function attachOuter(
+function maxBlazerLooks(occasion?: Occasion): number {
+  if (occasion === "weekend") return 1;
+  if (occasion === "weekday" || occasion === "out") return 2;
+  return 0;
+}
+
+function maybeAttachBlazer(
   core: Garment[],
   outers: Garment[],
   today: string,
-  occasion?: Occasion,
-  season?: Season,
+  occasion: Occasion | undefined,
+  season: Season | undefined,
+  blazerLooks: number,
+  usedBlazers: Set<string>,
+  atCap: (g: Garment) => boolean,
 ): Garment[] {
-  if (core.some(isGraphic)) return core;
+  if (core.some(isGraphic) || core.some(isHoodiePiece)) return core;
   if (core.some((g) => slotOf(g) === "outerwear")) return core;
+  const max = maxBlazerLooks(occasion);
+  if (blazerLooks >= max) return core;
+  if (occasion === "weekend" && blazerLooks >= 1) return core;
   const tryOn = (o: Garment): Garment[] | null => {
     if (core.some((g) => g.id === o.id)) return null;
-    if (slotOf(o) !== "outerwear") return null;
+    if (usedBlazers.has(o.id)) return null;
+    if (atCap(o)) return null;
+    if (!lookAllowsBlazer(core, o, occasion)) return null;
     if (season === "summer" && o.warmth >= 4) return null;
     const next = [...core, o];
     if (clashes(next)) return null;
+    if (beigePlateCount(next) >= 3) return null;
     if (season && !lookFitsSeason(next, season)) return null;
+    if (harmony(next, { occasion, f: season ? undefined : 64 }) < 0) return null;
     return next;
   };
-  if (occasion === "weekday" || occasion === "out") {
-    const blazers = outers.filter(isBlazer);
-    const light = season === "summer" ? blazers.filter((o) => o.warmth <= 3) : blazers;
-    for (const o of rank(light, today)) {
-      const next = tryOn(o);
-      if (next) return next;
-    }
-  }
-  if (occasion === "weekend") return core;
   if (occasion === "travel") {
     for (const o of rank(
-      outers.filter((x) => x.warmth <= 3 && !isHoodiePiece(x)),
+      outers.filter((x) => x.warmth <= 3 && !isHoodiePiece(x) && !isBlazer(x)),
       today,
     )) {
-      const next = tryOn(o);
-      if (next) return next;
+      if (core.some((g) => g.id === o.id) || atCap(o)) continue;
+      const next = [...core, o];
+      if (clashes(next)) continue;
+      if (season && !lookFitsSeason(next, season)) continue;
+      return next;
     }
     return core;
   }
-  const ranked = rank(outers, today);
-  for (const o of ranked) {
-    if (!shouldOuter(o, core)) continue;
+  const blazers = outers.filter(isBlazer);
+  const light = season === "summer" ? blazers.filter((o) => o.warmth <= 3) : blazers;
+  for (const o of rank(light, today)) {
     const next = tryOn(o);
     if (next) return next;
   }
@@ -313,11 +368,12 @@ export function pieceLookCap(slotCount: number): number {
   return 3;
 }
 
-function wearCapSlot(g: Garment): "top" | "bottom" | "footwear" | null {
+function wearCapSlot(g: Garment): "top" | "bottom" | "footwear" | "outerwear" | null {
   const s = slotOf(g);
   if (s === "top" || s === "dress") return "top";
   if (s === "bottom") return "bottom";
   if (s === "footwear") return "footwear";
+  if (s === "outerwear") return "outerwear";
   return null;
 }
 
@@ -326,7 +382,47 @@ function slotCapsFor(pool: Garment[]) {
     top: pieceLookCap(bySlot(pool, "top").length + bySlot(pool, "dress").length),
     bottom: pieceLookCap(bySlot(pool, "bottom").length),
     footwear: pieceLookCap(bySlot(pool, "footwear").length),
+    outerwear: pieceLookCap(bySlot(pool, "outerwear").length),
   };
+}
+
+/** Keep at most one look per blazer id; strip that jacket from the rest. Max 2 blazered looks (1 on weekend). */
+export function stripRepeatBlazers(looks: Look[], garments: Garment[]): Look[] {
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  const keptJacket = new Map<string, Set<string>>();
+  const blazerLooks = new Map<string, number>();
+  return looks.map((l) => {
+    if (l.source === "manual" || !l.lookbook) return l;
+    const occ = mapOccasion(l.occasion);
+    if (occ !== "weekday" && occ !== "out" && occ !== "weekend") return l;
+    const jackets = l.garmentIds
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => g != null && isBlazer(g));
+    if (!jackets.length) return l;
+    const seen = keptJacket.get(occ) ?? new Set<string>();
+    const count = blazerLooks.get(occ) ?? 0;
+    const max = maxBlazerLooks(occ);
+    const keep = new Set<string>();
+    for (const j of jackets) {
+      if (seen.has(j.id)) continue;
+      if (count + keep.size >= max) continue;
+      keep.add(j.id);
+    }
+    const strip = jackets.filter((j) => !keep.has(j.id)).map((j) => j.id);
+    if (!strip.length) {
+      for (const id of keep) seen.add(id);
+      keptJacket.set(occ, seen);
+      blazerLooks.set(occ, count + keep.size);
+      return l;
+    }
+    const ids = l.garmentIds.filter((id) => !strip.includes(id));
+    if (ids.length < 3) return l;
+    for (const id of keep) seen.add(id);
+    keptJacket.set(occ, seen);
+    blazerLooks.set(occ, count + keep.size);
+    const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    return { ...l, garmentIds: ids, name: nameOf(pieces) };
+  });
 }
 
 /** Drop extra auto looks so no shirt/pant/shoe exceeds the per-chapter cap. Manual stays. */
@@ -379,6 +475,8 @@ export function buildChapter(
     today?: string;
     season?: Season;
     usedCount?: Map<string, number>;
+    blazerLooks?: number;
+    usedBlazers?: Set<string>;
   },
 ): Look[] {
   const cap = opts?.cap ?? CHAPTER_CAP;
@@ -391,6 +489,8 @@ export function buildChapter(
   const byId = new Map(pool.map((g) => [g.id, g]));
   const caps = slotCapsFor(pool);
   const usedCount = opts?.usedCount ?? new Map<string, number>();
+  let blazerLooks = opts?.blazerLooks ?? 0;
+  const usedBlazers = opts?.usedBlazers ?? new Set<string>();
   const atCap = (g: Garment) => {
     const slot = wearCapSlot(g);
     if (!slot) return false;
@@ -414,6 +514,7 @@ export function buildChapter(
     if (pieces.length < 3) return false;
     if (!lookFitsOccasion(pieces, occasion, pool)) return false;
     if (season && !lookFitsSeason(pieces, season)) return false;
+    if (beigePlateCount(pieces) >= 3) return false;
     if (!force) {
       for (const g of pieces) {
         if (atCap(g)) return false;
@@ -454,14 +555,34 @@ export function buildChapter(
     prev = ids;
     let pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
     if (pieces.length < 3) continue;
-    pieces = attachOuter(
-      pieces,
-      outers.filter((o) => !atCap(o)),
-      today,
-      occasion,
-      season,
-    );
-    tryPush(pieces);
+    pieces = pieces.filter((g) => !isBlazer(g));
+    const tryJacket =
+      ((occasion === "weekday" || occasion === "out") &&
+        ((blazerLooks === 0 && out.length >= 2) ||
+          (blazerLooks === 1 && out.length >= 6))) ||
+      (occasion === "weekend" && blazerLooks === 0 && out.length >= 5) ||
+      occasion === "travel";
+    if (tryJacket) {
+      const next = maybeAttachBlazer(
+        pieces,
+        outers,
+        today,
+        occasion,
+        season,
+        blazerLooks,
+        usedBlazers,
+        atCap,
+      );
+      pieces = next;
+    }
+    if (tryPush(pieces)) {
+      for (const g of pieces) {
+        if (isBlazer(g)) {
+          blazerLooks += 1;
+          usedBlazers.add(g.id);
+        }
+      }
+    }
   }
 
   if (out.length < cap) {
@@ -480,7 +601,7 @@ export function buildChapter(
       });
       let pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
       if (!pieces.some((x) => x.id === g.id)) continue;
-      pieces = attachOuter(pieces, outers.filter((o) => !atCap(o)), today, occasion, season);
+      pieces = pieces.filter((x) => !isBlazer(x));
       tryPush(pieces, true);
     }
   }
@@ -516,14 +637,25 @@ export function fillOccasionLooks(
     ...have.map((l) => comboKey(l.garmentIds)),
   ]);
   const usedCount = new Map<string, number>();
+  const usedBlazers = new Set<string>();
+  let blazerLooks = 0;
   for (const l of have) {
     for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
+    const jackets = l.garmentIds
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => g != null && isBlazer(g));
+    if (jackets.length) {
+      blazerLooks += 1;
+      for (const j of jackets) usedBlazers.add(j.id);
+    }
   }
   return buildChapter(garments, occ, {
     exclude: keys,
     cap: min - have.length,
     season,
     usedCount,
+    blazerLooks,
+    usedBlazers,
   });
 }
 
@@ -560,10 +692,20 @@ export function applyShuffle(
   const kept = looksToKeepOnShuffle(looks, occ, garments, season);
   const exclude = new Set(seen);
   const usedCount = new Map<string, number>();
+  const usedBlazers = new Set<string>();
+  let blazerLooks = 0;
+  const byId = new Map(garments.map((g) => [g.id, g]));
   for (const l of kept) {
     if (mapOccasion(l.occasion) !== occ) continue;
     exclude.add(comboKey(l.garmentIds));
     for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
+    const jackets = l.garmentIds
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => g != null && isBlazer(g));
+    if (jackets.length) {
+      blazerLooks += 1;
+      for (const j of jackets) usedBlazers.add(j.id);
+    }
   }
   const added = buildChapter(garments, occ, {
     exclude,
@@ -571,6 +713,8 @@ export function applyShuffle(
     today,
     season,
     usedCount,
+    blazerLooks,
+    usedBlazers,
   });
   const nextSeen = [...new Set([...seen, ...added.map((l) => comboKey(l.garmentIds))])];
   return { looks: [...kept, ...added], added, seen: nextSeen };

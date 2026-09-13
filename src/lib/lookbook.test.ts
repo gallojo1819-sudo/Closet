@@ -8,10 +8,12 @@ import {
   comboKey,
   enforcePieceCap,
   fillOccasionLooks,
+  lookAllowsBlazer,
   lookFitsOccasion,
   looksForHero,
   mergeLookbook,
   moreLikeThis,
+  stripRepeatBlazers,
 } from "./lookbook.ts";
 import type { Garment, Look } from "./types.ts";
 
@@ -97,23 +99,137 @@ describe("buildLookbook", () => {
     assert.equal(buildLookbook(closet(5, 5, 0)).length, 0);
   });
 
-  it("out puts a blazer on when he owns one", () => {
+  it("out is mostly 3 pieces; at most two different blazers", () => {
     const g = [
-      ...closet(3, 3, 3),
+      ...closet(8, 8, 8),
       piece({
         id: "j1",
         name: "Navy blazer",
         category: "outerwear",
         subtype: "blazer",
         formality: 4,
+        colors: ["navy"],
+      }),
+      piece({
+        id: "j2",
+        name: "Grey sport coat",
+        category: "outerwear",
+        subtype: "sport coat",
+        formality: 4,
+        colors: ["grey"],
+      }),
+      piece({
+        id: "cord",
+        name: "Beige cord blazer",
+        category: "outerwear",
+        subtype: "blazer",
+        formality: 4,
+        colors: ["beige"],
       }),
     ];
     const looks = buildChapter(g, "out", { cap: 10, today: "2026-09-12" });
-    assert.ok(looks.length >= 1, "out must have looks");
-    assert.ok(
-      looks.some((l) => l.garmentIds.includes("j1")),
-      "out look should wear the blazer",
+    assert.ok(looks.length >= 6, `out looks ${looks.length}`);
+    const withJacket = looks.filter((l) =>
+      l.garmentIds.some((id) => id === "j1" || id === "j2" || id === "cord"),
     );
+    assert.ok(withJacket.length <= 2, `blazers on ${withJacket.length} looks`);
+    const jacketIds = new Set(
+      withJacket.flatMap((l) =>
+        l.garmentIds.filter((id) => id === "j1" || id === "j2" || id === "cord"),
+      ),
+    );
+    assert.equal(jacketIds.size, withJacket.length, "each blazered look a different jacket");
+    const three = looks.filter((l) => l.garmentIds.filter((id) => !id.startsWith("j") && id !== "cord").length >= 3 && !l.garmentIds.some((id) => id === "j1" || id === "j2" || id === "cord"));
+    assert.ok(three.length >= looks.length - 2, "most cards are 3 pieces");
+  });
+
+  it("cream cable does not wear a beige cord blazer; white mules get no blazer", () => {
+    const cable = piece({
+      id: "cable",
+      name: "Cream cable-knit",
+      category: "top",
+      subtype: "cable",
+      colors: ["cream"],
+      warmth: 3,
+    });
+    const camp = piece({
+      id: "camp",
+      name: "Linen camp collar",
+      category: "top",
+      subtype: "camp shirt",
+      colors: ["white"],
+      warmth: 1,
+      seasons: [],
+    });
+    const chino = piece({
+      id: "ch",
+      name: "Beige chino",
+      category: "bottom",
+      subtype: "chino",
+      colors: ["beige"],
+    });
+    const mule = piece({
+      id: "mu",
+      name: "White mules",
+      category: "footwear",
+      subtype: "mule",
+      colors: ["white"],
+    });
+    const loafer = piece({
+      id: "lf",
+      name: "Navy loafers",
+      category: "footwear",
+      subtype: "loafer",
+      colors: ["navy"],
+    });
+    const cord = piece({
+      id: "cord",
+      name: "Beige cord blazer",
+      category: "outerwear",
+      subtype: "blazer",
+      colors: ["beige"],
+    });
+    assert.equal(lookAllowsBlazer([cable, chino, loafer], cord, "out"), false);
+    assert.equal(lookAllowsBlazer([camp, chino, mule], cord, "out"), false);
+    const looks = buildChapter(
+      [cable, camp, chino, mule, loafer, cord],
+      "out",
+      { cap: 10, today: "2026-09-12" },
+    );
+    for (const l of looks) {
+      if (l.garmentIds.includes("cable")) {
+        assert.ok(!l.garmentIds.includes("cord"), "cream cable + beige cord");
+      }
+      if (l.garmentIds.includes("mu")) {
+        assert.ok(!l.garmentIds.includes("cord"), "white mules + blazer");
+      }
+    }
+  });
+
+  it("strips a repeated blazer off extra Out rows", () => {
+    const g = [
+      ...closet(3, 3, 3),
+      piece({
+        id: "j1",
+        name: "Beige cord blazer",
+        category: "outerwear",
+        subtype: "blazer",
+        colors: ["beige"],
+      }),
+    ];
+    const bloated: Look[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `lb2_out_${i}`,
+      name: "Oxford · blazer",
+      occasion: "out",
+      garmentIds: ["t1", "b1", "s1", "j1"],
+      source: "ai" as const,
+      lookbook: true,
+      createdAt: "2026-09-12T00:00:00.000Z",
+    }));
+    const trimmed = stripRepeatBlazers(bloated, g);
+    const withJ = trimmed.filter((l) => l.garmentIds.includes("j1"));
+    assert.equal(withJ.length, 1);
+    assert.ok(trimmed.filter((l) => l.garmentIds.length === 3).length >= 7);
   });
 
   it("shuffle never repeats a combo key; saved look stays", () => {

@@ -458,17 +458,13 @@ export function pickLook(
   if (pin.get("outerwear")) {
     const o = pin.get("outerwear")!;
     if (!ids.includes(o.id)) ids.push(o.id);
-  } else {
-    const coats = by("outerwear").filter((g) => !isHoodiePiece(g));
-    const blazer = coats.find((g) =>
-      /blazer|sport\s*coats?/.test(`${g.subtype} ${g.name}`.toLowerCase()),
-    );
-    if ((opts.occasion === "weekday" || opts.occasion === "out") && blazer) {
-      if (!(f >= 75 && blazer.warmth >= 4)) ids.push(blazer.id);
-    } else if (cool && !warm) {
-      const outer = best(coats);
-      if (outer && !(warm && outer.warmth >= 5)) ids.push(outer.id);
-    }
+  } else if (cool && !warm) {
+    const coats = by("outerwear").filter((g) => {
+      if (isHoodiePiece(g)) return false;
+      return !/blazer|sport\s*coats?/.test(`${g.subtype} ${g.name}`.toLowerCase());
+    });
+    const outer = best(coats);
+    if (outer && !(warm && outer.warmth >= 5)) ids.push(outer.id);
   }
   const acc = by("accessory");
   const belt = acc.find((a) => a.subtype === "belt");
@@ -519,7 +515,12 @@ export function pickLook(
     } else if (candSlot === "accessory") {
       ids.push(candidate.id);
     } else if (candSlot === "outerwear" && !isHoodiePiece(candidate)) {
-      if (!(f >= 75 && (candidate.warmth >= 4 || isOvercoatPiece(candidate)))) {
+      const sport = /blazer|sport\s*coats?/.test(
+        `${candidate.subtype} ${candidate.name}`.toLowerCase(),
+      );
+      if (sport) {
+        // Lookbook / Today: never complete a look with a random sport coat.
+      } else if (!(f >= 75 && (candidate.warmth >= 4 || isOvercoatPiece(candidate)))) {
         ids.push(candidate.id);
       }
     }

@@ -197,14 +197,27 @@ export function nameWithColor(name: string, color: string): string {
   return name;
 }
 
-function role(g: Garment): "top" | "bottom" | "footwear" | "other" {
+const SAND = new Set<PaletteColor>(["cream", "beige", "tan", "camel", "khaki", "ivory"]);
+
+function role(g: Garment): "top" | "bottom" | "footwear" | "outer" | "other" {
   const b = `${g.subtype} ${g.name}`.toLowerCase();
   if (/\b(shoes?|loafers?|mules?|sneakers?|boots?)\b/.test(b)) return "footwear";
   if (/\b(pants?|chinos?|jeans?|trousers?|shorts?)\b/.test(b)) return "bottom";
+  if (/\b(blazers?|sport\s*coats?|overcoats?|coats?)\b/.test(b) || g.category === "outerwear") {
+    return "outer";
+  }
   if (g.category === "footwear" || g.category === "bottom" || g.category === "top") {
     return g.category;
   }
   return "other";
+}
+
+function isSandGarment(g: Garment): boolean {
+  const cols = colorsOf(g);
+  if (cols.some((c) => SAND.has(c))) return true;
+  return /beige|cream|tan|camel|khaki|sand|ecru|stone|bone/.test(
+    `${g.name} ${g.subtype} ${g.colors.join(" ")}`.toLowerCase(),
+  );
 }
 
 function colorsOf(g: Garment): PaletteColor[] {
@@ -227,13 +240,19 @@ export function harmony(
   const top = pieces.find((g) => role(g) === "top");
   const bottom = pieces.find((g) => role(g) === "bottom");
   const shoes = pieces.find((g) => role(g) === "footwear");
+  const outer = pieces.find((g) => role(g) === "outer");
   const tc = top ? colorsOf(top) : [];
   const bc = bottom ? colorsOf(bottom) : [];
   const sc = shoes ? colorsOf(shoes) : [];
-  const all = [...new Set([...tc, ...bc, ...sc])];
+  const oc = outer ? colorsOf(outer) : [];
+  const all = [...new Set([...tc, ...bc, ...sc, ...oc])];
   if (!all.length) return 0;
 
   let s = 0;
+  const sandPlates = [top, bottom, shoes, outer].filter(
+    (g): g is Garment => g != null && isSandGarment(g),
+  );
+  if (sandPlates.length >= 3) s -= 12;
   const shoeBlob = shoes ? `${shoes.subtype} ${shoes.name}`.toLowerCase() : "";
   const loafer = /loafer/.test(shoeBlob);
   const sneaker = /sneaker/.test(shoeBlob);
