@@ -18,7 +18,8 @@ import {
 import { costPerWear, money } from "@/lib/look";
 import { PALETTE, nameWithColor } from "@/lib/color";
 import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
-import { CATEGORIES, type Category, type Garment } from "@/lib/types";
+import { CATEGORIES, SEASONS, type Category, type Garment } from "@/lib/types";
+import { seasonsOf } from "@/lib/season";
 import { guessTuck, tuckOf } from "@/lib/tuck";
 import { useCloset } from "@/lib/store";
 import { useImageSrc } from "@/lib/use-image";
@@ -468,6 +469,36 @@ export function GarmentDetail({
                 <p className="text-sm text-ink-soft">
                   Ralph client tucks the oxford. Camp collar stays out.
                 </p>
+              </dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="micro text-ink-soft">Season</dt>
+              <dd className="mt-1 space-y-2">
+                <div className="flex flex-wrap gap-1">
+                  {SEASONS.map((s) => {
+                    const on = seasonsOf(garment).includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          const cur = new Set(seasonsOf(garment));
+                          if (cur.has(s.id)) cur.delete(s.id);
+                          else cur.add(s.id);
+                          updateGarment(garment.id, { seasons: [...cur] });
+                        }}
+                        className={cn(
+                          "micro border px-2 py-1",
+                          on
+                            ? "border-ink bg-ink text-paper"
+                            : "border-hairline text-ink-soft",
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </dd>
             </div>
             <div>

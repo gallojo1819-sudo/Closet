@@ -135,6 +135,92 @@ describe("buildLookbook", () => {
     assert.equal(comboKey(["a", "c", "b"]), comboKey(["c", "a", "b"]));
   });
 
+  it("50-top closet: cream cable-knit is in 1 weekday card, not 8", () => {
+    const g = [
+      ...closet(49, 12, 12),
+      piece({
+        id: "cable",
+        name: "Cream cable-knit",
+        category: "top",
+        subtype: "cable",
+        warmth: 3,
+      }),
+    ];
+    const looks = buildChapter(g, "weekday", { cap: 10, today: "2026-09-12" });
+    const n = looks.filter((l) => l.garmentIds.includes("cable")).length;
+    assert.ok(n <= 1, `cream cable in ${n} weekday looks`);
+    const topIds = looks.flatMap((l) =>
+      l.garmentIds.filter((id) => id === "cable" || /^t\d+$/.test(id)),
+    );
+    assert.equal(new Set(topIds).size, topIds.length, "each top at most once");
+  });
+
+  it("Out + Summer has no overcoat", () => {
+    const g = [
+      piece({
+        id: "camp",
+        name: "Linen camp collar",
+        category: "top",
+        subtype: "camp shirt",
+        warmth: 1,
+        seasons: [],
+      }),
+      piece({
+        id: "lin",
+        name: "Linen trousers",
+        category: "bottom",
+        subtype: "trouser",
+        warmth: 2,
+        seasons: [],
+      }),
+      piece({
+        id: "mu",
+        name: "White mules",
+        category: "footwear",
+        subtype: "mule",
+        warmth: 2,
+        seasons: [],
+      }),
+      piece({
+        id: "ox",
+        name: "White oxford",
+        category: "top",
+        subtype: "oxford",
+        warmth: 2,
+        seasons: [],
+      }),
+      piece({
+        id: "ch",
+        name: "Khaki chinos",
+        category: "bottom",
+        subtype: "chino",
+        warmth: 2,
+        seasons: [],
+      }),
+      piece({
+        id: "sn",
+        name: "White sneakers",
+        category: "footwear",
+        subtype: "sneaker",
+        warmth: 2,
+        seasons: [],
+      }),
+      piece({
+        id: "oc",
+        name: "Camel overcoat",
+        category: "outerwear",
+        subtype: "overcoat",
+        warmth: 5,
+        seasons: [],
+      }),
+    ];
+    const looks = buildChapter(g, "out", { cap: 10, season: "summer", today: "2026-09-12" });
+    assert.ok(looks.length >= 1, "summer out must have looks");
+    for (const l of looks) {
+      assert.ok(!l.garmentIds.includes("oc"), l.name);
+    }
+  });
+
   it("90s hoodie is not an out look when a knit/oxford exists", () => {
     const hood = [
       piece({ id: "hood", name: "Black 90s hoodie", category: "top", subtype: "hoodie", formality: 2 }),

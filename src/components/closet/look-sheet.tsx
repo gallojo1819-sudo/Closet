@@ -1,14 +1,25 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { FlatLay } from "@/components/closet/flat-lay";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
+import { LookKit } from "@/components/closet/look-kit";
 import { placeBesideTile, useMdUp } from "@/components/closet/detail";
-import { ensureLookOnMe } from "@/components/closet/on-me";
+import { ensureLookOnMe, queueLookOnMe } from "@/components/closet/on-me";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
-import { moreLikeThis } from "@/lib/lookbook";
+import { nameLook } from "@/lib/look";
+import { comboKey, moreLikeThis } from "@/lib/lookbook";
+import { slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import type { Garment, Look, Occasion } from "@/lib/types";
 import { useImageSrc } from "@/lib/use-image";
 import { cn } from "@/lib/utils";
+
+type WearSlot = "top" | "bottom" | "footwear" | "outerwear";
+
+function wearSlot(g: Garment): WearSlot | null {
+  const s = slotOf(g);
+  if (s === "top" || s === "dress") return "top";
+  if (s === "bottom" || s === "footwear" || s === "outerwear") return s;
+  return null;
+}
 
 export function LookSheet({
   look,
@@ -29,8 +40,19 @@ export function LookSheet({
   onOpenLook: (look: Look) => void;
   getCard?: () => HTMLElement | null;
 }) {
-  const cacheKey = lookOnMeKey(look.id);
-  const cachedSrc = useImageSrc(cacheKey);
+  const [ids, setIds] = useState(look.garmentIds);
+  const [swapSlot, setSwapSlot] = useState<WearSlot | null>(null);
+  const closetById = useMemo(() => new Map(closet.map((g) => [g.id, g])), [closet]);
+  const activePieces = useMemo(
+    () => ids.map((id) => closetById.get(id)).filter((g): g is Garment => Boolean(g)),
+    [ids, closetById],
+  );
+  const extra = comboKey(activePieces.map((p) => p.id));
+  const cacheKey = lookOnMeKey(look.id, extra);
+  const cachedSrc =
+    useImageSrc(cacheKey) ||
+    useImageSrc(lookOnMeKey(look.id)) ||
+    useImageSrc(`idb:lb:v2:${look.id}`);
   const [frame, setFrame] = useState<string | null>(null);
   const [showMe, setShowMe] = useState(false);
   const [dressing, setDressing] = useState(false);
@@ -38,8 +60,8 @@ export function LookSheet({
   const [showAlts, setShowAlts] = useState(false);
   const [lockedIds, setLockedIds] = useState<string[]>([]);
   const gen = useRef(0);
-  const piecesRef = useRef(pieces);
-  piecesRef.current = pieces;
+  const piecesRef = useRef(activePieces);
+  piecesRef.current = activePieces;
   const keepLook = useCloset((s) => s.keepLook);
   const md = useMdUp();
   const [pos, setPos] = useState<{
@@ -109,8 +131,15 @@ export function LookSheet({
   }, [look.id, cacheKey]);
 
   useEffect(() => {
+    setIds(look.garmentIds);
+    setSwapSlot(null);
     setLockedIds((prev) => prev.filter((id) => look.garmentIds.includes(id)));
   }, [look.id]);
+
+  useEffect(() => {
+    if (activePieces.length < 2) return;
+    void queueLookOnMe(look.id, activePieces, 45_000, look.occasion as Occasion);
+  }, [look.id, extra]);
 
   const alts = showAlts ? moreLikeThis(look, book, closet, 3, lockedIds) : null;
 
@@ -178,7 +207,7 @@ export function LookSheet({
         }
       >
         <div className="relative border-b border-hairline bg-paper aspect-[4/5] overflow-hidden">
-          <FlatLay pieces={pieces} className="border-0" passive />
+          <LookKit pieces={activePieces} className="border-0" />
           {showMe && painted && (
             <img
               key={painted}
@@ -190,13 +219,18 @@ export function LookSheet({
         </div>
         <div className="p-4 flex flex-col gap-4">
           <div>
-            <p>{look.name}</p>
+            <p>{nameLook(activePieces) || look.name}</p>
             <p className="micro text-ink-soft">{look.occasion}</p>
           </div>
           <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => keepLook(look.id)}
+            onClick={() =>
+              keepLook(look.id, {
+                garmentIds: activePieces.map((g) => g.id),
+                name: nameLook(activePieces) || look.name,
+              })
+            }
             className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
           >
             {look.source === "manual" ? "Saved" : "Save look"}
@@ -216,11 +250,33 @@ export function LookSheet({
           </div>
           {dressError && <p className="text-sm text-accent">{dressError}</p>}
           <ul className="flex gap-2 overflow-x-auto">
-            {pieces.map((g) => {
+            {[
+              ...activePieces,
+              ...pieces.filter((g) => !ids.includes(g.id)),
+            ].map((g) => {
+              const on = ids.includes(g.id);
               const locked = lockedIds.includes(g.id);
+              const slot = wearSlot(g);
               return (
                 <li key={g.id} className="w-16 shrink-0">
-                  <div className="relative aspect-page border border-hairline bg-paper-deep overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (on) {
+                        if (ids.length <= 2) return;
+                        setIds((cur) => cur.filter((id) => id !== g.id));
+                        setShowMe(false);
+                      } else {
+                        setIds((cur) => [...cur, g.id]);
+                        setShowMe(false);
+                      }
+                    }}
+                    className={cn(
+                      "relative aspect-page w-full border border-hairline bg-paper overflow-hidden",
+                      !on && "opacity-40",
+                    )}
+                    aria-label={on ? `Remove ${g.name}` : `Add ${g.name}`}
+                  >
                     <GarmentImg
                       garment={g}
                       className="h-full w-full object-contain p-[8%]"
@@ -230,7 +286,7 @@ export function LookSheet({
                         Lock
                       </span>
                     )}
-                  </div>
+                  </button>
                   <button
                     type="button"
                     onClick={() =>
@@ -242,10 +298,47 @@ export function LookSheet({
                   >
                     {locked ? "Unlock" : "Lock"}
                   </button>
+                  {slot && on && (
+                    <button
+                      type="button"
+                      onClick={() => setSwapSlot((cur) => (cur === slot ? null : slot))}
+                      className="micro mt-1 block text-ink-soft hover:text-ink"
+                    >
+                      Swap
+                    </button>
+                  )}
                 </li>
               );
             })}
           </ul>
+          {swapSlot && (
+            <div className="flex flex-wrap gap-2 border border-hairline p-2">
+              {closet
+                .filter((g) => wearSlot(g) === swapSlot && !ids.includes(g.id))
+                .slice(0, 24)
+                .map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => {
+                      const occupant = activePieces.find((x) => wearSlot(x) === swapSlot);
+                      setIds((cur) => {
+                        if (!occupant) return [...cur, g.id];
+                        return cur.map((id) => (id === occupant.id ? g.id : id));
+                      });
+                      setSwapSlot(null);
+                      setShowMe(false);
+                    }}
+                    className="w-14 shrink-0"
+                    aria-label={g.name}
+                  >
+                    <div className="aspect-page border border-hairline bg-paper overflow-hidden">
+                      <GarmentImg garment={g} className="h-full w-full object-contain p-[8%]" />
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -284,10 +377,9 @@ export function LookSheet({
                         className="block w-full text-left"
                         aria-label={alt.name}
                       >
-                        <FlatLay
+                        <LookKit
                           pieces={shot}
-                          className="pointer-events-none"
-                          passive
+                          className="pointer-events-none aspect-[4/5]"
                         />
                       </button>
                     </li>

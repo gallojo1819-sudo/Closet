@@ -1,6 +1,7 @@
 import { harmony } from "./color.ts";
 import type { Garment, Moment, Occasion, WearEntry, WeatherSnap } from "./types.ts";
 import { lastDays, todayISO } from "./utils.ts";
+import { isLinenCampPiece, isOvercoatPiece, seasonFromWeather } from "./season.ts";
 import { onlyTopIsUntucked, resolveTuck } from "./tuck.ts";
 
 export type { Moment, Occasion };
@@ -367,6 +368,10 @@ export function pickLook(
     s += Math.min(daysIdle(g), 90) / 10;
     s += occasionScore(g, opts.occasion);
     s += houseClimateScore(g, f, opts.occasion);
+    const season = seasonFromWeather(f);
+    if (season === "summer" && (g.warmth >= 4 || isOvercoatPiece(g))) s -= 4;
+    if (season === "winter" && isLinenCampPiece(g)) s -= 6;
+    if (season === "winter" && g.warmth <= 2) s -= 2;
     return s + Math.random() * 0.25;
   };
 
@@ -406,8 +411,23 @@ export function pickLook(
         if (topG && botG && repeats.has(pairKey(topG.id, botG.id))) {
           if (!lockedSet.has(topG.id) && !lockedSet.has(botG.id)) s -= 12;
         }
-        if (opts.occasion === "out" && onlyTopIsUntucked(pieces) && topG && /camp/.test(`${topG.subtype} ${topG.name}`)) {
+        if (
+          opts.occasion === "out" &&
+          f < 75 &&
+          onlyTopIsUntucked(pieces) &&
+          topG &&
+          /camp/.test(`${topG.subtype} ${topG.name}`)
+        ) {
           continue;
+        }
+        if (f < 55 && topG && isLinenCampPiece(topG) && !lockedSet.has(topG.id)) {
+          const hasKnit = pool.some((g) => {
+            if (isHoodiePiece(g) || isLinenCampPiece(g)) return false;
+            const sl = slotOf(g);
+            if (sl !== "top" && sl !== "dress") return false;
+            return /knit|sweater|merino|cable/.test(`${g.subtype} ${g.name}`.toLowerCase());
+          });
+          if (hasKnit) continue;
         }
         if (
           (opts.occasion === "weekend" || opts.occasion === "travel") &&
@@ -444,8 +464,8 @@ export function pickLook(
       /blazer|sport\s*coats?/.test(`${g.subtype} ${g.name}`.toLowerCase()),
     );
     if ((opts.occasion === "weekday" || opts.occasion === "out") && blazer) {
-      ids.push(blazer.id);
-    } else if (cool) {
+      if (!(f >= 75 && blazer.warmth >= 4)) ids.push(blazer.id);
+    } else if (cool && !warm) {
       const outer = best(coats);
       if (outer && !(warm && outer.warmth >= 5)) ids.push(outer.id);
     }
@@ -499,7 +519,9 @@ export function pickLook(
     } else if (candSlot === "accessory") {
       ids.push(candidate.id);
     } else if (candSlot === "outerwear" && !isHoodiePiece(candidate)) {
-      ids.push(candidate.id);
+      if (!(f >= 75 && (candidate.warmth >= 4 || isOvercoatPiece(candidate)))) {
+        ids.push(candidate.id);
+      }
     }
   }
 

@@ -241,6 +241,32 @@ describe("pickLook", () => {
     }
   });
 
+  it("40° drop never picks linen camp as the only top if a knit exists", () => {
+    const closet = [
+      piece({
+        id: "camp",
+        name: "Linen camp collar",
+        category: "top",
+        subtype: "camp shirt",
+        warmth: 1,
+      }),
+      piece({ id: "knit", name: "Grey merino", category: "top", subtype: "knit", warmth: 3 }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    for (let i = 0; i < 16; i++) {
+      const ids = pickLook(closet, {
+        occasion: "weekday",
+        moment: "day",
+        weather: { f: 40, label: "Cold", code: 3 },
+      });
+      assert.ok(ids.includes("knit") || !ids.includes("camp"), `camp without knit: ${ids.join(",")}`);
+      if (ids.includes("camp") && !ids.includes("knit")) {
+        assert.fail("linen camp as the only top");
+      }
+    }
+  });
+
   it("locked loafer stays when occasion changes", () => {
     const closet = [
       piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),

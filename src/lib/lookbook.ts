@@ -9,6 +9,7 @@ import {
   pickLook,
   slotOf,
 } from "./style.ts";
+import { lookFitsSeason, weatherForSeason, type Season } from "./season.ts";
 import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
@@ -142,18 +143,23 @@ function attachOuter(
   outers: Garment[],
   today: string,
   occasion?: Occasion,
+  season?: Season,
 ): Garment[] {
   if (core.some(isGraphic)) return core;
   if (core.some((g) => slotOf(g) === "outerwear")) return core;
   const tryOn = (o: Garment): Garment[] | null => {
     if (core.some((g) => g.id === o.id)) return null;
     if (slotOf(o) !== "outerwear") return null;
+    if (season === "summer" && o.warmth >= 4) return null;
     const next = [...core, o];
     if (clashes(next)) return null;
+    if (season && !lookFitsSeason(next, season)) return null;
     return next;
   };
   if (occasion === "weekday" || occasion === "out") {
-    for (const o of rank(outers.filter(isBlazer), today)) {
+    const blazers = outers.filter(isBlazer);
+    const light = season === "summer" ? blazers.filter((o) => o.warmth <= 3) : blazers;
+    for (const o of rank(light, today)) {
       const next = tryOn(o);
       if (next) return next;
     }
@@ -301,43 +307,87 @@ export function lookFitsOccasion(
   return true;
 }
 
+export function pieceLookCap(slotCount: number): number {
+  if (slotCount >= 12) return 1;
+  if (slotCount >= 6) return 2;
+  return 3;
+}
+
+function wearCapSlot(g: Garment): "top" | "bottom" | "footwear" | null {
+  const s = slotOf(g);
+  if (s === "top" || s === "dress") return "top";
+  if (s === "bottom") return "bottom";
+  if (s === "footwear") return "footwear";
+  return null;
+}
+
 export function buildChapter(
   garments: Garment[],
   occasion: Occasion,
-  opts?: { exclude?: Set<string>; cap?: number; salt?: number; today?: string },
+  opts?: {
+    exclude?: Set<string>;
+    cap?: number;
+    salt?: number;
+    today?: string;
+    season?: Season;
+    usedCount?: Map<string, number>;
+  },
 ): Look[] {
   const cap = opts?.cap ?? CHAPTER_CAP;
   const exclude = opts?.exclude ?? new Set<string>();
   const today = opts?.today ?? todayISO();
   const salt = opts?.salt ?? 0;
+  const season = opts?.season;
   const pool = lookbookPool(garments);
   const outers = bySlot(pool, "outerwear");
   const byId = new Map(pool.map((g) => [g.id, g]));
+  const topsN = bySlot(pool, "top").length + bySlot(pool, "dress").length;
+  const bottomsN = bySlot(pool, "bottom").length;
+  const shoesN = bySlot(pool, "footwear").length;
+  const caps = {
+    top: pieceLookCap(topsN),
+    bottom: pieceLookCap(bottomsN),
+    footwear: pieceLookCap(shoesN),
+  };
+  const usedCount = opts?.usedCount ?? new Map<string, number>();
+  const atCap = (g: Garment) => {
+    const slot = wearCapSlot(g);
+    if (!slot) return false;
+    return (usedCount.get(g.id) ?? 0) >= caps[slot];
+  };
+  const bump = (ids: string[]) => {
+    for (const id of ids) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
+  };
   const out: Look[] = [];
   const used = new Set(exclude);
   let prev: string[] = [];
-  const weather =
-    occasion === "out"
+  const weather = season
+    ? weatherForSeason(season)
+    : occasion === "out"
       ? { f: 64, label: "Mild", code: 2 }
       : occasion === "weekend" || occasion === "travel"
         ? { f: 72, label: "Fair", code: 2 }
         : { f: 68, label: "Fair", code: 2 };
-  for (let i = 0; i < 160 && out.length < cap; i++) {
-    const ids = pickLook(pool, {
-      occasion,
-      moment: "day",
-      weather,
-      previousIds: prev,
-    });
-    if (ids.length < 3) break;
-    prev = ids;
-    let pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
-    if (pieces.length < 3) continue;
-    pieces = attachOuter(pieces, outers, today, occasion);
-    if (!lookFitsOccasion(pieces, occasion, pool)) continue;
+
+  const tryPush = (pieces: Garment[], force = false): boolean => {
+    if (pieces.length < 3) return false;
+    if (!lookFitsOccasion(pieces, occasion, pool)) return false;
+    if (season && !lookFitsSeason(pieces, season)) return false;
+    if (!force) {
+      for (const g of pieces) {
+        if (atCap(g)) return false;
+      }
+    } else {
+      for (const g of pieces) {
+        const slot = wearCapSlot(g);
+        if (!slot) continue;
+        if ((usedCount.get(g.id) ?? 0) >= 1 && atCap(g)) return false;
+      }
+    }
     const key = comboKey(pieces.map((p) => p.id));
-    if (used.has(key)) continue;
+    if (used.has(key)) return false;
     used.add(key);
+    bump(pieces.map((p) => p.id));
     out.push({
       id: `lb2_${occasion}_${key.replace(/\|/g, "_")}`,
       name: nameOf(pieces),
@@ -347,6 +397,51 @@ export function buildChapter(
       lookbook: true,
       createdAt: `${today}T00:00:00.000Z`,
     });
+    return true;
+  };
+
+  for (let i = 0; i < 160 && out.length < cap; i++) {
+    const available = pool.filter((g) => !atCap(g));
+    if (available.length < 3) break;
+    const ids = pickLook(available, {
+      occasion,
+      moment: "day",
+      weather,
+      previousIds: prev,
+    });
+    if (ids.length < 3) break;
+    prev = ids;
+    let pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    if (pieces.length < 3) continue;
+    pieces = attachOuter(
+      pieces,
+      outers.filter((o) => !atCap(o)),
+      today,
+      occasion,
+      season,
+    );
+    tryPush(pieces);
+  }
+
+  if (out.length < cap) {
+    const leftovers = pool.filter((g) => {
+      const slot = wearCapSlot(g);
+      if (!slot) return false;
+      return (usedCount.get(g.id) ?? 0) === 0;
+    });
+    for (const g of leftovers) {
+      if (out.length >= cap) break;
+      const ids = pickLook(pool.filter((x) => x.id === g.id || !atCap(x)), {
+        occasion,
+        moment: "day",
+        weather,
+        lockedIds: [g.id],
+      });
+      let pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
+      if (!pieces.some((x) => x.id === g.id)) continue;
+      pieces = attachOuter(pieces, outers.filter((o) => !atCap(o)), today, occasion, season);
+      tryPush(pieces, true);
+    }
   }
   void salt;
   return out;
@@ -362,22 +457,53 @@ export function fillOccasionLooks(
   occasion: Occasion,
   min = CHAPTER_CAP,
   exclude?: Set<string>,
+  season?: Season,
 ): Look[] {
   const occ = mapOccasion(occasion);
-  const have = looks.filter((l) => mapOccasion(l.occasion) === occ);
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  const have = looks.filter((l) => {
+    if (mapOccasion(l.occasion) !== occ) return false;
+    if (!season) return true;
+    const pieces = l.garmentIds
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => Boolean(g));
+    return pieces.length >= 3 && lookFitsSeason(pieces, season);
+  });
   if (have.length >= min) return [];
   const keys = new Set([
     ...(exclude ?? []),
     ...have.map((l) => comboKey(l.garmentIds)),
   ]);
-  return buildChapter(garments, occ, { exclude: keys, cap: min - have.length });
+  const usedCount = new Map<string, number>();
+  for (const l of have) {
+    for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
+  }
+  return buildChapter(garments, occ, {
+    exclude: keys,
+    cap: min - have.length,
+    season,
+    usedCount,
+  });
 }
 
-export function looksToKeepOnShuffle(looks: Look[], occasion: Occasion): Look[] {
+export function looksToKeepOnShuffle(
+  looks: Look[],
+  occasion: Occasion,
+  garments: Garment[] = [],
+  season?: Season,
+): Look[] {
   const occ = mapOccasion(occasion);
-  return looks.filter(
-    (l) => mapOccasion(l.occasion) !== occ || l.source === "manual",
-  );
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  return looks.filter((l) => {
+    if (mapOccasion(l.occasion) !== occ) return true;
+    if (l.source === "manual") return true;
+    if (!season || !garments.length) return false;
+    const pieces = l.garmentIds
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => Boolean(g));
+    if (pieces.length < 3) return false;
+    return !lookFitsSeason(pieces, season);
+  });
 }
 
 /** Shuffle one chapter: drop unsaved rows, fill up to 10 unseen combos. Saved stay. */
@@ -387,17 +513,23 @@ export function applyShuffle(
   occasion: Occasion,
   seen: string[],
   today?: string,
+  season?: Season,
 ): { looks: Look[]; added: Look[]; seen: string[] } {
   const occ = mapOccasion(occasion);
-  const kept = looksToKeepOnShuffle(looks, occ);
+  const kept = looksToKeepOnShuffle(looks, occ, garments, season);
   const exclude = new Set(seen);
+  const usedCount = new Map<string, number>();
   for (const l of kept) {
-    if (mapOccasion(l.occasion) === occ) exclude.add(comboKey(l.garmentIds));
+    if (mapOccasion(l.occasion) !== occ) continue;
+    exclude.add(comboKey(l.garmentIds));
+    for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
   }
   const added = buildChapter(garments, occ, {
     exclude,
     cap: CHAPTER_CAP,
     today,
+    season,
+    usedCount,
   });
   const nextSeen = [...new Set([...seen, ...added.map((l) => comboKey(l.garmentIds))])];
   return { looks: [...kept, ...added], added, seen: nextSeen };
@@ -419,7 +551,7 @@ export function capChapterLooks(looks: Look[]): Look[] {
     for (const l of mapped) {
       if (used.has(l.id)) continue;
       if (l.occasion !== occ) continue;
-      if (n >= CHAPTER_CAP) continue;
+      if (n >= CHAPTER_CAP * 4) continue;
       out.push(l);
       used.add(l.id);
       n += 1;

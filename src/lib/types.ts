@@ -93,6 +93,16 @@ export function mapOccasion(raw?: string | null): Occasion {
   }
   return "weekday";
 }
+
+export const SEASONS = [
+  { id: "spring", label: "Spring" },
+  { id: "summer", label: "Summer" },
+  { id: "fall", label: "Fall" },
+  { id: "winter", label: "Winter" },
+] as const;
+
+export type Season = (typeof SEASONS)[number]["id"];
+
 export type Moment = "morning" | "day" | "evening";
 
 export type DailyDrop = {

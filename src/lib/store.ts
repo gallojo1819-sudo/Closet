@@ -21,6 +21,7 @@ import {
   comboKey,
   fillOccasionLooks,
 } from "./lookbook";
+import { lookFitsSeason } from "./season";
 import {
   mergeClosetPersist,
   openPersistGate,
@@ -39,7 +40,7 @@ import {
   slotOf,
   weekUniformKeys,
 } from "./style";
-import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
+import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { todayISO, uid } from "./utils";
 
 export { mergeClosetPersist, openPersistGate, persistGate };
@@ -82,11 +83,11 @@ type ClosetState = {
   restoreRefPhoto: () => Promise<void>;
   restoreFromIdbMeta: () => Promise<void>;
   ensureLookbook: (salt?: number) => void;
-  ensureOccasionBook: (occasion: Occasion) => void;
-  shuffleChapter: (occasion: Occasion) => number;
-  resetChapter: (occasion: Occasion) => void;
+  ensureOccasionBook: (occasion: Occasion, season?: Season) => void;
+  shuffleChapter: (occasion: Occasion, season?: Season) => number;
+  resetChapter: (occasion: Occasion, season?: Season) => void;
   markSeen: (occasion: Occasion, keys: string[]) => void;
-  keepLook: (id: string) => void;
+  keepLook: (id: string, patch?: { garmentIds?: string[]; name?: string }) => void;
   loadSample: () => void;
   emptyCloset: () => void;
   importCloset: (payload: {
@@ -313,7 +314,7 @@ export const useCloset = create<ClosetState>()(
         }));
         return id;
       },
-      keepLook: (id) => {
+      keepLook: (id, patch) => {
         set((s) => ({
           looks: s.looks.map((l) =>
             l.id === id
@@ -322,6 +323,8 @@ export const useCloset = create<ClosetState>()(
                   source: "manual" as const,
                   lookbook: true,
                   occasion: mapOccasion(l.occasion),
+                  ...(patch?.garmentIds ? { garmentIds: patch.garmentIds } : {}),
+                  ...(patch?.name ? { name: patch.name } : {}),
                 }
               : l,
           ),
@@ -460,23 +463,27 @@ export const useCloset = create<ClosetState>()(
         if (key(s.looks) === key(looks)) return;
         set({ looks, seenLooks });
       },
-      ensureOccasionBook: (occasion) => {
+      ensureOccasionBook: (occasion, season) => {
         const s = get();
         if (!s.hydrated) return;
         const occ = mapOccasion(occasion);
-        const auto = s.looks.filter(
-          (l) =>
-            l.lookbook &&
-            l.source !== "manual" &&
-            mapOccasion(l.occasion) === occ,
-        );
-        if (auto.length > 0) return;
+        const byId = new Map(s.garments.map((g) => [g.id, g]));
+        const fitting = s.looks.filter((l) => {
+          if (!l.lookbook || mapOccasion(l.occasion) !== occ) return false;
+          if (!season) return l.source !== "manual";
+          const pieces = l.garmentIds
+            .map((id) => byId.get(id))
+            .filter((g): g is Garment => Boolean(g));
+          return pieces.length >= 3 && lookFitsSeason(pieces, season);
+        });
+        if (fitting.length >= CHAPTER_CAP) return;
         const extra = fillOccasionLooks(
           s.garments,
           s.looks,
           occ,
           CHAPTER_CAP,
           new Set(s.seenLooks[occ] ?? []),
+          season,
         );
         if (!extra.length) return;
         set({
@@ -492,7 +499,7 @@ export const useCloset = create<ClosetState>()(
           },
         });
       },
-      shuffleChapter: (occasion) => {
+      shuffleChapter: (occasion, season) => {
         const s = get();
         const occ = mapOccasion(occasion);
         const next = applyShuffle(
@@ -500,6 +507,8 @@ export const useCloset = create<ClosetState>()(
           s.looks,
           occ,
           s.seenLooks[occ] ?? [],
+          undefined,
+          season,
         );
         set({
           looks: next.looks,
@@ -507,10 +516,10 @@ export const useCloset = create<ClosetState>()(
         });
         return next.added.length;
       },
-      resetChapter: (occasion) => {
+      resetChapter: (occasion, season) => {
         const s = get();
         const occ = mapOccasion(occasion);
-        const next = applyShuffle(s.garments, s.looks, occ, []);
+        const next = applyShuffle(s.garments, s.looks, occ, [], undefined, season);
         set({
           looks: next.looks,
           seenLooks: { ...s.seenLooks, [occ]: next.seen },

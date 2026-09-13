@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FlatLay } from "@/components/closet/flat-lay";
 import { IdleMount } from "@/components/closet/idle-mount";
 import { LookBuilder } from "@/components/closet/look-builder";
+import { LookKit } from "@/components/closet/look-kit";
 import { LookSheet } from "@/components/closet/look-sheet";
-import { ensureLookOnMe } from "@/components/closet/on-me";
+import { queueLookOnMe } from "@/components/closet/on-me";
 import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
@@ -14,9 +14,10 @@ import {
   lookFitsOccasion,
   lookHasColor,
 } from "@/lib/lookbook";
+import { lookFitsSeason, seasonFromWeather } from "@/lib/season";
 import { slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
+import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/lookbook")({
@@ -37,63 +38,59 @@ function LookCardFace({
   onOpen: () => void;
   cardRef: (el: HTMLElement | null) => void;
 }) {
-  const cacheKey = lookOnMeKey(look.id);
-  const cachedSrc = useImageSrc(cacheKey);
-  const [dressing, setDressing] = useState(false);
-  const [dressError, setDressError] = useState<string | null>(null);
+  const extra = comboKey(pieces.map((p) => p.id));
+  const liveSrc = useImageSrc(lookOnMeKey(look.id, extra));
+  const oldSrc = useImageSrc(lookOnMeKey(look.id));
+  const v2Src = useImageSrc(`idb:lb:v2:${look.id}`);
+  const cachedSrc = liveSrc || oldSrc || v2Src;
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const asked = useRef(false);
 
-  const onYou = (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (dressing) return;
-    setDressing(true);
-    setDressError(null);
-    void (async () => {
-      try {
-        await ensureLookOnMe(look.id, pieces, 45_000, look.occasion as Occasion);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Could not dress you.";
-        setDressError(msg === "timeout" ? "Imagine timed out after 45s." : msg);
-      } finally {
-        setDressing(false);
-      }
-    })();
+  const setRefs = (el: HTMLDivElement | null) => {
+    rootRef.current = el;
+    cardRef(el);
   };
 
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setVisible(Boolean(entry?.isIntersecting)),
+      { rootMargin: "80px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!visible || cachedSrc || asked.current) return;
+    asked.current = true;
+    void queueLookOnMe(look.id, pieces, 45_000, look.occasion as Occasion);
+  }, [visible, cachedSrc, look.id, look.occasion, pieces]);
+
   return (
-    <>
-      <div
-        ref={cardRef}
-        className="relative w-full border border-hairline bg-paper aspect-[4/5] overflow-hidden"
-        style={{ viewTransitionName: "none" }}
+    <div
+      ref={setRefs}
+      className="relative w-full border border-hairline bg-paper aspect-[4/5] overflow-hidden"
+      style={{ viewTransitionName: "none" }}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={look.name}
+        className="absolute inset-0 block"
       >
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={look.name}
-          className="absolute inset-0 block"
-        >
-          <FlatLay pieces={pieces} className="h-full border-0 pointer-events-none" passive />
-          {cachedSrc && (
-            <img
-              src={cachedSrc}
-              alt=""
-              className="on-you-glass absolute inset-0 z-10 h-full w-full object-cover bg-paper pointer-events-none"
-            />
-          )}
-        </button>
-        {!cachedSrc && (
-          <button
-            type="button"
-            onClick={onYou}
-            className="absolute bottom-2 left-2 z-20 micro border border-hairline bg-paper px-2 py-1 text-ink-soft hover:border-hairline-strong"
-          >
-            {dressing ? "On you…" : "On you"}
-          </button>
+        <LookKit pieces={pieces} className="h-full pointer-events-none" />
+        {cachedSrc && (
+          <img
+            src={cachedSrc}
+            alt=""
+            className="on-you-glass absolute inset-0 z-10 h-full w-full object-cover bg-paper pointer-events-none"
+          />
         )}
-      </div>
-      {dressError && <p className="mt-1 text-sm text-accent">{dressError}</p>}
-    </>
+      </button>
+    </div>
   );
 }
 
@@ -158,7 +155,9 @@ function LookbookPage() {
   const wearToday = useCloset((s) => s.wearToday);
   const [play, setPlay] = useState(false);
   const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]["id"]>("weekday");
+  const [seasonChip, setSeasonChip] = useState<"auto" | Season>("auto");
   const [color, setColor] = useState<string | null>(null);
+  const drop = useCloset((s) => s.drop);
   const [openId, setOpenId] = useState<string | null>(null);
   const [exhausted, setExhausted] = useState(false);
   const cardEls = useRef(new Map<string, HTMLElement>());
@@ -180,6 +179,12 @@ function LookbookPage() {
   );
   const gap = useMemo(() => rackLine(garments), [garments]);
   const chapterLabel = OCCASIONS.find((o) => o.id === occasion)?.label ?? "Weekday";
+  const autoSeason = seasonFromWeather(drop?.weather?.f ?? 68);
+  const season: Season = seasonChip === "auto" ? autoSeason : seasonChip;
+  const seasonLabel =
+    seasonChip === "auto"
+      ? `Auto · ${SEASONS.find((s) => s.id === autoSeason)?.label ?? "Fall"}`
+      : (SEASONS.find((s) => s.id === season)?.label ?? "Fall");
   const colorChips = useMemo(() => {
     const set = new Set<string>();
     for (const g of garments) for (const c of g.colors) if (c) set.add(c.toLowerCase());
@@ -197,10 +202,11 @@ function LookbookPage() {
       if (look.source !== "manual" && !lookFitsOccasion(pieces, occasion, pool)) {
         return false;
       }
+      if (!lookFitsSeason(pieces, season)) return false;
       if (color && !lookHasColor(pieces, color)) return false;
       return true;
     });
-  }, [book, occasion, color, byId, pool]);
+  }, [book, occasion, color, byId, pool, season]);
 
   const highlightId = focusLook ?? null;
 
@@ -215,8 +221,8 @@ function LookbookPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    ensureOccasionBook(occasion);
-  }, [hydrated, occasion, garments.length, ensureOccasionBook]);
+    ensureOccasionBook(occasion, season);
+  }, [hydrated, occasion, season, garments.length, ensureOccasionBook]);
 
   useEffect(() => {
     if (!hydrated || shown.length === 0) return;
@@ -241,7 +247,7 @@ function LookbookPage() {
         Lookbook
       </h1>
       <p className="mt-3 text-ink-soft max-w-xl">
-        {chapterLabel}. 10 looks · Shuffle · Save on the sheet.
+        {chapterLabel} · {seasonLabel}. 10 looks · Shuffle · Save on the sheet.
       </p>
       {gap && (
         <p className="mt-3 text-sm text-ink-soft max-w-xl">{gap}</p>
@@ -263,6 +269,41 @@ function LookbookPage() {
             )}
           >
             {o.label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setSeasonChip("auto");
+            setExhausted(false);
+          }}
+          className={cn(
+            "micro border px-3 py-2",
+            seasonChip === "auto"
+              ? "border-ink bg-ink text-paper"
+              : "border-hairline text-ink-soft",
+          )}
+        >
+          Auto
+        </button>
+        {SEASONS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => {
+              setSeasonChip(s.id);
+              setExhausted(false);
+            }}
+            className={cn(
+              "micro border px-3 py-2",
+              seasonChip === s.id
+                ? "border-ink bg-ink text-paper"
+                : "border-hairline text-ink-soft",
+            )}
+          >
+            {s.label}
           </button>
         ))}
       </div>
@@ -289,7 +330,7 @@ function LookbookPage() {
       <button
         type="button"
         onClick={() => {
-          const n = shuffleChapter(occasion);
+          const n = shuffleChapter(occasion, season);
           setExhausted(n < 3);
         }}
         className="micro text-ink-soft hover:text-ink"
@@ -344,7 +385,7 @@ function LookbookPage() {
           <button
             type="button"
             onClick={() => {
-              resetChapter(occasion);
+              resetChapter(occasion, season);
               setExhausted(false);
             }}
             className="mt-4 micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"

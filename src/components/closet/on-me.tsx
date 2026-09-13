@@ -8,6 +8,7 @@ import {
   getImage,
   jpegDataUrl,
   lookOnMeKey,
+  lookOnMeKeys,
   putImage,
   resolveImage,
 } from "@/lib/images";
@@ -67,6 +68,11 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 const inflight = new Map<string, Promise<string>>();
+let dressQueue: Promise<unknown> = Promise.resolve();
+
+function comboExtra(pieces: Garment[]): string {
+  return [...pieces.map((p) => p.id)].sort().join("|");
+}
 
 /** Cache-first On you. One Imagine per look. Card and sheet share the job. */
 export async function ensureLookOnMe(
@@ -75,19 +81,37 @@ export async function ensureLookOnMe(
   ms = 45_000,
   occasion?: Occasion,
 ): Promise<string> {
-  const key = lookOnMeKey(lookId);
-  const hit = await getImage(key);
-  if (hit) return blobToDataUrl(hit);
-  const pending = inflight.get(lookId);
+  const extra = comboExtra(pieces);
+  const writeKey = lookOnMeKey(lookId, extra);
+  for (const k of lookOnMeKeys(lookId, extra)) {
+    const hit = await getImage(k);
+    if (hit) return blobToDataUrl(hit);
+  }
+  const pending = inflight.get(writeKey);
   if (pending) return pending;
   const job = (async () => {
     const image = await withTimeout(dressLook(pieces, occasion), ms);
-    await putImage(key, dataUrlToBlob(image));
+    await putImage(writeKey, dataUrlToBlob(image));
     return image;
   })().finally(() => {
-    inflight.delete(lookId);
+    inflight.delete(writeKey);
   });
-  inflight.set(lookId, job);
+  inflight.set(writeKey, job);
+  return job;
+}
+
+/** Visible Lookbook cards. Concurrency 1. Kit stays until the blob lands. */
+export function queueLookOnMe(
+  lookId: string,
+  pieces: Garment[],
+  ms = 45_000,
+  occasion?: Occasion,
+): Promise<string | null> {
+  if (!useCloset.getState().refPhoto) return Promise.resolve(null);
+  const job = dressQueue.then(() =>
+    ensureLookOnMe(lookId, pieces, ms, occasion).catch(() => null),
+  );
+  dressQueue = job.then(() => undefined);
   return job;
 }
 

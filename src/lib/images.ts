@@ -202,6 +202,16 @@ export function lookOnMeKey(lookId: string, extra?: string): string {
   return extra ? `${KEY_PREFIX}lb:v4:${lookId}:${extra}` : `${KEY_PREFIX}lb:v4:${lookId}`;
 }
 
+/** Current combo key first, then older dressed plates for this look. */
+export function lookOnMeKeys(lookId: string, extra?: string): string[] {
+  const keys: string[] = [];
+  if (extra) keys.push(lookOnMeKey(lookId, extra));
+  keys.push(lookOnMeKey(lookId));
+  keys.push(`${KEY_PREFIX}lb:v3:${lookId}`);
+  keys.push(`${KEY_PREFIX}lb:v2:${lookId}`);
+  return [...new Set(keys)];
+}
+
 /** JPEG data URL, long edge capped. Used to shrink On-me payloads. */
 export async function jpegDataUrl(src: Blob | string, maxEdge: number, quality = 0.8): Promise<string> {
   const url = typeof src === "string" ? src : URL.createObjectURL(src);
