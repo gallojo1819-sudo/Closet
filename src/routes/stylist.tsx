@@ -111,7 +111,7 @@ function StylistNote({ text }: { text: string }) {
 }
 
 const PROMPTS = [
-  "Client meeting, uptown, afternoon",
+  "Out, uptown, afternoon",
   "Dinner in the West Village",
   "Saturday, nothing planned",
   "Wear something I keep skipping",

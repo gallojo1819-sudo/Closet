@@ -1,4 +1,6 @@
-import type { DailyDrop, Garment, Look, StylistMessage, WearEntry } from "./types.ts";
+import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry } from "./types.ts";
+
+export type SeenLooks = Partial<Record<Occasion, string[]>>;
 
 export type PersistedCloset = {
   garments: Garment[];
@@ -10,6 +12,8 @@ export type PersistedCloset = {
   /** Compressed JPEG data URL so idb:me:ref can be rebuilt if IDB is cleared. */
   refPhotoBackup: string | null;
   messages: StylistMessage[];
+  /** Combo keys (sorted garmentIds joined by |) already shown, per chapter. */
+  seenLooks?: SeenLooks;
 };
 
 export type ClosetSnapshot = PersistedCloset & { hydrated: boolean };
@@ -68,5 +72,9 @@ export function mergeClosetPersist<T extends ClosetSnapshot>(
     refPhoto,
     refPhotoBackup,
     messages: Array.isArray(p.messages) ? p.messages : current.messages,
+    seenLooks:
+      p.seenLooks && typeof p.seenLooks === "object" && !Array.isArray(p.seenLooks)
+        ? p.seenLooks
+        : current.seenLooks,
   };
 }

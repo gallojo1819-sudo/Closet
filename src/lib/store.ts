@@ -13,7 +13,14 @@ import {
   refImageKey,
 } from "./images";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
-import { buildLookbook, fillOccasionLooks, mergeLookbook } from "./lookbook";
+import {
+  applyShuffle,
+  buildChapter,
+  capChapterLooks,
+  CHAPTER_CAP,
+  comboKey,
+  fillOccasionLooks,
+} from "./lookbook";
 import {
   mergeClosetPersist,
   openPersistGate,
@@ -22,6 +29,7 @@ import {
   persistHasGarments,
   unpackPersist,
   type PersistedCloset,
+  type SeenLooks,
 } from "./store-persist";
 import {
   daysIdle,
@@ -31,7 +39,7 @@ import {
   slotOf,
   weekUniformKeys,
 } from "./style";
-import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry, WeatherSnap } from "./types";
+import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { todayISO, uid } from "./utils";
 
 export { mergeClosetPersist, openPersistGate, persistGate };
@@ -49,6 +57,8 @@ type ClosetState = {
   refPhoto: string | null;
   /** Compressed JPEG data URL backup of the body photo. */
   refPhotoBackup: string | null;
+  /** Combo keys shown in Lookbook, per chapter. closet.v6 extra. */
+  seenLooks: SeenLooks;
   addGarment: (
     g: Omit<Garment, "id" | "createdAt" | "archived" | "wornOn" | "demo"> & { id?: string },
     opts?: { quiet?: boolean },
@@ -73,6 +83,10 @@ type ClosetState = {
   restoreFromIdbMeta: () => Promise<void>;
   ensureLookbook: (salt?: number) => void;
   ensureOccasionBook: (occasion: Occasion) => void;
+  shuffleChapter: (occasion: Occasion) => number;
+  resetChapter: (occasion: Occasion) => void;
+  markSeen: (occasion: Occasion, keys: string[]) => void;
+  keepLook: (id: string) => void;
   loadSample: () => void;
   emptyCloset: () => void;
   importCloset: (payload: {
@@ -176,6 +190,7 @@ export const useCloset = create<ClosetState>()(
       hydrated: false,
       refPhoto: null,
       refPhotoBackup: null,
+      seenLooks: {},
       addGarment: (input, opts) => {
         const id = input.id ?? uid("g");
         const garment: Garment = {
@@ -282,16 +297,41 @@ export const useCloset = create<ClosetState>()(
       },
       saveLook: (look) => {
         const id = uid("l");
+        const occasion = mapOccasion(look.occasion);
         set((s) => ({
-          looks: [{ ...look, id, createdAt: new Date().toISOString() }, ...s.looks],
+          looks: [
+            {
+              ...look,
+              id,
+              occasion,
+              source: "manual",
+              lookbook: true,
+              createdAt: new Date().toISOString(),
+            },
+            ...s.looks,
+          ],
         }));
         return id;
+      },
+      keepLook: (id) => {
+        set((s) => ({
+          looks: s.looks.map((l) =>
+            l.id === id
+              ? {
+                  ...l,
+                  source: "manual" as const,
+                  lookbook: true,
+                  occasion: mapOccasion(l.occasion),
+                }
+              : l,
+          ),
+        }));
       },
       removeLook: (id) => set((s) => ({ looks: s.looks.filter((l) => l.id !== id) })),
       setDrop: (drop) => set({ drop }),
       rerollDrop: (weather, occasion, previousIds) => {
         const prev = get().drop;
-        const occ = occasion ?? prev?.occasion ?? defaultOccasion();
+        const occ = mapOccasion(occasion ?? prev?.occasion ?? defaultOccasion());
         const moment = momentOfDay();
         const lastWorn = get().journal.find((j) => j.verdict === "worn")?.garmentIds;
         const sameDay = prev?.date === todayISO();
@@ -381,23 +421,109 @@ export const useCloset = create<ClosetState>()(
             { ...m, id: uid("m"), createdAt: new Date().toISOString() },
           ],
         })),
-      ensureLookbook: (salt) => {
+      ensureLookbook: () => {
         const s = get();
         if (!s.hydrated) return;
         if (s.garments.length === 0) return;
-        const book = buildLookbook(s.garments, undefined, salt ?? 2);
-        const next = mergeLookbook(s.looks, book, s.garments);
-        const key = (looks: Look[]) =>
-          looks.map((l) => `${l.lookbook ? "b" : "k"}:${l.id}`).join("|");
-        if (key(s.looks) === key(next)) return;
-        set({ looks: next });
+        let looks = capChapterLooks(s.looks);
+        const seenLooks: SeenLooks = { ...s.seenLooks };
+        for (const { id: occ } of OCCASIONS) {
+          const auto = looks.filter(
+            (l) =>
+              l.lookbook &&
+              l.source !== "manual" &&
+              mapOccasion(l.occasion) === occ,
+          );
+          if (auto.length > 0) continue;
+          const exclude = new Set([
+            ...(seenLooks[occ] ?? []),
+            ...looks
+              .filter((l) => mapOccasion(l.occasion) === occ)
+              .map((l) => comboKey(l.garmentIds)),
+          ]);
+          const extra = buildChapter(s.garments, occ, {
+            exclude,
+            cap: CHAPTER_CAP,
+          });
+          looks = [...looks, ...extra];
+          if (extra.length) {
+            seenLooks[occ] = [
+              ...new Set([
+                ...(seenLooks[occ] ?? []),
+                ...extra.map((l) => comboKey(l.garmentIds)),
+              ]),
+            ];
+          }
+        }
+        const key = (list: Look[]) =>
+          list.map((l) => `${l.lookbook ? "b" : "k"}:${l.id}:${l.occasion}`).join("|");
+        if (key(s.looks) === key(looks)) return;
+        set({ looks, seenLooks });
       },
       ensureOccasionBook: (occasion) => {
         const s = get();
         if (!s.hydrated) return;
-        const extra = fillOccasionLooks(s.garments, s.looks, occasion, 6);
+        const occ = mapOccasion(occasion);
+        const auto = s.looks.filter(
+          (l) =>
+            l.lookbook &&
+            l.source !== "manual" &&
+            mapOccasion(l.occasion) === occ,
+        );
+        if (auto.length > 0) return;
+        const extra = fillOccasionLooks(
+          s.garments,
+          s.looks,
+          occ,
+          CHAPTER_CAP,
+          new Set(s.seenLooks[occ] ?? []),
+        );
         if (!extra.length) return;
-        set({ looks: mergeLookbook(s.looks, extra, s.garments) });
+        set({
+          looks: [...s.looks, ...extra],
+          seenLooks: {
+            ...s.seenLooks,
+            [occ]: [
+              ...new Set([
+                ...(s.seenLooks[occ] ?? []),
+                ...extra.map((l) => comboKey(l.garmentIds)),
+              ]),
+            ],
+          },
+        });
+      },
+      shuffleChapter: (occasion) => {
+        const s = get();
+        const occ = mapOccasion(occasion);
+        const next = applyShuffle(
+          s.garments,
+          s.looks,
+          occ,
+          s.seenLooks[occ] ?? [],
+        );
+        set({
+          looks: next.looks,
+          seenLooks: { ...s.seenLooks, [occ]: next.seen },
+        });
+        return next.added.length;
+      },
+      resetChapter: (occasion) => {
+        const s = get();
+        const occ = mapOccasion(occasion);
+        const next = applyShuffle(s.garments, s.looks, occ, []);
+        set({
+          looks: next.looks,
+          seenLooks: { ...s.seenLooks, [occ]: next.seen },
+        });
+      },
+      markSeen: (occasion, keys) => {
+        const occ = mapOccasion(occasion);
+        set((s) => {
+          const prev = s.seenLooks[occ] ?? [];
+          const merged = [...new Set([...prev, ...keys])];
+          if (merged.length === prev.length) return s;
+          return { seenLooks: { ...s.seenLooks, [occ]: merged } };
+        });
       },
       setRefPhoto: (key, backup) => {
         if (key === null) {
@@ -424,6 +550,10 @@ export const useCloset = create<ClosetState>()(
               ? (meta.avoid as Record<string, number>)
               : get().avoid,
           drop: "drop" in meta ? ((meta.drop as DailyDrop | null) ?? null) : get().drop,
+          seenLooks:
+            meta.seenLooks && typeof meta.seenLooks === "object"
+              ? (meta.seenLooks as SeenLooks)
+              : get().seenLooks,
           refPhoto:
             typeof meta.refPhoto === "string" || meta.refPhoto === null
               ? (meta.refPhoto as string | null)
@@ -466,6 +596,7 @@ export const useCloset = create<ClosetState>()(
           drop: null,
           journal: [],
           avoid: {},
+          seenLooks: {},
         });
         get().ensureLookbook();
       },
@@ -477,6 +608,7 @@ export const useCloset = create<ClosetState>()(
           drop: null,
           journal: [],
           avoid: {},
+          seenLooks: {},
         });
         void clearClosetMeta().catch(() => {});
         // Joe's body photo stays. Only Fit → Remove deletes it.
@@ -505,6 +637,7 @@ export const useCloset = create<ClosetState>()(
         refPhoto: s.refPhoto,
         refPhotoBackup: s.refPhotoBackup,
         messages: s.messages,
+        seenLooks: s.seenLooks,
       }),
       merge: (persisted, current) => mergeClosetPersist(persisted, current),
       onRehydrateStorage: () => (_state, error) => {

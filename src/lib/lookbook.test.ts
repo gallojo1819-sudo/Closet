@@ -1,6 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildLookbook, fillOccasionLooks, lookFitsOccasion, looksForHero, mergeLookbook, lookbookStats, moreLikeThis } from "./lookbook.ts";
+import {
+  applyShuffle,
+  buildChapter,
+  buildLookbook,
+  CHAPTER_CAP,
+  comboKey,
+  fillOccasionLooks,
+  lookFitsOccasion,
+  looksForHero,
+  mergeLookbook,
+  moreLikeThis,
+} from "./lookbook.ts";
 import type { Garment, Look } from "./types.ts";
 
 function piece(
@@ -45,18 +56,14 @@ function closet(nTop: number, nBottom: number, nShoe: number, extra: Garment[] =
 }
 
 describe("buildLookbook", () => {
-  it("5×5×5 yields ~15–30 looks, every id used, not 125", () => {
-    const g = closet(5, 5, 5);
+  it("caps each chapter at 10, four chapters, not 97", () => {
+    const g = closet(8, 8, 8);
     const looks = buildLookbook(g, "2026-09-12");
-    assert.ok(looks.length >= 5 && looks.length <= 96, `looks=${looks.length}`);
-    assert.ok(looks.length < 125);
-    const ids = new Set(g.map((x) => x.id));
-    const used = new Set(looks.flatMap((l) => l.garmentIds));
-    for (const id of ids) assert.ok(used.has(id), `missing ${id}`);
-    const stats = lookbookStats(looks, g);
-    assert.equal(stats.total, 15);
-    assert.equal(stats.used, 15);
-    assert.equal(stats.everyPieceUsed, true);
+    assert.ok(looks.length <= CHAPTER_CAP * 4, `looks=${looks.length}`);
+    for (const occ of ["weekday", "out", "weekend", "travel"] as const) {
+      const n = looks.filter((l) => l.occasion === occ).length;
+      assert.ok(n <= CHAPTER_CAP, `${occ} has ${n}`);
+    }
     for (const l of looks) {
       assert.equal(l.lookbook, true);
       assert.equal(l.source, "ai");
@@ -64,7 +71,7 @@ describe("buildLookbook", () => {
     }
   });
 
-  it("adding a 6th top includes it without wiping a saved outfit", () => {
+  it("adding a 6th top does not wipe a saved outfit", () => {
     const g15 = closet(5, 5, 5);
     const saved: Look = {
       id: "l_saved",
@@ -72,6 +79,7 @@ describe("buildLookbook", () => {
       occasion: "weekend",
       garmentIds: ["t1", "b1", "s1"],
       source: "manual",
+      lookbook: true,
       createdAt: "2026-09-01T12:00:00.000Z",
     };
     const first = mergeLookbook([saved], buildLookbook(g15, "2026-09-12"));
@@ -80,151 +88,97 @@ describe("buildLookbook", () => {
       ...g15,
       piece({ id: "t6", name: "Grey polo", category: "top", subtype: "polo" }),
     ];
-    const second = mergeLookbook(
-      first,
-      buildLookbook(g16, "2026-09-12"),
-    );
+    const second = mergeLookbook(first, buildLookbook(g16, "2026-09-12"));
     assert.ok(second.some((l) => l.id === "l_saved" && l.source === "manual"));
-    const book = second.filter((l) => l.lookbook);
-    assert.ok(
-      book.some((l) => l.garmentIds.includes("t6")),
-      "new top must appear in lookbook",
-    );
   });
 
   it("empty without a full weekday trio", () => {
     assert.equal(buildLookbook(closet(5, 5, 0)).length, 0);
   });
 
-  it("covers jackets and other-tagged loafers in cover(1)", () => {
+  it("out puts a blazer on when he owns one", () => {
     const g = [
       ...closet(3, 3, 3),
       piece({
         id: "j1",
         name: "Navy blazer",
-        category: "other",
-        subtype: "",
-      }),
-      piece({
-        id: "j2",
-        name: "Camel overcoat",
-        category: "other",
-        subtype: "coat",
-      }),
-    ];
-    const looks = buildLookbook(g, "2026-09-12");
-    const used = new Set(looks.flatMap((l) => l.garmentIds));
-    assert.ok(used.has("j1"), "blazer tagged other must appear");
-    assert.ok(used.has("j2"), "overcoat tagged other must appear");
-    assert.ok(used.has("s1"), "loafer tagged other must appear");
-    const stats = lookbookStats(looks, g);
-    assert.equal(stats.unusedNames.length, 0);
-  });
-
-  it("force pass covers more tops than PARTNER_K heroes", () => {
-    const g = [
-      ...closet(8, 3, 3),
-      piece({
-        id: "card",
-        name: "Cream cable-knit cardigan",
-        category: "other",
-        subtype: "",
-      }),
-      piece({
-        id: "mules",
-        name: "White mules",
-        category: "other",
-        subtype: "",
-      }),
-    ];
-    const looks = buildLookbook(g, "2026-09-12");
-    const used = new Set(looks.flatMap((l) => l.garmentIds));
-    assert.ok(used.has("card"), "cardigan must appear");
-    assert.ok(used.has("mules"), "white mules must appear");
-    for (let i = 1; i <= 8; i++) assert.ok(used.has(`t${i}`), `top t${i}`);
-    const stats = lookbookStats(looks, g);
-    assert.equal(stats.unusedNames.length, 0);
-  });
-
-  it("90s hoodie only with jean/sneaker, never cream pleated + loafer", () => {
-    const g = [
-      ...closet(2, 2, 2),
-      piece({
-        id: "hood",
-        name: "Black 90s hoodie",
         category: "outerwear",
-        subtype: "hoodie",
-        formality: 2,
-      }),
-      piece({
-        id: "pleat",
-        name: "Cream pleated trousers",
-        category: "bottom",
-        subtype: "trouser",
+        subtype: "blazer",
         formality: 4,
       }),
-      piece({
-        id: "jean",
-        name: "Indigo jeans",
-        category: "bottom",
-        subtype: "jean",
-        formality: 2,
-      }),
-      piece({
-        id: "sn",
-        name: "White sneakers",
-        category: "footwear",
-        subtype: "sneaker",
-        formality: 1,
-      }),
-      piece({
-        id: "fair",
-        name: "Cream fair isle",
-        category: "top",
-        subtype: "knit",
-      }),
-      piece({
-        id: "camp",
-        name: "Linen camp collar",
-        category: "top",
-        subtype: "shirt",
-        warmth: 1,
-      }),
     ];
-    const looks = buildLookbook(g, "2026-09-12");
-    const hoodLooks = looks.filter((l) => l.garmentIds.includes("hood"));
-    assert.ok(hoodLooks.length >= 1, "hoodie must still appear on weekend/jean");
-    for (const l of hoodLooks) {
-      assert.equal(l.occasion, "weekend");
-      assert.ok(!l.garmentIds.includes("pleat"), `hoodie on pleats: ${l.name}`);
-      assert.ok(!l.garmentIds.includes("s1"), `hoodie on loafers: ${l.name}`);
-      assert.ok(!l.garmentIds.includes("fair"), `hoodie on fair isle: ${l.name}`);
-      assert.ok(!l.garmentIds.includes("camp"), `hoodie on camp collar: ${l.name}`);
-      assert.ok(
-        l.garmentIds.includes("jean") || l.garmentIds.some((id) => /^b\d+$/.test(id)),
-        `hoodie without jean/chino: ${l.name}`,
-      );
-      assert.ok(l.garmentIds.includes("sn"), `hoodie without sneaker: ${l.name}`);
-    }
-    for (const l of looks.filter((x) => x.garmentIds.includes("fair"))) {
-      assert.ok(!l.garmentIds.includes("hood"), `fair isle look has 90s hoodie: ${l.name}`);
-    }
-    for (const l of looks.filter((x) => x.garmentIds.includes("camp"))) {
-      assert.ok(!l.garmentIds.includes("hood"), `camp look has hoodie: ${l.name}`);
-    }
-    const invalid = looks.filter(
-      (l) =>
-        l.lookbook &&
-        l.garmentIds.includes("hood") &&
-        (l.garmentIds.includes("pleat") || l.garmentIds.includes("s1")),
+    const looks = buildChapter(g, "out", { cap: 10, today: "2026-09-12" });
+    assert.ok(looks.length >= 1, "out must have looks");
+    assert.ok(
+      looks.some((l) => l.garmentIds.includes("j1")),
+      "out look should wear the blazer",
     );
-    const dropped = mergeLookbook(invalid, looks, g);
+  });
+
+  it("shuffle never repeats a combo key; saved look stays", () => {
+    const g = closet(8, 8, 8);
+    const first = buildChapter(g, "out", { cap: 10, today: "2026-09-12" });
+    assert.ok(first.length >= 3, `first ${first.length}`);
+    const saved: Look = {
+      ...first[0]!,
+      id: "l_saved_out",
+      source: "manual",
+      lookbook: true,
+    };
+    const seen = first.map((l) => comboKey(l.garmentIds));
+    const next = applyShuffle(g, [...first, saved], "out", seen, "2026-09-13");
+    assert.ok(next.looks.some((l) => l.id === "l_saved_out"));
+    const firstKeys = new Set(seen);
+    for (const l of next.added) {
+      assert.ok(!firstKeys.has(comboKey(l.garmentIds)), `repeat ${l.name}`);
+    }
+    assert.equal(comboKey(["a", "c", "b"]), comboKey(["c", "a", "b"]));
+  });
+
+  it("90s hoodie is not an out look when a knit/oxford exists", () => {
+    const hood = [
+      piece({ id: "hood", name: "Black 90s hoodie", category: "top", subtype: "hoodie", formality: 2 }),
+      piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean", formality: 2 }),
+      piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker", formality: 1 }),
+    ];
+    const rack = [
+      ...hood,
+      piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "tr", name: "Charcoal trousers", category: "bottom", subtype: "trouser" }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    assert.equal(lookFitsOccasion(hood, "out", rack), false);
+    assert.equal(lookFitsOccasion(hood, "weekend"), true);
+    const invalid: Look = {
+      id: "lb_bad",
+      name: "hoodie pleat",
+      occasion: "out",
+      garmentIds: ["hood", "pleat", "s1"],
+      source: "ai",
+      lookbook: true,
+      createdAt: "2026-09-12T00:00:00.000Z",
+    };
+    const dropped = mergeLookbook(
+      [invalid],
+      [],
+      [
+        ...rack,
+        piece({
+          id: "pleat",
+          name: "Cream pleated trousers",
+          category: "bottom",
+          subtype: "trouser",
+          formality: 4,
+        }),
+        piece({ id: "s1", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+      ],
+    );
     assert.ok(!dropped.some((l) => l.garmentIds.includes("hood") && l.garmentIds.includes("pleat")));
   });
 });
 
 describe("lookFitsOccasion", () => {
-  it("dinner is trousers + loafer, never a 90s hoodie", () => {
+  it("out is sharper; maps old client/dinner; never a 90s hoodie as the only top", () => {
     const dinner = [
       piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),
       piece({ id: "tr", name: "Charcoal trousers", category: "bottom", subtype: "trouser" }),
@@ -242,6 +196,7 @@ describe("lookFitsOccasion", () => {
     assert.equal(lookFitsOccasion(hood, "weekend"), true);
     assert.equal(lookFitsOccasion(dinner, "weekend"), false);
     assert.equal(lookFitsOccasion(dinner, "client"), true);
+    assert.equal(lookFitsOccasion(dinner, "out"), true);
   });
 
   it("weekday is Ralph oxford + chino + loafer, not gym", () => {
@@ -257,25 +212,24 @@ describe("lookFitsOccasion", () => {
     ];
     assert.equal(lookFitsOccasion(week, "weekday"), true);
     assert.equal(lookFitsOccasion(gym, "weekday"), false);
-    assert.equal(lookFitsOccasion(week, "dinner"), false);
+    assert.equal(lookFitsOccasion(week, "out"), true);
   });
 
-  it("fillOccasionLooks tags dinner and does not mix hoodie", () => {
+  it("fillOccasionLooks tags out and does not mix hoodie", () => {
     const g = [
       piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford", formality: 3 }),
       piece({ id: "tr", name: "Navy trousers", category: "bottom", subtype: "trouser", formality: 4 }),
       piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer", formality: 3 }),
+      piece({ id: "blz", name: "Navy blazer", category: "outerwear", subtype: "blazer", formality: 4 }),
       piece({ id: "hood", name: "Black 90s hoodie", category: "top", subtype: "hoodie", formality: 2 }),
       piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean", formality: 2 }),
       piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker", formality: 1 }),
     ];
-    const extra = fillOccasionLooks(g, [], "dinner", 3);
-    assert.ok(extra.length >= 1, "dinner book must have looks");
+    const extra = fillOccasionLooks(g, [], "out", 3);
+    assert.ok(extra.length >= 1, "out book must have looks");
     for (const l of extra) {
-      assert.equal(l.occasion, "dinner");
+      assert.equal(l.occasion, "out");
       assert.ok(!l.garmentIds.includes("hood"));
-      assert.ok(l.garmentIds.includes("tr"));
-      assert.ok(l.garmentIds.includes("lf"));
     }
   });
 

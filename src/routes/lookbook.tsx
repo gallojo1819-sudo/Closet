@@ -9,8 +9,8 @@ import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import {
+  comboKey,
   lookbookPool,
-  lookbookStats,
   lookFitsOccasion,
   lookHasColor,
 } from "@/lib/lookbook";
@@ -152,12 +152,15 @@ function LookbookPage() {
   const looksAll = useCloset((s) => s.looks);
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
   const ensureOccasionBook = useCloset((s) => s.ensureOccasionBook);
+  const shuffleChapter = useCloset((s) => s.shuffleChapter);
+  const resetChapter = useCloset((s) => s.resetChapter);
+  const markSeen = useCloset((s) => s.markSeen);
   const wearToday = useCloset((s) => s.wearToday);
   const [play, setPlay] = useState(false);
-  const [occasion, setOccasion] = useState<"all" | (typeof OCCASIONS)[number]["id"]>("all");
+  const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]["id"]>("weekday");
   const [color, setColor] = useState<string | null>(null);
-  const [focusId, setFocusId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [exhausted, setExhausted] = useState(false);
   const cardEls = useRef(new Map<string, HTMLElement>());
   const { look: focusLook } = Route.useSearch();
 
@@ -175,8 +178,8 @@ function LookbookPage() {
   const canBuild = ["top", "bottom", "footwear"].every((slot) =>
     pool.some((g) => slotOf(g) === slot || (slot === "top" && slotOf(g) === "dress")),
   );
-  const stats = lookbookStats(book, garments);
   const gap = useMemo(() => rackLine(garments), [garments]);
+  const chapterLabel = OCCASIONS.find((o) => o.id === occasion)?.label ?? "Weekday";
   const colorChips = useMemo(() => {
     const set = new Set<string>();
     for (const g of garments) for (const c of g.colors) if (c) set.add(c.toLowerCase());
@@ -190,25 +193,38 @@ function LookbookPage() {
     return book.filter((look) => {
       const pieces = piecesFor(look);
       if (pieces.length < 3) return false;
-      if (occasion !== "all") {
-        if (look.occasion !== occasion) return false;
-        if (!lookFitsOccasion(pieces, occasion)) return false;
+      if (look.occasion !== occasion) return false;
+      if (look.source !== "manual" && !lookFitsOccasion(pieces, occasion, pool)) {
+        return false;
       }
       if (color && !lookHasColor(pieces, color)) return false;
       return true;
     });
-  }, [book, occasion, color, byId]);
+  }, [book, occasion, color, byId, pool]);
 
-  const highlightId = focusId ?? focusLook ?? null;
+  const highlightId = focusLook ?? null;
 
   useEffect(() => {
     if (focusLook) setOpenId(focusLook);
   }, [focusLook]);
 
   useEffect(() => {
-    if (!hydrated || occasion === "all") return;
+    if (!hydrated) return;
+    ensureLookbook();
+  }, [hydrated, garments.length, ensureLookbook]);
+
+  useEffect(() => {
+    if (!hydrated) return;
     ensureOccasionBook(occasion);
   }, [hydrated, occasion, garments.length, ensureOccasionBook]);
+
+  useEffect(() => {
+    if (!hydrated || shown.length === 0) return;
+    markSeen(
+      occasion,
+      shown.map((l) => comboKey(l.garmentIds)),
+    );
+  }, [hydrated, occasion, shown, markSeen]);
 
   const getOpenCard = useCallback(
     () => (openId ? cardEls.current.get(openId) ?? null : null),
@@ -225,67 +241,28 @@ function LookbookPage() {
         Lookbook
       </h1>
       <p className="mt-3 text-ink-soft max-w-xl">
-        Best outfits from this closet, on paper. Dress you when a card is on screen.
+        {chapterLabel}. 10 looks · Shuffle · Save on the sheet.
       </p>
       {gap && (
         <p className="mt-3 text-sm text-ink-soft max-w-xl">{gap}</p>
       )}
-      {book.length > 0 && (
-        <>
-          <p className="mt-3 micro text-ink-soft">
-            {stats.looks} looks · {stats.used} of {stats.total} pieces in looks
-            {stats.everyPieceUsed ? "." : "."}
-          </p>
-          {stats.unusedNames.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              <span className="micro text-ink-soft self-center">Not in a look yet:</span>
-              {stats.unusedNames.map((name) => {
-                const g = garments.find((x) => x.name === name);
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    className="micro border border-hairline px-2 py-1 text-ink-soft hover:border-hairline-strong"
-                    onClick={() => {
-                      if (!g) return;
-                      const hit = book.find((l) => l.garmentIds.includes(g.id));
-                      if (hit) {
-                        setFocusId(hit.id);
-                        setOpenId(hit.id);
-                        return;
-                      }
-                      ensureLookbook(Date.now());
-                      const again = useCloset
-                        .getState()
-                        .looks.find((l) => l.lookbook && l.garmentIds.includes(g.id));
-                      if (again) {
-                        setFocusId(again.id);
-                        setOpenId(again.id);
-                      }
-                    }}
-                  >
-                    {name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
       <div className="mt-6 flex flex-wrap gap-2">
-        {(["all", ...OCCASIONS.map((o) => o.id)] as const).map((id) => (
+        {OCCASIONS.map((o) => (
           <button
-            key={id}
+            key={o.id}
             type="button"
-            onClick={() => setOccasion(id)}
+            onClick={() => {
+              setOccasion(o.id);
+              setExhausted(false);
+            }}
             className={cn(
               "micro border px-3 py-2",
-              occasion === id
+              occasion === o.id
                 ? "border-ink bg-ink text-paper"
                 : "border-hairline text-ink-soft",
             )}
           >
-            {id === "all" ? "All" : OCCASIONS.find((o) => o.id === id)?.label}
+            {o.label}
           </button>
         ))}
       </div>
@@ -311,7 +288,10 @@ function LookbookPage() {
       <div className="mt-4 flex flex-wrap gap-3">
       <button
         type="button"
-        onClick={() => ensureLookbook(Date.now())}
+        onClick={() => {
+          const n = shuffleChapter(occasion);
+          setExhausted(n < 3);
+        }}
         className="micro text-ink-soft hover:text-ink"
       >
         Shuffle
@@ -354,11 +334,30 @@ function LookbookPage() {
             Add a piece
           </Link>
         </div>
-      ) : occasion !== "all" && shown.length === 0 ? (
-        <p className="mt-10 text-sm text-ink-soft">
-          Nothing in this closet for {occasion} yet
-        </p>
       ) : (
+        <>
+      {exhausted && (
+        <div className="mt-8 border border-hairline bg-card px-4 py-5">
+          <p className="text-sm text-ink-soft">
+            You’ve seen this chapter. Save a look you like, or add a piece.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              resetChapter(occasion);
+              setExhausted(false);
+            }}
+            className="mt-4 micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+          >
+            Reset chapter
+          </button>
+        </div>
+      )}
+      {shown.length === 0 && !exhausted ? (
+        <p className="mt-10 text-sm text-ink-soft">
+          Save a look you like, or add a piece.
+        </p>
+      ) : shown.length > 0 ? (
         <ul className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {shown.map((look, i) => {
             const pieces = piecesFor(look);
@@ -379,7 +378,7 @@ function LookbookPage() {
             );
           })}
         </ul>
-      )}
+      ) : null}
       {openLook && openPieces.length >= 2 && (
         <LookSheet
           look={openLook}
@@ -391,6 +390,8 @@ function LookbookPage() {
           onWear={() => wearToday(openPieces.map((g) => g.id))}
           onOpenLook={(next) => setOpenId(next.id)}
         />
+      )}
+        </>
       )}
     </div>
   );

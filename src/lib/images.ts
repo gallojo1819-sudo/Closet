@@ -42,6 +42,7 @@ export async function putClosetMeta(meta: {
   refPhoto?: unknown;
   refPhotoBackup?: unknown;
   messages?: unknown;
+  seenLooks?: unknown;
 }): Promise<void> {
   const blob = new Blob([JSON.stringify({ v: 6, ...meta })], {
     type: "application/json",
@@ -59,6 +60,7 @@ export async function getClosetMeta(): Promise<{
   refPhoto?: unknown;
   refPhotoBackup?: unknown;
   messages?: unknown;
+  seenLooks?: unknown;
 } | null> {
   const blob = await getImage(CLOSET_META_KEY);
   if (!blob) return null;
@@ -197,7 +199,7 @@ export function refImageKey(): string {
 }
 
 export function lookOnMeKey(lookId: string, extra?: string): string {
-  return extra ? `${KEY_PREFIX}lb:v3:${lookId}:${extra}` : `${KEY_PREFIX}lb:v3:${lookId}`;
+  return extra ? `${KEY_PREFIX}lb:v4:${lookId}:${extra}` : `${KEY_PREFIX}lb:v4:${lookId}`;
 }
 
 /** JPEG data URL, long edge capped. Used to shrink On-me payloads. */

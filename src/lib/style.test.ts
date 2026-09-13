@@ -133,7 +133,7 @@ describe("pickLook", () => {
     }
   });
 
-  it("dinner prefers trousers and loafers over jeans and sneakers", () => {
+  it("out prefers trousers and loafers over jeans and sneakers", () => {
     const mix = [
       piece({ id: "tee", name: "Striped shirt", category: "top", subtype: "shirt", formality: 3 }),
       piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford", formality: 3 }),
@@ -145,14 +145,14 @@ describe("pickLook", () => {
     const prev = ["tee", "jeans", "sn"];
     for (let i = 0; i < 12; i++) {
       const ids = pickLook(mix, {
-        occasion: "dinner",
+        occasion: "out",
         moment: "day",
         weather: opts.weather,
         previousIds: prev,
       });
       assert.ok(ids.includes("tr"), `bottom should be trousers: ${ids.join(",")}`);
       assert.ok(ids.includes("lf"), `shoes should be loafers: ${ids.join(",")}`);
-      assert.ok(!ids.includes("jeans"), `dinner kept jeans: ${ids.join(",")}`);
+      assert.ok(!ids.includes("jeans"), `out kept jeans: ${ids.join(",")}`);
     }
   });
 
@@ -251,12 +251,12 @@ describe("pickLook", () => {
       piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker", formality: 1 }),
     ];
     const dinner = pickLook(closet, {
-      occasion: "dinner",
+      occasion: "out",
       moment: "day",
       weather: opts.weather,
       lockedIds: ["lf"],
     });
-    assert.ok(dinner.includes("lf"), `dinner lost loafer: ${dinner.join(",")}`);
+    assert.ok(dinner.includes("lf"), `out lost loafer: ${dinner.join(",")}`);
     assert.ok(!dinner.includes("hood"));
     const week = pickLook(closet, {
       occasion: "weekday",

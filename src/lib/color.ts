@@ -262,7 +262,7 @@ export function harmony(
     s -= 5;
   }
   if (accents.length >= 2) s -= 5;
-  if (sneaker && has(all, "white") && (has(all, "burgundy") || has(all, "maroon")) && opts?.occasion === "dinner") {
+  if (sneaker && has(all, "white") && (has(all, "burgundy") || has(all, "maroon")) && opts?.occasion === "out") {
     s -= 3;
   }
   const competing = all.filter((c) => !TRIAD.has(c) && !NEUTRAL.has(c) || GREEN.has(c) || PINK.has(c) || RED.has(c));

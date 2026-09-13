@@ -322,9 +322,10 @@ function Today() {
                 drop &&
                 saveLook({
                   name: lookName,
-                  occasion: drop.occasion ?? "daily",
+                  occasion: drop.occasion ?? "weekday",
                   garmentIds: drop.garmentIds,
-                  source: "ai",
+                  source: "manual",
+                  lookbook: true,
                 })
               }
             >

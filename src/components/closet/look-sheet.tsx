@@ -40,6 +40,7 @@ export function LookSheet({
   const gen = useRef(0);
   const piecesRef = useRef(pieces);
   piecesRef.current = pieces;
+  const keepLook = useCloset((s) => s.keepLook);
   const md = useMdUp();
   const [pos, setPos] = useState<{
     top: number;
@@ -192,11 +193,19 @@ export function LookSheet({
             <p>{look.name}</p>
             <p className="micro text-ink-soft">{look.occasion}</p>
           </div>
+          <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => keepLook(look.id)}
+            className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+          >
+            {look.source === "manual" ? "Saved" : "Save look"}
+          </button>
           <button
             type="button"
             onClick={runDress}
             className={cn(
-              "micro border px-3 py-2 self-start",
+              "micro border px-3 py-2",
               showMe && painted
                 ? "border-ink bg-ink text-paper"
                 : "border-hairline text-ink-soft hover:border-hairline-strong",
@@ -204,6 +213,7 @@ export function LookSheet({
           >
             {dressing ? "On you…" : "On you"}
           </button>
+          </div>
           {dressError && <p className="text-sm text-accent">{dressError}</p>}
           <ul className="flex gap-2 overflow-x-auto">
             {pieces.map((g) => {

@@ -309,10 +309,10 @@ ${data.tuck ?? ""}`;
 
 function occasionFromPrompt(prompt: string): Occasion {
   const p = prompt.toLowerCase();
-  if (/client/.test(p)) return "client";
-  if (/dinner/.test(p)) return "dinner";
+  if (/client|dinner|\bout\b/.test(p)) return "out";
   if (/saturday|weekend/.test(p)) return "weekend";
   if (/travel/.test(p)) return "travel";
+  if (/weekday|work|office/.test(p)) return "weekday";
   return defaultOccasion();
 }
 

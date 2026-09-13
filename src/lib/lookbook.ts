@@ -1,23 +1,18 @@
 import { canonicalize, harmony } from "./color.ts";
 import {
   daysIdle,
-  housesOf,
   isCampCollar,
   isFairIsle,
   isGraphic,
   isHoodiePiece,
-  leadHouse,
   lookHouses,
   pickLook,
   slotOf,
 } from "./style.ts";
-import { onlyTopIsUntucked } from "./tuck.ts";
-import type { Garment, Look, Occasion } from "./types.ts";
+import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
-const CAP = 96;
-const PER = 2;
-const PARTNER_K = 4;
+export const CHAPTER_CAP = 10;
 const LOUD =
   /\b(plaid|checks?|gingham|stripes?|striped|floral|print|printed|houndstooth|paisley|camo|leopard|argyle)\b/i;
 
@@ -89,10 +84,6 @@ export function lookClashes(pieces: Garment[]): boolean {
   return false;
 }
 
-function graphicPartnersOk(bottom: Garment, shoe: Garment): boolean {
-  return isJeanOrChino(bottom) && isSneaker(shoe);
-}
-
 function clashes(pieces: Garment[]): boolean {
   return lookClashes(pieces);
 }
@@ -100,21 +91,6 @@ function clashes(pieces: Garment[]): boolean {
 function pieceScore(g: Garment, today: string): number {
   let s = Math.min(daysIdle(g, today), 90) / 10;
   if (g.wornOn.at(-1) === today) s -= 6;
-  return s;
-}
-
-function comboScore(pieces: Garment[], today: string): number {
-  let s = 0;
-  const forms = pieces.map((p) => p.formality);
-  const spread = Math.max(...forms) - Math.min(...forms);
-  s += 4 - Math.min(spread, 4);
-  for (const g of pieces) s += pieceScore(g, today);
-  const lead = leadHouse(pieces);
-  const houseLists = pieces.map((p) => housesOf(p));
-  const shared = houseLists.reduce((acc, hs) => acc.filter((h) => hs.includes(h)));
-  if (shared.length) s += 1.5;
-  s += pieces.filter((g) => housesOf(g).includes(lead)).length * 0.4;
-  s += harmony(pieces);
   return s;
 }
 
@@ -132,20 +108,12 @@ function rank(list: Garment[], today: string, salt = 0): Garment[] {
   });
 }
 
-function rotate<T>(list: T[], salt: number): T[] {
-  if (list.length < 2) return list;
-  const n = salt % list.length;
-  return [...list.slice(n), ...list.slice(0, n)];
+export function comboKey(ids: string[]): string {
+  return [...ids].sort().join("|");
 }
 
-function occasionOf(pieces: Garment[]): string {
-  if (lookFitsOccasion(pieces, "dinner")) return "dinner";
-  if (lookFitsOccasion(pieces, "client")) return "client";
-  if (lookFitsOccasion(pieces, "weekday")) return "weekday";
-  if (lookFitsOccasion(pieces, "travel")) return "travel";
-  if (lookFitsOccasion(pieces, "weekend")) return "weekend";
-  if (pieces.some(isGraphic) || pieces.some(isHoodiePiece)) return "weekend";
-  return "weekday";
+function isBlazer(g: Garment): boolean {
+  return /blazer|sport\s*coats?/.test(blobOf(g));
 }
 
 const NAME_ORDER = ["top", "dress", "bottom", "outerwear", "footwear", "accessory"];
@@ -161,10 +129,6 @@ function nameOf(pieces: Garment[]): string {
     .join(" · ");
 }
 
-function lookId(ids: string[]): string {
-  return `lb2_${ids.join("_")}`;
-}
-
 function shouldOuter(outer: Garment, core: Garment[]): boolean {
   const blob = `${outer.subtype} ${outer.name}`.toLowerCase();
   if (/overcoat|topcoat|coat\b/.test(blob)) return true;
@@ -173,148 +137,60 @@ function shouldOuter(outer: Garment, core: Garment[]): boolean {
   return outer.warmth >= 3 && Math.abs(outer.formality - avg) <= 1;
 }
 
-function attachOuter(core: Garment[], outers: Garment[], today: string): Garment[] {
+function attachOuter(
+  core: Garment[],
+  outers: Garment[],
+  today: string,
+  occasion?: Occasion,
+): Garment[] {
   if (core.some(isGraphic)) return core;
+  if (core.some((g) => slotOf(g) === "outerwear")) return core;
+  const tryOn = (o: Garment): Garment[] | null => {
+    if (core.some((g) => g.id === o.id)) return null;
+    if (slotOf(o) !== "outerwear") return null;
+    const next = [...core, o];
+    if (clashes(next)) return null;
+    return next;
+  };
+  if (occasion === "weekday" || occasion === "out") {
+    for (const o of rank(outers.filter(isBlazer), today)) {
+      const next = tryOn(o);
+      if (next) return next;
+    }
+  }
+  if (occasion === "weekend") return core;
+  if (occasion === "travel") {
+    for (const o of rank(
+      outers.filter((x) => x.warmth <= 3 && !isHoodiePiece(x)),
+      today,
+    )) {
+      const next = tryOn(o);
+      if (next) return next;
+    }
+    return core;
+  }
   const ranked = rank(outers, today);
   for (const o of ranked) {
-    if (core.some((g) => g.id === o.id)) continue;
-    if (slotOf(o) !== "outerwear") continue;
     if (!shouldOuter(o, core)) continue;
-    const next = [...core, o];
-    if (clashes(next)) continue;
-    return next;
+    const next = tryOn(o);
+    if (next) return next;
   }
   return core;
 }
 
 /**
- * Best looks from this closet — not every combo.
- * cover(1) places every slotted top, bottom, shoe, and outer once (no cap).
- * Then cover(2) up to CAP. Harmony cannot exile a piece from cover(1).
+ * Best looks from this closet — four chapters, 10 each.
  */
 export function buildLookbook(
   garments: Garment[],
   today = todayISO(),
   salt = 0,
 ): Look[] {
-  const pool = lookbookPool(garments);
-  const tops = [...bySlot(pool, "top"), ...bySlot(pool, "dress")];
-  const bottoms = bySlot(pool, "bottom");
-  const shoes = bySlot(pool, "footwear");
-  const outers = bySlot(pool, "outerwear");
-  if (!tops.length || !bottoms.length || !shoes.length) return [];
-
-  const todayWorn = today;
-  const used = new Set<string>();
-  const count = new Map<string, number>();
-  const drafts: Look[] = [];
-
-  const bump = (ids: string[]) => {
-    for (const id of ids) count.set(id, (count.get(id) ?? 0) + 1);
-  };
-
-  const tryAdd = (core: Garment[], mustCover = false): boolean => {
-    if (core.length < 3) return false;
-    if (clashes(core)) return false;
-    void mustCover;
-    const hasOuter = core.some((g) => slotOf(g) === "outerwear");
-    const pieces = hasOuter ? core : attachOuter(core, outers, todayWorn);
-    if (clashes(pieces)) return false;
-    const ids = pieces.map((g) => g.id);
-    const key = lookId(ids);
-    if (used.has(key)) return false;
-    if (!mustCover && drafts.length >= CAP) return false;
-    used.add(key);
-    drafts.push({
-      id: key,
-      name: nameOf(pieces),
-      occasion: occasionOf(pieces),
-      garmentIds: ids,
-      source: "ai",
-      lookbook: true,
-      createdAt: `${todayWorn}T00:00:00.000Z`,
-    });
-    bump(ids);
-    return true;
-  };
-
-  const partnersFor = (focus: Garment, mustCover: boolean): Garment[][] => {
-    const slot = slotOf(focus);
-    const tAll = slot === "top" || slot === "dress" ? [focus] : rank(tops, todayWorn, salt);
-    const bAll = slot === "bottom" ? [focus] : rank(bottoms, todayWorn, salt);
-    const fAll = slot === "footwear" ? [focus] : rank(shoes, todayWorn, salt);
-    const tCands = mustCover ? tAll : tAll.slice(0, PARTNER_K);
-    const bCands = mustCover ? bAll : bAll.slice(0, PARTNER_K);
-    const fCands = mustCover ? fAll : fAll.slice(0, PARTNER_K);
-    const scored: { core: Garment[]; s: number; h: number }[] = [];
-    for (const t of tCands) {
-      for (const b of bCands) {
-        for (const f of fCands) {
-          if (new Set([t.id, b.id, f.id]).size < 3) continue;
-          if (isGraphic(t) && !graphicPartnersOk(b, f)) continue;
-          let core: Garment[] = [t, b, f];
-          if (slot === "outerwear") core = [...core, focus];
-          if (clashes(core)) continue;
-          const h = harmony(core);
-          const uncovered = core.filter((g) => (count.get(g.id) ?? 0) === 0).length;
-          scored.push({ core, s: comboScore(core, todayWorn) + uncovered * 3, h });
-        }
-      }
-    }
-    scored.sort((a, b) =>
-      b.s !== a.s
-        ? b.s - a.s
-        : lookId(a.core.map((g) => g.id)).localeCompare(lookId(b.core.map((g) => g.id))),
-    );
-    if (mustCover) return scored.map((x) => x.core);
-    const good = scored.filter((x) => x.h >= 0);
-    return (good.length ? good : scored).map((x) => x.core);
-  };
-
-  const cover = (need: number, slotted: Garment[], mustCover: boolean) => {
-    for (const g of rank(slotted, todayWorn, salt)) {
-      if (!mustCover && drafts.length >= CAP) break;
-      if ((count.get(g.id) ?? 0) >= need) continue;
-      for (const core of partnersFor(g, mustCover)) {
-        if ((count.get(g.id) ?? 0) >= need) break;
-        tryAdd(core, mustCover);
-      }
-    }
-  };
-
-  const mustSlot = [...tops, ...bottoms, ...shoes, ...outers];
-  cover(1, mustSlot, true);
-  cover(PER, mustSlot, false);
-
-  // Force: every leftover slotted piece gets a look. Clash is better than invisible.
-  let forceSalt = salt + 1;
-  for (const g of mustSlot) {
-    if ((count.get(g.id) ?? 0) >= 1) continue;
-    const slot = slotOf(g);
-    if (!slot) continue;
-    const Ts = rotate(slot === "top" || slot === "dress" ? [g] : tops.filter((x) => x.id !== g.id), forceSalt);
-    const Bs = rotate(slot === "bottom" ? [g] : bottoms.filter((x) => x.id !== g.id), forceSalt + 3);
-    const Fs = rotate(slot === "footwear" ? [g] : shoes.filter((x) => x.id !== g.id), forceSalt + 7);
-    forceSalt += 11;
-    if (!Ts.length || !Bs.length || !Fs.length) continue;
-    let placed = false;
-    outer: for (const t of Ts) {
-      for (const b of Bs) {
-        for (const f of Fs) {
-          if (new Set([t.id, b.id, f.id]).size < 3) continue;
-          if (isGraphic(t) && !graphicPartnersOk(b, f)) continue;
-          const core = slot === "outerwear" ? [t, b, f, g] : [t, b, f];
-          if (tryAdd(core, true)) {
-            placed = true;
-            break outer;
-          }
-        }
-      }
-    }
-    void placed;
+  const all: Look[] = [];
+  for (const { id } of OCCASIONS) {
+    all.push(...buildChapter(garments, id, { cap: CHAPTER_CAP, salt, today }));
   }
-
-  return drafts;
+  return all;
 }
 
 /** Two looks starring this piece — unused-rail tap. */
@@ -354,83 +230,126 @@ function hasKind(list: Garment[], re: RegExp): boolean {
   return list.some((g) => re.test(pieceBlob(g)));
 }
 
-export function lookFitsOccasion(pieces: Garment[], occ: string): boolean {
+export function lookFitsOccasion(
+  pieces: Garment[],
+  occ: string,
+  pool?: Garment[],
+): boolean {
   if (occ === "all") return true;
+  const o = mapOccasion(occ);
   const blob = lookBlob(pieces);
   const tops = topsOf(pieces);
   const bottoms = bottomsOf(pieces);
   const shoes = shoesOf(pieces);
   const graphic = pieces.some(isGraphic);
   const hoodie = pieces.some(isHoodiePiece);
-  const sneaker = hasKind(shoes, /sneaker|trainer|\b990\b|gym|runner|running|athletic/);
+  const sneaker = hasKind(shoes, /sneaker|trainer|\b990\b/);
+  const gymShoe = hasKind(shoes, /gym|runner|running|athletic/);
   const loafer = hasKind(shoes, /loafer/);
-  const mule = hasKind(shoes, /mule/);
   const trouser = hasKind(bottoms, /trouser/) && !hasKind(bottoms, /\bjeans?\b|denim/);
   const chino = hasKind(bottoms, /chino/);
   const jean = hasKind(bottoms, /\bjeans?\b|denim/);
-  const cargo = /cargo/.test(blob);
-  const tee = hasKind(tops, /\btee\b|t-shirt/);
   const rugby = /rugby/.test(blob);
   const oxford = hasKind(tops, /oxford/);
   const polo = hasKind(tops, /polo/);
   const cable = hasKind(tops, /cable/);
-  const fineKnit = hasKind(tops, /merino|cashmere|silk|fine/) && hasKind(tops, /knit|sweater/);
-  const blazer = pieces.some((g) => /blazer/.test(pieceBlob(g)));
   const knit = hasKind(tops, /knit|sweater|merino|cable/) && !hoodie;
   const overshirt = pieces.some((g) => /overshirt/.test(pieceBlob(g)));
   const fairIsle = pieces.some(isFairIsle);
-  const distressed = /distress|ripped|destroyed/.test(blob);
+  const camp = pieces.some(isCampCollar);
+  const cleanSneaker = sneaker && !gymShoe;
 
-  if (occ === "client") {
-    if (onlyTopIsUntucked(pieces)) return false;
-    if (hoodie || graphic || rugby || /90s|90's/.test(blob)) return false;
-    if (sneaker) return false;
-    if (cargo || distressed) return false;
-    if (jean && distressed) return false;
-    if (!(oxford || polo || fineKnit || blazer)) return false;
-    if (!(trouser || chino)) return false;
-    if (jean && !chino && !trouser) return false;
-    if (!loafer && !hasKind(shoes, /derby|monk|dress\s*shoe/)) return false;
-    if (mule && !loafer) return false;
-    return true;
-  }
-
-  if (occ === "dinner") {
-    if (onlyTopIsUntucked(pieces)) return false;
-    if (sneaker || hoodie || graphic || cargo || tee) return false;
-    if (jean) return false;
-    if (!trouser) return false;
-    if (!loafer && !mule) return false;
-    const lead = leadHouse(pieces);
-    if (lead !== "ralph" && lead !== "faloni") return false;
-    return true;
-  }
-
-  if (occ === "weekday") {
+  if (o === "weekday") {
     if (hoodie || graphic) return false;
-    if (sneaker) return false;
     if (!(oxford || polo || cable)) return false;
     if (!(chino || trouser)) return false;
-    if (!loafer) return false;
+    if (!(loafer || cleanSneaker)) return false;
     return true;
   }
 
-  if (occ === "weekend") {
-    if ((hoodie || graphic) && !((jean || chino) && sneaker)) return false;
-    const tuxedo = oxford && trouser && loafer && !jean && !rugby && !fairIsle && !hoodie;
-    if (tuxedo) return false;
-    return jean || rugby || fairIsle || sneaker || hoodie;
+  if (o === "out") {
+    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
+    const hoodieOnly = tops.length > 0 && tops.every((g) => isHoodiePiece(g) || isGraphic(g));
+    if (hoodieOnly) {
+      const rack = pool ?? [];
+      if (!rack.length) return false;
+      const hasShirt = rack.some((g) => {
+        const s = slotOf(g);
+        if (s !== "top" && s !== "dress") return false;
+        if (isHoodiePiece(g) || isGraphic(g)) return false;
+        return /oxford|knit|sweater|polo|cable/.test(`${g.subtype} ${g.name}`.toLowerCase());
+      });
+      if (hasShirt) return false;
+    }
+    return true;
   }
 
-  if (occ === "travel") {
+  if (o === "weekend") {
+    if ((hoodie || graphic) && !((jean || chino) && sneaker)) return false;
+    const tuxedo = oxford && trouser && loafer && !jean && !rugby && !fairIsle && !hoodie && !camp;
+    if (tuxedo) return false;
+    return jean || rugby || fairIsle || camp || sneaker || hoodie;
+  }
+
+  if (o === "travel") {
     if (!(knit || overshirt)) return false;
     if (!(chino || jean)) return false;
     if (!(sneaker || loafer)) return false;
-    if (trouser && loafer && !knit && !overshirt && !jean && !chino) return false;
     return true;
   }
 
   return true;
+}
+
+export function buildChapter(
+  garments: Garment[],
+  occasion: Occasion,
+  opts?: { exclude?: Set<string>; cap?: number; salt?: number; today?: string },
+): Look[] {
+  const cap = opts?.cap ?? CHAPTER_CAP;
+  const exclude = opts?.exclude ?? new Set<string>();
+  const today = opts?.today ?? todayISO();
+  const salt = opts?.salt ?? 0;
+  const pool = lookbookPool(garments);
+  const outers = bySlot(pool, "outerwear");
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  const out: Look[] = [];
+  const used = new Set(exclude);
+  let prev: string[] = [];
+  const weather =
+    occasion === "out"
+      ? { f: 64, label: "Mild", code: 2 }
+      : occasion === "weekend" || occasion === "travel"
+        ? { f: 72, label: "Fair", code: 2 }
+        : { f: 68, label: "Fair", code: 2 };
+  for (let i = 0; i < 160 && out.length < cap; i++) {
+    const ids = pickLook(pool, {
+      occasion,
+      moment: "day",
+      weather,
+      previousIds: prev,
+    });
+    if (ids.length < 3) break;
+    prev = ids;
+    let pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    if (pieces.length < 3) continue;
+    pieces = attachOuter(pieces, outers, today, occasion);
+    if (!lookFitsOccasion(pieces, occasion, pool)) continue;
+    const key = comboKey(pieces.map((p) => p.id));
+    if (used.has(key)) continue;
+    used.add(key);
+    out.push({
+      id: `lb2_${occasion}_${key.replace(/\|/g, "_")}`,
+      name: nameOf(pieces),
+      occasion,
+      garmentIds: pieces.map((p) => p.id),
+      source: "ai",
+      lookbook: true,
+      createdAt: `${today}T00:00:00.000Z`,
+    });
+  }
+  void salt;
+  return out;
 }
 
 /**
@@ -441,54 +360,72 @@ export function fillOccasionLooks(
   garments: Garment[],
   looks: Look[],
   occasion: Occasion,
-  min = 6,
+  min = CHAPTER_CAP,
+  exclude?: Set<string>,
 ): Look[] {
-  const pool = lookbookPool(garments);
-  const byId = new Map(pool.map((g) => [g.id, g]));
-  const fitting = looks.filter((l) => {
-    if (l.occasion === occasion) {
-      const pieces = l.garmentIds
-        .map((id) => byId.get(id))
-        .filter((g): g is Garment => Boolean(g));
-      return pieces.length >= 3 && lookFitsOccasion(pieces, occasion);
-    }
-    return false;
-  });
-  const keys = new Set(fitting.map((l) => [...l.garmentIds].sort().join("|")));
-  const extra: Look[] = [];
-  let prev: string[] = fitting.at(-1)?.garmentIds ?? [];
-  const weather =
-    occasion === "dinner"
-      ? { f: 62, label: "Mild", code: 2 }
-      : occasion === "weekend" || occasion === "travel"
-        ? { f: 72, label: "Fair", code: 2 }
-        : { f: 68, label: "Fair", code: 2 };
-  for (let i = 0; i < 40 && fitting.length + extra.length < min; i++) {
-    const ids = pickLook(pool, {
-      occasion,
-      moment: "day",
-      weather,
-      previousIds: prev,
-    });
-    if (ids.length < 3) break;
-    prev = ids;
-    const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
-    if (pieces.length < 3) continue;
-    if (!lookFitsOccasion(pieces, occasion)) continue;
-    const key = [...ids].sort().join("|");
-    if (keys.has(key)) continue;
-    keys.add(key);
-    extra.push({
-      id: `lb2_${occasion}_${ids.join("_")}`,
-      name: nameOf(pieces),
-      occasion,
-      garmentIds: ids,
-      source: "ai",
-      lookbook: true,
-      createdAt: `${todayISO()}T00:00:00.000Z`,
-    });
+  const occ = mapOccasion(occasion);
+  const have = looks.filter((l) => mapOccasion(l.occasion) === occ);
+  if (have.length >= min) return [];
+  const keys = new Set([
+    ...(exclude ?? []),
+    ...have.map((l) => comboKey(l.garmentIds)),
+  ]);
+  return buildChapter(garments, occ, { exclude: keys, cap: min - have.length });
+}
+
+export function looksToKeepOnShuffle(looks: Look[], occasion: Occasion): Look[] {
+  const occ = mapOccasion(occasion);
+  return looks.filter(
+    (l) => mapOccasion(l.occasion) !== occ || l.source === "manual",
+  );
+}
+
+/** Shuffle one chapter: drop unsaved rows, fill up to 10 unseen combos. Saved stay. */
+export function applyShuffle(
+  garments: Garment[],
+  looks: Look[],
+  occasion: Occasion,
+  seen: string[],
+  today?: string,
+): { looks: Look[]; added: Look[]; seen: string[] } {
+  const occ = mapOccasion(occasion);
+  const kept = looksToKeepOnShuffle(looks, occ);
+  const exclude = new Set(seen);
+  for (const l of kept) {
+    if (mapOccasion(l.occasion) === occ) exclude.add(comboKey(l.garmentIds));
   }
-  return extra;
+  const added = buildChapter(garments, occ, {
+    exclude,
+    cap: CHAPTER_CAP,
+    today,
+  });
+  const nextSeen = [...new Set([...seen, ...added.map((l) => comboKey(l.garmentIds))])];
+  return { looks: [...kept, ...added], added, seen: nextSeen };
+}
+
+/** Migrate old client/dinner tags and cap auto rows at 10 per chapter. Manual stays. */
+export function capChapterLooks(looks: Look[]): Look[] {
+  const mapped = looks.map((l) => ({ ...l, occasion: mapOccasion(l.occasion) }));
+  const out: Look[] = [];
+  const used = new Set<string>();
+  for (const l of mapped) {
+    if (l.source === "manual" || !l.lookbook) {
+      out.push(l);
+      used.add(l.id);
+    }
+  }
+  for (const { id: occ } of OCCASIONS) {
+    let n = 0;
+    for (const l of mapped) {
+      if (used.has(l.id)) continue;
+      if (l.occasion !== occ) continue;
+      if (n >= CHAPTER_CAP) continue;
+      out.push(l);
+      used.add(l.id);
+      n += 1;
+    }
+  }
+  return out;
 }
 
 export function lookHasColor(pieces: Garment[], color: string): boolean {
@@ -539,11 +476,11 @@ export function mergeLookbook(
   };
   // Auto builder ids are lb_*. Invalid hoodie+Italian looks drop even if saved.
   const kept = existing.filter(
-    (l) => (!l.lookbook || !l.id.startsWith("lb_")) && valid(l),
+    (l) => (l.source === "manual" || !l.lookbook || !l.id.startsWith("lb_")) && valid(l),
   );
-  const keys = new Set(kept.map((l) => [...l.garmentIds].sort().join("|")));
+  const keys = new Set(kept.map((l) => comboKey(l.garmentIds)));
   const extra = book.filter(
-    (b) => valid(b) && !keys.has([...b.garmentIds].sort().join("|")),
+    (b) => valid(b) && !keys.has(comboKey(b.garmentIds)),
   );
   return [...kept, ...extra];
 }
@@ -650,15 +587,15 @@ function heroOccasions(g: Garment): Occasion[] {
   if (isGraphic(g) || isHoodiePiece(g)) return ["weekend"];
   if (isCampCollar(g)) return ["weekday", "weekend", "travel"];
   if (slot === "footwear" && /loafer/.test(b)) {
-    return ["weekday", "client", "dinner", "weekend", "travel"];
+    return ["weekday", "out", "weekend", "travel"];
   }
   if (slot === "bottom" && /trouser|gurkha/.test(b)) {
-    return ["weekday", "client", "dinner", "travel", "weekend"];
+    return ["weekday", "out", "travel", "weekend"];
   }
   if (slot === "bottom" && /chino/.test(b)) {
-    return ["weekday", "client", "weekend", "travel"];
+    return ["weekday", "out", "weekend", "travel"];
   }
-  return ["weekday", "client", "dinner", "weekend", "travel"];
+  return ["weekday", "out", "weekend", "travel"];
 }
 
 function heroHonest(g: Garment, occ: Occasion, pieces: Garment[]): boolean {
@@ -683,8 +620,8 @@ export function looksForHero(g: Garment, garments: Garment[]): Look[] {
   const keys = new Set<string>();
   for (const occasion of heroOccasions(g)) {
     const weather =
-      occasion === "dinner"
-        ? { f: 62, label: "Mild", code: 2 }
+      occasion === "out"
+        ? { f: 64, label: "Mild", code: 2 }
         : occasion === "weekend" || occasion === "travel"
           ? { f: 72, label: "Fair", code: 2 }
           : { f: 68, label: "Fair", code: 2 };

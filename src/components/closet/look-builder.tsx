@@ -6,7 +6,7 @@ import { lookbookPool } from "@/lib/lookbook";
 import { nameLook } from "@/lib/look";
 import { defaultOccasion, slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import type { Garment } from "@/lib/types";
+import { mapOccasion, type Garment } from "@/lib/types";
 import { cn, todayISO } from "@/lib/utils";
 
 const SLOTS = [
@@ -173,9 +173,10 @@ export function LookBuilder({ onClose }: { onClose?: () => void }) {
           onClick={() =>
             saveLook({
               name: lookName,
-              occasion: drop?.occasion ?? "composed",
+              occasion: mapOccasion(drop?.occasion),
               garmentIds: ids,
               source: "manual",
+              lookbook: true,
             })
           }
           className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40"

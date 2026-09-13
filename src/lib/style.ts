@@ -92,7 +92,7 @@ function houseClimateScore(g: Garment, f: number, occasion: Occasion): number {
     s += 1.4;
   }
   if (
-    (occasion === "weekday" || occasion === "client" || occasion === "dinner") &&
+    (occasion === "weekday" || occasion === "out") &&
     hs.includes("ralph")
   ) {
     s += 1.1;
@@ -102,8 +102,7 @@ function houseClimateScore(g: Garment, f: number, occasion: Occasion): number {
 }
 
 function formalityTarget(occasion: Occasion, moment: Moment): number {
-  if (occasion === "client") return 4;
-  if (occasion === "dinner") return 4;
+  if (occasion === "out") return 4;
   if (occasion === "weekend" || occasion === "travel") return 2;
   void moment;
   return 3;
@@ -150,31 +149,24 @@ function occasionScore(g: Garment, occasion: Occasion): number {
   const knit = /knit|sweater|merino/.test(b);
   const overshirt = /overshirt/.test(b);
   const distressed = /distress|ripped|destroyed/.test(b);
+  const blazer = /blazer|sport\s*coats?/.test(b);
   let s = 0;
-  if (occasion === "client") {
-    if (sneaker || tee || gym) s -= 5;
-    if (jean || distressed) s -= 4;
-    if (trouser || oxford || loafer) s += 3;
-  } else if (occasion === "dinner") {
-    if (gym || (sneaker && gym)) s -= 5;
-    if (sneaker) s -= 3.5;
-    if (cargo) s -= 5;
-    if (jean) s -= 2.5;
-    if (tee) s -= 2;
-    if (loafer) s += 2.5;
-    if (trouser) s += 2;
-    if (oxford) s += 1.5;
+  if (occasion === "out") {
+    if (gym) s -= 4;
+    if (trouser || loafer || oxford || knit || blazer) s += 3;
+    if (jean) s += 0.4;
+    if (sneaker && !gym) s += 0.3;
+    if (/\bhoodies?\b|90s/.test(b)) s -= 4;
+  } else if (occasion === "weekday") {
+    if (oxford || polo || /cable/.test(b)) s += 1;
+    if (/chino/.test(b) || trouser) s += 1;
+    if (blazer) s += 1.2;
+    if (/\bhoodies?\b|90s|graphic/.test(b)) s -= 6;
   } else if (occasion === "weekend") {
     if (jean || sneaker || polo) s += 1.5;
     if (/\bhoodies?\b/.test(b)) s += 1;
   } else if (occasion === "travel") {
     if (knit || overshirt || sneaker || loafer) s += 1.5;
-  }
-  if (
-    (occasion === "weekday" || occasion === "client" || occasion === "dinner") &&
-    /\bhoodies?\b|90s|graphic/.test(b)
-  ) {
-    s -= 6;
   }
   return s;
 }
@@ -414,18 +406,22 @@ export function pickLook(
         if (topG && botG && repeats.has(pairKey(topG.id, botG.id))) {
           if (!lockedSet.has(topG.id) && !lockedSet.has(botG.id)) s -= 12;
         }
-        if (
-          (opts.occasion === "client" || opts.occasion === "dinner") &&
-          onlyTopIsUntucked(pieces)
-        ) {
+        if (opts.occasion === "out" && onlyTopIsUntucked(pieces) && topG && /camp/.test(`${topG.subtype} ${topG.name}`)) {
           continue;
         }
         if (
           (opts.occasion === "weekend" || opts.occasion === "travel") &&
           topG &&
-          resolveTuck(topG, opts.occasion) === "out"
+          resolveTuck(topG, opts.occasion, pieces) === "out"
         ) {
           s += 1.2;
+        }
+        if (
+          (opts.occasion === "weekday" || opts.occasion === "out") &&
+          topG &&
+          resolveTuck(topG, opts.occasion, pieces) === "in"
+        ) {
+          s += 0.6;
         }
         combos.push({ ids: pieces.map((g) => g.id), s, h, pieces });
       }
@@ -442,11 +438,17 @@ export function pickLook(
   if (pin.get("outerwear")) {
     const o = pin.get("outerwear")!;
     if (!ids.includes(o.id)) ids.push(o.id);
-  } else if (cool) {
-    // Outerwear only when it's actually cool. Hoodie is not a coat.
+  } else {
     const coats = by("outerwear").filter((g) => !isHoodiePiece(g));
-    const outer = best(coats);
-    if (outer && !(warm && outer.warmth >= 5)) ids.push(outer.id);
+    const blazer = coats.find((g) =>
+      /blazer|sport\s*coats?/.test(`${g.subtype} ${g.name}`.toLowerCase()),
+    );
+    if ((opts.occasion === "weekday" || opts.occasion === "out") && blazer) {
+      ids.push(blazer.id);
+    } else if (cool) {
+      const outer = best(coats);
+      if (outer && !(warm && outer.warmth >= 5)) ids.push(outer.id);
+    }
   }
   const acc = by("accessory");
   const belt = acc.find((a) => a.subtype === "belt");
@@ -475,8 +477,8 @@ export function pickLook(
       if (occupant && lockedSet.has(occupant.id)) {
         // locked slot stays
       } else {
-        // Don't swap a dinner trouser for idle jeans. Client/dinner stay brief-driven.
-        const formal = opts.occasion === "client" || opts.occasion === "dinner";
+        // Don't swap an Out trouser for idle jeans. Out stays brief-driven.
+        const formal = opts.occasion === "out";
         if (occupant && daysIdle(occupant) < 21 && !formal) {
           const nextIds = ids.map((id, i) => (i === slot ? candidate.id : id));
           const nextPieces = nextIds

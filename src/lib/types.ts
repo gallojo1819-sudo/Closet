@@ -78,13 +78,21 @@ export type WeatherSnap = {
 
 export const OCCASIONS = [
   { id: "weekday", label: "Weekday" },
-  { id: "client", label: "Client" },
-  { id: "dinner", label: "Dinner" },
+  { id: "out", label: "Out" },
   { id: "weekend", label: "Weekend" },
   { id: "travel", label: "Travel" },
 ] as const;
 
 export type Occasion = (typeof OCCASIONS)[number]["id"];
+
+/** Old closet.v6 client/dinner become Out. */
+export function mapOccasion(raw?: string | null): Occasion {
+  if (raw === "client" || raw === "dinner") return "out";
+  if (raw === "weekday" || raw === "out" || raw === "weekend" || raw === "travel") {
+    return raw;
+  }
+  return "weekday";
+}
 export type Moment = "morning" | "day" | "evening";
 
 export type DailyDrop = {

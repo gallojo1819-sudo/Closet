@@ -43,6 +43,7 @@ const empty = {
   refPhoto: null,
   messages: [],
   refPhotoBackup: null,
+  seenLooks: {},
   hydrated: false,
 };
 
@@ -77,6 +78,23 @@ describe("mergeClosetPersist", () => {
     );
     assert.equal(next.refPhoto, "idb:me:ref");
     assert.equal(next.refPhotoBackup, "data:image/jpeg;base64,xx");
+  });
+
+  it("keeps seenLooks from persist without wiping garments", () => {
+    const persisted: PersistedCloset = {
+      garments: [g("a")],
+      looks: [],
+      journal: [],
+      avoid: {},
+      drop: null,
+      refPhoto: null,
+      refPhotoBackup: null,
+      messages: [],
+      seenLooks: { out: ["a|b|c"] },
+    };
+    const next = mergeClosetPersist(persisted, empty);
+    assert.equal(next.garments[0]?.id, "a");
+    assert.deepEqual(next.seenLooks, { out: ["a|b|c"] });
   });
 });
 

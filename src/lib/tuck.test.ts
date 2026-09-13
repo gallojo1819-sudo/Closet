@@ -63,9 +63,22 @@ describe("guessTuck", () => {
     assert.equal(tuckOf({ ...ox, tuck: "out" }), "out");
   });
 
-  it("polo either is in for client, out for weekend", () => {
+  it("polo either is in for out under a blazer, out for weekend", () => {
     const polo = g({ id: "p", name: "Navy polo", subtype: "polo" });
-    assert.equal(resolveTuck(polo, "client"), "in");
+    assert.equal(resolveTuck(polo, "out"), "out");
+    assert.equal(
+      resolveTuck(polo, "out", [
+        polo,
+        g({ id: "z", name: "Navy blazer", subtype: "blazer", category: "outerwear" }),
+      ]),
+      "in",
+    );
     assert.equal(resolveTuck(polo, "weekend"), "out");
+    const ox = g({ id: "o", name: "White oxford", subtype: "oxford" });
+    assert.equal(resolveTuck(ox, "weekday"), "in");
+    assert.equal(resolveTuck(ox, "weekend"), "out");
+    assert.equal(resolveTuck({ ...ox, tuck: "in" }, "weekend"), "in");
+    const camp = g({ id: "c", name: "Linen camp collar", subtype: "camp shirt" });
+    assert.equal(resolveTuck(camp, "weekend"), "out");
   });
 });
