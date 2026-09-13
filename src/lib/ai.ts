@@ -233,6 +233,25 @@ Lay on #F4EFE6 paper, 4:5, fill ~80%. No extra garments, no model, no text.`,
     );
   });
 
+export const describeCover = createServerFn({ method: "POST" })
+  .validator((input: { image: string; notes: string }) => input)
+  .handler(async ({ data }): Promise<EditResult> => {
+    if (!process.env.XAI_API_KEY) {
+      return { ok: false, error: "Set XAI_API_KEY to match a cover." };
+    }
+    const notes = data.notes.trim();
+    if (!notes) return { ok: false, error: "Describe the make first." };
+    return imagineEdit(
+      `This is the SAME garment in the photo.
+Joe says it is: ${notes}
+Keep fabric, color, wear, hardware that is already there.
+Change construction to match his description (Gurkha = extended waist + buckle tabs, NO drawstring, NO elastic cuff, NO joggers).
+Still one pair, on #F4EFE6 paper, 4:5, fill ~80%.
+Do not invent a different pant or a model.`,
+      data.image,
+    );
+  });
+
 export const onMePreview = createServerFn({ method: "POST" })
   .validator((input: { refImage: string; cutouts: string[]; pieces: string }) => input)
   .handler(async ({ data }): Promise<EditResult> => {

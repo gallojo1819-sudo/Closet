@@ -3,7 +3,8 @@ import { Loader2 } from "lucide-react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
-import { aiStatus, recolorCover } from "@/lib/ai";
+import { aiStatus, describeCover, recolorCover } from "@/lib/ai";
+import { patchFromNotes } from "@/lib/describe";
 import {
   blobToDataUrl,
   dataUrlToBlob,
@@ -95,9 +96,12 @@ export function GarmentDetail({
   const refPhoto = useCloset((s) => s.refPhoto);
   const [view, setView] = useState<"print" | "original" | "me">("print");
   const [name, setName] = useState(garment.name);
+  const [subtype, setSubtype] = useState(garment.subtype ?? "");
+  const [notes, setNotes] = useState(garment.notes ?? "");
   const [color, setColor] = useState(garment.colors[0] ?? "");
   const [canPrint, setCanPrint] = useState(false);
   const [recoloring, setRecoloring] = useState(false);
+  const [matching, setMatching] = useState(false);
   const [coverNote, setCoverNote] = useState<string | null>(null);
   const [coverError, setCoverError] = useState<string | null>(null);
   const originalSrc = useImageSrc(garment.imageSrc);
@@ -144,6 +148,15 @@ export function GarmentDetail({
       .catch(() => setCanPrint(false));
   }, []);
 
+  useEffect(() => {
+    setName(garment.name);
+    setSubtype(garment.subtype ?? "");
+    setNotes(garment.notes ?? "");
+    setColor(garment.colors[0] ?? "");
+    setCoverNote(null);
+    setCoverError(null);
+  }, [garment.id]);
+
   const commitPaid = () => {
     const n = parseFloat(paid);
     const next = Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : undefined;
@@ -155,6 +168,25 @@ export function GarmentDetail({
     const next = name.trim();
     if (next && next !== garment.name) updateGarment(garment.id, { name: next });
     else setName(garment.name);
+  };
+
+  const commitSubtype = () => {
+    const next = subtype.trim();
+    if (next !== (garment.subtype ?? "")) {
+      updateGarment(garment.id, { subtype: next });
+    }
+  };
+
+  const commitNotes = () => {
+    const patch = patchFromNotes(garment, notes);
+    if (patch.subtype != null) setSubtype(patch.subtype);
+    if (patch.name) setName(patch.name);
+    const sameNotes = (patch.notes ?? "") === (garment.notes ?? "");
+    const sameSub = (patch.subtype ?? garment.subtype) === garment.subtype;
+    const sameName = !patch.name || patch.name === garment.name;
+    const sameCat = !patch.category || patch.category === garment.category;
+    if (sameNotes && sameSub && sameName && sameCat) return;
+    updateGarment(garment.id, patch);
   };
 
   const commitColor = (raw: string) => {
@@ -206,6 +238,39 @@ export function GarmentDetail({
       setCoverError(e instanceof Error ? e.message : "Could not recolor that cover.");
     } finally {
       setRecoloring(false);
+    }
+  };
+
+  const matchCover = async () => {
+    const patch = patchFromNotes(garment, notes);
+    if (patch.subtype != null) setSubtype(patch.subtype);
+    if (patch.name) setName(patch.name);
+    updateGarment(garment.id, patch);
+    if (!(patch.notes ?? "").trim()) {
+      setCoverError("Describe the make first.");
+      return;
+    }
+    setMatching(true);
+    setCoverError(null);
+    setCoverNote(null);
+    try {
+      const image = await coverDataUrl(garment.cutoutSrc || garment.imageSrc);
+      if (!image) throw new Error("Could not read the cover.");
+      const res = await describeCover({ data: { image, notes: patch.notes ?? notes } });
+      if (!res.ok) throw new Error(res.error);
+      const key = imageKey(garment.id, "c");
+      await putImage(key, dataUrlToBlob(res.image));
+      void putThumb(garment.id, res.image).catch(() => {});
+      updateGarment(garment.id, {
+        ...patch,
+        cutoutSrc: key,
+      });
+      setView("print");
+      setCoverNote("Cover updated — original photo unchanged.");
+    } catch (e) {
+      setCoverError(e instanceof Error ? e.message : "Could not match that cover.");
+    } finally {
+      setMatching(false);
     }
   };
 
@@ -341,11 +406,51 @@ export function GarmentDetail({
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <dt className="micro text-ink-soft">Subtype</dt>
-              <dd>{garment.subtype || "—"}</dd>
+              <dd>
+                <input
+                  value={subtype}
+                  onChange={(e) => setSubtype(e.target.value)}
+                  onBlur={commitSubtype}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  aria-label="Subtype"
+                  placeholder="gurkha"
+                  className="mt-1 h-9 w-full border border-hairline bg-card px-2 text-sm"
+                />
+              </dd>
             </div>
             <div>
               <dt className="micro text-ink-soft">Material</dt>
               <dd>{garment.material || "—"}</dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="micro text-ink-soft">Style / make</dt>
+              <dd className="mt-1 space-y-2">
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  onBlur={commitNotes}
+                  rows={3}
+                  aria-label="Style / make"
+                  placeholder="Gurkha. Extended waistband, side buckle, no belt, not a drawstring."
+                  className="w-full border border-hairline bg-card px-2 py-2 text-sm leading-relaxed"
+                />
+                {canPrint && (
+                  <button
+                    type="button"
+                    disabled={matching || recoloring}
+                    onClick={() => void matchCover()}
+                    className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40 inline-flex items-center gap-2"
+                  >
+                    {matching && <Loader2 className="size-3 animate-spin" />}
+                    {matching ? "Matching…" : "Match cover to this"}
+                  </button>
+                )}
+                <p className="text-sm text-ink-soft">
+                  Cover follows the description. Original photo stays.
+                </p>
+              </dd>
             </div>
             <div className="col-span-2">
               <dt className="micro text-ink-soft">Color</dt>
@@ -441,9 +546,6 @@ export function GarmentDetail({
               </p>
             )}
           </div>
-          {garment.notes && (
-            <p className="text-sm text-ink-soft">{garment.notes}</p>
-          )}
           <div className="mt-auto flex flex-wrap gap-2 pt-4">
             <Button onClick={() => wearToday([garment.id])} disabled={worn}>
               {worn ? "Worn today" : "I wore this"}
