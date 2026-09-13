@@ -16,7 +16,7 @@ import {
 } from "@/lib/lookbook";
 import { slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import { OCCASIONS, type Garment, type Look } from "@/lib/types";
+import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/lookbook")({
@@ -50,7 +50,7 @@ function LookCardFace({
     setDressError(null);
     void (async () => {
       try {
-        await ensureLookOnMe(look.id, pieces);
+        await ensureLookOnMe(look.id, pieces, 45_000, look.occasion as Occasion);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Could not dress you.";
         setDressError(msg === "timeout" ? "Imagine timed out after 45s." : msg);

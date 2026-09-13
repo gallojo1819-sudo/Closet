@@ -1,6 +1,7 @@
 import { harmony } from "./color.ts";
 import type { Garment, Moment, Occasion, WearEntry, WeatherSnap } from "./types.ts";
 import { lastDays, todayISO } from "./utils.ts";
+import { onlyTopIsUntucked, resolveTuck } from "./tuck.ts";
 
 export type { Moment, Occasion };
 export type House =
@@ -412,6 +413,19 @@ export function pickLook(
         }
         if (topG && botG && repeats.has(pairKey(topG.id, botG.id))) {
           if (!lockedSet.has(topG.id) && !lockedSet.has(botG.id)) s -= 12;
+        }
+        if (
+          (opts.occasion === "client" || opts.occasion === "dinner") &&
+          onlyTopIsUntucked(pieces)
+        ) {
+          continue;
+        }
+        if (
+          (opts.occasion === "weekend" || opts.occasion === "travel") &&
+          topG &&
+          resolveTuck(topG, opts.occasion) === "out"
+        ) {
+          s += 1.2;
         }
         combos.push({ ids: pieces.map((g) => g.id), s, h, pieces });
       }

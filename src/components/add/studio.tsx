@@ -13,8 +13,9 @@ import {
   type OfficialHit,
 } from "@/lib/listing";
 import { useCloset } from "@/lib/store";
-import type { Category, ImageSource } from "@/lib/types";
+import type { Category, ImageSource, Tuck } from "@/lib/types";
 import { uid } from "@/lib/utils";
+import { guessTuck } from "@/lib/tuck";
 
 const CHECKS = [
   "One item",
@@ -99,6 +100,7 @@ export function Studio() {
       notes?: string;
       productUrl?: string;
       fileHash?: string;
+      tuck?: Tuck;
       quiet?: boolean;
     }): Promise<Saved> => {
       const id = opts.id;
@@ -125,6 +127,7 @@ export function Studio() {
           matteQuality: "clean",
           productUrl: opts.productUrl,
           fileHash: opts.fileHash,
+          tuck: opts.tuck ?? guessTuck({ name: opts.name, subtype: opts.subtype ?? "", notes: opts.notes ?? "" }),
         },
         { quiet: opts.quiet },
       );
@@ -179,6 +182,7 @@ export function Studio() {
       let fit: "slim" | "regular" | "relaxed" = "regular";
       let formality: 1 | 2 | 3 | 4 | 5 = 3;
       let warmth: 1 | 2 | 3 | 4 | 5 = 3;
+      let tuck: Tuck | undefined;
       try {
         const thumb = await shrinkDataUrl(cutout, 768);
         const tag = await tagGarment({
@@ -198,6 +202,7 @@ export function Studio() {
           fit = tag.fit;
           formality = tag.formality;
           warmth = tag.warmth;
+          tuck = tag.tuck;
         }
       } catch {
         /* fall through */
@@ -234,6 +239,7 @@ export function Studio() {
         warmth,
         notes: matte.reason,
         fileHash: hash,
+        tuck: tuck ?? guessTuck({ name, subtype, notes: matte.reason }),
         quiet: true,
       });
       } catch (e) {

@@ -19,6 +19,7 @@ import { costPerWear, money } from "@/lib/look";
 import { PALETTE, nameWithColor } from "@/lib/color";
 import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
 import { CATEGORIES, type Category, type Garment } from "@/lib/types";
+import { guessTuck, tuckOf } from "@/lib/tuck";
 import { useCloset } from "@/lib/store";
 import { useImageSrc } from "@/lib/use-image";
 import { cn, todayISO } from "@/lib/utils";
@@ -188,7 +189,14 @@ export function GarmentDetail({
     const sameSub = (patch.subtype ?? garment.subtype) === garment.subtype;
     const sameName = !patch.name || patch.name === garment.name;
     const sameCat = !patch.category || patch.category === garment.category;
-    if (sameNotes && sameSub && sameName && sameCat) return;
+    if (/untuck|\btucked\b|\btuck in\b/.test(notes.toLowerCase())) {
+      patch.tuck = guessTuck({
+        name: garment.name,
+        subtype: patch.subtype ?? garment.subtype,
+        notes,
+      });
+    }
+    if (sameNotes && sameSub && sameName && sameCat && !patch.tuck) return;
     updateGarment(garment.id, patch);
   };
 
@@ -429,6 +437,37 @@ export function GarmentDetail({
                   placeholder="gurkha"
                   className="mt-1 h-9 w-full border border-hairline bg-card px-2 text-sm"
                 />
+              </dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="micro text-ink-soft">Tuck</dt>
+              <dd className="mt-1 space-y-2">
+                <div className="flex flex-wrap gap-1">
+                  {(
+                    [
+                      ["in", "Tucked"],
+                      ["out", "Untucked"],
+                      ["either", "Either"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => updateGarment(garment.id, { tuck: id })}
+                      className={cn(
+                        "micro border px-2 py-1",
+                        tuckOf(garment) === id
+                          ? "border-ink bg-ink text-paper"
+                          : "border-hairline text-ink-soft",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-sm text-ink-soft">
+                  Ralph client tucks the oxford. Camp collar stays out.
+                </p>
               </dd>
             </div>
             <div>

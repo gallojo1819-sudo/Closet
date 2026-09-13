@@ -12,11 +12,15 @@ import {
   resolveImage,
 } from "@/lib/images";
 import { useCloset } from "@/lib/store";
-import type { Garment } from "@/lib/types";
+import type { Garment, Occasion } from "@/lib/types";
 import { layersForOnMe } from "@/lib/look";
+import { tuckDressingLines } from "@/lib/tuck";
 
 /** Dress Joe in these exact cutouts. Never writes cutoutSrc. */
-export async function dressLook(pieces: Garment[]): Promise<string> {
+export async function dressLook(
+  pieces: Garment[],
+  occasion?: Occasion,
+): Promise<string> {
   const refPhoto = useCloset.getState().refPhoto;
   if (!refPhoto) {
     openRefPhotoDialog();
@@ -28,8 +32,9 @@ export async function dressLook(pieces: Garment[]): Promise<string> {
     throw new Error("Reference photo is missing — set it again.");
   }
   const refImage = await jpegDataUrl(blob, 768, 0.8);
+  const worn = layersForOnMe(pieces);
   const layers: { name: string; category: string; url: string }[] = [];
-  for (const g of layersForOnMe(pieces)) {
+  for (const g of worn) {
     const raw = await asDataUrl(g.cutoutSrc || g.imageSrc);
     if (!raw) continue;
     const url = await jpegDataUrl(raw, 512, 0.8);
@@ -39,7 +44,8 @@ export async function dressLook(pieces: Garment[]): Promise<string> {
   const list = layers
     .map((l, i) => `image ${i + 2} = ${l.name} (${l.category})`)
     .join(". ");
-  const res = await onMePreview({ data: { refImage, cutouts, pieces: list } });
+  const tuck = tuckDressingLines(worn, occasion);
+  const res = await onMePreview({ data: { refImage, cutouts, pieces: list, tuck } });
   if (!res.ok) throw new Error(res.error);
   return res.image;
 }
@@ -67,6 +73,7 @@ export async function ensureLookOnMe(
   lookId: string,
   pieces: Garment[],
   ms = 45_000,
+  occasion?: Occasion,
 ): Promise<string> {
   const key = lookOnMeKey(lookId);
   const hit = await getImage(key);
@@ -74,7 +81,7 @@ export async function ensureLookOnMe(
   const pending = inflight.get(lookId);
   if (pending) return pending;
   const job = (async () => {
-    const image = await withTimeout(dressLook(pieces), ms);
+    const image = await withTimeout(dressLook(pieces, occasion), ms);
     await putImage(key, dataUrlToBlob(image));
     return image;
   })().finally(() => {
@@ -99,7 +106,7 @@ async function asDataUrl(src: string): Promise<string | null> {
 
 const NO_REF = "No reference photo yet. Tap Fit · 5′8 reg up top to add one.";
 
-function useOnMe(pieces: Garment[]) {
+function useOnMe(pieces: Garment[], occasion?: Occasion) {
   const refPhoto = useCloset((s) => s.refPhoto);
   const [busy, setBusy] = useState(false);
   const [image, setImage] = useState<string | null>(null);
@@ -115,7 +122,7 @@ function useOnMe(pieces: Garment[]) {
     setBusy(true);
     setError(null);
     try {
-      const image = await dressLook(pieces);
+      const image = await dressLook(pieces, occasion);
       if (useCloset.getState().refPhoto !== refPhoto) return;
       setImage(image);
     } catch (e) {
@@ -195,11 +202,13 @@ export function OnMeButton({ pieces }: { pieces: Garment[] }) {
 export function OnMePanel({
   pieces,
   onUsePaper,
+  occasion,
 }: {
   pieces: Garment[];
   onUsePaper?: () => void;
+  occasion?: Occasion;
 }) {
-  const preview = useOnMe(pieces);
+  const preview = useOnMe(pieces, occasion);
   const hydrated = useCloset((s) => s.hydrated);
 
   useEffect(() => {

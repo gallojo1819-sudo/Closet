@@ -19,6 +19,8 @@ export const IMAGE_SOURCES = [
 
 export type ImageSource = (typeof IMAGE_SOURCES)[number];
 
+export type Tuck = "in" | "out" | "either";
+
 export type Garment = {
   id: string;
   name: string;
@@ -39,6 +41,8 @@ export type Garment = {
   wornOn: string[];
   paid?: number;
   fit?: "slim" | "regular" | "relaxed";
+  /** How the shirt is worn. Missing on old closet.v6 garments → guessTuck. */
+  tuck?: Tuck;
   productUrl?: string;
   /** Fingerprint of the source File so a dump cannot add the same JPEG twice. */
   fileHash?: string;

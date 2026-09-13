@@ -14,6 +14,7 @@ export type TagResult = {
   fit: "slim" | "regular" | "relaxed";
   formality: 1 | 2 | 3 | 4 | 5;
   warmth: 1 | 2 | 3 | 4 | 5;
+  tuck?: "in" | "out" | "either";
 } | { ok: false; error: string };
 
 type XaiResult = {
@@ -95,7 +96,7 @@ export const tagGarment = createServerFn({ method: "POST" })
     userContent.push({
       type: "text",
       text:
-        'Return ONLY JSON: {"name":"Brown suede mules","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"mules","colors":["brown"],"material":"suede","brand":"Giuseppe Zanotti","fit":"slim|regular|relaxed","formality":3,"warmth":2}. Name the FIRST image like a closet label: color + garment (Navy oxford, Grey merino, Brown suede mules). A pair of shoes is footwear. Two trouser legs joined at a crotch is bottom. Fit from how it lies. If unsure, regular. Name the GARMENT fabric color as worn, not the background. Navy is navy, not olive, not black, not charcoal. Maroon/burgundy is not brown. Light blue denim is light blue, not white. Loafers: the leather, not the sole. Return colors[] from this list only: navy, light blue, cream, white, ivory, khaki, beige, tan, camel, brown, chocolate, olive, forest, maroon, burgundy, wine, pink, blush, grey, charcoal, black, rust, gold.' +
+        'Return ONLY JSON: {"name":"Brown suede mules","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"mules","colors":["brown"],"material":"suede","brand":"Giuseppe Zanotti","fit":"slim|regular|relaxed","formality":3,"warmth":2,"tuck":"in|out|either"}. Name the FIRST image like a closet label: color + garment (Navy oxford, Grey merino, Brown suede mules). A pair of shoes is footwear. Two trouser legs joined at a crotch is bottom. Fit from how it lies. If unsure, regular. tuck: oxford/shirttail/point collar = in; camp collar/straight hem/resort = out; polo/rugby/overshirt = either; omit if not a shirt. Name the GARMENT fabric color as worn, not the background. Navy is navy, not olive, not black, not charcoal. Maroon/burgundy is not brown. Light blue denim is light blue, not white. Loafers: the leather, not the sole. Return colors[] from this list only: navy, light blue, cream, white, ivory, khaki, beige, tan, camel, brown, chocolate, olive, forest, maroon, burgundy, wine, pink, blush, grey, charcoal, black, rust, gold.' +
         (data.context
           ? " The second image is only the page the garment came from — you may read a brand name from it (Axel Arigato, AMI), nothing else. Never name the garment after the shop or a page ID."
           : " Brand only if a label or logo is legible on the garment itself, else empty."),
@@ -130,6 +131,11 @@ export const tagGarment = createServerFn({ method: "POST" })
       const fitRaw = String(parsed.fit ?? "regular");
       const fit =
         fitRaw === "slim" || fitRaw === "relaxed" ? fitRaw : "regular";
+      const tuckRaw = String(parsed.tuck ?? "");
+      const tuck =
+        tuckRaw === "in" || tuckRaw === "out" || tuckRaw === "either"
+          ? tuckRaw
+          : undefined;
       return {
         ok: true,
         name: String(parsed.name ?? "Garment").slice(0, 48),
@@ -143,6 +149,7 @@ export const tagGarment = createServerFn({ method: "POST" })
         fit,
         formality: (formality >= 1 && formality <= 5 ? formality : 3) as 1 | 2 | 3 | 4 | 5,
         warmth: (warmth >= 1 && warmth <= 5 ? warmth : 3) as 1 | 2 | 3 | 4 | 5,
+        tuck,
       };
     } catch {
       return { ok: false, error: "Could not parse tag." };
@@ -267,7 +274,7 @@ Do not invent a different pant or a model. Do not keep the old construction.`,
   });
 
 export const onMePreview = createServerFn({ method: "POST" })
-  .validator((input: { refImage: string; cutouts: string[]; pieces: string }) => input)
+  .validator((input: { refImage: string; cutouts: string[]; pieces: string; tuck?: string }) => input)
   .handler(async ({ data }): Promise<EditResult> => {
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
     if (!data.refImage) return { ok: false, error: "No reference photo." };
@@ -278,7 +285,8 @@ Do NOT morph two garments into one.
 Do NOT copy a logo, stripe, flag, or "90s" from garment A onto garment B.
 Do NOT invent a hybrid knit. If only one top image is sent, that is the only top — no extra hoodie.
 Keep his face, hair, beard or none, skin, 5′8 regular body. Hands EMPTY. No phone, no selfie. Full-body editorial, plain studio #F4EFE6. No text.
-${data.pieces}`;
+${data.pieces}
+${data.tuck ?? ""}`;
     const urls = [data.refImage, ...data.cutouts.slice(0, 4)].filter(Boolean);
     const images = urls.map(imageUrlPart);
     let r = await xaiFetch("https://api.x.ai/v1/images/edits", {

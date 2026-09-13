@@ -6,7 +6,7 @@ import { ensureLookOnMe } from "@/components/closet/on-me";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { moreLikeThis } from "@/lib/lookbook";
 import { useCloset } from "@/lib/store";
-import type { Garment, Look } from "@/lib/types";
+import type { Garment, Look, Occasion } from "@/lib/types";
 import { useImageSrc } from "@/lib/use-image";
 import { cn } from "@/lib/utils";
 
@@ -124,7 +124,12 @@ export function LookSheet({
     setDressError(null);
     void (async () => {
       try {
-        const image = await ensureLookOnMe(look.id, piecesRef.current);
+        const image = await ensureLookOnMe(
+          look.id,
+          piecesRef.current,
+          45_000,
+          look.occasion as Occasion,
+        );
         if (n !== gen.current) return;
         const url = URL.createObjectURL(dataUrlToBlob(image));
         setFrame((prev) => {

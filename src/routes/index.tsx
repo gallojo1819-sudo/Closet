@@ -230,7 +230,11 @@ function Today() {
             </div>
           )}
           {view === "me" && pieces.length > 0 ? (
-            <OnMePanel pieces={pieces} onUsePaper={() => setView("paper")} />
+            <OnMePanel
+              pieces={pieces}
+              occasion={drop?.occasion}
+              onUsePaper={() => setView("paper")}
+            />
           ) : (
             <FlatLay pieces={pieces} />
           )}

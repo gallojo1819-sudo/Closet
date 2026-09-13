@@ -11,6 +11,7 @@ import {
   pickLook,
   slotOf,
 } from "./style.ts";
+import { onlyTopIsUntucked } from "./tuck.ts";
 import type { Garment, Look, Occasion } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
@@ -381,6 +382,7 @@ export function lookFitsOccasion(pieces: Garment[], occ: string): boolean {
   const distressed = /distress|ripped|destroyed/.test(blob);
 
   if (occ === "client") {
+    if (onlyTopIsUntucked(pieces)) return false;
     if (hoodie || graphic || rugby || /90s|90's/.test(blob)) return false;
     if (sneaker) return false;
     if (cargo || distressed) return false;
@@ -394,6 +396,7 @@ export function lookFitsOccasion(pieces: Garment[], occ: string): boolean {
   }
 
   if (occ === "dinner") {
+    if (onlyTopIsUntucked(pieces)) return false;
     if (sneaker || hoodie || graphic || cargo || tee) return false;
     if (jean) return false;
     if (!trouser) return false;
