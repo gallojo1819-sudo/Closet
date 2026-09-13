@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { kitCells, layersForOnMe } from "./look.ts";
+import { kitCells, layersForOnMe, spreadTitle } from "./look.ts";
 import type { Garment } from "./types.ts";
 
 function g(
@@ -114,5 +114,20 @@ describe("kitCells", () => {
       kitCells(look).map((x) => x.id),
       ["polo", "tr", "lf"],
     );
+  });
+});
+
+describe("spreadTitle", () => {
+  it("is editorial, not a SKU dump", () => {
+    const look = [
+      g({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford", colors: ["navy"] }),
+      g({ id: "ch", name: "Cream chino", category: "bottom", subtype: "chino", colors: ["cream"] }),
+      g({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer", colors: ["brown"] }),
+    ];
+    assert.equal(spreadTitle(look, "weekday"), "Quiet office");
+    assert.equal(spreadTitle(look, "weekend"), "Saturday market");
+    const out = spreadTitle(look, "out");
+    assert.ok(!out.includes("Navy oxford ·"), out);
+    assert.ok(/Ralph|cream|navy|Out/i.test(out), out);
   });
 });

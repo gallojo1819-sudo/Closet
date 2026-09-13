@@ -18,10 +18,34 @@ import {
   stripRepeatBlazers,
 } from "@/lib/lookbook";
 import { lookFitsSeason, seasonFromWeather } from "@/lib/season";
+import { paletteCss } from "@/lib/color";
+import { spreadMicro, spreadTitle } from "@/lib/look";
 import { HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+function emptyFilterCopy(
+  chapter: string,
+  seasonLabel: string,
+  seasonChip: "auto" | Season,
+  houseChip: "all" | House,
+  color: string | null,
+): string {
+  const named = [chapter];
+  const seasonName = seasonLabel.replace(/^Auto · /, "");
+  if (seasonChip !== "auto") named.push(seasonName);
+  if (houseChip !== "all") {
+    named.push(HOUSE_CHIPS.find((h) => h.id === houseChip)?.label ?? houseChip);
+  }
+  if (color) named.push(color);
+  let hint = "Switch Weekend.";
+  if (seasonChip !== "auto") hint = `Clear ${seasonName} or switch Weekend.`;
+  else if (houseChip !== "all") {
+    hint = `Clear ${HOUSE_CHIPS.find((h) => h.id === houseChip)?.label ?? "house"} or switch Weekend.`;
+  } else if (color) hint = `Clear ${color} or switch Weekend.`;
+  return `Nothing in this closet for ${named.join(" × ")}. ${hint}`;
+}
 
 export const Route = createFileRoute("/lookbook")({
   component: LookbookPage,
@@ -107,6 +131,7 @@ function LookCard({
   index,
   onOpen,
   cardRef,
+  season,
 }: {
   look: Look;
   pieces: Garment[];
@@ -114,6 +139,7 @@ function LookCard({
   index: number;
   onOpen: () => void;
   cardRef: (el: HTMLElement | null) => void;
+  season: string;
 }) {
   const rootRef = useRef<HTMLLIElement>(null);
 
@@ -143,8 +169,10 @@ function LookCard({
       >
         <LookCardFace look={look} pieces={pieces} onOpen={onOpen} cardRef={cardRef} />
       </IdleMount>
-      <p className="mt-3">{look.name}</p>
-      <p className="micro text-ink-soft">{look.occasion}</p>
+      <p className="mt-3">{spreadTitle(pieces, look.occasion as Occasion)}</p>
+      <p className="micro text-ink-soft">
+        {spreadMicro(pieces, look.occasion as Occasion, season)}
+      </p>
     </li>
   );
 }
@@ -262,13 +290,15 @@ function LookbookPage() {
       <h1 className="mt-2 font-editorial text-4xl md:text-6xl tracking-tight">
         Lookbook
       </h1>
-      <p className="mt-3 text-ink-soft max-w-xl">
-        {chapterLabel} · {seasonLabel}. 10 looks · Shuffle · Save on the sheet.
-      </p>
+      {hydrated && (
+        <p className="mt-3 text-ink-soft max-w-xl">
+          {shown.length} looks · {chapterLabel} · {seasonLabel.replace(/^Auto · /, "")}
+        </p>
+      )}
       {gap && (
         <p className="mt-3 text-sm text-ink-soft max-w-xl">{gap}</p>
       )}
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-6 flex flex-wrap items-center gap-2">
         {OCCASIONS.map((o) => (
           <button
             key={o.id}
@@ -287,8 +317,6 @@ function LookbookPage() {
             {o.label}
           </button>
         ))}
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => {
@@ -322,8 +350,6 @@ function LookbookPage() {
             {s.label}
           </button>
         ))}
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => {
@@ -357,27 +383,22 @@ function LookbookPage() {
             {h.label}
           </button>
         ))}
+        {colorChips.map((c) => (
+          <button
+            key={c}
+            type="button"
+            title={c}
+            onClick={() => setColor((cur) => (cur === c ? null : c))}
+            className={cn(
+              "size-6 shrink-0 border",
+              color === c ? "border-ink" : "border-hairline",
+            )}
+            style={{ backgroundColor: paletteCss(c) }}
+            aria-label={c}
+          />
+        ))}
       </div>
-      {colorChips.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {colorChips.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setColor((cur) => (cur === c ? null : c))}
-              className={cn(
-                "micro border px-3 py-2",
-                color === c
-                  ? "border-ink bg-ink text-paper"
-                  : "border-hairline text-ink-soft",
-              )}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-6 flex flex-wrap gap-3">
       <button
         type="button"
         onClick={() => {
@@ -386,16 +407,16 @@ function LookbookPage() {
             season,
             houseChip === "all" ? undefined : houseChip,
           );
-          setExhausted(n < 3);
+          setExhausted(n === 0);
         }}
-        className="micro text-ink-soft hover:text-ink"
+        className="inline-flex h-11 items-center border border-hairline px-4 text-sm text-ink hover:border-hairline-strong"
       >
         Shuffle
       </button>
       <button
         type="button"
         onClick={() => setPlay((v) => !v)}
-        className="micro text-ink-soft hover:text-ink"
+        className="inline-flex h-11 items-center bg-accent px-4 text-sm text-paper"
       >
         {play ? "Close builder" : "Make a look"}
       </button>
@@ -406,7 +427,7 @@ function LookbookPage() {
         </div>
       )}
 
-      {hydrated && garments.length === 0 ? (
+      {!hydrated ? null : garments.length === 0 ? (
         <div className="mt-10 border border-hairline bg-card px-4 py-5">
           <p className="text-sm text-ink-soft">
             Lookbook is this closet. Add pieces on Add — don’t re-upload here.
@@ -435,7 +456,7 @@ function LookbookPage() {
       {exhausted && (
         <div className="mt-8 border border-hairline bg-card px-4 py-5">
           <p className="text-sm text-ink-soft">
-            You’ve seen this chapter. Save a look you like, or add a piece.
+            You’ve seen every honest look in this chapter.
           </p>
           <button
             type="button"
@@ -455,7 +476,7 @@ function LookbookPage() {
       )}
       {shown.length === 0 && !exhausted ? (
         <p className="mt-10 text-sm text-ink-soft">
-          Save a look you like, or add a piece.
+          {emptyFilterCopy(chapterLabel, seasonLabel, seasonChip, houseChip, color)}
         </p>
       ) : shown.length > 0 ? (
         <ul className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -468,6 +489,7 @@ function LookbookPage() {
                 look={look}
                 pieces={pieces}
                 index={i}
+                season={season}
                 highlight={highlightId === look.id}
                 onOpen={() => setOpenId(look.id)}
                 cardRef={(el) => {

@@ -4,7 +4,9 @@ import { LookKit } from "@/components/closet/look-kit";
 import { sheetPanelClass, useMdUp } from "@/components/closet/detail";
 import { ensureLookOnMe, queueLookOnMe } from "@/components/closet/on-me";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
-import { nameLook } from "@/lib/look";
+import { openRefPhotoDialog } from "@/components/shell/top-bar";
+import { colorLine } from "@/lib/color";
+import { nameLook, spreadTitle } from "@/lib/look";
 import { comboKey, moreLikeThis } from "@/lib/lookbook";
 import { slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
@@ -61,8 +63,13 @@ export function LookSheet({
   const piecesRef = useRef(activePieces);
   piecesRef.current = activePieces;
   const keepLook = useCloset((s) => s.keepLook);
+  const looks = useCloset((s) => s.looks);
+  const refPhoto = useCloset((s) => s.refPhoto);
   const md = useMdUp();
   const painted = frame || cachedSrc;
+  const comboSaved = looks.some(
+    (l) => l.source === "manual" && comboKey(l.garmentIds) === extra,
+  );
   void getCard;
 
   useEffect(() => {
@@ -177,34 +184,60 @@ export function LookSheet({
         </div>
         <div className="p-4 flex flex-col gap-4">
           <div>
-            <p>{nameLook(activePieces) || look.name}</p>
-            <p className="micro text-ink-soft">{look.occasion}</p>
+            <p>{spreadTitle(activePieces, look.occasion as Occasion)}</p>
+            <p className="micro text-ink-soft">
+              {colorLine(activePieces).replace(/\.$/, "") || look.occasion}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              keepLook(look.id, {
-                garmentIds: activePieces.map((g) => g.id),
-                name: nameLook(activePieces) || look.name,
-              })
-            }
-            className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-          >
-            {look.source === "manual" ? "Saved" : "Save look"}
-          </button>
-          <button
-            type="button"
-            onClick={runDress}
-            className={cn(
-              "micro border px-3 py-2",
-              showMe && painted
-                ? "border-ink bg-ink text-paper"
-                : "border-hairline text-ink-soft hover:border-hairline-strong",
+            <button
+              type="button"
+              onClick={onWear}
+              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+            >
+              Wear this
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                keepLook(look.id, {
+                  garmentIds: activePieces.map((g) => g.id),
+                  name: nameLook(activePieces) || look.name,
+                })
+              }
+              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+            >
+              {comboSaved || look.source === "manual" ? "Saved" : "Save look"}
+            </button>
+            {refPhoto ? (
+              <button
+                type="button"
+                onClick={runDress}
+                className={cn(
+                  "micro border px-3 py-2",
+                  showMe && painted
+                    ? "border-ink bg-ink text-paper"
+                    : "border-hairline text-ink-soft hover:border-hairline-strong",
+                )}
+              >
+                {dressing ? "On you…" : "On you"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openRefPhotoDialog()}
+                className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+              >
+                Set Fit photo
+              </button>
             )}
-          >
-            {dressing ? "On you…" : "On you"}
-          </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+            >
+              Close
+            </button>
           </div>
           {dressError && <p className="text-sm text-accent">{dressError}</p>}
           <ul className="flex gap-2 overflow-x-auto">
@@ -297,29 +330,13 @@ export function LookSheet({
                 ))}
             </div>
           )}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onWear}
-              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-            >
-              Wear this
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAlts(true)}
-              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-            >
-              More like this
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-            >
-              Close
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowAlts(true)}
+            className="micro self-start border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+          >
+            More like this
+          </button>
           {alts &&
             (alts.length === 0 ? (
               <p className="text-sm text-ink-soft">Nothing else in this register.</p>

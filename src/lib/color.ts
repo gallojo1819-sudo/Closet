@@ -181,6 +181,13 @@ export function preferPixels(
 const COLOR_LEAD =
   /^(?:(?:dark|light|pale|bright|deep|off)\s+)?(?:navy|olive|khaki|cream|white|black|brown|maroon|burgundy|pink|blue|grey|gray|tan|camel|ivory|red|green|charcoal|beige|stone|ecru|wine|rust|chocolate|blush|forest|gold)\s+/i;
 
+export function paletteCss(name: string): string {
+  const n = canonicalize(name);
+  if (!n) return "#c8c4bc";
+  const [r, g, b] = RGB[n];
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 export function titleColor(color: string): string {
   return color
     .trim()

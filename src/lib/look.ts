@@ -114,6 +114,35 @@ export function nameLook(pieces: Garment[]): string {
   return `${sorted[0]!.name} · ${sorted[1]!.name}`;
 }
 
+/** Editorial card title — palette + house, or a short occasion line. Not a SKU dump. */
+export function spreadTitle(pieces: Garment[], occasion?: Occasion): string {
+  const note = dropNote(pieces, undefined, occasion).replace(/\.$/, "");
+  if (occasion === "weekend") return "Saturday market";
+  if (occasion === "weekday") return "Quiet office";
+  return note || nameLook(pieces);
+}
+
+export function spreadMicro(
+  pieces: Garment[],
+  occasion?: Occasion,
+  season?: string,
+): string {
+  const n = Math.max(kitCells(pieces).length, pieces.filter((g) => slotOf(g) !== "accessory").length);
+  const occ = occasion ? occasion.toUpperCase() : "";
+  const sea = season ? season.toUpperCase() : "";
+  return [occ, sea, `${n} pieces`].filter(Boolean).join(" · ");
+}
+
+/** Core + belt/cap for the lay. */
+export function spreadPieces(pieces: Garment[]): Garment[] {
+  const core = kitCells(pieces);
+  const acc = pieces.filter((g) => {
+    const s = slotOf(g) ?? g.category;
+    return s === "accessory" && !core.some((c) => c.id === g.id);
+  });
+  return [...core, ...acc];
+}
+
 export function dropNote(
   pieces: Garment[],
   weather?: WeatherSnap,

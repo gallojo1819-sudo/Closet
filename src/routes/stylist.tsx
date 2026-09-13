@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { ensureLookOnMe } from "@/components/closet/on-me";
@@ -118,6 +118,7 @@ const PROMPTS = [
 ];
 
 function StylistPage() {
+  const hydrated = useCloset((s) => s.hydrated);
   const garmentsAll = useCloset((s) => s.garments);
   const drop = useCloset((s) => s.drop);
   const journal = useCloset((s) => s.journal);
@@ -232,19 +233,9 @@ function StylistPage() {
         Mixed from your closet. Never a garment you don’t own.
       </p>
 
-      {owned.length === 0 && (
-        <div className="mt-10 border border-champagne/20 bg-night-elev px-4 py-5">
-          <p className="text-sm text-champagne/80">
-            The stylist has nothing to dress. Photograph a piece first.
-          </p>
-          <Link
-            to="/add"
-            className="mt-4 inline-flex h-11 items-center bg-champagne px-4 text-sm text-night"
-          >
-            Add a piece
-          </Link>
-        </div>
-      )}
+      {!hydrated ? null : owned.length === 0 ? (
+        <Navigate to="/add" />
+      ) : null}
 
       <div className="mt-8 space-y-4 min-h-64">
         {messages.length === 0 && owned.length > 0 && (
