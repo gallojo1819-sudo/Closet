@@ -19,6 +19,7 @@ import {
   capChapterLooks,
   CHAPTER_CAP,
   comboKey,
+  enforcePieceCap,
   fillOccasionLooks,
 } from "./lookbook";
 import { lookFitsSeason } from "./season";
@@ -428,25 +429,24 @@ export const useCloset = create<ClosetState>()(
         const s = get();
         if (!s.hydrated) return;
         if (s.garments.length === 0) return;
-        let looks = capChapterLooks(s.looks);
+        let looks = enforcePieceCap(capChapterLooks(s.looks), s.garments);
         const seenLooks: SeenLooks = { ...s.seenLooks };
         for (const { id: occ } of OCCASIONS) {
-          const auto = looks.filter(
-            (l) =>
-              l.lookbook &&
-              l.source !== "manual" &&
-              mapOccasion(l.occasion) === occ,
-          );
-          if (auto.length > 0) continue;
+          const chapter = looks.filter((l) => mapOccasion(l.occasion) === occ);
+          const auto = chapter.filter((l) => l.lookbook && l.source !== "manual");
+          if (auto.length >= CHAPTER_CAP) continue;
           const exclude = new Set([
             ...(seenLooks[occ] ?? []),
-            ...looks
-              .filter((l) => mapOccasion(l.occasion) === occ)
-              .map((l) => comboKey(l.garmentIds)),
+            ...chapter.map((l) => comboKey(l.garmentIds)),
           ]);
+          const usedCount = new Map<string, number>();
+          for (const l of chapter) {
+            for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
+          }
           const extra = buildChapter(s.garments, occ, {
             exclude,
-            cap: CHAPTER_CAP,
+            cap: CHAPTER_CAP - auto.length,
+            usedCount,
           });
           looks = [...looks, ...extra];
           if (extra.length) {
@@ -467,8 +467,9 @@ export const useCloset = create<ClosetState>()(
         const s = get();
         if (!s.hydrated) return;
         const occ = mapOccasion(occasion);
+        const trimmed = enforcePieceCap(s.looks, s.garments);
         const byId = new Map(s.garments.map((g) => [g.id, g]));
-        const fitting = s.looks.filter((l) => {
+        const fitting = trimmed.filter((l) => {
           if (!l.lookbook || mapOccasion(l.occasion) !== occ) return false;
           if (!season) return l.source !== "manual";
           const pieces = l.garmentIds
@@ -476,18 +477,24 @@ export const useCloset = create<ClosetState>()(
             .filter((g): g is Garment => Boolean(g));
           return pieces.length >= 3 && lookFitsSeason(pieces, season);
         });
-        if (fitting.length >= CHAPTER_CAP) return;
+        if (fitting.length >= CHAPTER_CAP) {
+          if (trimmed.length !== s.looks.length) set({ looks: trimmed });
+          return;
+        }
         const extra = fillOccasionLooks(
           s.garments,
-          s.looks,
+          trimmed,
           occ,
           CHAPTER_CAP,
           new Set(s.seenLooks[occ] ?? []),
           season,
         );
-        if (!extra.length) return;
+        if (!extra.length) {
+          if (trimmed.length !== s.looks.length) set({ looks: trimmed });
+          return;
+        }
         set({
-          looks: [...s.looks, ...extra],
+          looks: [...trimmed, ...extra],
           seenLooks: {
             ...s.seenLooks,
             [occ]: [

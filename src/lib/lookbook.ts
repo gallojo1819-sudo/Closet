@@ -321,6 +321,54 @@ function wearCapSlot(g: Garment): "top" | "bottom" | "footwear" | null {
   return null;
 }
 
+function slotCapsFor(pool: Garment[]) {
+  return {
+    top: pieceLookCap(bySlot(pool, "top").length + bySlot(pool, "dress").length),
+    bottom: pieceLookCap(bySlot(pool, "bottom").length),
+    footwear: pieceLookCap(bySlot(pool, "footwear").length),
+  };
+}
+
+/** Drop extra auto looks so no shirt/pant/shoe exceeds the per-chapter cap. Manual stays. */
+export function enforcePieceCap(looks: Look[], garments: Garment[]): Look[] {
+  const pool = lookbookPool(garments);
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  const caps = slotCapsFor(pool);
+  const usedByOcc = new Map<string, Map<string, number>>();
+  const out: Look[] = [];
+  const over = (occ: string, ids: string[]) => {
+    const used = usedByOcc.get(occ) ?? new Map<string, number>();
+    for (const id of ids) {
+      const g = byId.get(id);
+      if (!g) continue;
+      const slot = wearCapSlot(g);
+      if (!slot) continue;
+      if ((used.get(id) ?? 0) >= caps[slot]) return true;
+    }
+    return false;
+  };
+  const bump = (occ: string, ids: string[]) => {
+    let used = usedByOcc.get(occ);
+    if (!used) {
+      used = new Map();
+      usedByOcc.set(occ, used);
+    }
+    for (const id of ids) used.set(id, (used.get(id) ?? 0) + 1);
+  };
+  for (const l of looks) {
+    const occ = mapOccasion(l.occasion);
+    if (l.source === "manual" || !l.lookbook) {
+      out.push(l);
+      bump(occ, l.garmentIds);
+      continue;
+    }
+    if (over(occ, l.garmentIds)) continue;
+    bump(occ, l.garmentIds);
+    out.push(l);
+  }
+  return out;
+}
+
 export function buildChapter(
   garments: Garment[],
   occasion: Occasion,
@@ -341,14 +389,7 @@ export function buildChapter(
   const pool = lookbookPool(garments);
   const outers = bySlot(pool, "outerwear");
   const byId = new Map(pool.map((g) => [g.id, g]));
-  const topsN = bySlot(pool, "top").length + bySlot(pool, "dress").length;
-  const bottomsN = bySlot(pool, "bottom").length;
-  const shoesN = bySlot(pool, "footwear").length;
-  const caps = {
-    top: pieceLookCap(topsN),
-    bottom: pieceLookCap(bottomsN),
-    footwear: pieceLookCap(shoesN),
-  };
+  const caps = slotCapsFor(pool);
   const usedCount = opts?.usedCount ?? new Map<string, number>();
   const atCap = (g: Garment) => {
     const slot = wearCapSlot(g);

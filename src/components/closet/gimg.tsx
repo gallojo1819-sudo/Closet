@@ -29,7 +29,7 @@ export function GarmentImg({
     void ensureThumb(garment.id, fullKey);
   }, [thumb, thumbSrc, garment.id, fullKey]);
 
-  if (!src) return <div className={cn("bg-paper-deep", className)} aria-hidden />;
+  if (!src) return <div className={cn("bg-paper", className)} aria-hidden />;
   return (
     <img
       src={src}

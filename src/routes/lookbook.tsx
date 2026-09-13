@@ -10,6 +10,7 @@ import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import {
   comboKey,
+  enforcePieceCap,
   lookbookPool,
   lookFitsOccasion,
   lookHasColor,
@@ -200,7 +201,7 @@ function LookbookPage() {
     look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
   const shown = useMemo(() => {
-    return book.filter((look) => {
+    const rows = book.filter((look) => {
       const pieces = piecesFor(look);
       if (pieces.length < 3) return false;
       if (look.occasion !== occasion) return false;
@@ -211,7 +212,8 @@ function LookbookPage() {
       if (color && !lookHasColor(pieces, color)) return false;
       return true;
     });
-  }, [book, occasion, color, byId, pool, season]);
+    return enforcePieceCap(rows, garments);
+  }, [book, occasion, color, byId, pool, season, garments]);
 
   const highlightId = focusLook ?? null;
 

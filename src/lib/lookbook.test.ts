@@ -6,6 +6,7 @@ import {
   buildLookbook,
   CHAPTER_CAP,
   comboKey,
+  enforcePieceCap,
   fillOccasionLooks,
   lookFitsOccasion,
   looksForHero,
@@ -153,6 +154,44 @@ describe("buildLookbook", () => {
       l.garmentIds.filter((id) => id === "cable" || /^t\d+$/.test(id)),
     );
     assert.equal(new Set(topIds).size, topIds.length, "each top at most once");
+  });
+
+  it("trims old weekday rows so cream cable is in 1 card, then shuffle stays at 1", () => {
+    const g = [
+      ...closet(49, 12, 12),
+      piece({
+        id: "cable",
+        name: "Cream cable-knit",
+        category: "top",
+        subtype: "cable",
+        warmth: 3,
+      }),
+    ];
+    const bloated: Look[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `lb2_week_cable_${i}`,
+      name: "Cream cable-knit",
+      occasion: "weekday",
+      garmentIds: ["cable", "b1", `s${(i % 12) + 1}`],
+      source: "ai" as const,
+      lookbook: true,
+      createdAt: "2026-09-12T00:00:00.000Z",
+    }));
+    const trimmed = enforcePieceCap(bloated, g);
+    assert.equal(
+      trimmed.filter((l) => l.garmentIds.includes("cable")).length,
+      1,
+    );
+    const first = applyShuffle(g, trimmed, "weekday", [], "2026-09-13");
+    const n1 = first.looks.filter(
+      (l) => l.occasion === "weekday" && l.garmentIds.includes("cable"),
+    ).length;
+    assert.ok(n1 <= 1, `after shuffle 1: cable in ${n1}`);
+    const seen = first.added.map((l) => comboKey(l.garmentIds));
+    const second = applyShuffle(g, first.looks, "weekday", seen, "2026-09-14");
+    const n2 = second.looks.filter(
+      (l) => l.occasion === "weekday" && l.garmentIds.includes("cable"),
+    ).length;
+    assert.ok(n2 <= 1, `after shuffle 2: cable in ${n2}`);
   });
 
   it("Out + Summer has no overcoat", () => {
