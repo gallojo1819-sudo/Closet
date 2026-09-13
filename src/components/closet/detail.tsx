@@ -3,14 +3,15 @@ import { Loader2 } from "lucide-react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
-import { aiStatus, describeCover, recolorCover } from "@/lib/ai";
-import { patchFromNotes } from "@/lib/describe";
+import { describeCover, readAiStatus, recolorCover } from "@/lib/ai";
+import { coversSameSilhouette, patchFromNotes } from "@/lib/describe";
 import {
   blobToDataUrl,
   dataUrlToBlob,
   getImage,
   imageKey,
   isIdbKey,
+  notifyImage,
   putImage,
   putThumb,
 } from "@/lib/images";
@@ -143,7 +144,7 @@ export function GarmentDetail({
   }, [onClose]);
 
   useEffect(() => {
-    aiStatus()
+    readAiStatus()
       .then((s) => setCanPrint(s.print))
       .catch(() => setCanPrint(false));
   }, []);
@@ -254,13 +255,21 @@ export function GarmentDetail({
     setCoverError(null);
     setCoverNote(null);
     try {
-      const image = await coverDataUrl(garment.cutoutSrc || garment.imageSrc);
-      if (!image) throw new Error("Could not read the cover.");
-      const res = await describeCover({ data: { image, notes: patch.notes ?? notes } });
+      const original = await coverDataUrl(garment.imageSrc);
+      if (!original) throw new Error("Could not read the original photo.");
+      const prevCover = await coverDataUrl(garment.cutoutSrc || garment.imageSrc);
+      const res = await describeCover({
+        data: { image: original, notes: patch.notes ?? notes },
+      });
       if (!res.ok) throw new Error(res.error);
+      if (prevCover && (await coversSameSilhouette(prevCover, res.image))) {
+        throw new Error("Cover came back the same silhouette. Sharpen the make.");
+      }
       const key = imageKey(garment.id, "c");
       await putImage(key, dataUrlToBlob(res.image));
-      void putThumb(garment.id, res.image).catch(() => {});
+      await putThumb(garment.id, res.image);
+      notifyImage(key);
+      notifyImage(imageKey(garment.id, "t"));
       updateGarment(garment.id, {
         ...patch,
         cutoutSrc: key,

@@ -93,6 +93,8 @@ export async function putImage(key: string, blob: Blob): Promise<void> {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error ?? new Error("Could not store image"));
   });
+  const old = urlCache.get(key);
+  if (old) URL.revokeObjectURL(old);
   urlCache.delete(key);
   notifyImage(key);
 }
@@ -139,7 +141,7 @@ export function watchImage(key: string, fn: () => void): () => void {
   };
 }
 
-function notifyImage(key: string) {
+export function notifyImage(key: string) {
   imageWatchers.get(key)?.forEach((fn) => fn());
 }
 

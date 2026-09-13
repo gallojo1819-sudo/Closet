@@ -65,6 +65,7 @@ function LookCardFace({
       <div
         ref={cardRef}
         className="relative w-full border border-hairline bg-paper aspect-[4/5] overflow-hidden"
+        style={{ viewTransitionName: "none" }}
       >
         <button
           type="button"
@@ -150,6 +151,7 @@ function LookbookPage() {
   const garmentsAll = useCloset((s) => s.garments);
   const looksAll = useCloset((s) => s.looks);
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
+  const ensureOccasionBook = useCloset((s) => s.ensureOccasionBook);
   const wearToday = useCloset((s) => s.wearToday);
   const [play, setPlay] = useState(false);
   const [occasion, setOccasion] = useState<"all" | (typeof OCCASIONS)[number]["id"]>("all");
@@ -188,7 +190,10 @@ function LookbookPage() {
     return book.filter((look) => {
       const pieces = piecesFor(look);
       if (pieces.length < 3) return false;
-      if (!lookFitsOccasion(pieces, occasion)) return false;
+      if (occasion !== "all") {
+        if (look.occasion !== occasion) return false;
+        if (!lookFitsOccasion(pieces, occasion)) return false;
+      }
       if (color && !lookHasColor(pieces, color)) return false;
       return true;
     });
@@ -199,6 +204,11 @@ function LookbookPage() {
   useEffect(() => {
     if (focusLook) setOpenId(focusLook);
   }, [focusLook]);
+
+  useEffect(() => {
+    if (!hydrated || occasion === "all") return;
+    ensureOccasionBook(occasion);
+  }, [hydrated, occasion, garments.length, ensureOccasionBook]);
 
   const getOpenCard = useCallback(
     () => (openId ? cardEls.current.get(openId) ?? null : null),
@@ -344,6 +354,10 @@ function LookbookPage() {
             Add a piece
           </Link>
         </div>
+      ) : occasion !== "all" && shown.length === 0 ? (
+        <p className="mt-10 text-sm text-ink-soft">
+          Nothing in this closet for {occasion} yet
+        </p>
       ) : (
         <ul className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {shown.map((look, i) => {

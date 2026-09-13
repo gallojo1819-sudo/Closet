@@ -13,7 +13,7 @@ import {
   refImageKey,
 } from "./images";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
-import { buildLookbook, mergeLookbook } from "./lookbook";
+import { buildLookbook, fillOccasionLooks, mergeLookbook } from "./lookbook";
 import {
   mergeClosetPersist,
   openPersistGate,
@@ -64,6 +64,7 @@ type ClosetState = {
   restoreRefPhoto: () => Promise<void>;
   restoreFromIdbMeta: () => Promise<void>;
   ensureLookbook: (salt?: number) => void;
+  ensureOccasionBook: (occasion: Occasion) => void;
   loadSample: () => void;
   emptyCloset: () => void;
   importCloset: (payload: {
@@ -196,7 +197,6 @@ export const useCloset = create<ClosetState>()(
         set((s) => ({
           garments: s.garments.map((g) => (g.id === id ? { ...g, ...patch } : g)),
         }));
-        get().ensureLookbook();
       },
       removeGarment: (id) => {
         const g = get().garments.find((x) => x.id === id);
@@ -339,6 +339,13 @@ export const useCloset = create<ClosetState>()(
           looks.map((l) => `${l.lookbook ? "b" : "k"}:${l.id}`).join("|");
         if (key(s.looks) === key(next)) return;
         set({ looks: next });
+      },
+      ensureOccasionBook: (occasion) => {
+        const s = get();
+        if (!s.hydrated) return;
+        const extra = fillOccasionLooks(s.garments, s.looks, occasion, 6);
+        if (!extra.length) return;
+        set({ looks: mergeLookbook(s.looks, extra, s.garments) });
       },
       setRefPhoto: (key, backup) => {
         if (key === null) {

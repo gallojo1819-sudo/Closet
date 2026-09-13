@@ -182,7 +182,12 @@ async function imagineEdit(prompt: string, url: string): Promise<EditResult> {
   return got;
 }
 
+const STATUS_TTL = 60_000;
+let statusMemo: { t: number; v: { print: boolean; chat: boolean } } | null = null;
+let clientStatus: { t: number; v: { print: boolean; chat: boolean } } | null = null;
+
 export const aiStatus = createServerFn({ method: "GET" }).handler(async () => {
+  if (statusMemo && Date.now() - statusMemo.t < STATUS_TTL) return statusMemo.v;
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) return { print: false, chat: false };
   let chat = false;
@@ -206,8 +211,18 @@ export const aiStatus = createServerFn({ method: "GET" }).handler(async () => {
     });
     chat = ping.ok;
   }
-  return { print, chat };
+  const v = { print, chat };
+  statusMemo = { t: Date.now(), v };
+  return v;
 });
+
+/** Client cache — don’t RPC /v1/models on every tab. */
+export async function readAiStatus(): Promise<{ print: boolean; chat: boolean }> {
+  if (clientStatus && Date.now() - clientStatus.t < STATUS_TTL) return clientStatus.v;
+  const v = await aiStatus();
+  clientStatus = { t: Date.now(), v };
+  return v;
+}
 
 export const printGarment = createServerFn({ method: "POST" })
   .validator((input: { image: string }) => input)
@@ -242,12 +257,11 @@ export const describeCover = createServerFn({ method: "POST" })
     const notes = data.notes.trim();
     if (!notes) return { ok: false, error: "Describe the make first." };
     return imagineEdit(
-      `This is the SAME garment in the photo.
-Joe says it is: ${notes}
-Keep fabric, color, wear, hardware that is already there.
-Change construction to match his description (Gurkha = extended waist + buckle tabs, NO drawstring, NO elastic cuff, NO joggers).
-Still one pair, on #F4EFE6 paper, 4:5, fill ~80%.
-Do not invent a different pant or a model.`,
+      `This is the SAME garment in the photo — a reference for fabric and color only.
+Joe's notes WIN over what the photo shows. He says: ${notes}
+If he says Gurkha / extended waist / side buckle / no belt: DRAW that waist — an extended waistband with buckle tabs. Remove the drawstring, elastic cuff, and jogger hem even if the photo has them. This is not a sweatpant.
+Keep the fabric color and wear. Still one pair, on #F4EFE6 paper, 4:5, fill ~80%.
+Do not invent a different pant or a model. Do not keep the old construction.`,
       data.image,
     );
   });

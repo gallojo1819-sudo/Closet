@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildLookbook, mergeLookbook, lookbookStats, moreLikeThis } from "./lookbook.ts";
+import { buildLookbook, fillOccasionLooks, lookFitsOccasion, mergeLookbook, lookbookStats, moreLikeThis } from "./lookbook.ts";
 import type { Garment, Look } from "./types.ts";
 
 function piece(
@@ -220,6 +220,63 @@ describe("buildLookbook", () => {
     );
     const dropped = mergeLookbook(invalid, looks, g);
     assert.ok(!dropped.some((l) => l.garmentIds.includes("hood") && l.garmentIds.includes("pleat")));
+  });
+});
+
+describe("lookFitsOccasion", () => {
+  it("dinner is trousers + loafer, never a 90s hoodie", () => {
+    const dinner = [
+      piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "tr", name: "Charcoal trousers", category: "bottom", subtype: "trouser" }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const hood = [
+      piece({ id: "hood", name: "Black 90s hoodie", category: "top", subtype: "hoodie", formality: 2 }),
+      piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean", formality: 2 }),
+      piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker", formality: 1 }),
+    ];
+    assert.equal(lookFitsOccasion(dinner, "dinner"), true);
+    assert.equal(lookFitsOccasion(hood, "dinner"), false);
+    assert.equal(lookFitsOccasion(hood, "client"), false);
+    assert.equal(lookFitsOccasion(hood, "weekday"), false);
+    assert.equal(lookFitsOccasion(hood, "weekend"), true);
+    assert.equal(lookFitsOccasion(dinner, "weekend"), false);
+    assert.equal(lookFitsOccasion(dinner, "client"), true);
+  });
+
+  it("weekday is Ralph oxford + chino + loafer, not gym", () => {
+    const week = [
+      piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const gym = [
+      piece({ id: "tee", name: "White tee", category: "top", subtype: "tee" }),
+      piece({ id: "j", name: "Indigo jeans", category: "bottom", subtype: "jean" }),
+      piece({ id: "sn", name: "Gym sneakers", category: "footwear", subtype: "sneaker" }),
+    ];
+    assert.equal(lookFitsOccasion(week, "weekday"), true);
+    assert.equal(lookFitsOccasion(gym, "weekday"), false);
+    assert.equal(lookFitsOccasion(week, "dinner"), false);
+  });
+
+  it("fillOccasionLooks tags dinner and does not mix hoodie", () => {
+    const g = [
+      piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford", formality: 3 }),
+      piece({ id: "tr", name: "Navy trousers", category: "bottom", subtype: "trouser", formality: 4 }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer", formality: 3 }),
+      piece({ id: "hood", name: "Black 90s hoodie", category: "top", subtype: "hoodie", formality: 2 }),
+      piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean", formality: 2 }),
+      piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker", formality: 1 }),
+    ];
+    const extra = fillOccasionLooks(g, [], "dinner", 3);
+    assert.ok(extra.length >= 1, "dinner book must have looks");
+    for (const l of extra) {
+      assert.equal(l.occasion, "dinner");
+      assert.ok(!l.garmentIds.includes("hood"));
+      assert.ok(l.garmentIds.includes("tr"));
+      assert.ok(l.garmentIds.includes("lf"));
+    }
   });
 });
 

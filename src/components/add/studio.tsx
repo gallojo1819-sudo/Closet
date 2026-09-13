@@ -3,7 +3,7 @@ import { Camera, ClipboardPaste, Link2, Loader2, Tag, Upload } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { imageKey, putImage, putThumb, dataUrlToBlob, fileFingerprint } from "@/lib/images";
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
-import { aiStatus, printGarment, tagGarment } from "@/lib/ai";
+import { printGarment, readAiStatus, tagGarment } from "@/lib/ai";
 import { nameWithColor, preferPixels, sampleCover } from "@/lib/color";
 import { guessGarment, looksLikeFilename } from "@/lib/guess";
 import {
@@ -76,7 +76,7 @@ export function Studio() {
   const tagRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    aiStatus()
+    readAiStatus()
       .then((s) => setCanPrint(s.print))
       .catch(() => setCanPrint(false));
   }, []);

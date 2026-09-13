@@ -5,11 +5,13 @@ import {
   isCampCollar,
   isFairIsle,
   isGraphic,
+  isHoodiePiece,
   leadHouse,
   lookHouses,
+  pickLook,
   slotOf,
 } from "./style.ts";
-import type { Garment, Look } from "./types.ts";
+import type { Garment, Look, Occasion } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
 const CAP = 96;
@@ -136,10 +138,12 @@ function rotate<T>(list: T[], salt: number): T[] {
 }
 
 function occasionOf(pieces: Garment[]): string {
-  if (pieces.some(isGraphic)) return "weekend";
-  const avg = pieces.reduce((n, g) => n + g.formality, 0) / pieces.length;
-  if (avg >= 4) return "client";
-  if (avg <= 2) return "weekend";
+  if (lookFitsOccasion(pieces, "dinner")) return "dinner";
+  if (lookFitsOccasion(pieces, "client")) return "client";
+  if (lookFitsOccasion(pieces, "weekday")) return "weekday";
+  if (lookFitsOccasion(pieces, "travel")) return "travel";
+  if (lookFitsOccasion(pieces, "weekend")) return "weekend";
+  if (pieces.some(isGraphic) || pieces.some(isHoodiePiece)) return "weekend";
   return "weekday";
 }
 
@@ -322,19 +326,166 @@ export function forceLooksForPiece(
   return looks.filter((l) => l.garmentIds.includes(garmentId)).slice(0, n);
 }
 
+function pieceBlob(g: Garment): string {
+  return `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
+}
+
+function lookBlob(pieces: Garment[]): string {
+  return pieces.map(pieceBlob).join(" ");
+}
+
+function topsOf(pieces: Garment[]): Garment[] {
+  return pieces.filter((g) => {
+    const s = slotOf(g);
+    return s === "top" || s === "dress";
+  });
+}
+
+function bottomsOf(pieces: Garment[]): Garment[] {
+  return pieces.filter((g) => slotOf(g) === "bottom");
+}
+
+function shoesOf(pieces: Garment[]): Garment[] {
+  return pieces.filter((g) => slotOf(g) === "footwear");
+}
+
+function hasKind(list: Garment[], re: RegExp): boolean {
+  return list.some((g) => re.test(pieceBlob(g)));
+}
+
 export function lookFitsOccasion(pieces: Garment[], occ: string): boolean {
   if (occ === "all") return true;
-  const blob = pieces.map((g) => `${g.subtype} ${g.name}`).join(" ").toLowerCase();
-  if (occ === "dinner") {
-    if (/gym|runner|running|athletic/.test(blob)) return false;
-    if (/\bsneakers?\b/.test(blob) && !/loafer/.test(blob)) return false;
-    return true;
-  }
+  const blob = lookBlob(pieces);
+  const tops = topsOf(pieces);
+  const bottoms = bottomsOf(pieces);
+  const shoes = shoesOf(pieces);
+  const graphic = pieces.some(isGraphic);
+  const hoodie = pieces.some(isHoodiePiece);
+  const sneaker = hasKind(shoes, /sneaker|trainer|\b990\b|gym|runner|running|athletic/);
+  const loafer = hasKind(shoes, /loafer/);
+  const mule = hasKind(shoes, /mule/);
+  const trouser = hasKind(bottoms, /trouser/) && !hasKind(bottoms, /\bjeans?\b|denim/);
+  const chino = hasKind(bottoms, /chino/);
+  const jean = hasKind(bottoms, /\bjeans?\b|denim/);
+  const cargo = /cargo/.test(blob);
+  const tee = hasKind(tops, /\btee\b|t-shirt/);
+  const rugby = /rugby/.test(blob);
+  const oxford = hasKind(tops, /oxford/);
+  const polo = hasKind(tops, /polo/);
+  const cable = hasKind(tops, /cable/);
+  const fineKnit = hasKind(tops, /merino|cashmere|silk|fine/) && hasKind(tops, /knit|sweater/);
+  const blazer = pieces.some((g) => /blazer/.test(pieceBlob(g)));
+  const knit = hasKind(tops, /knit|sweater|merino|cable/) && !hoodie;
+  const overshirt = pieces.some((g) => /overshirt/.test(pieceBlob(g)));
+  const fairIsle = pieces.some(isFairIsle);
+  const distressed = /distress|ripped|destroyed/.test(blob);
+
   if (occ === "client") {
-    if (/hoodie|\btee\b|t-shirt/.test(blob)) return false;
+    if (hoodie || graphic || rugby || /90s|90's/.test(blob)) return false;
+    if (sneaker) return false;
+    if (cargo || distressed) return false;
+    if (jean && distressed) return false;
+    if (!(oxford || polo || fineKnit || blazer)) return false;
+    if (!(trouser || chino)) return false;
+    if (jean && !chino && !trouser) return false;
+    if (!loafer && !hasKind(shoes, /derby|monk|dress\s*shoe/)) return false;
+    if (mule && !loafer) return false;
     return true;
   }
+
+  if (occ === "dinner") {
+    if (sneaker || hoodie || graphic || cargo || tee) return false;
+    if (jean) return false;
+    if (!trouser) return false;
+    if (!loafer && !mule) return false;
+    const lead = leadHouse(pieces);
+    if (lead !== "ralph" && lead !== "faloni") return false;
+    return true;
+  }
+
+  if (occ === "weekday") {
+    if (hoodie || graphic) return false;
+    if (sneaker) return false;
+    if (!(oxford || polo || cable)) return false;
+    if (!(chino || trouser)) return false;
+    if (!loafer) return false;
+    return true;
+  }
+
+  if (occ === "weekend") {
+    if ((hoodie || graphic) && !((jean || chino) && sneaker)) return false;
+    const tuxedo = oxford && trouser && loafer && !jean && !rugby && !fairIsle && !hoodie;
+    if (tuxedo) return false;
+    return jean || rugby || fairIsle || sneaker || hoodie;
+  }
+
+  if (occ === "travel") {
+    if (!(knit || overshirt)) return false;
+    if (!(chino || jean)) return false;
+    if (!(sneaker || loafer)) return false;
+    if (trouser && loafer && !knit && !overshirt && !jean && !chino) return false;
+    return true;
+  }
+
   return true;
+}
+
+/**
+ * Extra looks for one occasion until `min` or the rack is exhausted.
+ * Tagged with that occasion. HIS plates only.
+ */
+export function fillOccasionLooks(
+  garments: Garment[],
+  looks: Look[],
+  occasion: Occasion,
+  min = 6,
+): Look[] {
+  const pool = lookbookPool(garments);
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  const fitting = looks.filter((l) => {
+    if (l.occasion === occasion) {
+      const pieces = l.garmentIds
+        .map((id) => byId.get(id))
+        .filter((g): g is Garment => Boolean(g));
+      return pieces.length >= 3 && lookFitsOccasion(pieces, occasion);
+    }
+    return false;
+  });
+  const keys = new Set(fitting.map((l) => [...l.garmentIds].sort().join("|")));
+  const extra: Look[] = [];
+  let prev: string[] = fitting.at(-1)?.garmentIds ?? [];
+  const weather =
+    occasion === "dinner"
+      ? { f: 62, label: "Mild", code: 2 }
+      : occasion === "weekend" || occasion === "travel"
+        ? { f: 72, label: "Fair", code: 2 }
+        : { f: 68, label: "Fair", code: 2 };
+  for (let i = 0; i < 40 && fitting.length + extra.length < min; i++) {
+    const ids = pickLook(pool, {
+      occasion,
+      moment: "day",
+      weather,
+      previousIds: prev,
+    });
+    if (ids.length < 3) break;
+    prev = ids;
+    const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    if (pieces.length < 3) continue;
+    if (!lookFitsOccasion(pieces, occasion)) continue;
+    const key = [...ids].sort().join("|");
+    if (keys.has(key)) continue;
+    keys.add(key);
+    extra.push({
+      id: `lb2_${occasion}_${ids.join("_")}`,
+      name: nameOf(pieces),
+      occasion,
+      garmentIds: ids,
+      source: "ai",
+      lookbook: true,
+      createdAt: `${todayISO()}T00:00:00.000Z`,
+    });
+  }
+  return extra;
 }
 
 export function lookHasColor(pieces: Garment[], color: string): boolean {
