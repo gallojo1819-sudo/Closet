@@ -8,7 +8,6 @@ import {
   getImage,
   jpegDataUrl,
   lookOnMeKey,
-  lookOnMeKeys,
   putImage,
   resolveImage,
 } from "@/lib/images";
@@ -83,10 +82,8 @@ export async function ensureLookOnMe(
 ): Promise<string> {
   const extra = comboExtra(pieces);
   const writeKey = lookOnMeKey(lookId, extra);
-  for (const k of lookOnMeKeys(lookId, extra)) {
-    const hit = await getImage(k);
-    if (hit) return blobToDataUrl(hit);
-  }
+  const exact = await getImage(writeKey);
+  if (exact) return blobToDataUrl(exact);
   const pending = inflight.get(writeKey);
   if (pending) return pending;
   const job = (async () => {

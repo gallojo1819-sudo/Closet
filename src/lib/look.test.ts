@@ -71,6 +71,22 @@ describe("layersForOnMe", () => {
       `fused graphics: ${ids.join(",")}`,
     );
   });
+
+  it("does not send a blazer when the look is three pieces", () => {
+    const look = [
+      g({ id: "polo", name: "Pink polo", category: "top", subtype: "polo" }),
+      g({ id: "tr", name: "Blue trousers", category: "bottom", subtype: "trouser" }),
+      g({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+      g({ id: "blz", name: "Navy blazer", category: "outerwear", subtype: "blazer" }),
+    ];
+    const three = layersForOnMe(look.slice(0, 3));
+    assert.deepEqual(
+      three.map((x) => x.id),
+      ["polo", "tr", "lf"],
+    );
+    const four = layersForOnMe(look);
+    assert.ok(four.some((x) => x.id === "blz"));
+  });
 });
 
 describe("kitCells", () => {

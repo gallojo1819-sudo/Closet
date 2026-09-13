@@ -107,6 +107,7 @@ export function GarmentDetail({
   const [canPrint, setCanPrint] = useState(false);
   const [recoloring, setRecoloring] = useState(false);
   const [matching, setMatching] = useState(false);
+  const [coverTick, setCoverTick] = useState(0);
   const [coverNote, setCoverNote] = useState<string | null>(null);
   const [coverError, setCoverError] = useState<string | null>(null);
   const originalSrc = useImageSrc(garment.imageSrc);
@@ -198,6 +199,10 @@ export function GarmentDetail({
       });
     }
     if (sameNotes && sameSub && sameName && sameCat && !patch.tuck) return;
+    if (canPrint && notes.trim()) {
+      void matchCover();
+      return;
+    }
     updateGarment(garment.id, patch);
   };
 
@@ -266,15 +271,21 @@ export function GarmentDetail({
     setCoverError(null);
     setCoverNote(null);
     try {
-      const original = await coverDataUrl(garment.imageSrc);
+      const origKey = imageKey(garment.id, "o");
+      const original =
+        (await coverDataUrl(origKey)) || (await coverDataUrl(garment.imageSrc));
       if (!original) throw new Error("Could not read the original photo.");
       const prevCover = await coverDataUrl(garment.cutoutSrc || garment.imageSrc);
       const res = await describeCover({
         data: { image: original, notes: patch.notes ?? notes },
       });
       if (!res.ok) throw new Error(res.error);
-      if (prevCover && (await coversSameSilhouette(prevCover, res.image))) {
-        throw new Error("Cover came back the same silhouette. Sharpen the make.");
+      const stillOriginal = await coversSameSilhouette(original, res.image);
+      const stillPrev = prevCover
+        ? await coversSameSilhouette(prevCover, res.image)
+        : false;
+      if (stillOriginal || stillPrev) {
+        throw new Error("Cover still looks like a drawstring — try again.");
       }
       const key = imageKey(garment.id, "c");
       await putImage(key, dataUrlToBlob(res.image));
@@ -285,6 +296,7 @@ export function GarmentDetail({
         ...patch,
         cutoutSrc: key,
       });
+      setCoverTick((n) => n + 1);
       setView("print");
       setCoverNote("Cover updated — original photo unchanged.");
     } catch (e) {
@@ -334,8 +346,10 @@ export function GarmentDetail({
             >
               {view === "print" ? (
                 <GarmentImg
+                  key={`cover-${garment.id}-${coverTick}`}
                   garment={garment}
                   thumb={false}
+                  eager
                   className="h-full w-full object-contain p-[8%]"
                 />
               ) : originalSrc ? (

@@ -38,14 +38,23 @@ describe("patchFromNotes", () => {
     assert.ok(patch.notes?.includes("Gurkha"));
   });
 
-  it("does not rename a custom name", () => {
+  it("retitles Brown corduroy when notes say gurkha", () => {
     const patch = patchFromNotes(
-      g({ id: "1", name: "Saturday olive pants", subtype: "pant" }),
+      g({ id: "1", name: "Brown corduroy", subtype: "pant", colors: ["brown"] }),
+      "Gurkha. Extended waistband, side buckle, no belt, not a drawstring.",
+    );
+    assert.equal(patch.subtype, "gurkha");
+    assert.equal(patch.category, "bottom");
+    assert.equal(patch.name, "Brown Gurkha trousers");
+  });
+
+  it("does not rename when gurkha is already in the name", () => {
+    const patch = patchFromNotes(
+      g({ id: "1", name: "Brown Gurkha trousers", subtype: "gurkha" }),
       "Gurkha, extended waist, side buckle.",
     );
     assert.equal(patch.subtype, "gurkha");
     assert.equal(patch.name, undefined);
-    assert.equal(isPlaceholderName("Saturday olive pants"), false);
     assert.equal(isPlaceholderName("Olive drawstring"), true);
   });
 });

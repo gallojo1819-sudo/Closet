@@ -42,9 +42,7 @@ function LookCardFace({
 }) {
   const extra = comboKey(pieces.map((p) => p.id));
   const liveSrc = useImageSrc(lookOnMeKey(look.id, extra));
-  const oldSrc = useImageSrc(lookOnMeKey(look.id));
-  const v2Src = useImageSrc(`idb:lb:v2:${look.id}`);
-  const cachedSrc = liveSrc || oldSrc || v2Src;
+  const cachedSrc = liveSrc;
   const [visible, setVisible] = useState(false);
   const asked = useRef("");
   const ioRef = useRef<IntersectionObserver | null>(null);

@@ -85,7 +85,11 @@ export function layersForOnMe(pieces: Garment[]): Garment[] {
   const top = pickTop(tops);
   const bottom = bottoms[0];
   const shoe = feet[0];
-  const outer = outers.find((g) => g.id !== top?.id);
+  const wearCount = [top, bottom, shoe].filter(Boolean).length;
+  const outer =
+    wearCount >= 3 && pieces.length >= 4
+      ? outers.find((g) => g.id !== top?.id)
+      : undefined;
 
   return [top, bottom, shoe, outer].filter((g): g is Garment => Boolean(g)).slice(0, 4);
 }

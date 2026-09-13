@@ -19,8 +19,8 @@ export function isPlaceholderName(name: string): boolean {
 }
 
 /**
- * Notes describe the make. Gurkha / extended waist / buckle → subtype gurkha,
- * bottom, and retitle only when the current name is a placeholder.
+ * Notes describe the make. Gurkha / no belt / not a drawstring → subtype gurkha,
+ * bottom, and retitle when the name does not already say gurkha.
  */
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -72,10 +72,14 @@ export function patchFromNotes(g: Garment, notes: string): Partial<Garment> {
   const text = notes.trim();
   const patch: Partial<Garment> = { notes: text };
   const blob = `${text} ${g.subtype} ${g.name}`.toLowerCase();
-  if (/gurkha|extended\s+waist|\bbuckle/.test(blob)) {
+  if (
+    /gurkha|extended\s+waist|\bbuckle|no\s*belt|not\s+a\s+drawstring|not\s+drawstring/.test(
+      blob,
+    )
+  ) {
     patch.subtype = "gurkha";
     patch.category = "bottom" as Category;
-    if (isPlaceholderName(g.name)) {
+    if (!/gurkha/i.test(g.name)) {
       const color = colorLead(g);
       patch.name = color ? `${color} Gurkha trousers` : "Gurkha trousers";
     }

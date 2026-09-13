@@ -264,11 +264,12 @@ export const describeCover = createServerFn({ method: "POST" })
     const notes = data.notes.trim();
     if (!notes) return { ok: false, error: "Describe the make first." };
     return imagineEdit(
-      `This is the SAME garment in the photo — a reference for fabric and color only.
-Joe's notes WIN over what the photo shows. He says: ${notes}
-If he says Gurkha / extended waist / side buckle / no belt: DRAW that waist — an extended waistband with buckle tabs. Remove the drawstring, elastic cuff, and jogger hem even if the photo has them. This is not a sweatpant.
-Keep the fabric color and wear. Still one pair, on #F4EFE6 paper, 4:5, fill ~80%.
-Do not invent a different pant or a model. Do not keep the old construction.`,
+      `This is the SAME garment. Use the photo for fabric color and corduroy texture ONLY.
+Joe's notes WIN. He says: ${notes}
+REMOVE drawstring ties, hanging cords, elastic cuff, and jogger hem. They must be gone.
+DRAW a Gurkha: extended waistband, side tabs/buckles, no belt loops as the story, flat hem.
+Same brown corduroy. One pair on #F4EFE6 paper, 4:5, fill ~80%. No model, no extra garments.
+If you leave hanging ties, you failed.`,
       data.image,
     );
   });
@@ -278,13 +279,13 @@ export const onMePreview = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<EditResult> => {
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
     if (!data.refImage) return { ok: false, error: "No reference photo." };
-    const prompt = `Image 1 is THIS man. Same face, hair, beard or none. Forbidden: stock campaign model, different man, invented "90s" knit, extra hoodie that was not sent.
-Images 2+ are separate garments. Only garments in images 2+. Put them on him as layers: outer on top of top, top on bottom, shoes on feet.
-If the top is a camp collar, he wears that camp collar — no hoodie.
-Do NOT morph two garments into one.
-Do NOT copy a logo, stripe, flag, or "90s" from garment A onto garment B.
-Do NOT invent a hybrid knit. If only one top image is sent, that is the only top — no extra hoodie.
-Keep his face, hair, beard or none, skin, 5′8 regular body. Hands EMPTY. No phone, no selfie. Full-body editorial, plain studio #F4EFE6. No text.
+    const prompt = `Image 1 is THIS man. Same face, hair, beard or none. Forbidden: stock campaign model, different man.
+Images 2+ are separate garments. Wear ONLY those plates. One top, one bottom, one pair of shoes, optional one jacket — never extra layers.
+Do NOT copy elbow patches, arm stripes, a collar, a placket, or hardware from garment A onto garment B.
+If the top is a polo, no Tommy / arm / chest stripes unless THAT polo plate already has them.
+If no blazer/jacket image was sent, he is NOT wearing a blazer.
+Do NOT morph two garments into one. Do NOT invent a hybrid knit.
+Keep his face, hair, beard or none, skin, 5′8 regular body. Hands EMPTY. Full-body editorial, plain studio #F4EFE6. No text.
 ${data.pieces}
 ${data.tuck ?? ""}`;
     const urls = [data.refImage, ...data.cutouts.slice(0, 4)].filter(Boolean);
