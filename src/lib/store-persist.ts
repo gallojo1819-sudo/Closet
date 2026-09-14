@@ -1,3 +1,4 @@
+import { scrubRack } from "./rack.ts";
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry } from "./types.ts";
 
 export type SeenLooks = Record<string, string[]>;
@@ -62,7 +63,7 @@ export function mergeClosetPersist<T extends ClosetSnapshot>(
   if (stored.length === 0) {
     return { ...current, refPhoto, refPhotoBackup };
   }
-  return {
+  const mixed = {
     ...current,
     garments: stored,
     looks: Array.isArray(p.looks) ? p.looks : current.looks,
@@ -77,4 +78,7 @@ export function mergeClosetPersist<T extends ClosetSnapshot>(
         ? p.seenLooks
         : current.seenLooks,
   };
+  const { purgedIds: _purged, ...clean } = scrubRack(mixed);
+  void _purged;
+  return clean as T;
 }

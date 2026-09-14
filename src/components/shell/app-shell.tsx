@@ -28,10 +28,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       await useCloset.getState().restoreRefPhoto();
       if (!live) return;
       useCloset.setState({ hydrated: true });
+      useCloset.getState().purgeDemoRack();
       const s = useCloset.getState();
       if (s.garments.length > 0) {
         useCloset.setState({ garments: s.garments });
       }
+      void useCloset.getState().retitleFakeNames();
       void migrateImagesToIdb().catch(() => {});
     })();
     return () => {

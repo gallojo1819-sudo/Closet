@@ -119,6 +119,7 @@ export function spreadTitle(pieces: Garment[], occasion?: Occasion): string {
   const note = dropNote(pieces, undefined, occasion).replace(/\.$/, "");
   if (occasion === "weekend") return "Saturday market";
   if (occasion === "weekday") return "Quiet office";
+  if (occasion === "comfy") return "Off duty";
   return note || nameLook(pieces);
 }
 

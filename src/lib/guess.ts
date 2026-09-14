@@ -127,7 +127,7 @@ export async function guessGarment(cutoutSrc: string): Promise<{
     noun = "shirt";
   } else {
     category = "top";
-    noun = "piece";
+    noun = "top";
   }
   const name = `${color[0]!.toUpperCase()}${color.slice(1)} ${noun}`;
   return { name, category, subtype, colors: [color] };

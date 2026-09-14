@@ -1,4 +1,5 @@
 import { canonicalize, harmony } from "./color.ts";
+import { livePool } from "./rack.ts";
 import {
   daysIdle,
   isCampCollar,
@@ -20,8 +21,7 @@ const LOUD =
   /\b(plaid|checks?|gingham|stripes?|striped|floral|print|printed|houndstooth|paisley|camo|leopard|argyle)\b/i;
 
 export function lookbookPool(garments: Garment[]): Garment[] {
-  const real = garments.filter((g) => !g.archived && !g.demo);
-  return real.length ? real : garments.filter((g) => !g.archived);
+  return livePool(garments);
 }
 
 function bySlot(pool: Garment[], slot: "top" | "bottom" | "footwear" | "outerwear" | "dress") {
@@ -186,6 +186,7 @@ function shouldOuter(outer: Garment, core: Garment[]): boolean {
 
 function maxBlazerLooks(occasion?: Occasion): number {
   if (occasion === "weekend") return 1;
+  if (occasion === "comfy") return 0;
   if (occasion === "weekday" || occasion === "out") return 2;
   return 0;
 }
@@ -357,6 +358,18 @@ export function lookFitsOccasion(
     const tuxedo = oxford && trouser && loafer && !jean && !rugby && !fairIsle && !hoodie && !camp;
     if (tuxedo) return false;
     return jean || rugby || fairIsle || camp || sneaker || hoodie;
+  }
+
+  if (o === "comfy") {
+    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
+    const varsity = /varsity|letterman|bomber/.test(blob);
+    const cord = /cord/.test(blob) || hasKind(bottoms, /cord/);
+    const boot = hasKind(shoes, /boot/);
+    const mule = hasKind(shoes, /mule/);
+    const topOk = knit || rugby || varsity || hoodie || fairIsle || polo;
+    const botOk = chino || jean || cord;
+    const shoeOk = sneaker || mule || loafer || boot;
+    return topOk && botOk && shoeOk;
   }
 
   if (o === "travel") {
@@ -547,7 +560,7 @@ export function buildChapter(
     ? weatherForSeason(season)
     : occasion === "out"
       ? { f: 64, label: "Mild", code: 2 }
-      : occasion === "weekend" || occasion === "travel"
+      : occasion === "weekend" || occasion === "travel" || occasion === "comfy"
         ? { f: 72, label: "Fair", code: 2 }
         : { f: 68, label: "Fair", code: 2 };
 

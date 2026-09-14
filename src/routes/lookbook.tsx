@@ -20,6 +20,7 @@ import {
 import { lookFitsSeason, seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { spreadMicro, spreadTitle } from "@/lib/look";
+import { livePool } from "@/lib/rack";
 import { HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
@@ -198,10 +199,7 @@ function LookbookPage() {
   const cardEls = useRef(new Map<string, HTMLElement>());
   const { look: focusLook } = Route.useSearch();
 
-  const garments = useMemo(
-    () => garmentsAll.filter((g) => !g.archived),
-    [garmentsAll],
-  );
+  const garments = useMemo(() => livePool(garmentsAll), [garmentsAll]);
   const byId = useMemo(() => {
     const m = new Map<string, Garment>();
     for (const g of garments) m.set(g.id, g);

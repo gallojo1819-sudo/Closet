@@ -6,6 +6,7 @@ import { ensureLookOnMe } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { askStylist } from "@/lib/ai";
 import { nameLook } from "@/lib/look";
+import { livePool } from "@/lib/rack";
 import { daysIdle, defaultOccasion, HOUSE_LABEL, housesOf, momentOfDay } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import type { Garment, Occasion } from "@/lib/types";
@@ -122,15 +123,9 @@ function StylistPage() {
   const garmentsAll = useCloset((s) => s.garments);
   const drop = useCloset((s) => s.drop);
   const journal = useCloset((s) => s.journal);
-  const garments = useMemo(
-    () => garmentsAll.filter((g) => !g.archived),
-    [garmentsAll],
-  );
-  const owned = useMemo(
-    () => garments.filter((g) => !g.demo),
-    [garments],
-  );
-  const forStylist = owned.length ? owned : garments;
+  const garments = useMemo(() => livePool(garmentsAll), [garmentsAll]);
+  const owned = garments;
+  const forStylist = garments;
   const messages = useCloset((s) => s.messages);
   const pushMessage = useCloset((s) => s.pushMessage);
   const saveLook = useCloset((s) => s.saveLook);

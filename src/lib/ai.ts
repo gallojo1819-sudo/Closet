@@ -280,11 +280,12 @@ export const onMePreview = createServerFn({ method: "POST" })
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
     if (!data.refImage) return { ok: false, error: "No reference photo." };
     const prompt = `Image 1 is THIS man. Same face, hair, beard or none. Forbidden: stock campaign model, different man.
-Images 2+ are separate garments. Wear ONLY those plates. One top, one bottom, one pair of shoes, optional one jacket — never extra layers.
+Images 2+ are the ONLY garments that exist. Wear exactly those plates — nothing else.
+FORBIDDEN unless it is in images 2+: a white shirt, white mules, khaki oxford, extra shoes, a second pair of footwear, any invented knit.
+If image 2 is a cream varsity, dress THAT cream varsity — not a khaki shirt.
+One top, one bottom, one pair of shoes, optional one jacket from the plates. Never extra layers.
 Do NOT copy elbow patches, arm stripes, a collar, a placket, or hardware from garment A onto garment B.
-If the top is a polo, no Tommy / arm / chest stripes unless THAT polo plate already has them.
 If no blazer/jacket image was sent, he is NOT wearing a blazer.
-Do NOT morph two garments into one. Do NOT invent a hybrid knit.
 Keep his face, hair, beard or none, skin, 5′8 regular body. Hands EMPTY. Full-body editorial, plain studio #F4EFE6. No text.
 ${data.pieces}
 ${data.tuck ?? ""}`;
@@ -311,6 +312,7 @@ ${data.tuck ?? ""}`;
 function occasionFromPrompt(prompt: string): Occasion {
   const p = prompt.toLowerCase();
   if (/client|dinner|\bout\b/.test(p)) return "out";
+  if (/comfy|couch|at home|off duty/.test(p)) return "comfy";
   if (/saturday|weekend/.test(p)) return "weekend";
   if (/travel/.test(p)) return "travel";
   if (/weekday|work|office/.test(p)) return "weekday";

@@ -80,6 +80,36 @@ describe("mergeClosetPersist", () => {
     assert.equal(next.refPhotoBackup, "data:image/jpeg;base64,xx");
   });
 
+  it("strips demo garments when real pieces exist", () => {
+    const persisted: PersistedCloset = {
+      garments: [g("real"), { ...g("sample"), demo: true }],
+      looks: [
+        {
+          id: "l1",
+          name: "mix",
+          occasion: "weekday",
+          garmentIds: ["real", "sample"],
+          source: "ai",
+          createdAt: "t",
+        },
+      ],
+      journal: [],
+      avoid: {},
+      drop: null,
+      refPhoto: null,
+      refPhotoBackup: null,
+      messages: [],
+    };
+    const next = mergeClosetPersist(persisted, empty);
+    assert.equal(next.garments.every((x) => x.demo !== true), true);
+    assert.equal(next.garments.length, 1);
+    assert.ok(
+      !(next.looks as { garmentIds: string[] }[]).some((l) =>
+        l.garmentIds.includes("sample"),
+      ),
+    );
+  });
+
   it("keeps seenLooks from persist without wiping garments", () => {
     const persisted: PersistedCloset = {
       garments: [g("a")],
@@ -90,11 +120,11 @@ describe("mergeClosetPersist", () => {
       refPhoto: null,
       refPhotoBackup: null,
       messages: [],
-      seenLooks: { out: ["a|b|c"] },
+      seenLooks: { out: ["a"] },
     };
     const next = mergeClosetPersist(persisted, empty);
     assert.equal(next.garments[0]?.id, "a");
-    assert.deepEqual(next.seenLooks, { out: ["a|b|c"] });
+    assert.deepEqual(next.seenLooks, { out: ["a"] });
   });
 });
 

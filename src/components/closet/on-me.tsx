@@ -15,6 +15,8 @@ import {
 import { useCloset } from "@/lib/store";
 import type { Garment, Occasion } from "@/lib/types";
 import { layersForOnMe } from "@/lib/look";
+import { livePool } from "@/lib/rack";
+import { slotOf } from "@/lib/style";
 import { tuckDressingLines } from "@/lib/tuck";
 
 /** Dress Joe in these exact cutouts. Never writes cutoutSrc. */
@@ -33,7 +35,8 @@ export async function dressLook(
     throw new Error("Reference photo is missing — set it again.");
   }
   const refImage = await jpegDataUrl(blob, 768, 0.8);
-  const worn = layersForOnMe(pieces);
+  const allowed = new Set(livePool(useCloset.getState().garments).map((g) => g.id));
+  const worn = layersForOnMe(pieces.filter((g) => allowed.has(g.id)));
   const layers: { name: string; category: string; url: string }[] = [];
   for (const g of worn) {
     const cover =
@@ -47,6 +50,7 @@ export async function dressLook(
   const list = layers
     .map((l, i) => `image ${i + 2} = ${l.name} (${l.category})`)
     .join(". ");
+  const only = layers.map((l) => l.name).join(", ");
   const tuck = tuckDressingLines(worn, occasion);
   const gurkha = worn.some((g) =>
     /gurkha/.test(`${g.subtype} ${g.notes} ${g.name}`.toLowerCase()),
@@ -55,11 +59,19 @@ export async function dressLook(
     ? "NO drawstring ties at the hem. Gurkha waist. Trousers break on the shoe."
     : "";
   const res = await onMePreview({
-    data: { refImage, cutouts, pieces: list, tuck: `${tuck} ${gurkhaLine}`.trim() },
+    data: {
+      refImage,
+      cutouts,
+      pieces: `${list}. ONLY these garments: ${only}. Nothing else.`,
+      tuck: `${tuck} ${gurkhaLine}`.trim(),
+    },
   });
   if (!res.ok) throw new Error(res.error);
   if (await isLegsOnlyBody(res.image)) {
     throw new Error("On you cropped to the legs — keeping the kit.");
+  }
+  if (await inventedExtras(res.image, worn)) {
+    throw new Error("On you invented a garment that isn’t in the closet — keeping the kit.");
   }
   return res.image;
 }
@@ -94,6 +106,48 @@ export async function isLegsOnlyBody(dataUrl: string): Promise<boolean> {
       if (!paper && !white) person += 1;
     }
     return n > 0 && person / n < 0.03;
+  } catch {
+    return false;
+  }
+}
+
+/** Extra white footwear (or similar) that was not in the sent plates. */
+export async function inventedExtras(dataUrl: string, worn: Garment[]): Promise<boolean> {
+  if (typeof document === "undefined") return false;
+  const sentWhiteShoe = worn.some((g) => {
+    const shoe = slotOf(g) === "footwear";
+    const blob = `${g.name} ${g.subtype} ${g.colors.join(" ")}`.toLowerCase();
+    return shoe && /white|cream|ivory/.test(blob);
+  });
+  if (sentWhiteShoe) return false;
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("image"));
+      el.src = dataUrl;
+    });
+    const w = 48;
+    const h = 60;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return false;
+    ctx.drawImage(img, 0, 0, w, h);
+    const y0 = Math.round(h * 0.78);
+    const data = ctx.getImageData(0, y0, w, h - y0).data;
+    let white = 0;
+    const n = data.length / 4;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i]!;
+      const g = data[i + 1]!;
+      const b = data[i + 2]!;
+      const paper = Math.abs(r - 244) < 28 && Math.abs(g - 239) < 28 && Math.abs(b - 230) < 28;
+      if (paper) continue;
+      if (r > 220 && g > 220 && b > 210) white += 1;
+    }
+    return n > 0 && white / n > 0.22;
   } catch {
     return false;
   }

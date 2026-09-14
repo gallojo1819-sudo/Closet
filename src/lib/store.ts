@@ -11,6 +11,7 @@ import {
   putClosetMeta,
   putImage,
   refImageKey,
+  resolveImage,
 } from "./images";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
 import {
@@ -25,7 +26,9 @@ import {
   seenKey,
   stripRepeatBlazers,
 } from "./lookbook";
+import { isFakeName, nameFromPixels, scrubRack } from "./rack";
 import { lookFitsSeason } from "./season";
+import { preferPixels, sampleCover } from "./color";
 import {
   mergeClosetPersist,
   openPersistGate,
@@ -87,6 +90,8 @@ type ClosetState = {
   setRefPhoto: (key: string | null, backup?: string | null) => void;
   restoreRefPhoto: () => Promise<void>;
   restoreFromIdbMeta: () => Promise<void>;
+  purgeDemoRack: () => void;
+  retitleFakeNames: () => Promise<void>;
   ensureLookbook: (salt?: number) => void;
   ensureOccasionBook: (occasion: Occasion, season?: Season, house?: House) => void;
   shuffleChapter: (occasion: Occasion, season?: Season, house?: House) => number;
@@ -571,6 +576,47 @@ export const useCloset = create<ClosetState>()(
           ...(backup !== undefined ? { refPhotoBackup: backup } : {}),
         });
       },
+      purgeDemoRack: () => {
+        const s = get();
+        const next = scrubRack(s);
+        for (const id of next.purgedIds) {
+          for (const kind of ["o", "c", "t"] as const) {
+            void deleteImage(imageKey(id, kind)).catch(() => {});
+          }
+        }
+        const { purgedIds, ...rest } = next;
+        void purgedIds;
+        if (
+          rest.garments.length !== s.garments.length ||
+          rest.looks.length !== s.looks.length
+        ) {
+          set(rest);
+        }
+      },
+      retitleFakeNames: async () => {
+        const list = get().garments;
+        for (const g of list) {
+          if (g.demo === true || !isFakeName(g.name)) continue;
+          let colors = g.colors;
+          try {
+            const src = g.cutoutSrc || g.imageSrc;
+            const url = await resolveImage(src);
+            if (url) {
+              const sampled = await sampleCover(url);
+              colors = preferPixels(sampled, g.colors);
+            }
+          } catch {
+            /* pixels optional */
+          }
+          const name = nameFromPixels(g, colors);
+          if (name && name !== g.name) {
+            get().updateGarment(g.id, {
+              name,
+              colors: colors.length ? colors : g.colors,
+            });
+          }
+        }
+      },
       restoreFromIdbMeta: async () => {
         if (get().garments.length > 0) return;
         const meta = await getClosetMeta();
@@ -600,6 +646,7 @@ export const useCloset = create<ClosetState>()(
             ? (meta.messages as StylistMessage[])
             : get().messages,
         });
+        get().purgeDemoRack();
       },
       restoreRefPhoto: async () => {
         const s = get();
@@ -648,12 +695,20 @@ export const useCloset = create<ClosetState>()(
         // Joe's body photo stays. Only Fit → Remove deletes it.
       },
       importCloset: (payload) => {
-        set({
+        const next = scrubRack({
           garments: payload.garments,
           looks: payload.looks,
           journal: payload.journal,
-          avoid: payload.avoid,
           drop: payload.drop,
+        });
+        const { purgedIds, ...rest } = next;
+        void purgedIds;
+        set({
+          garments: rest.garments,
+          looks: rest.looks,
+          journal: rest.journal,
+          avoid: payload.avoid,
+          drop: rest.drop,
         });
         get().ensureLookbook();
       },

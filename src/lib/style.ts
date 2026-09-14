@@ -2,6 +2,7 @@ import { harmony } from "./color.ts";
 import type { Garment, Moment, Occasion, WearEntry, WeatherSnap } from "./types.ts";
 import { lastDays, todayISO } from "./utils.ts";
 import { isLinenCampPiece, isOvercoatPiece, seasonFromWeather } from "./season.ts";
+import { livePool } from "./rack.ts";
 import { onlyTopIsUntucked, resolveTuck } from "./tuck.ts";
 
 export type { Moment, Occasion };
@@ -107,13 +108,14 @@ function houseClimateScore(g: Garment, f: number, occasion: Occasion): number {
   ) {
     s += 1.1;
   }
-  if (occasion === "weekend" && hs.includes("ald")) s += 1.2;
+  if ((occasion === "weekend" || occasion === "comfy") && hs.includes("ald")) s += 1.2;
+  if (occasion === "comfy" && hs.includes("sweetStable")) s += 1.2;
   return s;
 }
 
 function formalityTarget(occasion: Occasion, moment: Moment): number {
   if (occasion === "out") return 4;
-  if (occasion === "weekend" || occasion === "travel") return 2;
+  if (occasion === "weekend" || occasion === "travel" || occasion === "comfy") return 2;
   void moment;
   return 3;
 }
@@ -337,9 +339,7 @@ export function pickLook(
     repeatPairs?: Set<string> | string[];
   },
 ): string[] {
-  const real = garments.filter((g) => !g.archived && !g.demo);
-  // Real closet only. Samples fill Today only when nothing real is on the rack.
-  const pool = real.length ? real : garments.filter((g) => !g.archived);
+  const pool = livePool(garments);
   const by = (slot: Slot) => pool.filter((g) => slotOf(g) === slot);
   const f = opts.weather?.f ?? 68;
   const cool = f < 62;

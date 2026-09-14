@@ -5,7 +5,8 @@ import { imageKey, putImage, putThumb, dataUrlToBlob, fileFingerprint } from "@/
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
 import { printGarment, readAiStatus, tagGarment } from "@/lib/ai";
 import { nameWithColor, preferPixels, sampleCover } from "@/lib/color";
-import { guessGarment, looksLikeFilename } from "@/lib/guess";
+import { guessGarment } from "@/lib/guess";
+import { isFakeName, nameFromPixels } from "@/lib/rack";
 import {
   fetchListing,
   identifyPiece,
@@ -42,10 +43,7 @@ class AlreadyInCloset extends Error {
 }
 
 function badName(name: string): boolean {
-  return (
-    looksLikeFilename(name) ||
-    /farfetch|ssense|net-a-porter|mr\s?porter|add to bag|\bID\b/i.test(name)
-  );
+  return isFakeName(name);
 }
 
 export function Studio() {
@@ -219,7 +217,11 @@ export function Studio() {
       try {
         const sampled = await sampleCover(cutout);
         colors = preferPixels(sampled, colors);
-        if (colors[0]) name = nameWithColor(name, colors[0]);
+        if (!name || isFakeName(name)) {
+          name = nameFromPixels({ category, subtype, name: name || "" }, colors);
+        } else if (colors[0]) {
+          name = nameWithColor(name, colors[0]);
+        }
       } catch {
         /* keep tag colors */
       }

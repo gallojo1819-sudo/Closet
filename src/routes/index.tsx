@@ -6,6 +6,7 @@ import { LookBuilder } from "@/components/closet/look-builder";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, nameLook, neglectedPiece, sortLook } from "@/lib/look";
+import { livePool } from "@/lib/rack";
 import { HOUSE_LABEL, avoidedUniformLine, daysIdle, lookHouses } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, type Occasion } from "@/lib/types";
@@ -15,7 +16,8 @@ import { cn, formatLongDate, lastDays, todayISO, weekdayLetter } from "@/lib/uti
 export const Route = createFileRoute("/")({ component: Today });
 
 function Today() {
-  const garments = useCloset((s) => s.garments);
+  const garmentsAll = useCloset((s) => s.garments);
+  const garments = useMemo(() => livePool(garmentsAll), [garmentsAll]);
   const drop = useCloset((s) => s.drop);
   const journal = useCloset((s) => s.journal);
   const setDrop = useCloset((s) => s.setDrop);

@@ -63,8 +63,8 @@ describe("buildLookbook", () => {
   it("caps each chapter at 10, four chapters, not 97", () => {
     const g = closet(8, 8, 8);
     const looks = buildLookbook(g, "2026-09-12");
-    assert.ok(looks.length <= CHAPTER_CAP * 4, `looks=${looks.length}`);
-    for (const occ of ["weekday", "out", "weekend", "travel"] as const) {
+    assert.ok(looks.length <= CHAPTER_CAP * 5, `looks=${looks.length}`);
+    for (const occ of ["weekday", "out", "weekend", "comfy", "travel"] as const) {
       const n = looks.filter((l) => l.occasion === occ).length;
       assert.ok(n <= CHAPTER_CAP, `${occ} has ${n}`);
     }
@@ -455,6 +455,23 @@ describe("lookFitsHouse", () => {
     ];
     assert.equal(lookFitsHouse(ald, "ald", "weekday", ald), true);
     assert.equal(lookFitsHouse(ald, "ald", "weekend", ald), true);
+  });
+});
+
+describe("lookFitsOccasion comfy", () => {
+  it("allows knit + chino + sneaker, not tuxedo oxford", () => {
+    const comfy = [
+      piece({ id: "k", name: "Grey merino", category: "top", subtype: "knit" }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker" }),
+    ];
+    const tuxedo = [
+      piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "tr", name: "Charcoal trousers", category: "bottom", subtype: "trouser" }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    assert.equal(lookFitsOccasion(comfy, "comfy"), true);
+    assert.equal(lookFitsOccasion(tuxedo, "comfy"), false);
   });
 });
 

@@ -53,7 +53,7 @@ export function resolveTuck(
     if (polo) return blazer ? "in" : "out";
     return "in";
   }
-  if (occ === "weekend") {
+  if (occ === "weekend" || occ === "comfy") {
     if (camp || polo || oxford) return "out";
     return "out";
   }

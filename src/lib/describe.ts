@@ -1,4 +1,5 @@
 import { titleColor } from "./color.ts";
+import { isFakeName } from "./rack.ts";
 import type { Category, Garment } from "./types.ts";
 
 function colorLead(g: Garment): string {
@@ -12,8 +13,7 @@ function colorLead(g: Garment): string {
 /** Drawstring / empty / "Piece" — not a name he chose. */
 export function isPlaceholderName(name: string): boolean {
   const n = name.trim();
-  if (!n) return true;
-  if (/^piece$/i.test(n)) return true;
+  if (isFakeName(n)) return true;
   if (/drawstring/i.test(n)) return true;
   return false;
 }
