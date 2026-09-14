@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { lookMissing } from "./gaps";
+import { livePool } from "./rack";
 import { defaultOccasion, HOUSE_LABEL, houseMixPenalty, lookHouses, momentOfDay, pickLook } from "./style";
 import type { Category, Garment, Occasion } from "./types";
 
@@ -414,7 +415,7 @@ export const askStylist = createServerFn({ method: "POST" })
       | { ok: true; text: string; garmentIds: string[]; occasion: Occasion }
       | { ok: false; error: string }
     > => {
-    const rack = (data.garments ?? []).filter((g) => !g.archived);
+    const rack = livePool(data.garments ?? []);
     const f = data.weatherF ?? 68;
     const fallback = () =>
       rack.length

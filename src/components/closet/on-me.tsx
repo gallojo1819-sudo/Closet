@@ -42,9 +42,14 @@ export async function dressLook(
     const cover =
       g.cutoutSrc && g.cutoutSrc !== g.imageSrc ? g.cutoutSrc : imageKey(g.id, "c");
     const raw = await asDataUrl(cover);
-    if (!raw) continue;
+    if (!raw) {
+      throw new Error("Missing a cover plate — keeping the kit.");
+    }
     const url = await jpegDataUrl(raw, 512, 0.8);
     layers.push({ name: g.name, category: g.category, url });
+  }
+  if (worn.length < 3) {
+    throw new Error("Incomplete look — keeping the kit.");
   }
   const cutouts = layers.map((l) => l.url);
   const list = layers

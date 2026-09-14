@@ -117,10 +117,11 @@ export function nameLook(pieces: Garment[]): string {
 /** Editorial card title — palette + house, or a short occasion line. Not a SKU dump. */
 export function spreadTitle(pieces: Garment[], occasion?: Occasion): string {
   const note = dropNote(pieces, undefined, occasion).replace(/\.$/, "");
+  if (note) return note;
   if (occasion === "weekend") return "Saturday market";
   if (occasion === "weekday") return "Quiet office";
   if (occasion === "comfy") return "Off duty";
-  return note || nameLook(pieces);
+  return nameLook(pieces);
 }
 
 export function spreadMicro(

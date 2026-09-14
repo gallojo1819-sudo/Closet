@@ -64,7 +64,7 @@ function StylistLookFrame({
         <img
           src={painted}
           alt="On you"
-          className="absolute inset-0 z-10 h-full w-full object-cover bg-paper"
+          className="absolute inset-0 z-10 h-full w-full object-contain bg-paper"
         />
       )}
       {dressing && !painted && (
