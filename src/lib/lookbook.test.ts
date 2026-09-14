@@ -476,6 +476,31 @@ describe("lookFitsOccasion comfy", () => {
 });
 
 describe("lookFitsOccasion", () => {
+  it("hoodie+jean+sneaker is weekend/ALD, never default Out", () => {
+    const hood = [
+      piece({ id: "hood", name: "Black 90s hoodie", category: "top", subtype: "hoodie", formality: 2 }),
+      piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean", formality: 2 }),
+      piece({ id: "sn", name: "White sneakers", category: "footwear", subtype: "sneaker", formality: 1 }),
+    ];
+    const cable = [
+      piece({ id: "cable", name: "Cream cable-knit", category: "top", subtype: "cable" }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const rack = [
+      ...hood,
+      ...cable,
+      piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "tr", name: "Charcoal trousers", category: "bottom", subtype: "trouser" }),
+    ];
+    assert.equal(lookFitsOccasion(hood, "out", rack), false);
+    assert.equal(lookFitsOccasion(hood, "out"), false);
+    assert.equal(lookFitsOccasion(hood, "weekend"), true);
+    assert.equal(lookFitsHouse(hood, "ald", "out", rack), true);
+    assert.equal(lookFitsOccasion(cable, "weekday"), true);
+    assert.equal(lookFitsOccasion(cable, "out", rack), true);
+  });
+
   it("out is sharper; maps old client/dinner; never a 90s hoodie as the only top", () => {
     const dinner = [
       piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),

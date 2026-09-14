@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isPlaceholderName, patchFromNotes } from "./describe.ts";
+import { isPlaceholderName, notesWantGurkha, patchFromNotes } from "./describe.ts";
 import type { Garment } from "./types.ts";
 
 function g(partial: Partial<Garment> & Pick<Garment, "id" | "name">): Garment {
@@ -56,5 +56,12 @@ describe("patchFromNotes", () => {
     assert.equal(patch.subtype, "gurkha");
     assert.equal(patch.name, undefined);
     assert.equal(isPlaceholderName("Olive drawstring"), true);
+  });
+});
+
+describe("notesWantGurkha", () => {
+  it("reads gurkha / no belt / not a drawstring", () => {
+    assert.equal(notesWantGurkha("Gurkha. No belt, not a drawstring."), true);
+    assert.equal(notesWantGurkha("just a chino"), false);
   });
 });

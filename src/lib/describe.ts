@@ -51,6 +51,42 @@ function garmentMask(img: HTMLImageElement): boolean[] {
   return bits;
 }
 
+export function notesWantGurkha(notes: string): boolean {
+  return /gurkha|extended\s+waist|no\s*belt|not\s+a\s+drawstring|not\s+drawstring/.test(
+    notes.toLowerCase(),
+  );
+}
+
+function maskOverlap(A: boolean[], B: boolean[]): number {
+  if (!A.length || A.length !== B.length) return 0;
+  let same = 0;
+  for (let i = 0; i < A.length; i++) if (A[i] === B[i]) same += 1;
+  return same / A.length;
+}
+
+function zoneOverlap(
+  A: boolean[],
+  B: boolean[],
+  w: number,
+  h: number,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+): number {
+  let same = 0;
+  let n = 0;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const i = y * w + x;
+      if (i < 0 || i >= A.length) continue;
+      n += 1;
+      if (A[i] === B[i]) same += 1;
+    }
+  }
+  return n ? same / n : 0;
+}
+
 /** True when Imagine reprinted the same plate instead of changing construction. */
 export async function coversSameSilhouette(a: string, b: string): Promise<boolean> {
   if (typeof document === "undefined") return false;
@@ -59,10 +95,31 @@ export async function coversSameSilhouette(a: string, b: string): Promise<boolea
     const [ia, ib] = await Promise.all([loadImg(a), loadImg(b)]);
     const A = garmentMask(ia);
     const B = garmentMask(ib);
-    if (!A.length || A.length !== B.length) return false;
-    let same = 0;
-    for (let i = 0; i < A.length; i++) if (A[i] === B[i]) same += 1;
-    return same / A.length > 0.94;
+    return maskOverlap(A, B) > 0.94;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Gurkha reprint still has the original drawstring silhouette
+ * (full plate or the hanging-tie zone at the hem).
+ */
+export async function stillLooksLikeDrawstring(
+  original: string,
+  reprint: string,
+): Promise<boolean> {
+  if (typeof document === "undefined") return false;
+  if (original === reprint) return true;
+  try {
+    const [ia, ib] = await Promise.all([loadImg(original), loadImg(reprint)]);
+    const w = 24;
+    const h = 30;
+    const A = garmentMask(ia);
+    const B = garmentMask(ib);
+    if (maskOverlap(A, B) > 0.9) return true;
+    const ties = zoneOverlap(A, B, w, h, 7, 17, 16, 29);
+    return ties > 0.86;
   } catch {
     return false;
   }

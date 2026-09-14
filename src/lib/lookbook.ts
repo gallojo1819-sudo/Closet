@@ -293,6 +293,20 @@ function hasKind(list: Garment[], re: RegExp): boolean {
   return list.some((g) => re.test(pieceBlob(g)));
 }
 
+function rackHas(
+  pool: Garment[] | undefined,
+  slot: "top" | "bottom" | "footwear",
+  re: RegExp,
+): boolean {
+  return (pool ?? []).some((g) => {
+    const s = slotOf(g);
+    if (slot === "top") {
+      if (s !== "top" && s !== "dress") return false;
+    } else if (s !== slot) return false;
+    return re.test(pieceBlob(g));
+  });
+}
+
 export function lookFitsOccasion(
   pieces: Garment[],
   occ: string,
@@ -310,6 +324,8 @@ export function lookFitsOccasion(
   const sneaker = hasKind(shoes, /sneaker|trainer|\b990\b/);
   const gymShoe = hasKind(shoes, /gym|runner|running|athletic/);
   const loafer = hasKind(shoes, /loafer/);
+  const mule = hasKind(shoes, /mule/);
+  const boot = hasKind(shoes, /boot/);
   const trouser = hasKind(bottoms, /trouser/) && !hasKind(bottoms, /\bjeans?\b|denim/);
   const chino = hasKind(bottoms, /chino/);
   const jean = hasKind(bottoms, /\bjeans?\b|denim/);
@@ -322,33 +338,49 @@ export function lookFitsOccasion(
   const fairIsle = pieces.some(isFairIsle);
   const camp = pieces.some(isCampCollar);
   const cleanSneaker = sneaker && !gymShoe;
-
-  if (o === "weekday" && house && house !== "ralph") {
-    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
-    return true;
-  }
+  const hoodieOnly = tops.length > 0 && tops.every((g) => isHoodiePiece(g) || isGraphic(g));
 
   if (o === "weekday") {
+    if (house === "ald") {
+      if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
+      return (hoodie || rugby || graphic) && (jean || chino) && (sneaker || loafer);
+    }
+    if (house === "faloni") {
+      return (camp || /linen/.test(blob)) && (chino || trouser) && (loafer || mule) && !hoodie;
+    }
+    if (house === "sweetStable") {
+      return (fairIsle || rugby || /gingham|cord/.test(blob)) && (chino || jean) && (loafer || sneaker);
+    }
+    if (house === "italianWinter") {
+      return knit && (trouser || chino) && loafer;
+    }
+    if (house === "fiveFourFive") {
+      return (camp || /linen|sangallo/.test(blob)) && (chino || trouser) && (loafer || mule);
+    }
     if (hoodie || graphic) return false;
     if (!(oxford || polo || cable)) return false;
     if (!(chino || trouser)) return false;
-    if (!(loafer || cleanSneaker)) return false;
-    return true;
+    if (loafer) return true;
+    if (cleanSneaker && pool && !rackHas(pool, "footwear", /loafer/)) return true;
+    return false;
   }
 
   if (o === "out") {
     if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
-    const hoodieOnly = tops.length > 0 && tops.every((g) => isHoodiePiece(g) || isGraphic(g));
-    if (hoodieOnly) {
-      const rack = pool ?? [];
-      if (!rack.length) return false;
-      const hasShirt = rack.some((g) => {
-        const s = slotOf(g);
-        if (s !== "top" && s !== "dress") return false;
-        if (isHoodiePiece(g) || isGraphic(g)) return false;
-        return /oxford|knit|sweater|polo|cable/.test(`${g.subtype} ${g.name}`.toLowerCase());
-      });
-      if (hasShirt) return false;
+    if (house === "ald") {
+      return (hoodie || rugby || graphic || oxford || polo) && (jean || chino) && (sneaker || loafer);
+    }
+    if (hoodieOnly || hoodie) return false;
+    if (!(oxford || polo || camp || knit)) return false;
+    const dressBottom = chino || trouser;
+    if (!dressBottom) {
+      if (!jean) return false;
+      if (!pool || rackHas(pool, "bottom", /chino|trouser/)) return false;
+    }
+    const dressShoe = loafer || mule || boot;
+    if (!dressShoe) {
+      if (!sneaker) return false;
+      if (!pool || rackHas(pool, "footwear", /loafer|mule|boot/)) return false;
     }
     return true;
   }

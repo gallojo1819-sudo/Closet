@@ -4,7 +4,12 @@ import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { describeCover, readAiStatus, recolorCover } from "@/lib/ai";
-import { coversSameSilhouette, patchFromNotes } from "@/lib/describe";
+import {
+  coversSameSilhouette,
+  notesWantGurkha,
+  patchFromNotes,
+  stillLooksLikeDrawstring,
+} from "@/lib/describe";
 import {
   blobToDataUrl,
   dataUrlToBlob,
@@ -267,12 +272,19 @@ export function GarmentDetail({
         data: { image: original, notes: patch.notes ?? notes },
       });
       if (!res.ok) throw new Error(res.error);
-      const stillOriginal = await coversSameSilhouette(original, res.image);
-      const stillPrev = prevCover
-        ? await coversSameSilhouette(prevCover, res.image)
-        : false;
-      if (stillOriginal || stillPrev) {
-        throw new Error("Cover still looks like a drawstring — try again.");
+      const gurkha = notesWantGurkha(patch.notes ?? notes);
+      if (gurkha) {
+        if (await stillLooksLikeDrawstring(original, res.image)) {
+          throw new Error("Cover still looks like a drawstring — try again.");
+        }
+      } else {
+        const stillOriginal = await coversSameSilhouette(original, res.image);
+        const stillPrev = prevCover
+          ? await coversSameSilhouette(prevCover, res.image)
+          : false;
+        if (stillOriginal || stillPrev) {
+          throw new Error("Cover came back the same silhouette. Sharpen the make.");
+        }
       }
       const key = imageKey(garment.id, "c");
       await putImage(key, dataUrlToBlob(res.image));
