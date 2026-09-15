@@ -244,12 +244,11 @@ export const printGarment = createServerFn({ method: "POST" })
   });
 
 const CLASSIFY_PROMPT =
-  'Return ONLY JSON: {"kind":"skip|garment|outfit|rail","reason":"short","pieces":[{"slot":"top|bottom|outerwear|footwear|accessory","label":"Navy oxford"}]}. ' +
+  'Return ONLY JSON: {"kind":"skip|garment|worn","reason":"short","boxes":[{"name":"Polo","category":"top","x":0.2,"y":0.12,"w":0.55,"h":0.32}]}. ' +
   "skip: food, pizza, meal, receipt, landscape, document, screenshot chrome with no clothing product, meme, pet as the subject, nothing wearable. " +
-  "garment: exactly ONE clothing item or one pair of shoes — product plate, phone flat-lay, or a single hung piece. pieces empty or one. " +
-  "outfit: a person wearing 2+ items, or a laid-out look of 2+ items. List EACH distinct garment you can clearly see (top, bottom, shoes, optional jacket). NEVER list the person. NEVER invent shoes, white mules, or extras that are not clearly visible. If only one garment is clear, kind=garment with that one. " +
-  "rail: hanging rail, pile, or stack of multiple distinct garments. List each piece you can tell apart. Do not invent. " +
-  'Labels: color + garment (Cream varsity, Navy loafer). Never "Piece". Never a filename. Max 6 pieces.';
+  "garment: exactly ONE clothing item or one pair of shoes — product plate, floor or chair flat-lay, or a single hung piece. No person as the subject. boxes empty. " +
+  "worn: a PERSON wearing clothes, OR 2+ distinct garments in one frame (laid look, rail, pile). Return 2-6 boxes. Each box is one garment: short chip name (Polo, Cords, Loafers), category top|bottom|outerwear|footwear|accessory, and x,y,w,h as fractions of the image (0-1). " +
+  "NEVER a face, head, or the person as a box. NEVER invent shoes, white mules, or extras that are not clearly visible. If only ONE garment is clearly visible, kind=garment with no boxes — do not invent a second. Never \"Piece\".";
 
 export type ClassifyScanResult =
   | ({ ok: true } & ScanClass)
@@ -259,7 +258,7 @@ export const classifyScan = createServerFn({ method: "POST" })
   .validator((input: { image: string }) => input)
   .handler(async ({ data }): Promise<ClassifyScanResult> => {
     if (!process.env.XAI_API_KEY) {
-      return { ok: true, kind: "garment", reason: "no-key", pieces: [] };
+      return { ok: true, kind: "garment", reason: "no-key", pieces: [], boxes: [] };
     }
     const userContent = [
       { type: "image_url", image_url: { url: data.image } },
@@ -268,13 +267,13 @@ export const classifyScan = createServerFn({ method: "POST" })
     for (const model of ["grok-4.3", "grok-4.5", "grok-4"] as const) {
       const r = await xaiFetch("https://api.x.ai/v1/chat/completions", {
         model,
-        max_tokens: 280,
+        max_tokens: 500,
         temperature: 0,
         messages: [
           {
             role: "system",
             content:
-              "You classify one photo for a clothes closet. JSON only. Never invent a garment that is not clearly in the photo. Never name a person as a piece.",
+              "You classify one photo for a clothes closet. JSON only. Never invent a garment that is not clearly in the photo. Never return a face or person as a box.",
           },
           { role: "user", content: userContent },
         ],

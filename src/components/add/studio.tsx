@@ -3,6 +3,7 @@ import { Camera, ClipboardPaste, Images, Link2, Loader2, Tag, Upload } from "luc
 import { Button } from "@/components/ui/button";
 import { imageKey, putImage, putThumb, dataUrlToBlob, fileFingerprint } from "@/lib/images";
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
+import { WornPicker } from "@/components/add/worn-picker";
 import { classifyScan, extractGarment, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
 import { nameWithColor, preferPixels, sampleCover } from "@/lib/color";
 import { guessGarment } from "@/lib/guess";
@@ -11,10 +12,11 @@ import {
   collectKnownHashes,
   filenameLooksLikeSkip,
   looksInventedExtra,
+  padBox,
   pieceFileHash,
-  sanitizeScanPieces,
   type ScanKind,
   type ScanPiece,
+  type WornBox,
 } from "@/lib/scan";
 import {
   fetchListing,
@@ -43,6 +45,18 @@ type Saved = {
   matches?: OfficialHit[];
   query?: string;
 };
+
+type WornPick = {
+  id: string;
+  original: string;
+  hash: string;
+  boxes: WornBox[];
+  done: string[];
+};
+
+type RouteResult =
+  | { type: "pieces"; pieces: Saved[] }
+  | { type: "worn"; pick: WornPick };
 
 class PageRejected extends Error {}
 class AlreadyInCloset extends Error {
@@ -85,6 +99,8 @@ export function Studio() {
   const [skipped, setSkipped] = useState(0);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved[]>([]);
+  const [wornQueue, setWornQueue] = useState<WornPick[]>([]);
+  const [extractingBox, setExtractingBox] = useState<string | null>(null);
   const [canPrint, setCanPrint] = useState<boolean | null>(null);
   const [url, setUrl] = useState("");
   const [picker, setPicker] = useState<{
@@ -353,6 +369,7 @@ export function Studio() {
       cutout: string,
       hash: string,
       index: number,
+      original: string,
     ): Promise<Saved | null> => {
       if (await isBlankPaper(cutout)) return null;
       const tagged = await nameCutout(cutout);
@@ -360,7 +377,7 @@ export function Studio() {
       if (isFakeName(tagged.name)) return null;
       return commit({
         id: uid("g"),
-        original: cutout,
+        original,
         cover: cutout,
         source: "cutout",
         name: tagged.name,
@@ -381,19 +398,69 @@ export function Studio() {
     [commit, nameCutout],
   );
 
+  const pullWornBox = useCallback(
+    async (
+      photo: string,
+      hash: string,
+      box: WornBox,
+      index: number,
+    ): Promise<Saved | null> => {
+      if (!canPrint) return null;
+      let crop = photo;
+      let hasCrop = false;
+      if (box.box) {
+        crop = await cropDataUrl(photo, padBox(box.box));
+        hasCrop = true;
+      }
+      let printed: string | null = null;
+      try {
+        const print = await printGarment({
+          data: { image: await shrinkDataUrl(crop, 1024) },
+        });
+        if (print.ok) printed = print.image;
+      } catch {
+        /* fallback extract */
+      }
+      if (!printed) {
+        try {
+          const ext = await extractGarment({
+            data: {
+              image: await shrinkDataUrl(crop, 1024),
+              slot: box.slot,
+              label: box.name,
+            },
+          });
+          if (ext.ok) printed = ext.image;
+        } catch {
+          return null;
+        }
+      }
+      if (!printed) return null;
+      const cutout = await shrinkDataUrl(await toLocalDataUrl(printed), 900, 0.85);
+      return commitExtracted(
+        { slot: box.slot, label: box.name },
+        cutout,
+        hash,
+        index,
+        hasCrop ? crop : cutout,
+      );
+    },
+    [canPrint, commitExtracted],
+  );
+
   const processScanFile = useCallback(
     async (
       file: File,
       known: Set<string>,
       onPiece: (piece: Saved) => void,
-    ): Promise<Saved[]> => {
+    ): Promise<RouteResult> => {
       const hash = await fileFingerprint(file);
       if (known.has(hash)) throw new AlreadyInCloset();
       const raw = await readAsImageSrc(file);
       const original = await shrinkDataUrl(raw, 1280, 0.85);
 
       let kind: ScanKind = "garment";
-      let pieces: ScanPiece[] = [];
+      let boxes: WornBox[] = [];
       let classifiedOk = false;
       try {
         const res = await classifyScan({
@@ -402,7 +469,7 @@ export function Studio() {
         if (res.ok) {
           classifiedOk = true;
           kind = res.kind;
-          pieces = res.pieces;
+          boxes = res.boxes;
         }
       } catch {
         /* fall through to garment / filename skip */
@@ -415,111 +482,34 @@ export function Studio() {
       if (kind === "garment") {
         const piece = await processOne(file, known);
         onPiece(piece);
-        return [piece];
+        return { type: "pieces", pieces: [piece] };
       }
 
       if (!canPrint) throw new NeedPrint();
 
-      const wanted = sanitizeScanPieces(kind, pieces);
-      if (!wanted.length) throw new ScanEmpty();
+      if (boxes.length >= 2) {
+        known.add(hash);
+        return {
+          type: "worn",
+          pick: { id: uid("w"), original, hash, boxes, done: [] },
+        };
+      }
 
-      known.add(hash);
-      const out: Saved[] = [];
-      try {
-        for (let i = 0; i < wanted.length; i++) {
-          const spec = wanted[i]!;
-          let print: { ok: true; image: string } | { ok: false; error: string };
-          try {
-            print = await extractGarment({
-              data: {
-                image: await shrinkDataUrl(original, 1024),
-                slot: spec.slot,
-                label: spec.label,
-              },
-            });
-          } catch {
-            continue;
-          }
-          if (!print.ok) continue;
-          let cutout: string;
-          try {
-            cutout = await shrinkDataUrl(await toLocalDataUrl(print.image), 900, 0.85);
-          } catch {
-            continue;
-          }
-          const piece = await commitExtracted(spec, cutout, hash, i);
-          if (!piece) continue;
-          out.push(piece);
-          onPiece(piece);
+      if (boxes.length === 1) {
+        const box = boxes[0]!;
+        known.add(hash);
+        const piece = await pullWornBox(original, hash, box, 0);
+        if (!piece) {
+          known.delete(hash);
+          throw new ScanEmpty();
         }
-      } catch (e) {
-        if (!out.length) known.delete(hash);
-        throw e;
+        onPiece(piece);
+        return { type: "pieces", pieces: [piece] };
       }
-      if (!out.length) {
-        known.delete(hash);
-        throw new ScanEmpty();
-      }
-      return out;
-    },
-    [canPrint, commitExtracted, processOne],
-  );
 
-  const processFiles = useCallback(
-    async (list: FileList | File[] | null) => {
-      const images = [...(list ?? [])].filter((f) => f.type.startsWith("image/"));
-      if (!images.length) {
-        setError("Those files are not images.");
-        return;
-      }
-      setError(null);
-      setBusy(true);
-      const known = collectKnownHashes(
-        useCloset.getState().garments.map((g) => g.fileHash),
-      );
-      let next = 0;
-      let done = 0;
-      const total = images.length;
-      const misses: string[] = [];
-      const pages: string[] = [];
-      const already: string[] = [];
-      const worker = async () => {
-        for (;;) {
-          const idx = next++;
-          if (idx >= total) return;
-          const file = images[idx]!;
-          try {
-            const piece = await processOne(file, known);
-            done++;
-            setProgress(`${done}/${total} — ${piece.name}`);
-            setSaved((cur) => [piece, ...cur]);
-          } catch (e) {
-            done++;
-            if (e instanceof AlreadyInCloset) {
-              already.push(file.name);
-              setProgress(`${done}/${total} — Already in the closet.`);
-            } else if (e instanceof PageRejected) {
-              pages.push(file.name);
-              setProgress(`${done}/${total}`);
-            } else {
-              misses.push(file.name);
-              setProgress(`${done}/${total}`);
-            }
-          }
-        }
-      };
-      const n = Math.min(3, total);
-      await Promise.all(Array.from({ length: n }, () => worker()));
-      ensureLookbook();
-      setBusy(false);
-      setProgress("");
-      const count = useCloset.getState().garments.filter((g) => !g.archived).length;
-      if (count > 0) setSavedFlash(`Saved on this URL · ${count} pieces.`);
-      if (misses.length) setFailed((cur) => [...misses, ...cur]);
-      if (pages.length) setRejected((cur) => [...pages, ...cur]);
-      if (already.length) setDupes((cur) => [...already, ...cur]);
+      throw new ScanEmpty();
     },
-    [processOne, ensureLookbook],
+    [canPrint, processOne, pullWornBox],
   );
 
   const scanFiles = useCallback(
@@ -545,14 +535,19 @@ export function Studio() {
           if (idx >= total) return;
           const file = images[idx]!;
           try {
-            await processScanFile(file, known, (piece) => {
+            const routed = await processScanFile(file, known, (piece) => {
               setSaved((cur) => [piece, ...cur]);
               setProgress(`${idx + 1} of ${total} · ${piece.name}`);
             });
             done++;
-            const last = useCloset.getState().garments[0]?.name;
-            if (last) setProgress(`${done} of ${total} · ${last}`);
-            else setProgress(`${done} of ${total}`);
+            if (routed.type === "worn") {
+              setWornQueue((q) => [...q, routed.pick]);
+              setProgress(`${done} of ${total} · Tap the clothes.`);
+            } else {
+              const last = routed.pieces.at(-1)?.name;
+              if (last) setProgress(`${done} of ${total} · ${last}`);
+              else setProgress(`${done} of ${total}`);
+            }
           } catch (e) {
             done++;
             if (e instanceof AlreadyInCloset) {
@@ -593,6 +588,35 @@ export function Studio() {
   const dismissPiece = (id: string) => {
     removeGarment(id);
     setSaved((cur) => cur.filter((s) => s.id !== id));
+  };
+
+  const tapWorn = async (box: WornBox) => {
+    const pick = wornQueue[0];
+    if (!pick || extractingBox) return;
+    if (pick.done.includes(box.id)) return;
+    setExtractingBox(box.id);
+    setError(null);
+    try {
+      const index = pick.boxes.findIndex((b) => b.id === box.id);
+      const piece = await pullWornBox(pick.original, pick.hash, box, Math.max(0, index));
+      if (!piece) {
+        setError("Could not pull that piece.");
+        return;
+      }
+      setSaved((cur) => [piece, ...cur]);
+      setWornQueue((q) =>
+        q.map((w, i) => (i === 0 ? { ...w, done: [...w.done, box.id] } : w)),
+      );
+      ensureLookbook();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not pull that piece.");
+    } finally {
+      setExtractingBox(null);
+    }
+  };
+
+  const finishWorn = () => {
+    setWornQueue((q) => q.slice(1));
   };
 
   const addFromUrl = async () => {
@@ -786,16 +810,27 @@ export function Studio() {
         .filter((f): f is File => !!f);
       if (files.length) {
         e.preventDefault();
-        if (tab === "scan") void scanFiles(files);
-        else void processFiles(files);
+        void scanFiles(files);
       }
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [processFiles, scanFiles, tab]);
+  }, [scanFiles]);
+
+  const worn = wornQueue[0];
 
   return (
     <div className="space-y-8">
+      {worn && (
+        <WornPicker
+          photo={worn.original}
+          boxes={worn.boxes}
+          busyId={extractingBox}
+          doneIds={new Set(worn.done)}
+          onTap={(b) => void tapWorn(b)}
+          onDone={finishWorn}
+        />
+      )}
       <div className="flex gap-2">
         <Button
           variant={tab === "scan" ? "primary" : "ghost"}
@@ -826,8 +861,7 @@ export function Studio() {
             Scan the camera roll.
           </p>
           <p className="mt-3 mx-auto max-w-md text-sm text-ink-soft leading-relaxed">
-            Drop many photos. We pull the clothes — not the pizza, not you.
-            A look splits into each piece on paper.
+            Shoot it on the chair, on you, or the hanger. We’ll put it on paper.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
             <Button onClick={() => scanRef.current?.click()} disabled={busy} size="lg">
@@ -858,7 +892,7 @@ export function Studio() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
-          void processFiles(e.dataTransfer.files);
+          void scanFiles(e.dataTransfer.files);
         }}
         className="border border-dashed border-hairline-strong bg-card px-6 py-12 text-center"
       >
@@ -925,7 +959,7 @@ export function Studio() {
           multiple
           hidden
           onChange={(e) => {
-            void processFiles(e.target.files);
+            void scanFiles(e.target.files);
             e.target.value = "";
           }}
         />
@@ -936,7 +970,7 @@ export function Studio() {
           capture="environment"
           hidden
           onChange={(e) => {
-            void processFiles(e.target.files);
+            void scanFiles(e.target.files);
             e.target.value = "";
           }}
         />
@@ -1117,6 +1151,27 @@ async function toLocalDataUrl(src: string): Promise<string> {
     r.onerror = () => reject(new Error("Could not download print"));
     r.readAsDataURL(blob);
   });
+}
+
+async function cropDataUrl(
+  src: string,
+  box: { x: number; y: number; w: number; h: number },
+): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error("crop"));
+    el.src = src;
+  });
+  const x = Math.round(box.x * img.naturalWidth);
+  const y = Math.round(box.y * img.naturalHeight);
+  const w = Math.max(8, Math.round(box.w * img.naturalWidth));
+  const h = Math.max(8, Math.round(box.h * img.naturalHeight));
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  c.getContext("2d")?.drawImage(img, x, y, w, h, 0, 0, w, h);
+  return c.toDataURL("image/jpeg", 0.88);
 }
 
 const PAPER = { r: 244, g: 239, b: 230 };
