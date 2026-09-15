@@ -535,7 +535,7 @@ describe("lookFitsOccasion", () => {
     assert.equal(lookFitsOccasion(hood, "client"), false);
     assert.equal(lookFitsOccasion(hood, "weekday"), false);
     assert.equal(lookFitsOccasion(hood, "weekend"), true);
-    assert.equal(lookFitsOccasion(dinner, "weekend"), false);
+    assert.equal(lookFitsOccasion(dinner, "weekend"), true);
     assert.equal(lookFitsOccasion(dinner, "client"), true);
     assert.equal(lookFitsOccasion(dinner, "out"), true);
   });

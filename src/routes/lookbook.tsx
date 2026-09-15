@@ -8,15 +8,12 @@ import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import {
+  chapterExhausted,
+  chapterVisible,
   comboKey,
-  enforcePieceCap,
   lookbookPool,
-  lookFitsHouse,
-  lookFitsOccasion,
-  lookHasColor,
-  stripRepeatBlazers,
 } from "@/lib/lookbook";
-import { lookFitsSeason, seasonFromWeather, seasonRank } from "@/lib/season";
+import { seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { spreadMicro, spreadTitle } from "@/lib/look";
 import { livePool } from "@/lib/rack";
@@ -198,27 +195,13 @@ function LookbookPage() {
     look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
   const shown = useMemo(() => {
-    const rows = book.filter((look) => {
-      const pieces = piecesFor(look);
-      if (pieces.length < 2) return false;
-      if (look.occasion !== occasion) return false;
-      if (look.source !== "manual" && !lookFitsOccasion(pieces, occasion, pool)) {
-        return false;
-      }
-      if (!lookFitsSeason(pieces, season)) return false;
-      if (houseChip !== "all" && !lookFitsHouse(pieces, houseChip, occasion, pool)) {
-        return false;
-      }
-      if (color && !lookHasColor(pieces, color)) return false;
-      return true;
+    return chapterVisible(book, garments, occasion, {
+      season,
+      house: houseChip,
+      color,
+      min: canBuild ? 3 : 0,
     });
-    const ranked = [...rows].sort((a, b) => {
-      const pa = piecesFor(a);
-      const pb = piecesFor(b);
-      return seasonRank(pb, season) - seasonRank(pa, season);
-    });
-    return enforcePieceCap(stripRepeatBlazers(ranked, garments), garments);
-  }, [book, occasion, color, byId, pool, season, garments, houseChip]);
+  }, [book, garments, occasion, season, houseChip, color, canBuild]);
 
   const highlightId = focusLook ?? null;
 
@@ -420,7 +403,7 @@ function LookbookPage() {
             season,
             houseChip === "all" ? undefined : houseChip,
           );
-          setExhausted(n === 0);
+          setExhausted(chapterExhausted(shown.length, n, n));
         }}
         className="inline-flex h-11 items-center border border-hairline px-4 text-sm text-ink hover:border-hairline-strong"
       >

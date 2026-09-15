@@ -18,7 +18,7 @@ import {
   slotOf,
   type House,
 } from "./style.ts";
-import { lookFitsSeason, weatherForSeason, type Season } from "./season.ts";
+import { lookFitsSeason, seasonRank, weatherForSeason, type Season } from "./season.ts";
 import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
@@ -206,7 +206,7 @@ export function buildLookbook(
   for (const { id } of OCCASIONS) {
     all.push(...buildChapter(garments, id, { cap: CHAPTER_CAP, salt, today }));
   }
-  return all;
+  return coverUnused(garments, all);
 }
 
 /** Two looks starring this piece — unused-rail tap. */
@@ -352,10 +352,10 @@ export function lookFitsOccasion(
   }
 
   if (o === "weekend") {
+    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
     if ((hoodie || graphic) && !((jean || chino) && sneaker)) return false;
-    const tuxedo = oxford && trouser && loafer && !jean && !rugby && !fairIsle && !hoodie && !camp;
-    if (tuxedo) return false;
-    return jean || rugby || fairIsle || camp || sneaker || hoodie;
+    // oxford + trouser + loafer is legal Ralph weekend — not a tuxedo ban
+    return legalBottom || rugby || fairIsle || camp || sneaker || loafer || boot || oxford || polo || knit;
   }
 
   if (o === "comfy") {
@@ -567,11 +567,7 @@ export function buildChapter(
 
   const tryPush = (pieces: Garment[], force = false): boolean => {
     if (pieces.length < 3) return false;
-    if (house) {
-      if (!lookFitsHouse(pieces, house, occasion, pool)) return false;
-    } else if (!lookFitsOccasion(pieces, occasion, pool)) {
-      return false;
-    }
+    if (!lookFitsOccasion(pieces, occasion, pool)) return false;
     if (season && !lookFitsSeason(pieces, season)) return false;
     if (beigePlateCount(pieces) >= 3) return false;
     if (!force) {
@@ -689,7 +685,6 @@ export function fillOccasionLooks(
       .map((id) => byId.get(id))
       .filter((g): g is Garment => Boolean(g));
     if (pieces.length < 3) return false;
-    if (house && !lookFitsHouse(pieces, house, occ, garments)) return false;
     return true;
   });
   if (have.length >= min) return [];
@@ -733,14 +728,7 @@ export function looksToKeepOnShuffle(
   return looks.filter((l) => {
     if (mapOccasion(l.occasion) !== occ) return true;
     if (l.source === "manual") return true;
-    if (house && garments.length) {
-      const pieces = l.garmentIds
-        .map((id) => byId.get(id))
-        .filter((g): g is Garment => Boolean(g));
-      if (pieces.length >= 3 && !lookFitsHouse(pieces, house, occ, garments)) {
-        return true;
-      }
-    }
+    void house;
     return false;
   });
 }
@@ -1038,4 +1026,110 @@ export function looksForHero(g: Garment, garments: Garment[]): Look[] {
     if (out.length >= 5) break;
   }
   return out;
+}
+
+/**
+ * Shown-equivalent for one chapter.
+ * Occasion is the chapter key. House and season rank; they must not zero the grid.
+ */
+export function chapterVisible(
+  looks: Look[],
+  garments: Garment[],
+  occasion: Occasion,
+  opts?: { season?: Season; house?: House | "all"; color?: string | null; min?: number },
+): Look[] {
+  const pool = lookbookPool(garments);
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  const season = opts?.season;
+  const house = opts?.house && opts.house !== "all" ? opts.house : undefined;
+  const min = opts?.min ?? 3;
+  const resolve = (l: Look) =>
+    l.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+
+  const rows = looks.filter((look) => {
+    const pieces = resolve(look);
+    if (pieces.length < 3) return false;
+    if (mapOccasion(look.occasion) !== occasion) return false;
+    if (lookClashes(pieces)) return false;
+    if (season && !lookFitsSeason(pieces, season)) return false;
+    if (opts?.color && !lookHasColor(pieces, opts.color)) return false;
+    return true;
+  });
+
+  const ranked = [...rows].sort((a, b) => {
+    const pa = resolve(a);
+    const pb = resolve(b);
+    if (house) {
+      const ha = lookFitsHouse(pa, house, occasion, pool) ? 1 : 0;
+      const hb = lookFitsHouse(pb, house, occasion, pool) ? 1 : 0;
+      if (hb !== ha) return hb - ha;
+    }
+    if (season) return seasonRank(pb, season) - seasonRank(pa, season);
+    return 0;
+  });
+
+  let out = enforcePieceCap(stripRepeatBlazers(ranked, garments), garments);
+  if (out.length < min && min > 0) {
+    const extra = fillOccasionLooks(
+      garments,
+      [...looks, ...out],
+      occasion,
+      min,
+      new Set(out.map((l) => comboKey(l.garmentIds))),
+      undefined,
+      undefined,
+    );
+    const merged = stripRepeatBlazers([...out, ...extra], garments);
+    const capped = enforcePieceCap(merged, garments);
+    out = capped.length >= min ? capped : merged;
+  }
+  return out;
+}
+
+/** Exhausted only after a full chapter was shown and shuffle-after-reset added nothing. */
+export function chapterExhausted(
+  visible: number,
+  shuffleAdded: number,
+  resetAdded: number,
+): boolean {
+  return visible >= 3 && shuffleAdded === 0 && resetAdded === 0;
+}
+
+/** Put idle livePool pieces into looks so the whole rack is in the book. */
+export function coverUnused(garments: Garment[], looks: Look[]): Look[] {
+  const pool = lookbookPool(garments);
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  const used = new Set(looks.flatMap((l) => l.garmentIds));
+  const extra: Look[] = [...looks];
+  const keys = new Set(looks.map((l) => comboKey(l.garmentIds)));
+  for (const g of pool) {
+    const slot = slotOf(g);
+    if (!slot || slot === "accessory") continue;
+    if (used.has(g.id)) continue;
+    const occ: Occasion =
+      isGraphic(g) || isHoodiePiece(g) ? "weekend" : isCampCollar(g) ? "weekend" : "weekday";
+    const ids = pickLook(pool, {
+      occasion: occ,
+      moment: "day",
+      weather: { f: 64, label: "Mild", code: 2 },
+      lockedIds: [g.id],
+    });
+    if (!ids.includes(g.id) || ids.length < 3) continue;
+    const pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
+    if (pieces.length < 3 || lookClashes(pieces)) continue;
+    const key = comboKey(ids);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    for (const id of ids) used.add(id);
+    extra.push({
+      id: `lb2_cover_${g.id}_${key.replace(/\|/g, "_")}`,
+      name: nameOf(pieces),
+      occasion: occ,
+      garmentIds: ids,
+      source: "ai",
+      lookbook: true,
+      createdAt: `${todayISO()}T00:00:00.000Z`,
+    });
+  }
+  return extra;
 }

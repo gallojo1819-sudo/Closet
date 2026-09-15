@@ -22,12 +22,10 @@ import {
   comboKey,
   enforcePieceCap,
   fillOccasionLooks,
-  lookFitsHouse,
   seenKey,
   stripRepeatBlazers,
 } from "./lookbook";
 import { isFakeName, nameFromPixels, scrubRack } from "./rack";
-import { lookFitsSeason } from "./season";
 import { preferPixels, sampleCover } from "./color";
 import {
   mergeClosetPersist,
@@ -505,7 +503,6 @@ export const useCloset = create<ClosetState>()(
             .map((id) => byId.get(id))
             .filter((g): g is Garment => Boolean(g));
           if (pieces.length < 3) return false;
-          if (house && !lookFitsHouse(pieces, house, occ, s.garments)) return false;
           return true;
         });
         if (fitting.length >= CHAPTER_CAP) {
