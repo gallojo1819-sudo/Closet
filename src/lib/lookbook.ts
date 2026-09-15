@@ -506,7 +506,7 @@ export function enforcePieceCap(looks: Look[], garments: Garment[]): Look[] {
   };
   for (const l of looks) {
     const occ = mapOccasion(l.occasion);
-    if (l.source === "manual" || !l.lookbook) {
+    if (l.source === "manual" || !l.lookbook || l.id.startsWith("week_")) {
       out.push(l);
       bump(occ, l.garmentIds);
       continue;
@@ -728,6 +728,7 @@ export function looksToKeepOnShuffle(
   return looks.filter((l) => {
     if (mapOccasion(l.occasion) !== occ) return true;
     if (l.source === "manual") return true;
+    if (l.id.startsWith("week_")) return true;
     void house;
     return false;
   });
@@ -952,21 +953,10 @@ export function moreLikeThis(
   return ranked.slice(0, n).map((x) => x.l);
 }
 
-function heroOccasions(g: Garment): Occasion[] {
-  const b = `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
-  const slot = slotOf(g);
-  if (isGraphic(g) || isHoodiePiece(g)) return ["weekend"];
-  if (isCampCollar(g)) return ["weekday", "weekend", "travel"];
-  if (slot === "footwear" && /loafer/.test(b)) {
-    return ["weekday", "out", "weekend", "travel"];
-  }
-  if (slot === "bottom" && /trouser|gurkha/.test(b)) {
-    return ["weekday", "out", "travel", "weekend"];
-  }
-  if (slot === "bottom" && /chino/.test(b)) {
-    return ["weekday", "out", "weekend", "travel"];
-  }
-  return ["weekday", "out", "weekend", "travel"];
+const HERO_OCCASIONS: Occasion[] = ["weekday", "out", "weekend", "travel", "comfy"];
+
+function heroOccasions(_g: Garment): Occasion[] {
+  return HERO_OCCASIONS;
 }
 
 function heroHonest(g: Garment, occ: Occasion, pieces: Garment[]): boolean {
@@ -983,49 +973,129 @@ function heroHonest(g: Garment, occ: Occasion, pieces: Garment[]): boolean {
   return false;
 }
 
-/** Up to 5 looks that include this piece — one per occasion that can wear it. */
-export function looksForHero(g: Garment, garments: Garment[]): Look[] {
+function weatherForOcc(occasion: Occasion) {
+  if (occasion === "out") return { f: 64, label: "Mild", code: 2 };
+  if (occasion === "weekend" || occasion === "travel" || occasion === "comfy") {
+    return { f: 72, label: "Fair", code: 2 };
+  }
+  return { f: 68, label: "Fair", code: 2 };
+}
+
+function starLook(
+  g: Garment,
+  garments: Garment[],
+  occasion: Occasion,
+  seen: Set<string>,
+  previousIds: string[],
+): Look | null {
   const pool = lookbookPool(garments);
   const byId = new Map(pool.map((x) => [x.id, x]));
+  const ids = pickLook(pool, {
+    occasion,
+    moment: "day",
+    weather: weatherForOcc(occasion),
+    lockedIds: [g.id],
+    previousIds,
+  });
+  const ordered = ids.includes(g.id) ? ids : [g.id, ...ids.filter((id) => id !== g.id)];
+  if (ordered.length < 3 || !ordered.includes(g.id)) return null;
+  const key = comboKey(ordered);
+  if (seen.has(key)) return null;
+  const pieces = ordered.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
+  if (pieces.length < 3) return null;
+  if (lookClashes(pieces)) return null;
+  return {
+    id: `hero_${g.id}_${occasion}_${key.slice(0, 10)}`,
+    name: nameOf(pieces),
+    occasion,
+    garmentIds: ordered,
+    source: "ai",
+    lookbook: true,
+    createdAt: `${todayISO()}T00:00:00.000Z`,
+  };
+}
+
+/**
+ * 5 looks starring this piece: weekday / out / weekend / travel / comfy.
+ * Skip an occasion only when clashes make it impossible, then PoloDefault fill to 5.
+ */
+export function looksForHero(
+  g: Garment,
+  garments: Garment[],
+  opts?: { seen?: string[] },
+): Look[] {
+  const seen = new Set(opts?.seen ?? []);
+  const previous: string[] = [];
   const out: Look[] = [];
-  const keys = new Set<string>();
   for (const occasion of heroOccasions(g)) {
-    const weather =
-      occasion === "out"
-        ? { f: 64, label: "Mild", code: 2 }
-        : occasion === "weekend" || occasion === "travel"
-          ? { f: 72, label: "Fair", code: 2 }
-          : { f: 68, label: "Fair", code: 2 };
-    const ids = pickLook(pool, {
-      occasion,
-      moment: "day",
-      weather,
-      lockedIds: [g.id],
-    });
-    if (!ids.includes(g.id)) continue;
-    const pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
-    if (pieces.length < 3) continue;
-    if (!heroHonest(g, occasion, pieces)) continue;
-    if (occasion === "weekend" && (isHoodiePiece(g) || isGraphic(g))) {
-      const jean = pieces.some((p) => /\bjeans?\b|denim/.test(`${p.subtype} ${p.name}`));
-      const sneaker = pieces.some((p) => /sneaker|trainer|\b990\b/.test(`${p.subtype} ${p.name}`));
-      if (!jean || !sneaker) continue;
+    const look = starLook(g, garments, occasion, seen, previous);
+    if (!look) continue;
+    const pieces = look.garmentIds
+      .map((id) => garments.find((x) => x.id === id))
+      .filter((x): x is Garment => Boolean(x));
+    if (!lookFitsOccasion(pieces, occasion, garments) && !heroHonest(g, occasion, pieces)) {
+      continue;
     }
-    const key = [...ids].sort().join("|");
-    if (keys.has(key)) continue;
-    keys.add(key);
-    out.push({
-      id: `hero_${g.id}_${occasion}`,
-      name: nameOf(pieces),
-      occasion,
-      garmentIds: ids,
-      source: "ai",
-      lookbook: true,
-      createdAt: `${todayISO()}T00:00:00.000Z`,
-    });
-    if (out.length >= 5) break;
+    out.push(look);
+    seen.add(comboKey(look.garmentIds));
+    previous.push(...look.garmentIds.filter((id) => id !== g.id));
+    if (out.length >= 5) return out;
+  }
+  for (let t = 0; t < 12 && out.length < 5; t++) {
+    const look = starLook(g, garments, "weekday", seen, previous);
+    if (!look) break;
+    out.push(look);
+    seen.add(comboKey(look.garmentIds));
+    previous.push(...look.garmentIds.filter((id) => id !== g.id));
   }
   return out;
+}
+
+/** Chip-filter the 5 looks starring a piece; fill to ≥3 without dropping the piece. */
+export function visibleHero(
+  g: Garment,
+  looks: Look[],
+  garments: Garment[],
+  opts?: { occasion?: Occasion; season?: Season; house?: House | "all"; color?: string | null; min?: number },
+): Look[] {
+  const pool = lookbookPool(garments);
+  const byId = new Map(pool.map((x) => [x.id, x]));
+  const season = opts?.season;
+  const house = opts?.house && opts.house !== "all" ? opts.house : undefined;
+  const min = opts?.min ?? 3;
+  const resolve = (l: Look) =>
+    l.garmentIds.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
+  let rows = looks.filter((l) => {
+    if (!l.garmentIds.includes(g.id)) return false;
+    const pieces = resolve(l);
+    if (pieces.length < 3) return false;
+    if (lookClashes(pieces)) return false;
+    if (season && !lookFitsSeason(pieces, season)) return false;
+    if (opts?.color && !lookHasColor(pieces, opts.color)) return false;
+    return true;
+  });
+  if (opts?.occasion) {
+    const occRows = rows.filter((l) => mapOccasion(l.occasion) === opts.occasion);
+    if (occRows.length >= min) rows = occRows;
+  }
+  rows = [...rows].sort((a, b) => {
+    if (!house) return 0;
+    const ha = lookFitsHouse(resolve(a), house, opts?.occasion ?? "weekday", pool) ? 1 : 0;
+    const hb = lookFitsHouse(resolve(b), house, opts?.occasion ?? "weekday", pool) ? 1 : 0;
+    return hb - ha;
+  });
+  if (rows.length < min) {
+    const extra = looksForHero(g, garments, { seen: rows.map((l) => comboKey(l.garmentIds)) });
+    const more = extra.filter((l) => l.garmentIds.includes(g.id));
+    const keys = new Set(rows.map((l) => comboKey(l.garmentIds)));
+    for (const l of more) {
+      const k = comboKey(l.garmentIds);
+      if (keys.has(k)) continue;
+      keys.add(k);
+      rows.push(l);
+    }
+  }
+  return rows.filter((l) => l.garmentIds.includes(g.id)).slice(0, 5);
 }
 
 /**
@@ -1072,7 +1142,7 @@ export function chapterVisible(
   if (out.length < min && min > 0) {
     const extra = fillOccasionLooks(
       garments,
-      [...looks, ...out],
+      out,
       occasion,
       min,
       new Set(out.map((l) => comboKey(l.garmentIds))),
@@ -1082,6 +1152,33 @@ export function chapterVisible(
     const merged = stripRepeatBlazers([...out, ...extra], garments);
     const capped = enforcePieceCap(merged, garments);
     out = capped.length >= min ? capped : merged;
+  }
+  const keys = new Set(out.map((l) => comboKey(l.garmentIds)));
+  let guard = 0;
+  while (out.length < min && min > 0 && guard < 16) {
+    guard += 1;
+    const ids = pickLook(pool, {
+      occasion,
+      moment: "day",
+      weather: season ? weatherForSeason(season) : weatherForOcc(occasion),
+      previousIds: out.flatMap((l) => l.garmentIds),
+    });
+    if (ids.length < 3) break;
+    const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    if (pieces.length < 3 || lookClashes(pieces)) continue;
+    if (season && !lookFitsSeason(pieces, season)) continue;
+    const key = comboKey(ids);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    out.push({
+      id: `lb2_fill_${occasion}_${key.replace(/\|/g, "_")}`,
+      name: nameOf(pieces),
+      occasion,
+      garmentIds: ids,
+      source: "ai",
+      lookbook: true,
+      createdAt: `${todayISO()}T00:00:00.000Z`,
+    });
   }
   return out;
 }
@@ -1100,12 +1197,28 @@ export function coverUnused(garments: Garment[], looks: Look[]): Look[] {
   const pool = lookbookPool(garments);
   const byId = new Map(pool.map((g) => [g.id, g]));
   const used = new Set(looks.flatMap((l) => l.garmentIds));
-  const extra: Look[] = [...looks];
-  const keys = new Set(looks.map((l) => comboKey(l.garmentIds)));
+  const extra: Look[] = looks.map((l) => ({ ...l, garmentIds: [...l.garmentIds] }));
+  const keys = new Set(extra.map((l) => comboKey(l.garmentIds)));
   for (const g of pool) {
-    const slot = slotOf(g);
-    if (!slot || slot === "accessory") continue;
     if (used.has(g.id)) continue;
+    const slot = slotOf(g);
+    if (slot === "accessory" || g.category === "accessory" || !slot) {
+      const idx = extra.findIndex((l) => {
+        const pieces = l.garmentIds
+          .map((id) => byId.get(id))
+          .filter((x): x is Garment => Boolean(x));
+        return (
+          pieces.length >= 3 &&
+          !pieces.some((p) => slotOf(p) === "accessory" || p.category === "accessory")
+        );
+      });
+      if (idx >= 0) {
+        const host = extra[idx]!;
+        extra[idx] = { ...host, garmentIds: [...host.garmentIds, g.id] };
+        used.add(g.id);
+      }
+      continue;
+    }
     const occ: Occasion =
       isGraphic(g) || isHoodiePiece(g) ? "weekend" : isCampCollar(g) ? "weekend" : "weekday";
     const ids = pickLook(pool, {
@@ -1114,22 +1227,130 @@ export function coverUnused(garments: Garment[], looks: Look[]): Look[] {
       weather: { f: 64, label: "Mild", code: 2 },
       lockedIds: [g.id],
     });
-    if (!ids.includes(g.id) || ids.length < 3) continue;
-    const pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
+    const ordered = ids.includes(g.id) ? ids : [g.id, ...ids.filter((id) => id !== g.id)];
+    if (ordered.length < 3 || !ordered.includes(g.id)) continue;
+    const pieces = ordered.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
     if (pieces.length < 3 || lookClashes(pieces)) continue;
-    const key = comboKey(ids);
+    const key = comboKey(ordered);
     if (keys.has(key)) continue;
     keys.add(key);
-    for (const id of ids) used.add(id);
+    for (const id of ordered) used.add(id);
     extra.push({
       id: `lb2_cover_${g.id}_${key.replace(/\|/g, "_")}`,
       name: nameOf(pieces),
       occasion: occ,
-      garmentIds: ids,
+      garmentIds: ordered,
       source: "ai",
       lookbook: true,
       createdAt: `${todayISO()}T00:00:00.000Z`,
     });
   }
   return extra;
+}
+
+export const WEEK_ENERGIES: Occasion[] = [
+  "weekday",
+  "out",
+  "weekend",
+  "weekday",
+  "out",
+  "weekend",
+  "weekday",
+];
+
+export function mondayISO(iso = todayISO()): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y!, (m ?? 1) - 1, d ?? 1));
+  const day = dt.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  dt.setUTCDate(dt.getUTCDate() + diff);
+  return dt.toISOString().slice(0, 10);
+}
+
+export function isThisWeekLook(l: Look, monday: string): boolean {
+  return l.id.startsWith(`week_${monday}_`);
+}
+
+/** 7 idle-first spreads, mixed weekday/out/weekend so it is not seven oxfords. */
+export function buildWeek(garments: Garment[], today = todayISO()): Look[] {
+  const monday = mondayISO(today);
+  const pool = lookbookPool(garments);
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  const tops = pool
+    .filter((g) => {
+      const s = slotOf(g);
+      return s === "top" || s === "dress";
+    })
+    .sort((a, b) => daysIdle(b, today) - daysIdle(a, today) || a.id.localeCompare(b.id));
+  const chosen: Garment[] = [];
+  const rest = [...tops];
+  while (chosen.length < 7 && rest.length) {
+    const prev = chosen[chosen.length - 1];
+    let i = rest.findIndex((t) => !prev || t.subtype !== prev.subtype);
+    if (i < 0) i = 0;
+    chosen.push(rest.splice(i, 1)[0]!);
+  }
+  const previous: string[] = [];
+  const out: Look[] = [];
+  const keys = new Set<string>();
+  const pushLook = (occ: Occasion, locked: string[], i: number): boolean => {
+    const ids = pickLook(pool, {
+      occasion: occ,
+      moment: "day",
+      weather: weatherForOcc(occ),
+      lockedIds: locked,
+      previousIds: previous,
+    });
+    let pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
+    const hero = locked[0] ? byId.get(locked[0]) : undefined;
+    if (hero && !pieces.some((p) => p.id === hero.id)) {
+      const restP = pieces.filter((p) => {
+        const s = slotOf(p);
+        return s !== "top" && s !== "dress";
+      });
+      pieces = [hero, ...restP];
+    }
+    if (pieces.length < 3 || lookClashes(pieces)) return false;
+    if (!lookFitsOccasion(pieces, occ, pool) && locked.length) return false;
+    const lookIds = pieces.map((p) => p.id);
+    const key = comboKey(lookIds);
+    if (keys.has(key)) return false;
+    keys.add(key);
+    previous.push(...lookIds);
+    out.push({
+      id: `week_${monday}_${i}`,
+      name: nameOf(pieces),
+      occasion: occ,
+      garmentIds: lookIds,
+      source: "ai",
+      lookbook: true,
+      createdAt: `${today}T00:00:00.000Z`,
+    });
+    return true;
+  };
+  for (let i = 0; i < 7; i++) {
+    const occ = WEEK_ENERGIES[i]!;
+    const top = chosen[i];
+    if (top && pushLook(occ, [top.id], i)) continue;
+    pushLook(occ, [], i);
+  }
+  let pad = out.length;
+  while (out.length < 7 && pad < 20) {
+    const occ = WEEK_ENERGIES[out.length] ?? "weekday";
+    pushLook(occ, [], out.length);
+    pad += 1;
+  }
+  return out.slice(0, 7);
+}
+
+export function mergeWeekLooks(looks: Look[], week: Look[]): Look[] {
+  return [...week, ...looks.filter((l) => !l.id.startsWith("week_"))];
+}
+
+export function unusedFromLooks(garments: Garment[], looks: Look[]): Garment[] {
+  const pool = lookbookPool(garments);
+  const used = new Set(looks.filter((l) => l.lookbook).flatMap((l) => l.garmentIds));
+  return pool
+    .filter((g) => !used.has(g.id))
+    .sort((a, b) => daysIdle(b) - daysIdle(a) || a.id.localeCompare(b.id));
 }

@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildLookbook,
+  buildWeek,
   chapterExhausted,
   chapterVisible,
   coverUnused,
@@ -10,6 +11,8 @@ import {
   lookFitsHouse,
   lookFitsOccasion,
   lookbookStats,
+  looksForHero,
+  unusedFromLooks,
 } from "./lookbook.ts";
 import { lookFitsSeason } from "./season.ts";
 import { HOUSE_CHIPS, leadHouse, slotOf } from "./style.ts";
@@ -313,5 +316,32 @@ describe("lookbook invariants", () => {
     ];
     assert.equal(lookFitsSeason(shortsWinter, "winter"), false);
     assert.equal(lookFitsSeason(RALPH_WEEKEND, "fall"), true);
+  });
+
+  it("this week has 7; unused rail empty after cover; oxford stars in 5", () => {
+    const week = buildWeek(FIXTURE, "2026-09-14");
+    assert.equal(week.length, 7, `week ${week.length}`);
+    const book = coverUnused(FIXTURE, [...week, ...buildLookbook(FIXTURE, "2026-09-14")]);
+    assert.equal(
+      unusedFromLooks(FIXTURE, book).length,
+      0,
+      `unused ${unusedFromLooks(FIXTURE, book).map((g) => g.name).slice(0, 8).join(", ")}`,
+    );
+    const ox = FIXTURE.find((g) => g.id === "ox-lb")!;
+    const five = looksForHero(ox, FIXTURE);
+    assert.equal(five.length, 5, `hero looks ${five.length}`);
+    for (const l of five) {
+      assert.ok(l.garmentIds.includes(ox.id), l.name);
+      const pieces = l.garmentIds
+        .map((id) => FIXTURE.find((g) => g.id === id))
+        .filter((g): g is Garment => Boolean(g));
+      assert.equal(lookClashes(pieces), false);
+    }
+    const wrf = chapterVisible(week, FIXTURE, "weekend", {
+      season: "fall",
+      house: "ralph",
+      min: 3,
+    });
+    assert.ok(wrf.length >= 3, `Weekend×Ralph×Fall week band ${wrf.length}`);
   });
 });

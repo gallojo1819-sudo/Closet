@@ -17,11 +17,15 @@ import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
 import {
   applyShuffle,
   buildChapter,
+  buildWeek,
   capChapterLooks,
   CHAPTER_CAP,
   comboKey,
+  coverUnused,
   enforcePieceCap,
   fillOccasionLooks,
+  mergeWeekLooks,
+  mondayISO,
   seenKey,
   stripRepeatBlazers,
 } from "./lookbook";
@@ -97,6 +101,7 @@ type ClosetState = {
   resetChapter: (occasion: Occasion, season?: Season, house?: House) => void;
   markSeen: (occasion: Occasion, keys: string[], house?: House) => void;
   keepLook: (id: string, patch?: { garmentIds?: string[]; name?: string }) => void;
+  newWeek: () => void;
   loadSample: () => void;
   emptyCloset: () => void;
   importCloset: (payload: {
@@ -447,6 +452,13 @@ export const useCloset = create<ClosetState>()(
             { ...m, id: uid("m"), createdAt: new Date().toISOString() },
           ],
         })),
+      newWeek: () => {
+        const s = get();
+        if (!s.hydrated || s.garments.length === 0) return;
+        const week = buildWeek(s.garments);
+        const looks = coverUnused(s.garments, mergeWeekLooks(s.looks, week));
+        set({ looks });
+      },
       ensureLookbook: () => {
         const s = get();
         if (!s.hydrated) return;
@@ -455,6 +467,10 @@ export const useCloset = create<ClosetState>()(
           stripRepeatBlazers(capChapterLooks(s.looks), s.garments),
           s.garments,
         );
+        const monday = mondayISO();
+        if (looks.filter((l) => l.id.startsWith(`week_${monday}_`)).length < 7) {
+          looks = mergeWeekLooks(looks, buildWeek(s.garments));
+        }
         const seenLooks: SeenLooks = { ...s.seenLooks };
         for (const { id: occ } of OCCASIONS) {
           const chapter = looks.filter((l) => mapOccasion(l.occasion) === occ);
@@ -483,6 +499,7 @@ export const useCloset = create<ClosetState>()(
             ];
           }
         }
+        looks = coverUnused(s.garments, looks);
         const key = (list: Look[]) =>
           list.map((l) => `${l.lookbook ? "b" : "k"}:${l.id}:${l.occasion}`).join("|");
         if (key(s.looks) === key(looks)) return;

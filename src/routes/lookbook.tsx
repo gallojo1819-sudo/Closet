@@ -4,20 +4,24 @@ import { IdleMount } from "@/components/closet/idle-mount";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { LookKit } from "@/components/closet/look-kit";
 import { LookSheet } from "@/components/closet/look-sheet";
+import { GarmentTile } from "@/components/closet/tile";
 import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import {
-  chapterExhausted,
   chapterVisible,
   comboKey,
   lookbookPool,
+  looksForHero,
+  mondayISO,
+  unusedFromLooks,
+  visibleHero,
 } from "@/lib/lookbook";
 import { seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { spreadMicro, spreadTitle } from "@/lib/look";
 import { livePool } from "@/lib/rack";
-import { HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
+import { daysIdle, HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -149,10 +153,7 @@ function LookbookPage() {
   const garmentsAll = useCloset((s) => s.garments);
   const looksAll = useCloset((s) => s.looks);
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
-  const ensureOccasionBook = useCloset((s) => s.ensureOccasionBook);
-  const shuffleChapter = useCloset((s) => s.shuffleChapter);
-  const resetChapter = useCloset((s) => s.resetChapter);
-  const markSeen = useCloset((s) => s.markSeen);
+  const newWeek = useCloset((s) => s.newWeek);
   const wearToday = useCloset((s) => s.wearToday);
   const [play, setPlay] = useState(false);
   const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]["id"]>("weekday");
@@ -162,7 +163,8 @@ function LookbookPage() {
   const [colorOpen, setColorOpen] = useState(false);
   const drop = useCloset((s) => s.drop);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [exhausted, setExhausted] = useState(false);
+  const [heroId, setHeroId] = useState<string | null>(null);
+  const [heroLooks, setHeroLooks] = useState<Look[]>([]);
   const cardEls = useRef(new Map<string, HTMLElement>());
   const { look: focusLook } = Route.useSearch();
 
@@ -190,18 +192,41 @@ function LookbookPage() {
     for (const g of garments) for (const c of g.colors) if (c) set.add(c.toLowerCase());
     return [...set].sort();
   }, [garments]);
+  const monday = mondayISO();
 
   const piecesFor = (look: Look) =>
     look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
+  const weekLooks = useMemo(
+    () => book.filter((l) => l.id.startsWith(`week_${monday}_`)),
+    [book, monday],
+  );
   const shown = useMemo(() => {
-    return chapterVisible(book, garments, occasion, {
+    return chapterVisible(weekLooks.length ? weekLooks : book, garments, occasion, {
       season,
       house: houseChip,
       color,
       min: canBuild ? 3 : 0,
     });
-  }, [book, garments, occasion, season, houseChip, color, canBuild]);
+  }, [weekLooks, book, garments, occasion, season, houseChip, color, canBuild]);
+
+  const unused = useMemo(() => unusedFromLooks(garments, book), [garments, book]);
+  const usedN = garments.length - unused.length;
+  const rack = useMemo(
+    () => [...garments].sort((a, b) => daysIdle(b) - daysIdle(a) || a.id.localeCompare(b.id)),
+    [garments],
+  );
+  const hero = heroId ? byId.get(heroId) ?? null : null;
+  const heroShown = useMemo(() => {
+    if (!hero) return [];
+    return visibleHero(hero, heroLooks, garments, {
+      occasion,
+      season,
+      house: houseChip,
+      color,
+      min: 3,
+    });
+  }, [hero, heroLooks, garments, occasion, season, houseChip, color]);
 
   const highlightId = focusLook ?? null;
 
@@ -214,37 +239,21 @@ function LookbookPage() {
     ensureLookbook();
   }, [hydrated, garments.length, ensureLookbook]);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    const run = () =>
-      ensureOccasionBook(
-        occasion,
-        season,
-        houseChip === "all" ? undefined : houseChip,
-      );
-    if (typeof requestIdleCallback === "function") {
-      const id = requestIdleCallback(run);
-      return () => cancelIdleCallback(id);
-    }
-    const t = window.setTimeout(run, 0);
-    return () => window.clearTimeout(t);
-  }, [hydrated, occasion, season, houseChip, garments.length, ensureOccasionBook]);
-
-  useEffect(() => {
-    if (!hydrated || shown.length === 0) return;
-    markSeen(
-      occasion,
-      shown.map((l) => comboKey(l.garmentIds)),
-      houseChip === "all" ? undefined : houseChip,
-    );
-  }, [hydrated, occasion, houseChip, shown, markSeen]);
+  const openHero = (g: Garment) => {
+    setHeroId(g.id);
+    setHeroLooks(looksForHero(g, garments));
+  };
 
   const getOpenCard = useCallback(
     () => (openId ? cardEls.current.get(openId) ?? null : null),
     [openId],
   );
 
-  const openLook = shown.find((l) => l.id === openId) ?? book.find((l) => l.id === openId) ?? null;
+  const allOpenLooks = [...shown, ...heroShown, ...book];
+  const openLook =
+    allOpenLooks.find((l) => l.id === openId) ??
+    book.find((l) => l.id === openId) ??
+    null;
   const openPieces = openLook ? piecesFor(openLook) : [];
 
   return (
@@ -255,7 +264,8 @@ function LookbookPage() {
       </h1>
       {hydrated && (
         <p className="mt-3 text-ink-soft max-w-xl">
-          {shown.length} looks · {chapterLabel} · {seasonLabel.replace(/^Auto · /, "")}
+          {usedN} of {garments.length} in looks · {chapterLabel} ·{" "}
+          {seasonLabel.replace(/^Auto · /, "")}
         </p>
       )}
       {gap && (
@@ -267,10 +277,7 @@ function LookbookPage() {
             key={o.id}
             type="button"
             onClick={() => {
-              startTransition(() => {
-                setOccasion(o.id);
-                setExhausted(false);
-              });
+              startTransition(() => setOccasion(o.id));
             }}
             className={cn(
               "micro border px-3 py-2",
@@ -284,10 +291,7 @@ function LookbookPage() {
         ))}
         <button
           type="button"
-          onClick={() => {
-            setSeasonChip("auto");
-            setExhausted(false);
-          }}
+          onClick={() => setSeasonChip("auto")}
           className={cn(
             "micro border px-3 py-2",
             seasonChip === "auto"
@@ -301,10 +305,7 @@ function LookbookPage() {
           <button
             key={s.id}
             type="button"
-            onClick={() => {
-              setSeasonChip(s.id);
-              setExhausted(false);
-            }}
+            onClick={() => setSeasonChip(s.id)}
             className={cn(
               "micro border px-3 py-2",
               seasonChip === s.id
@@ -317,10 +318,7 @@ function LookbookPage() {
         ))}
         <button
           type="button"
-          onClick={() => {
-            setHouseChip("all");
-            setExhausted(false);
-          }}
+          onClick={() => setHouseChip("all")}
           className={cn(
             "micro border px-3 py-2",
             houseChip === "all"
@@ -334,10 +332,7 @@ function LookbookPage() {
           <button
             key={h.id}
             type="button"
-            onClick={() => {
-              setHouseChip(h.id);
-              setExhausted(false);
-            }}
+            onClick={() => setHouseChip(h.id)}
             className={cn(
               "micro border px-3 py-2",
               houseChip === h.id
@@ -397,17 +392,10 @@ function LookbookPage() {
       <div className="mt-6 flex flex-wrap gap-3">
       <button
         type="button"
-        onClick={() => {
-          const n = shuffleChapter(
-            occasion,
-            season,
-            houseChip === "all" ? undefined : houseChip,
-          );
-          setExhausted(chapterExhausted(shown.length, n, n));
-        }}
+        onClick={() => newWeek()}
         className="inline-flex h-11 items-center border border-hairline px-4 text-sm text-ink hover:border-hairline-strong"
       >
-        Shuffle
+        New week
       </button>
       <button
         type="button"
@@ -449,58 +437,114 @@ function LookbookPage() {
         </div>
       ) : (
         <>
-      {exhausted && (
-        <div className="mt-8 border border-hairline bg-card px-4 py-5">
-          <p className="text-sm text-ink-soft">
-            You’ve seen every honest look in this chapter.
+      <section className="mt-10">
+        <p className="micro text-ink-soft">This week</p>
+        {shown.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-soft">
+            {emptyFilterCopy(chapterLabel, seasonLabel, seasonChip, houseChip, color)}
           </p>
-          <button
-            type="button"
-            onClick={() => {
-              resetChapter(
-                occasion,
-                season,
-                houseChip === "all" ? undefined : houseChip,
+        ) : (
+          <ul className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {shown.map((look, i) => {
+              const pieces = piecesFor(look);
+              if (pieces.length < 3) return null;
+              return (
+                <LookCard
+                  key={look.id}
+                  look={look}
+                  pieces={pieces}
+                  index={i}
+                  season={season}
+                  highlight={highlightId === look.id}
+                  onOpen={() => setOpenId(look.id)}
+                  cardRef={(el) => {
+                    if (el) cardEls.current.set(look.id, el);
+                    else cardEls.current.delete(look.id);
+                  }}
+                />
               );
-              setExhausted(false);
-            }}
-            className="mt-4 micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-          >
-            Reset chapter
-          </button>
-        </div>
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-12">
+        <p className="text-sm text-ink-soft">
+          {usedN} of {garments.length} in looks
+        </p>
+        {unused.length > 0 && (
+          <>
+            <p className="mt-2 micro text-ink-soft">Not in a look yet</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {unused.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => openHero(g)}
+                  className="micro border border-hairline px-3 py-2 text-ink hover:border-hairline-strong"
+                >
+                  {g.name}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
+      {hero && (
+        <section className="mt-12">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <p className="font-editorial text-2xl tracking-tight">
+              5 looks with {hero.name}
+            </p>
+            <button
+              type="button"
+              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+              onClick={() =>
+                setHeroLooks(
+                  looksForHero(hero, garments, {
+                    seen: heroLooks.map((l) => comboKey(l.garmentIds)),
+                  }),
+                )
+              }
+            >
+              Shuffle
+            </button>
+          </div>
+          <ul className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {heroShown.map((look, i) => {
+              const pieces = piecesFor(look);
+              if (pieces.length < 3) return null;
+              return (
+                <LookCard
+                  key={look.id}
+                  look={look}
+                  pieces={pieces}
+                  index={i}
+                  season={season}
+                  onOpen={() => setOpenId(look.id)}
+                  cardRef={(el) => {
+                    if (el) cardEls.current.set(look.id, el);
+                    else cardEls.current.delete(look.id);
+                  }}
+                />
+              );
+            })}
+          </ul>
+        </section>
       )}
-      {shown.length === 0 && !canBuild ? (
-        <p className="mt-10 text-sm text-ink-soft">
-          Need a top, a bottom, and shoes.
-        </p>
-      ) : shown.length === 0 && !exhausted ? (
-        <p className="mt-10 text-sm text-ink-soft">
-          {emptyFilterCopy(chapterLabel, seasonLabel, seasonChip, houseChip, color)}
-        </p>
-      ) : shown.length > 0 ? (
-        <ul className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {shown.map((look, i) => {
-            const pieces = piecesFor(look);
-            if (pieces.length < 3) return null;
-            return (
-              <LookCard
-                key={look.id}
-                look={look}
-                pieces={pieces}
-                index={i}
-                season={season}
-                highlight={highlightId === look.id}
-                onOpen={() => setOpenId(look.id)}
-                cardRef={(el) => {
-                  if (el) cardEls.current.set(look.id, el);
-                  else cardEls.current.delete(look.id);
-                }}
-              />
-            );
-          })}
+
+      <section className="mt-12 pt-8 border-t border-hairline">
+        <p className="micro text-ink-soft">The rack</p>
+        <ul className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6">
+          {rack.map((g) => (
+            <li key={g.id}>
+              <GarmentTile garment={g} onClick={() => openHero(g)} />
+            </li>
+          ))}
         </ul>
-      ) : null}
+      </section>
+
       {openLook && openPieces.length >= 2 && (
         <LookSheet
           look={openLook}
