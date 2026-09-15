@@ -1,11 +1,17 @@
 import { canonicalize, harmony } from "./color.ts";
 import { livePool } from "./rack.ts";
 import {
+  clashes as styleClashes,
   daysIdle,
+  isBlazerPiece,
   isCampCollar,
+  isDistressedJean,
   isFairIsle,
   isGraphic,
+  isHeavyCable,
   isHoodiePiece,
+  isRugbyPiece,
+  isShortsPiece,
   leadHouse,
   lookHouses,
   pickLook,
@@ -17,8 +23,6 @@ import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "
 import { todayISO } from "./utils.ts";
 
 export const CHAPTER_CAP = 10;
-const LOUD =
-  /\b(plaid|checks?|gingham|stripes?|striped|floral|print|printed|houndstooth|paisley|camo|leopard|argyle)\b/i;
 
 export function lookbookPool(garments: Garment[]): Garment[] {
   return livePool(garments);
@@ -28,67 +32,13 @@ function bySlot(pool: Garment[], slot: "top" | "bottom" | "footwear" | "outerwea
   return pool.filter((g) => slotOf(g) === slot);
 }
 
-function loud(g: Garment): boolean {
-  return LOUD.test(`${g.name} ${g.subtype} ${g.notes}`) || isGraphic(g);
-}
-
 function blobOf(g: Garment): string {
   return `${g.subtype} ${g.name}`.toLowerCase();
 }
 
-function isJeanOrChino(g: Garment): boolean {
-  return /\b(chinos?|jeans?|denim)\b/.test(blobOf(g));
-}
-
-function isSneaker(g: Garment): boolean {
-  return /sneaker|trainer|\b990\b/.test(blobOf(g));
-}
-
-function isLoaferOrMule(g: Garment): boolean {
-  return /loafer|mule/.test(blobOf(g));
-}
-
-function isPleatedOrTrouser(g: Garment): boolean {
-  const b = blobOf(g);
-  if (isJeanOrChino(g)) return false;
-  return /pleat|trouser/.test(b);
-}
-
-function isOxfordPiece(g: Garment): boolean {
-  return /oxford/.test(blobOf(g)) && slotOf(g) === "top";
-}
-
-function isDressKnit(g: Garment): boolean {
-  const b = blobOf(g);
-  if (isGraphic(g)) return false;
-  return /knit|sweater|merino|cable/.test(b) && (/burgundy|wine|dress|cable|merino/.test(b) || g.formality >= 3);
-}
-
-function isLayerTop(g: Garment): boolean {
-  const s = slotOf(g);
-  return s === "top" || s === "dress";
-}
-
 /** Graphic top + Italian/Ralph leather is costume. Two loud graphics don't share a look. */
 export function lookClashes(pieces: Garment[]): boolean {
-  if (pieces.filter(loud).length >= 2) return true;
-  if (pieces.filter(isGraphic).length >= 2) return true;
-  const camps = pieces.filter(isCampCollar);
-  if (camps.length && pieces.filter(isLayerTop).length > 1) return true;
-  const graphic = pieces.find(isGraphic);
-  if (!graphic) return false;
-  const rest = pieces.filter((g) => g.id !== graphic.id);
-  if (rest.some(isLoaferOrMule)) return true;
-  if (rest.some(isPleatedOrTrouser)) return true;
-  if (rest.some(isOxfordPiece)) return true;
-  if (rest.some(isCampCollar)) return true;
-  if (rest.some(isFairIsle)) return true;
-  if (rest.some(isDressKnit)) return true;
-  return false;
-}
-
-function clashes(pieces: Garment[]): boolean {
-  return lookClashes(pieces);
+  return styleClashes(pieces);
 }
 
 function pieceScore(g: Garment, today: string): number {
@@ -137,6 +87,7 @@ function beigePlateCount(pieces: Garment[]): number {
 export function lookAllowsBlazer(core: Garment[], jacket: Garment, occasion?: Occasion): boolean {
   if (!isBlazer(jacket)) return false;
   if (core.some((g) => slotOf(g) === "outerwear")) return false;
+  if (occasion === "comfy") return false;
   if (core.some(isHoodiePiece) || core.some(isGraphic)) return false;
   const top = topsOf(core)[0];
   const bottom = bottomsOf(core)[0];
@@ -147,14 +98,16 @@ export function lookAllowsBlazer(core: Garment[], jacket: Garment, occasion?: Oc
   if (/mule|sneaker|trainer|\b990\b/.test(sb)) return false;
   if (!/loafer|oxford/.test(sb)) return false;
   if (isCampCollar(top) || /linen/.test(tb)) return false;
-  if (/cable|chunky|aran|fisherman/.test(tb)) return false;
+  if (isRugbyPiece(top) || /rugby/.test(tb)) return false;
+  if (isHeavyCable(top)) return false;
   const shirt =
     /oxford|polo/.test(tb) ||
     ((/merino|fine|silk/.test(tb) || /knit|sweater/.test(tb)) &&
-      !/cable|chunky|fair\s*isle/.test(tb));
+      !isHeavyCable(top) &&
+      !/fair\s*isle/.test(tb));
   if (!shirt) return false;
   const house = leadHouse(core);
-  if (house === "ralph" && /cable/.test(tb)) return false;
+  if (house === "ralph" && isHeavyCable(top)) return false;
   if (occasion === "weekend" && isFairIsle(top)) return false;
   if (bottom && isSandPiece(top) && isSandPiece(bottom) && isSandPiece(jacket)) {
     return false;
@@ -213,7 +166,7 @@ function maybeAttachBlazer(
     if (!lookAllowsBlazer(core, o, occasion)) return null;
     if (season === "summer" && o.warmth >= 4) return null;
     const next = [...core, o];
-    if (clashes(next)) return null;
+    if (lookClashes(next)) return null;
     if (beigePlateCount(next) >= 3) return null;
     if (season && !lookFitsSeason(next, season)) return null;
     if (harmony(next, { occasion, f: season ? undefined : 64 }) < 0) return null;
@@ -226,7 +179,7 @@ function maybeAttachBlazer(
     )) {
       if (core.some((g) => g.id === o.id) || atCap(o)) continue;
       const next = [...core, o];
-      if (clashes(next)) continue;
+      if (lookClashes(next)) continue;
       if (season && !lookFitsSeason(next, season)) continue;
       return next;
     }
@@ -314,6 +267,7 @@ export function lookFitsOccasion(
   house?: House,
 ): boolean {
   if (occ === "all") return true;
+  if (lookClashes(pieces)) return false;
   const o = mapOccasion(occ);
   const blob = lookBlob(pieces);
   const tops = topsOf(pieces);
@@ -329,7 +283,8 @@ export function lookFitsOccasion(
   const trouser = hasKind(bottoms, /trouser/) && !hasKind(bottoms, /\bjeans?\b|denim/);
   const chino = hasKind(bottoms, /chino/);
   const jean = hasKind(bottoms, /\bjeans?\b|denim/);
-  const rugby = /rugby/.test(blob);
+  const cord = hasKind(bottoms, /cord/);
+  const rugby = pieces.some(isRugbyPiece) || /rugby/.test(blob);
   const oxford = hasKind(tops, /oxford/);
   const polo = hasKind(tops, /polo/);
   const cable = hasKind(tops, /cable/);
@@ -339,27 +294,42 @@ export function lookFitsOccasion(
   const camp = pieces.some(isCampCollar);
   const cleanSneaker = sneaker && !gymShoe;
   const hoodieOnly = tops.length > 0 && tops.every((g) => isHoodiePiece(g) || isGraphic(g));
+  const distressed = bottoms.some(isDistressedJean);
+  const shorts = bottoms.some(isShortsPiece);
+  const blazer = pieces.some(isBlazerPiece);
+  const legalBottom = chino || trouser || jean;
+
+  if (shorts && o === "weekday") return false;
+  if (distressed && o !== "weekend" && o !== "comfy") return false;
 
   if (o === "weekday") {
+    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
+    if (rugby && blazer) return false;
     if (house === "ald") {
-      if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
       return (hoodie || rugby || graphic) && (jean || chino) && (sneaker || loafer);
     }
+    if (rugby && (jean || chino) && loafer) return true;
     if (house === "faloni") {
-      return (camp || /linen/.test(blob)) && (chino || trouser) && (loafer || mule) && !hoodie;
+      return (camp || /linen/.test(blob)) && legalBottom && (loafer || mule) && !hoodie;
     }
     if (house === "sweetStable") {
-      return (fairIsle || rugby || /gingham|cord/.test(blob)) && (chino || jean) && (loafer || sneaker);
+      return (
+        (fairIsle || rugby || /gingham/.test(blob)) &&
+        (chino || jean || cord) &&
+        (loafer || boot || sneaker) &&
+        !mule
+      );
     }
+    if (fairIsle && (chino || jean || cord) && (loafer || boot) && !mule) return true;
     if (house === "italianWinter") {
-      return knit && (trouser || chino) && loafer;
+      return knit && legalBottom && loafer;
     }
     if (house === "fiveFourFive") {
-      return (camp || /linen|sangallo/.test(blob)) && (chino || trouser) && (loafer || mule);
+      return (camp || /linen|sangallo/.test(blob)) && legalBottom && (loafer || mule);
     }
     if (hoodie || graphic) return false;
     if (!(oxford || polo || cable)) return false;
-    if (!(chino || trouser)) return false;
+    if (!legalBottom) return false;
     if (loafer) return true;
     if (cleanSneaker && pool && !rackHas(pool, "footwear", /loafer/)) return true;
     return false;
@@ -372,11 +342,7 @@ export function lookFitsOccasion(
     }
     if (hoodieOnly || hoodie) return false;
     if (!(oxford || polo || camp || knit)) return false;
-    const dressBottom = chino || trouser;
-    if (!dressBottom) {
-      if (!jean) return false;
-      if (!pool || rackHas(pool, "bottom", /chino|trouser/)) return false;
-    }
+    if (!legalBottom) return false;
     const dressShoe = loafer || mule || boot;
     if (!dressShoe) {
       if (!sneaker) return false;
@@ -982,6 +948,7 @@ export function moreLikeThis(
     let sharedC = 0;
     for (const c of lookColors(p)) if (colors.has(c)) sharedC += 1;
     if (sharedH === 0 && sharedC === 0) return Number.NEGATIVE_INFINITY;
+    if (lookClashes(p)) return Number.NEGATIVE_INFINITY;
     const idleN = p.filter((g) => daysIdle(g) >= 21).length;
     const idleDays = p.reduce((n, g) => n + daysIdle(g), 0);
     let s = sharedH * 3 + sharedC * 2 + idleN * 5 + idleDays / 20;

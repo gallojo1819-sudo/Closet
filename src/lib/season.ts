@@ -118,6 +118,7 @@ export function lookFitsSeason(pieces: Garment[], season: Season): boolean {
   if (lookMixesSolstice(pieces)) return false;
   if (season === "summer" && pieces.some(isOvercoatPiece)) return false;
   if (season === "winter") {
+    if (pieces.some((g) => /\bshorts?\b/.test(blobOf(g)))) return false;
     const tops = pieces.filter(isLayerTop);
     if (
       tops.length > 0 &&

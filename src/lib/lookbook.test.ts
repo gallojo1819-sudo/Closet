@@ -9,6 +9,7 @@ import {
   enforcePieceCap,
   fillOccasionLooks,
   lookAllowsBlazer,
+  lookClashes,
   lookFitsHouse,
   lookFitsOccasion,
   looksForHero,
@@ -16,6 +17,7 @@ import {
   moreLikeThis,
   stripRepeatBlazers,
 } from "./lookbook.ts";
+import { lookFitsSeason } from "./season.ts";
 import type { Garment, Look } from "./types.ts";
 
 function piece(
@@ -662,6 +664,151 @@ describe("moreLikeThis", () => {
     for (const l of alts) {
       assert.ok(book.some((x) => x.id === l.id));
       for (const id of l.garmentIds) assert.ok(garments.some((g) => g.id === id));
+    }
+  });
+});
+
+describe("2026-09 stylist pack", () => {
+  it("camp+cord blazer+990 → invalid", () => {
+    const look = [
+      piece({ id: "camp", name: "Linen camp collar", category: "top", subtype: "camp shirt", warmth: 1 }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      piece({ id: "nb", name: "Grey 990", category: "footwear", subtype: "sneaker" }),
+      piece({ id: "cb", name: "Beige cord blazer", category: "outerwear", subtype: "blazer" }),
+    ];
+    assert.equal(lookClashes(look), true);
+    assert.equal(lookFitsOccasion(look, "weekday"), false);
+    assert.equal(lookFitsOccasion(look, "out"), false);
+  });
+
+  it("rugby+blazer → invalid", () => {
+    const core = [
+      piece({ id: "rg", name: "Navy rugby", category: "top", subtype: "rugby" }),
+      piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean" }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const blazer = piece({
+      id: "bz",
+      name: "Navy blazer",
+      category: "outerwear",
+      subtype: "blazer",
+    });
+    assert.equal(lookAllowsBlazer(core, blazer, "weekday"), false);
+    assert.equal(lookClashes([...core, blazer]), true);
+    assert.equal(lookFitsOccasion([...core, blazer], "weekday"), false);
+  });
+
+  it("rugby+loafer+jean → VALID (ALD override)", () => {
+    const look = [
+      piece({ id: "rg", name: "Navy rugby", category: "top", subtype: "rugby" }),
+      piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean" }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    assert.equal(lookClashes(look), false);
+    assert.equal(lookFitsOccasion(look, "weekday"), true);
+    assert.equal(lookFitsOccasion(look, "weekend"), true);
+    assert.equal(lookFitsHouse(look, "ald", "weekday", look), true);
+  });
+
+  it("fair isle+cord+loafer weekday → VALID (Sweet Stable weekday)", () => {
+    const look = [
+      piece({ id: "fi", name: "Cream fair isle", category: "top", subtype: "knit" }),
+      piece({ id: "cord", name: "Brown cords", category: "bottom", subtype: "cord" }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    assert.equal(lookClashes(look), false);
+    assert.equal(lookFitsOccasion(look, "weekday"), true);
+    assert.equal(lookFitsHouse(look, "sweetStable", "weekday", look), true);
+  });
+
+  it("oxford+dark jean+loafer weekday → VALID", () => {
+    const look = [
+      piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "jean", name: "Dark indigo jeans", category: "bottom", subtype: "jean" }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    assert.equal(lookFitsOccasion(look, "weekday"), true);
+    assert.equal(lookFitsOccasion(look, "out"), true);
+    assert.equal(lookFitsOccasion(look, "weekend"), true);
+    assert.equal(lookFitsOccasion(look, "travel"), true);
+    assert.equal(lookFitsOccasion(look, "comfy"), false);
+  });
+
+  it("cable+blazer → invalid", () => {
+    const core = [
+      piece({ id: "cable", name: "Cream cable-knit", category: "top", subtype: "cable", warmth: 3 }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const blazer = piece({
+      id: "bz",
+      name: "Navy blazer",
+      category: "outerwear",
+      subtype: "blazer",
+    });
+    assert.equal(lookAllowsBlazer(core, blazer, "out"), false);
+    assert.equal(lookClashes([...core, blazer]), true);
+  });
+
+  it("linen-only winter → invalid", () => {
+    const look = [
+      piece({
+        id: "camp",
+        name: "Linen camp collar",
+        category: "top",
+        subtype: "camp shirt",
+        warmth: 1,
+        seasons: [],
+      }),
+      piece({
+        id: "tr",
+        name: "Linen trousers",
+        category: "bottom",
+        subtype: "trouser",
+        warmth: 2,
+        seasons: [],
+      }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer", warmth: 2 }),
+    ];
+    assert.equal(lookFitsSeason(look, "winter"), false);
+    assert.equal(lookFitsSeason(look, "summer"), true);
+  });
+
+  it("Travel+Fall+Ralph still builds ≥3 in a 40-top fixture", () => {
+    const tops = Array.from({ length: 40 }, (_, i) =>
+      piece({ id: `t${i + 1}`, name: `Oxford ${i + 1}`, category: "top", subtype: "oxford", warmth: 2 }),
+    );
+    const bottoms = Array.from({ length: 12 }, (_, i) =>
+      piece({
+        id: `b${i + 1}`,
+        name: i % 2 ? `Jean ${i + 1}` : `Chino ${i + 1}`,
+        category: "bottom",
+        subtype: i % 2 ? "jean" : "chino",
+        warmth: 3,
+      }),
+    );
+    const shoes = Array.from({ length: 8 }, (_, i) =>
+      piece({
+        id: `s${i + 1}`,
+        name: `Brown loafers ${i + 1}`,
+        category: "footwear",
+        subtype: "loafer",
+        warmth: 2,
+      }),
+    );
+    const g = [...tops, ...bottoms, ...shoes];
+    const looks = buildChapter(g, "travel", {
+      cap: 10,
+      season: "fall",
+      house: "ralph",
+      today: "2026-09-12",
+    });
+    assert.ok(looks.length >= 3, `Travel+Fall+Ralph looks ${looks.length}`);
+    for (const l of looks) {
+      assert.equal(l.occasion, "travel");
+      const pieces = l.garmentIds.map((id) => g.find((x) => x.id === id)!);
+      assert.equal(lookFitsHouse(pieces, "ralph", "travel", g), true);
+      assert.equal(lookFitsSeason(pieces, "fall"), true);
     }
   });
 });

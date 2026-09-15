@@ -102,6 +102,7 @@ function houseClimateScore(g: Garment, f: number, occasion: Occasion): number {
   ) {
     s += 1.4;
   }
+  if (occasion === "weekday" && hs.includes("sweetStable")) s += 1.1;
   if (
     (occasion === "weekday" || occasion === "out") &&
     hs.includes("ralph")
@@ -146,6 +147,149 @@ export function isGraphic(g: Garment): boolean {
   return false;
 }
 
+export function isRugbyPiece(g: Garment): boolean {
+  return /rugby/.test(blobOf(g));
+}
+
+export function isHeavyCable(g: Garment): boolean {
+  const b = blobOf(g);
+  if (!/cable|chunky|aran|fisherman/.test(b)) return false;
+  return !/fine|silk|thin/.test(b);
+}
+
+export function isSangalloPiece(g: Garment): boolean {
+  return /sangallo|bowling/.test(blobOf(g));
+}
+
+export function isWesternPiece(g: Garment): boolean {
+  return /western|cowboy|bolo|pearl\s*snap/.test(blobOf(g));
+}
+
+export function isBlazerPiece(g: Garment): boolean {
+  return /blazer|sport\s*coats?/.test(blobOf(g));
+}
+
+export function isCordBlazer(g: Garment): boolean {
+  return isBlazerPiece(g) && /cord/.test(blobOf(g));
+}
+
+export function isMulePiece(g: Garment): boolean {
+  return /mule/.test(blobOf(g));
+}
+
+export function isShortsPiece(g: Garment): boolean {
+  return /\bshorts?\b/.test(blobOf(g));
+}
+
+export function isDistressedJean(g: Garment): boolean {
+  const b = blobOf(g);
+  return /\b(jeans?|denim)\b/.test(b) && /distress|ripped|destroyed/.test(b);
+}
+
+export function is990Shoe(g: Garment): boolean {
+  return /\b990\b|new balance/.test(blobOf(g));
+}
+
+function isWhiteAthleticSneaker(g: Garment): boolean {
+  const b = blobOf(g);
+  if (!/sneaker|trainer/.test(b)) return false;
+  return /athletic|gym|runner|running|court/.test(b) && /white|ivory/.test(b);
+}
+
+function isTrailSneaker(g: Garment): boolean {
+  return /trail|hiker|runner|running/.test(blobOf(g));
+}
+
+function isOversizedOxford(g: Garment): boolean {
+  const b = blobOf(g);
+  return /oxford/.test(b) && /oversized|\bald\b/.test(b);
+}
+
+function isItalianKnitPolo(g: Garment): boolean {
+  const b = blobOf(g);
+  if (!/polo/.test(b)) return false;
+  return /linen|silk|italian|knit polo/.test(b);
+}
+
+const LOUD =
+  /\b(plaid|checks?|gingham|stripes?|striped|floral|print|printed|houndstooth|paisley|camo|leopard|argyle|fair\s*isle)\b/i;
+
+function isLoud(g: Garment): boolean {
+  return LOUD.test(`${g.name} ${g.subtype} ${g.notes}`) || isGraphic(g);
+}
+
+function isLayerTop(g: Garment): boolean {
+  const s = slotOf(g);
+  return s === "top" || s === "dress";
+}
+
+/**
+ * Hard invalid looks. Do not soften. Rugby + loafer is legal; rugby + blazer is not.
+ */
+export function clashes(pieces: Garment[]): boolean {
+  if (pieces.length < 2) return false;
+  const tops = pieces.filter(isLayerTop);
+  const bottoms = pieces.filter((g) => slotOf(g) === "bottom");
+  const camp = pieces.some(isCampCollar);
+  const rugby = pieces.some(isRugbyPiece);
+  const fairIsle = pieces.some(isFairIsle);
+  const heavyCable = pieces.some(isHeavyCable);
+  const sangallo = pieces.some(isSangalloPiece);
+  const hoodie = pieces.some(isHoodiePiece);
+  const graphic = pieces.some(isGraphic);
+  const blazer = pieces.some(isBlazerPiece);
+  const cordBlazer = pieces.some(isCordBlazer);
+  const mule = pieces.some(isMulePiece);
+  const overcoat = pieces.some(isOvercoatPiece);
+  const nb990 = pieces.some(is990Shoe);
+  const flannel = pieces.some((g) => /flannel/.test(blobOf(g)));
+  const linenBottom = bottoms.some((g) => /linen/.test(blobOf(g)));
+  const linenShort = bottoms.some((g) => isShortsPiece(g) && /linen/.test(blobOf(g)));
+  const westernN = pieces.filter(isWesternPiece).length;
+  const navyBlazer = pieces.some((g) => isBlazerPiece(g) && /navy/.test(blobOf(g)));
+
+  if (pieces.filter(isLoud).length >= 2) return true;
+  if (pieces.filter(isGraphic).length >= 2) return true;
+  if (camp && tops.length > 1) return true;
+  if (camp && (cordBlazer || nb990 || fairIsle || rugby || heavyCable)) return true;
+  if (rugby && blazer) return true;
+  if (fairIsle && (mule || sangallo || pieces.some(isWhiteAthleticSneaker) || navyBlazer)) {
+    return true;
+  }
+  if (sangallo && (flannel || overcoat || westernN > 0 || fairIsle)) return true;
+  if (heavyCable && (blazer || mule || linenShort)) return true;
+  if (mule && (rugby || fairIsle || pieces.some(isTrailSneaker))) return true;
+  if (overcoat && (linenBottom || camp || mule)) return true;
+  const linenOnly =
+    tops.length > 0 &&
+    tops.every((g) => isLinenCampPiece(g) || /linen/.test(blobOf(g)));
+  if (linenOnly && (overcoat || fairIsle || flannel)) return true;
+  if (hoodie && blazer) return true;
+  if (westernN >= 2) return true;
+  if (blazer && mule) return true;
+  if (bottoms.some(isShortsPiece) && overcoat) return true;
+  if (graphic) {
+    const rest = pieces.filter((g) => g.id !== pieces.find(isGraphic)!.id);
+    if (rest.some(isMulePiece)) return true;
+    if (rest.some((g) => /loafer/.test(blobOf(g)))) return true;
+    if (rest.some((g) => /pleat|trouser/.test(blobOf(g)) && !/\b(chinos?|jeans?)\b/.test(blobOf(g)))) {
+      return true;
+    }
+    if (rest.some((g) => /oxford/.test(blobOf(g)) && isLayerTop(g))) return true;
+    if (rest.some(isCampCollar) || rest.some(isFairIsle)) return true;
+    if (
+      rest.some(
+        (g) =>
+          /knit|sweater|merino|cable/.test(blobOf(g)) &&
+          (/burgundy|wine|dress|cable|merino/.test(blobOf(g)) || g.formality >= 3),
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Occasion briefs: mixed houses, not costume. Penalties beat idle. */
 function occasionScore(g: Garment, occasion: Occasion): number {
   const b = blobOf(g);
@@ -171,7 +315,7 @@ function occasionScore(g: Garment, occasion: Occasion): number {
     if (/\bhoodies?\b|90s/.test(b)) s -= 4;
   } else if (occasion === "weekday") {
     if (oxford || polo || /cable/.test(b)) s += 1;
-    if (/chino/.test(b) || trouser) s += 1;
+    if (/chino/.test(b) || trouser || (jean && !distressed)) s += 1;
     if (blazer) s += 1.2;
     if (/\bhoodies?\b|90s|graphic/.test(b)) s -= 6;
   } else if (occasion === "weekend") {
@@ -248,7 +392,7 @@ export function houseMixPenalty(pieces: Garment[]): number {
   return p;
 }
 
-/** House the TOP belongs to. The look follows that house. */
+/** House the TOP belongs to. Default PoloDefault (ralph) when unsure. */
 export function leadHouse(pieces: Garment[]): House {
   const top =
     pieces.find((g) => {
@@ -257,14 +401,19 @@ export function leadHouse(pieces: Garment[]): House {
     }) ?? pieces[0];
   if (!top) return "ralph";
   const b = blobOf(top);
-  if (isGraphic(top)) return "ald";
-  if (/sangallo|light cashmere/.test(b)) return "fiveFourFive";
-  if (/camp|linen/.test(b) && top.warmth <= 2) return "faloni";
-  if (/fair\s*isle|gingham|cord/.test(b)) return "sweetStable";
-  if (/rugby/.test(b)) return "ald";
-  if (/merino|flannel|cashmere|suede/.test(b)) return "italianWinter";
-  if (/oxford|polo|cable|blazer/.test(b)) return "ralph";
-  return housesOf(top)[0] ?? "ralph";
+  if (isCampCollar(top) || isItalianKnitPolo(top) || (/linen/.test(b) && top.warmth <= 2 && !isSangalloPiece(top))) {
+    return "faloni";
+  }
+  if (isRugbyPiece(top) || isOversizedOxford(top) || isGraphic(top)) return "ald";
+  if (isFairIsle(top) || /gingham/.test(b)) return "sweetStable";
+  if (isSangalloPiece(top) || /resort/.test(b)) return "fiveFourFive";
+  if (isHeavyCable(top)) return "ralph";
+  if (/oxford|polo/.test(b) || (/cable/.test(b) && !isHeavyCable(top))) return "ralph";
+  if (/merino|turtleneck|rollneck|flannel|cashmere/.test(b)) return "italianWinter";
+  if (/linen/.test(b) || (/knit/.test(b) && top.warmth <= 2 && /silk|linen|soft/.test(b))) {
+    return "faloni";
+  }
+  return "ralph";
 }
 
 export function pairKey(a: string, b: string): string {
@@ -456,11 +605,13 @@ export function pickLook(
       }
     }
   }
-  const legal = combos.filter((c) => houseMixPenalty(c.pieces) >= -8);
-  const ok = (legal.length ? legal : combos).filter((c) => c.h >= 0);
-  const poolC = (ok.length ? ok : legal.length ? legal : combos).sort(
-    (a, b) => b.s - a.s,
+  const legal = combos.filter(
+    (c) => houseMixPenalty(c.pieces) >= -8 && !clashes(c.pieces),
   );
+  const ok = (legal.length ? legal : combos.filter((c) => !clashes(c.pieces))).filter(
+    (c) => c.h >= 0,
+  );
+  const poolC = (ok.length ? ok : legal).sort((a, b) => b.s - a.s);
   const win = poolC[0];
   const ids: string[] = win ? [...win.ids] : lockedGs.map((g) => g.id);
   // Weekday look is top + bottom + footwear. Empty slots omitted, never invented.
