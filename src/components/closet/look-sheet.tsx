@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { LookKit } from "@/components/closet/look-kit";
 import { sheetPanelClass, useMdUp } from "@/components/closet/detail";
-import { ensureLookOnMe, queueLookOnMe } from "@/components/closet/on-me";
+import { ensureLookOnMe } from "@/components/closet/on-me";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { colorLine } from "@/lib/color";
@@ -116,11 +116,6 @@ export function LookSheet({
     setSwapSlot(null);
     setLockedIds((prev) => prev.filter((id) => look.garmentIds.includes(id)));
   }, [look.id]);
-
-  useEffect(() => {
-    if (activePieces.length < 2) return;
-    void queueLookOnMe(look.id, activePieces, 45_000, look.occasion as Occasion);
-  }, [look.id, extra]);
 
   const alts = showAlts ? moreLikeThis(look, book, closet, 3, lockedIds) : null;
 
@@ -298,6 +293,20 @@ export function LookSheet({
                       Swap
                     </button>
                   )}
+                  {on && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (ids.length <= 2) return;
+                        setIds((cur) => cur.filter((id) => id !== g.id));
+                        setLockedIds((cur) => cur.filter((id) => id !== g.id));
+                        setShowMe(false);
+                      }}
+                      className="micro mt-1 block text-ink-soft hover:text-ink"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -335,7 +344,7 @@ export function LookSheet({
             onClick={() => setShowAlts(true)}
             className="micro self-start border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
           >
-            More like this
+            Also with this
           </button>
           {alts &&
             (alts.length === 0 ? (

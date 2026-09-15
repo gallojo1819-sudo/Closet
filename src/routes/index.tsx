@@ -24,6 +24,7 @@ function Today() {
   const rerollDrop = useCloset((s) => s.rerollDrop);
   const swapDropPiece = useCloset((s) => s.swapDropPiece);
   const toggleLock = useCloset((s) => s.toggleLock);
+  const removeDropPiece = useCloset((s) => s.removeDropPiece);
   const wearToday = useCloset((s) => s.wearToday);
   const skipDrop = useCloset((s) => s.skipDrop);
   const saveLook = useCloset((s) => s.saveLook);
@@ -299,6 +300,14 @@ function Today() {
                     className="micro text-ink-soft hover:text-ink disabled:opacity-30"
                   >
                     Swap
+                  </button>
+                  <button
+                    type="button"
+                    disabled={done || pieces.length <= 2}
+                    onClick={() => removeDropPiece(g.id)}
+                    className="micro text-ink-soft hover:text-ink disabled:opacity-30"
+                  >
+                    Remove
                   </button>
                 </li>
               );

@@ -118,4 +118,13 @@ describe("lookFitsSeason", () => {
     assert.equal(lookFitsSeason(camp, "winter"), false);
     assert.equal(lookFitsSeason(winter, "winter"), true);
   });
+
+  it("fall + oxford/chino/loafer always passes", () => {
+    const look = [
+      g({ id: "ox", name: "Navy oxford", subtype: "oxford", warmth: 2 }),
+      g({ id: "ch", name: "Khaki chino", subtype: "chino", category: "bottom", warmth: 3 }),
+      g({ id: "lf", name: "Navy loafers", subtype: "loafer", category: "footwear", warmth: 2 }),
+    ];
+    assert.equal(lookFitsSeason(look, "fall"), true);
+  });
 });

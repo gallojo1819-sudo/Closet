@@ -85,6 +85,7 @@ type ClosetState = {
     previousIds?: string[],
   ) => void;
   swapDropPiece: (id: string) => void;
+  removeDropPiece: (id: string) => void;
   toggleLock: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
   setRefPhoto: (key: string | null, backup?: string | null) => void;
@@ -398,6 +399,20 @@ export const useCloset = create<ClosetState>()(
           drop: { ...drop, lockedIds: [...locked], lockNote: drop.lockNote ?? null },
         });
       },
+      removeDropPiece: (id) => {
+        const drop = get().drop;
+        if (!drop) return;
+        if (drop.garmentIds.length <= 2) return;
+        if (!drop.garmentIds.includes(id)) return;
+        const locked = (drop.lockedIds ?? []).filter((x) => x !== id);
+        set({
+          drop: {
+            ...drop,
+            garmentIds: drop.garmentIds.filter((gid) => gid !== id),
+            lockedIds: locked,
+          },
+        });
+      },
       swapDropPiece: (id) => {
         const drop = get().drop;
         if (!drop) return;
@@ -490,7 +505,6 @@ export const useCloset = create<ClosetState>()(
             .map((id) => byId.get(id))
             .filter((g): g is Garment => Boolean(g));
           if (pieces.length < 3) return false;
-          if (season && !lookFitsSeason(pieces, season)) return false;
           if (house && !lookFitsHouse(pieces, house, occ, s.garments)) return false;
           return true;
         });
@@ -499,15 +513,27 @@ export const useCloset = create<ClosetState>()(
           return;
         }
         const bucket = seenKey(occ, house);
-        const extra = fillOccasionLooks(
+        let extra = fillOccasionLooks(
           s.garments,
           trimmed,
           occ,
-          CHAPTER_CAP,
+          Math.max(3, CHAPTER_CAP),
           new Set(s.seenLooks[bucket] ?? []),
-          season,
+          undefined,
           house,
         );
+        if (fitting.length + extra.length < 3 && house) {
+          extra = [
+            ...extra,
+            ...fillOccasionLooks(
+              s.garments,
+              [...trimmed, ...extra],
+              occ,
+              3,
+              new Set(s.seenLooks[bucket] ?? []),
+            ),
+          ];
+        }
         if (!extra.length) {
           if (trimmed.length !== s.looks.length) set({ looks: trimmed });
           return;
@@ -529,15 +555,18 @@ export const useCloset = create<ClosetState>()(
         const s = get();
         const occ = mapOccasion(occasion);
         const bucket = seenKey(occ, house);
-        const next = applyShuffle(
+        let next = applyShuffle(
           s.garments,
           s.looks,
           occ,
           s.seenLooks[bucket] ?? [],
           undefined,
-          season,
+          undefined,
           house,
         );
+        if (next.added.length === 0) {
+          next = applyShuffle(s.garments, s.looks, occ, [], undefined, undefined, house);
+        }
         set({
           looks: next.looks,
           seenLooks: { ...s.seenLooks, [bucket]: next.seen },

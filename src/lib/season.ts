@@ -110,8 +110,8 @@ export function lookMixesSolstice(pieces: Garment[]): boolean {
 }
 
 /**
- * A look is legal for a season only if nothing is a hard clash
- * and majority warmth matches (±1).
+ * Hard clashes only: linen-only top in winter, overcoat in summer.
+ * Fall + knit/chino/loafer/oxford always passes.
  */
 export function lookFitsSeason(pieces: Garment[], season: Season): boolean {
   if (pieces.length < 2) return false;
@@ -126,9 +126,12 @@ export function lookFitsSeason(pieces: Garment[], season: Season): boolean {
       return false;
     }
   }
-  const worn = pieces.filter((g) => g.category !== "accessory");
-  const pool = worn.length ? worn : pieces;
+  return true;
+}
+
+export function seasonRank(pieces: Garment[], season: Season): number {
+  if (!lookFitsSeason(pieces, season)) return -1;
   const target = seasonWarmth(season);
-  const matching = pool.filter((g) => Math.abs(g.warmth - target) <= 1).length;
-  return matching * 2 > pool.length;
+  return pieces.filter((g) => g.category !== "accessory" && Math.abs(g.warmth - target) <= 1)
+    .length;
 }

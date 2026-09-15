@@ -501,6 +501,22 @@ describe("lookFitsOccasion", () => {
     assert.equal(lookFitsOccasion(cable, "out", rack), true);
   });
 
+  it("travel allows oxford + chino + loafer; no 90s hoodie", () => {
+    const pack = [
+      piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const hood = [
+      piece({ id: "hood", name: "Black 90s hoodie", category: "top", subtype: "hoodie", formality: 2 }),
+      piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean" }),
+      piece({ id: "sn", name: "Gym sneakers", category: "footwear", subtype: "sneaker" }),
+    ];
+    assert.equal(lookFitsOccasion(pack, "travel"), true);
+    assert.equal(lookFitsHouse(pack, "ralph", "travel", pack), true);
+    assert.equal(lookFitsOccasion(hood, "travel"), false);
+  });
+
   it("out is sharper; maps old client/dinner; never a 90s hoodie as the only top", () => {
     const dinner = [
       piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" }),

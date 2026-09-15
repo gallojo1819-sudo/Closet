@@ -405,10 +405,13 @@ export function lookFitsOccasion(
   }
 
   if (o === "travel") {
-    if (!(knit || overshirt)) return false;
-    if (!(chino || jean)) return false;
-    if (!(sneaker || loafer)) return false;
-    return true;
+    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
+    if (hoodieOnly || (hoodie && graphic)) return false;
+    if (gymShoe) return false;
+    const topOk = knit || overshirt || oxford || polo;
+    const botOk = chino || trouser || jean;
+    const shoeOk = loafer || sneaker || boot;
+    return topOk && botOk && shoeOk;
   }
 
   return true;
@@ -720,7 +723,6 @@ export function fillOccasionLooks(
       .map((id) => byId.get(id))
       .filter((g): g is Garment => Boolean(g));
     if (pieces.length < 3) return false;
-    if (season && !lookFitsSeason(pieces, season)) return false;
     if (house && !lookFitsHouse(pieces, house, occ, garments)) return false;
     return true;
   });
@@ -757,19 +759,23 @@ export function looksToKeepOnShuffle(
   looks: Look[],
   occasion: Occasion,
   garments: Garment[] = [],
-  season?: Season,
+  _season?: Season,
+  house?: House,
 ): Look[] {
   const occ = mapOccasion(occasion);
   const byId = new Map(garments.map((g) => [g.id, g]));
   return looks.filter((l) => {
     if (mapOccasion(l.occasion) !== occ) return true;
     if (l.source === "manual") return true;
-    if (!season || !garments.length) return false;
-    const pieces = l.garmentIds
-      .map((id) => byId.get(id))
-      .filter((g): g is Garment => Boolean(g));
-    if (pieces.length < 3) return false;
-    return !lookFitsSeason(pieces, season);
+    if (house && garments.length) {
+      const pieces = l.garmentIds
+        .map((id) => byId.get(id))
+        .filter((g): g is Garment => Boolean(g));
+      if (pieces.length >= 3 && !lookFitsHouse(pieces, house, occ, garments)) {
+        return true;
+      }
+    }
+    return false;
   });
 }
 
@@ -784,7 +790,7 @@ export function applyShuffle(
   house?: House,
 ): { looks: Look[]; added: Look[]; seen: string[] } {
   const occ = mapOccasion(occasion);
-  const kept = looksToKeepOnShuffle(looks, occ, garments, season);
+  const kept = looksToKeepOnShuffle(looks, occ, garments, season, house);
   const exclude = new Set(seen);
   const usedCount = new Map<string, number>();
   const usedBlazers = new Set<string>();
@@ -804,9 +810,8 @@ export function applyShuffle(
   }
   const added = buildChapter(garments, occ, {
     exclude,
-    cap: CHAPTER_CAP,
+    cap: 8,
     today,
-    season,
     usedCount,
     blazerLooks,
     usedBlazers,
@@ -980,7 +985,7 @@ export function moreLikeThis(
     const idleN = p.filter((g) => daysIdle(g) >= 21).length;
     const idleDays = p.reduce((n, g) => n + daysIdle(g), 0);
     let s = sharedH * 3 + sharedC * 2 + idleN * 5 + idleDays / 20;
-    if (cand.occasion === occ) s += 10;
+    if (cand.occasion !== occ) return Number.NEGATIVE_INFINITY;
     return s;
   };
 
@@ -989,9 +994,7 @@ export function moreLikeThis(
     .filter((x) => x.s > Number.NEGATIVE_INFINITY)
     .sort((a, b) => b.s - a.s || a.l.id.localeCompare(b.l.id));
 
-  const same = ranked.filter((x) => x.l.occasion === occ);
-  const rest = ranked.filter((x) => x.l.occasion !== occ);
-  return [...same, ...rest].slice(0, n).map((x) => x.l);
+  return ranked.slice(0, n).map((x) => x.l);
 }
 
 function heroOccasions(g: Garment): Occasion[] {

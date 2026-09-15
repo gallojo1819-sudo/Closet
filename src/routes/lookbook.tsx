@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { IdleMount } from "@/components/closet/idle-mount";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { LookKit } from "@/components/closet/look-kit";
 import { LookSheet } from "@/components/closet/look-sheet";
-import { queueLookOnMe } from "@/components/closet/on-me";
 import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
@@ -17,7 +16,7 @@ import {
   lookHasColor,
   stripRepeatBlazers,
 } from "@/lib/lookbook";
-import { lookFitsSeason, seasonFromWeather } from "@/lib/season";
+import { lookFitsSeason, seasonFromWeather, seasonRank } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { spreadMicro, spreadTitle } from "@/lib/look";
 import { livePool } from "@/lib/rack";
@@ -69,40 +68,10 @@ function LookCardFace({
   const extra = comboKey(pieces.map((p) => p.id));
   const liveSrc = useImageSrc(lookOnMeKey(look.id, extra));
   const cachedSrc = liveSrc;
-  const [visible, setVisible] = useState(false);
-  const asked = useRef("");
-  const ioRef = useRef<IntersectionObserver | null>(null);
-
-  const setRefs = (el: HTMLDivElement | null) => {
-    cardRef(el);
-    ioRef.current?.disconnect();
-    ioRef.current = null;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => setVisible(Boolean(entry?.isIntersecting)),
-      { rootMargin: "40px" },
-    );
-    io.observe(el);
-    ioRef.current = io;
-  };
-
-  useEffect(() => () => ioRef.current?.disconnect(), []);
-
-  useEffect(() => {
-    asked.current = "";
-  }, [look.id]);
-
-  useEffect(() => {
-    if (!visible || cachedSrc) return;
-    const token = `${look.id}:${extra}`;
-    if (asked.current === token) return;
-    asked.current = token;
-    void queueLookOnMe(look.id, pieces, 45_000, look.occasion as Occasion);
-  }, [visible, cachedSrc, look.id, look.occasion, extra, pieces]);
 
   return (
     <div
-      ref={setRefs}
+      ref={cardRef}
       className="relative w-full border border-hairline bg-paper aspect-[4/5] overflow-hidden"
       style={{ viewTransitionName: "none" }}
     >
@@ -193,6 +162,7 @@ function LookbookPage() {
   const [seasonChip, setSeasonChip] = useState<"auto" | Season>("auto");
   const [houseChip, setHouseChip] = useState<"all" | House>("all");
   const [color, setColor] = useState<string | null>(null);
+  const [colorOpen, setColorOpen] = useState(false);
   const drop = useCloset((s) => s.drop);
   const [openId, setOpenId] = useState<string | null>(null);
   const [exhausted, setExhausted] = useState(false);
@@ -230,7 +200,7 @@ function LookbookPage() {
   const shown = useMemo(() => {
     const rows = book.filter((look) => {
       const pieces = piecesFor(look);
-      if (pieces.length < 3) return false;
+      if (pieces.length < 2) return false;
       if (look.occasion !== occasion) return false;
       if (look.source !== "manual" && !lookFitsOccasion(pieces, occasion, pool)) {
         return false;
@@ -242,7 +212,12 @@ function LookbookPage() {
       if (color && !lookHasColor(pieces, color)) return false;
       return true;
     });
-    return enforcePieceCap(stripRepeatBlazers(rows, garments), garments);
+    const ranked = [...rows].sort((a, b) => {
+      const pa = piecesFor(a);
+      const pb = piecesFor(b);
+      return seasonRank(pb, season) - seasonRank(pa, season);
+    });
+    return enforcePieceCap(stripRepeatBlazers(ranked, garments), garments);
   }, [book, occasion, color, byId, pool, season, garments, houseChip]);
 
   const highlightId = focusLook ?? null;
@@ -258,11 +233,18 @@ function LookbookPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    ensureOccasionBook(
-      occasion,
-      season,
-      houseChip === "all" ? undefined : houseChip,
-    );
+    const run = () =>
+      ensureOccasionBook(
+        occasion,
+        season,
+        houseChip === "all" ? undefined : houseChip,
+      );
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(run);
+      return () => cancelIdleCallback(id);
+    }
+    const t = window.setTimeout(run, 0);
+    return () => window.clearTimeout(t);
   }, [hydrated, occasion, season, houseChip, garments.length, ensureOccasionBook]);
 
   useEffect(() => {
@@ -302,8 +284,10 @@ function LookbookPage() {
             key={o.id}
             type="button"
             onClick={() => {
-              setOccasion(o.id);
-              setExhausted(false);
+              startTransition(() => {
+                setOccasion(o.id);
+                setExhausted(false);
+              });
             }}
             className={cn(
               "micro border px-3 py-2",
@@ -381,20 +365,51 @@ function LookbookPage() {
             {h.label}
           </button>
         ))}
-        {colorChips.map((c) => (
+        <div className="relative">
           <button
-            key={c}
             type="button"
-            title={c}
-            onClick={() => setColor((cur) => (cur === c ? null : c))}
+            onClick={() => setColorOpen((v) => !v)}
             className={cn(
-              "size-6 shrink-0 border",
-              color === c ? "border-ink" : "border-hairline",
+              "micro border px-3 py-2",
+              color
+                ? "border-ink bg-ink text-paper"
+                : "border-hairline text-ink-soft",
             )}
-            style={{ backgroundColor: paletteCss(c) }}
-            aria-label={c}
-          />
-        ))}
+          >
+            Color
+          </button>
+          {colorOpen && (
+            <div className="absolute left-0 top-full z-20 mt-1 flex flex-wrap gap-1 border border-hairline bg-paper p-2 shadow-sm w-48">
+              <button
+                type="button"
+                className="micro px-2 py-1 text-ink-soft"
+                onClick={() => {
+                  setColor(null);
+                  setColorOpen(false);
+                }}
+              >
+                Any
+              </button>
+              {colorChips.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  title={c}
+                  onClick={() => {
+                    setColor((cur) => (cur === c ? null : c));
+                    setColorOpen(false);
+                  }}
+                  className={cn(
+                    "size-6 shrink-0 border",
+                    color === c ? "border-ink" : "border-hairline",
+                  )}
+                  style={{ backgroundColor: paletteCss(c) }}
+                  aria-label={c}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       <div className="mt-6 flex flex-wrap gap-3">
       <button
@@ -472,7 +487,11 @@ function LookbookPage() {
           </button>
         </div>
       )}
-      {shown.length === 0 && !exhausted ? (
+      {shown.length === 0 && !canBuild ? (
+        <p className="mt-10 text-sm text-ink-soft">
+          Need a top, a bottom, and shoes.
+        </p>
+      ) : shown.length === 0 && !exhausted ? (
         <p className="mt-10 text-sm text-ink-soft">
           {emptyFilterCopy(chapterLabel, seasonLabel, seasonChip, houseChip, color)}
         </p>
