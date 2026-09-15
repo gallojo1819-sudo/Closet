@@ -71,7 +71,7 @@ export function useMdUp() {
   return md;
 }
 
-/** Prefer right of the tile, then left, then over it. Clamp to the viewport. */
+/** Prefer next to the tile. If it won't fit, dead-center. Never below the fold. */
 export function placeBesideTile(tile: DOMRect): {
   top: number;
   left: number;
@@ -82,18 +82,28 @@ export function placeBesideTile(tile: DOMRect): {
   const gap = 8;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const width = Math.min(tile.width * 2 + 16, vw - pad * 2);
-  const maxHeight = Math.min(vh - pad * 2, Math.round(vh * 0.92));
+  const width = Math.min(720, Math.max(320, tile.width * 2 + 16), vw - pad * 2);
+  const maxHeight = Math.min(vh - pad * 2, Math.round(vh * 0.9));
 
-  let left: number;
-  if (tile.right + gap + width <= vw - pad) left = tile.right + gap;
-  else if (tile.left - gap - width >= pad) left = tile.left - gap - width;
-  else left = Math.min(Math.max(pad, tile.left), vw - pad - width);
-
-  let top = tile.top;
-  if (top + maxHeight > vh - pad) top = vh - pad - maxHeight;
-  if (top < pad) top = pad;
-  return { top, left, width, maxHeight };
+  const roomRight = tile.right + gap + width <= vw - pad;
+  const roomLeft = tile.left - gap - width >= pad;
+  if (roomRight || roomLeft) {
+    let top = tile.top;
+    if (top + maxHeight > vh - pad) top = vh - pad - maxHeight;
+    if (top < pad) top = pad;
+    return {
+      top,
+      left: roomRight ? tile.right + gap : tile.left - gap - width,
+      width,
+      maxHeight,
+    };
+  }
+  return {
+    top: Math.max(pad, (vh - maxHeight) / 2),
+    left: Math.max(pad, (vw - width) / 2),
+    width,
+    maxHeight,
+  };
 }
 
 export function GarmentDetail({

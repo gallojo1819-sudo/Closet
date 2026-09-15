@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
 import type { Garment } from "@/lib/types";
 import { daysIdle } from "@/lib/style";
@@ -10,7 +11,7 @@ export function GarmentTile({
   selecting,
 }: {
   garment: Garment;
-  onClick?: () => void;
+  onClick?: (e: MouseEvent<HTMLButtonElement>) => void;
   selected?: boolean;
   selecting?: boolean;
 }) {

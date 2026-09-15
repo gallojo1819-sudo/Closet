@@ -4,6 +4,7 @@ import { IdleMount } from "@/components/closet/idle-mount";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { LookKit } from "@/components/closet/look-kit";
 import { LookSheet } from "@/components/closet/look-sheet";
+import { Overlay } from "@/components/closet/overlay";
 import { GarmentTile } from "@/components/closet/tile";
 import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
@@ -112,16 +113,8 @@ function LookCard({
   cardRef: (el: HTMLElement | null) => void;
   season: string;
 }) {
-  const rootRef = useRef<HTMLLIElement>(null);
-
-  useEffect(() => {
-    if (!highlight) return;
-    rootRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [highlight]);
-
   return (
     <li
-      ref={rootRef}
       id={`look-${look.id}`}
       className={highlight ? "outline outline-1 outline-ink" : undefined}
     >
@@ -166,6 +159,7 @@ function LookbookPage() {
   const [heroId, setHeroId] = useState<string | null>(null);
   const [heroLooks, setHeroLooks] = useState<Look[]>([]);
   const cardEls = useRef(new Map<string, HTMLElement>());
+  const lastAnchor = useRef<HTMLElement | null>(null);
   const { look: focusLook } = Route.useSearch();
 
   const garments = useMemo(() => livePool(garmentsAll), [garmentsAll]);
@@ -239,15 +233,18 @@ function LookbookPage() {
     ensureLookbook();
   }, [hydrated, garments.length, ensureLookbook]);
 
-  const openHero = (g: Garment) => {
+  const openHero = (g: Garment, el?: HTMLElement | null) => {
+    if (el) lastAnchor.current = el;
     setHeroId(g.id);
     setHeroLooks(looksForHero(g, garments));
   };
 
-  const getOpenCard = useCallback(
-    () => (openId ? cardEls.current.get(openId) ?? null : null),
-    [openId],
-  );
+  const getAnchor = useCallback(() => lastAnchor.current, [heroId, openId]);
+
+  const getOpenCard = useCallback(() => {
+    if (lastAnchor.current) return lastAnchor.current;
+    return openId ? cardEls.current.get(openId) ?? null : null;
+  }, [openId]);
 
   const allOpenLooks = [...shown, ...heroShown, ...book];
   const openLook =
@@ -456,7 +453,10 @@ function LookbookPage() {
                   index={i}
                   season={season}
                   highlight={highlightId === look.id}
-                  onOpen={() => setOpenId(look.id)}
+                  onOpen={() => {
+                    lastAnchor.current = cardEls.current.get(look.id) ?? null;
+                    setOpenId(look.id);
+                  }}
                   cardRef={(el) => {
                     if (el) cardEls.current.set(look.id, el);
                     else cardEls.current.delete(look.id);
@@ -480,7 +480,7 @@ function LookbookPage() {
                 <button
                   key={g.id}
                   type="button"
-                  onClick={() => openHero(g)}
+                  onClick={(e) => openHero(g, e.currentTarget)}
                   className="micro border border-hairline px-3 py-2 text-ink hover:border-hairline-strong"
                 >
                   {g.name}
@@ -491,60 +491,67 @@ function LookbookPage() {
         )}
       </section>
 
-      {hero && (
-        <section className="mt-12">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <p className="font-editorial text-2xl tracking-tight">
-              5 looks with {hero.name}
-            </p>
-            <button
-              type="button"
-              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-              onClick={() =>
-                setHeroLooks(
-                  looksForHero(hero, garments, {
-                    seen: heroLooks.map((l) => comboKey(l.garmentIds)),
-                  }),
-                )
-              }
-            >
-              Shuffle
-            </button>
-          </div>
-          <ul className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {heroShown.map((look, i) => {
-              const pieces = piecesFor(look);
-              if (pieces.length < 3) return null;
-              return (
-                <LookCard
-                  key={look.id}
-                  look={look}
-                  pieces={pieces}
-                  index={i}
-                  season={season}
-                  onOpen={() => setOpenId(look.id)}
-                  cardRef={(el) => {
-                    if (el) cardEls.current.set(look.id, el);
-                    else cardEls.current.delete(look.id);
-                  }}
-                />
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
       <section className="mt-12 pt-8 border-t border-hairline">
         <p className="micro text-ink-soft">The rack</p>
         <ul className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6">
           {rack.map((g) => (
             <li key={g.id}>
-              <GarmentTile garment={g} onClick={() => openHero(g)} />
+              <GarmentTile garment={g} onClick={(e) => openHero(g, e.currentTarget)} />
             </li>
           ))}
         </ul>
       </section>
 
+      {hero && heroShown.length > 0 && !openLook && (
+        <Overlay onClose={() => setHeroId(null)} getAnchor={getAnchor} zClass="z-[55]">
+          <div className="p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <p className="font-editorial text-2xl tracking-tight">
+                5 looks with {hero.name}
+              </p>
+              <button
+                type="button"
+                className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+                onClick={() =>
+                  setHeroLooks(
+                    looksForHero(hero, garments, {
+                      seen: heroLooks.map((l) => comboKey(l.garmentIds)),
+                    }),
+                  )
+                }
+              >
+                Shuffle
+              </button>
+            </div>
+            <ul className="mt-4 grid grid-cols-2 gap-3">
+              {heroShown.map((look) => {
+                const pieces = piecesFor(look);
+                if (pieces.length < 3) return null;
+                return (
+                  <li key={look.id}>
+                    <button
+                      type="button"
+                      className="block w-full text-left"
+                      onClick={() => setOpenId(look.id)}
+                    >
+                      <LookKit pieces={pieces} className="pointer-events-none aspect-[4/5]" />
+                      <p className="mt-2 text-sm">{spreadTitle(pieces, look.occasion as Occasion)}</p>
+                      <p className="micro text-ink-soft">{look.occasion}</p>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setHeroId(null)}
+              className="micro mt-4 text-ink-soft hover:text-ink"
+            >
+              Close
+            </button>
+          </div>
+        </Overlay>
+      )}
       {openLook && openPieces.length >= 2 && (
         <LookSheet
           look={openLook}

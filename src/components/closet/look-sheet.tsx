@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { LookKit } from "@/components/closet/look-kit";
-import { sheetPanelClass, useMdUp } from "@/components/closet/detail";
+import { Overlay } from "@/components/closet/overlay";
 import { ensureLookOnMe } from "@/components/closet/on-me";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
@@ -65,20 +65,10 @@ export function LookSheet({
   const keepLook = useCloset((s) => s.keepLook);
   const looks = useCloset((s) => s.looks);
   const refPhoto = useCloset((s) => s.refPhoto);
-  const md = useMdUp();
   const painted = frame || cachedSrc;
   const comboSaved = looks.some(
     (l) => l.source === "manual" && comboKey(l.garmentIds) === extra,
   );
-  void getCard;
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   useEffect(() => {
     return () => {
@@ -158,14 +148,7 @@ export function LookSheet({
     l.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
   return (
-    <div className={cn("fixed inset-0 z-50", !md && "flex items-end")}>
-      <button
-        type="button"
-        className={cn("absolute inset-0", md ? "bg-ink/10" : "bg-ink/30")}
-        aria-label="Close"
-        onClick={onClose}
-      />
-      <div className={sheetPanelClass(md)}>
+    <Overlay onClose={onClose} getAnchor={getCard} zClass="z-[60]">
         <div className="relative border-b border-hairline bg-paper aspect-[4/5] overflow-hidden">
           <LookKit pieces={activePieces} className="border-0" />
           {showMe && painted && (
@@ -372,7 +355,6 @@ export function LookSheet({
               </ul>
             ))}
         </div>
-      </div>
-    </div>
+    </Overlay>
   );
 }
