@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { lookMissing } from "./gaps";
 import { livePool } from "./rack";
+import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
 import { defaultOccasion, HOUSE_LABEL, houseMixPenalty, lookHouses, momentOfDay, pickLook } from "./style";
 import type { Category, Garment, Occasion } from "./types";
 
@@ -238,6 +239,75 @@ export const printGarment = createServerFn({ method: "POST" })
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Set XAI_API_KEY for catalog covers." };
     return imagineEdit(
       "Product photograph of the SINGLE garment only. Keep the exact garment: color, fabric, stitching, hardware, logos, wear. Remove floor, walls, hangers, people, webpage chrome, prices, IDs, buttons, color swatches, text. Lay the garment (or pair of shoes) neatly on a solid #F4EFE6 paper, 4:5, garment filling ~80% of the frame, even light, no shadow theater. Do not invent a different item, brand, or color.",
+      data.image,
+    );
+  });
+
+const CLASSIFY_PROMPT =
+  'Return ONLY JSON: {"kind":"skip|garment|outfit|rail","reason":"short","pieces":[{"slot":"top|bottom|outerwear|footwear|accessory","label":"Navy oxford"}]}. ' +
+  "skip: food, pizza, meal, receipt, landscape, document, screenshot chrome with no clothing product, meme, pet as the subject, nothing wearable. " +
+  "garment: exactly ONE clothing item or one pair of shoes — product plate, phone flat-lay, or a single hung piece. pieces empty or one. " +
+  "outfit: a person wearing 2+ items, or a laid-out look of 2+ items. List EACH distinct garment you can clearly see (top, bottom, shoes, optional jacket). NEVER list the person. NEVER invent shoes, white mules, or extras that are not clearly visible. If only one garment is clear, kind=garment with that one. " +
+  "rail: hanging rail, pile, or stack of multiple distinct garments. List each piece you can tell apart. Do not invent. " +
+  'Labels: color + garment (Cream varsity, Navy loafer). Never "Piece". Never a filename. Max 6 pieces.';
+
+export type ClassifyScanResult =
+  | ({ ok: true } & ScanClass)
+  | { ok: false; error: string };
+
+export const classifyScan = createServerFn({ method: "POST" })
+  .validator((input: { image: string }) => input)
+  .handler(async ({ data }): Promise<ClassifyScanResult> => {
+    if (!process.env.XAI_API_KEY) {
+      return { ok: true, kind: "garment", reason: "no-key", pieces: [] };
+    }
+    const userContent = [
+      { type: "image_url", image_url: { url: data.image } },
+      { type: "text", text: CLASSIFY_PROMPT },
+    ];
+    for (const model of ["grok-4.3", "grok-4.5", "grok-4"] as const) {
+      const r = await xaiFetch("https://api.x.ai/v1/chat/completions", {
+        model,
+        max_tokens: 280,
+        temperature: 0,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You classify one photo for a clothes closet. JSON only. Never invent a garment that is not clearly in the photo. Never name a person as a piece.",
+          },
+          { role: "user", content: userContent },
+        ],
+      });
+      if (!r.ok) {
+        if (r.status === 403 || r.status === 404 || r.status === 422) continue;
+        return { ok: false, error: r.error };
+      }
+      const body = r.json as { choices?: { message?: { content?: string } }[] };
+      const text = body.choices?.[0]?.message?.content ?? "";
+      if (!text.trim()) continue;
+      const parsed = parseScanClass(text);
+      return { ok: true, ...parsed };
+    }
+    return { ok: false, error: "Could not classify." };
+  });
+
+export const extractGarment = createServerFn({ method: "POST" })
+  .validator((input: { image: string; slot: ScanSlot | string; label: string }) => input)
+  .handler(async ({ data }): Promise<EditResult> => {
+    if (!process.env.XAI_API_KEY) {
+      return { ok: false, error: "Set XAI_API_KEY to pull a garment off a look." };
+    }
+    const label = data.label.trim().slice(0, 80);
+    const slot = String(data.slot ?? "").trim().slice(0, 24);
+    if (!label) return { ok: false, error: "No garment to extract." };
+    return imagineEdit(
+      `Extract ONLY this one real garment from the photo: ${label} (${slot || "garment"}).
+Product photograph of that SINGLE garment (or pair of shoes) laid neatly on solid #F4EFE6 paper, 4:5, filling ~80%.
+Keep exact color, fabric, stitching, hardware, logos, wear.
+No person, no face, no body, no mannequin, no other garments, no hangers, no room, no text.
+Do not invent a garment that is not clearly visible. Do not invent white mules, white sneakers, or any shoes that are not in the photo.
+If this piece is not clearly visible as its own item, leave the paper blank — do not substitute.`,
       data.image,
     );
   });

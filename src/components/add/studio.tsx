@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, ClipboardPaste, Link2, Loader2, Tag, Upload } from "lucide-react";
+import { Camera, ClipboardPaste, Images, Link2, Loader2, Tag, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { imageKey, putImage, putThumb, dataUrlToBlob, fileFingerprint } from "@/lib/images";
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
-import { printGarment, readAiStatus, tagGarment } from "@/lib/ai";
+import { classifyScan, extractGarment, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
 import { nameWithColor, preferPixels, sampleCover } from "@/lib/color";
 import { guessGarment } from "@/lib/guess";
 import { isFakeName, nameFromPixels } from "@/lib/rack";
+import {
+  collectKnownHashes,
+  filenameLooksLikeSkip,
+  looksInventedExtra,
+  pieceFileHash,
+  sanitizeScanPieces,
+  type ScanKind,
+  type ScanPiece,
+} from "@/lib/scan";
 import {
   fetchListing,
   identifyPiece,
@@ -41,6 +50,21 @@ class AlreadyInCloset extends Error {
     super("Already in the closet.");
   }
 }
+class NotClothes extends Error {
+  constructor() {
+    super("Not clothes.");
+  }
+}
+class NeedPrint extends Error {
+  constructor() {
+    super("Need catalog covers to split a look.");
+  }
+}
+class ScanEmpty extends Error {
+  constructor() {
+    super("Could not pull a garment.");
+  }
+}
 
 function badName(name: string): boolean {
   return isFakeName(name);
@@ -49,13 +73,16 @@ function badName(name: string): boolean {
 export function Studio() {
   const addGarment = useCloset((s) => s.addGarment);
   const updateGarment = useCloset((s) => s.updateGarment);
+  const removeGarment = useCloset((s) => s.removeGarment);
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
+  const [tab, setTab] = useState<"scan" | "dump">("scan");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
   const [rejected, setRejected] = useState<string[]>([]);
   const [dupes, setDupes] = useState<string[]>([]);
+  const [skipped, setSkipped] = useState(0);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved[]>([]);
   const [canPrint, setCanPrint] = useState<boolean | null>(null);
@@ -73,6 +100,7 @@ export function Studio() {
   const pickRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const tagRef = useRef<HTMLInputElement>(null);
+  const scanRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     readAiStatus()
@@ -252,6 +280,191 @@ export function Studio() {
     [canPrint, commit],
   );
 
+  const nameCutout = useCallback(async (cutout: string): Promise<{
+    name: string;
+    category: Category;
+    subtype: string;
+    colors: string[];
+    material: string;
+    brand: string;
+    fit: "slim" | "regular" | "relaxed";
+    formality: 1 | 2 | 3 | 4 | 5;
+    warmth: 1 | 2 | 3 | 4 | 5;
+    tuck?: Tuck;
+  }> => {
+    let name = "";
+    let category: Category = "other";
+    let subtype = "";
+    let colors: string[] = [];
+    let material = "";
+    let brand = "";
+    let fit: "slim" | "regular" | "relaxed" = "regular";
+    let formality: 1 | 2 | 3 | 4 | 5 = 3;
+    let warmth: 1 | 2 | 3 | 4 | 5 = 3;
+    let tuck: Tuck | undefined;
+    try {
+      const tag = await tagGarment({
+        data: { image: await shrinkDataUrl(cutout, 768) },
+      });
+      if (tag.ok && !badName(tag.name)) {
+        name = tag.name;
+        category = tag.category;
+        subtype = tag.subtype;
+        colors = tag.colors;
+        material = tag.material;
+        brand = tag.brand;
+        fit = tag.fit;
+        formality = tag.formality;
+        warmth = tag.warmth;
+        tuck = tag.tuck;
+      }
+    } catch {
+      /* fall through */
+    }
+    if (!name || badName(name) || category === "other") {
+      const guess = await guessGarment(cutout);
+      if (!name || badName(name)) name = guess.name;
+      if (category === "other") {
+        category = guess.category;
+        subtype = subtype || guess.subtype;
+        colors = colors.length ? colors : guess.colors;
+      }
+    }
+    try {
+      const sampled = await sampleCover(cutout);
+      colors = preferPixels(sampled, colors);
+      if (!name || isFakeName(name)) {
+        name = nameFromPixels({ category, subtype, name: name || "" }, colors);
+      } else if (colors[0]) {
+        name = nameWithColor(name, colors[0]);
+      }
+    } catch {
+      /* keep tag colors */
+    }
+    if (!name || isFakeName(name)) {
+      name = nameFromPixels({ category, subtype, name: name || "" }, colors);
+    }
+    return { name, category, subtype, colors, material, brand, fit, formality, warmth, tuck };
+  }, []);
+
+  const commitExtracted = useCallback(
+    async (
+      spec: ScanPiece,
+      cutout: string,
+      hash: string,
+      index: number,
+    ): Promise<Saved | null> => {
+      if (await isBlankPaper(cutout)) return null;
+      const tagged = await nameCutout(cutout);
+      if (looksInventedExtra(spec, tagged)) return null;
+      if (isFakeName(tagged.name)) return null;
+      return commit({
+        id: uid("g"),
+        original: cutout,
+        cover: cutout,
+        source: "cutout",
+        name: tagged.name,
+        category: tagged.category,
+        subtype: tagged.subtype,
+        colors: tagged.colors,
+        material: tagged.material,
+        brand: tagged.brand,
+        fit: tagged.fit,
+        formality: tagged.formality,
+        warmth: tagged.warmth,
+        notes: `scan · ${spec.slot} · ${spec.label}`,
+        fileHash: pieceFileHash(hash, spec.slot, index),
+        tuck: tagged.tuck ?? guessTuck({ name: tagged.name, subtype: tagged.subtype, notes: "" }),
+        quiet: true,
+      });
+    },
+    [commit, nameCutout],
+  );
+
+  const processScanFile = useCallback(
+    async (
+      file: File,
+      known: Set<string>,
+      onPiece: (piece: Saved) => void,
+    ): Promise<Saved[]> => {
+      const hash = await fileFingerprint(file);
+      if (known.has(hash)) throw new AlreadyInCloset();
+      const raw = await readAsImageSrc(file);
+      const original = await shrinkDataUrl(raw, 1280, 0.85);
+
+      let kind: ScanKind = "garment";
+      let pieces: ScanPiece[] = [];
+      let classifiedOk = false;
+      try {
+        const res = await classifyScan({
+          data: { image: await shrinkDataUrl(original, 768) },
+        });
+        if (res.ok) {
+          classifiedOk = true;
+          kind = res.kind;
+          pieces = res.pieces;
+        }
+      } catch {
+        /* fall through to garment / filename skip */
+      }
+
+      if (kind === "skip" || (!classifiedOk && filenameLooksLikeSkip(file.name))) {
+        throw new NotClothes();
+      }
+
+      if (kind === "garment") {
+        const piece = await processOne(file, known);
+        onPiece(piece);
+        return [piece];
+      }
+
+      if (!canPrint) throw new NeedPrint();
+
+      const wanted = sanitizeScanPieces(kind, pieces);
+      if (!wanted.length) throw new ScanEmpty();
+
+      known.add(hash);
+      const out: Saved[] = [];
+      try {
+        for (let i = 0; i < wanted.length; i++) {
+          const spec = wanted[i]!;
+          let print: { ok: true; image: string } | { ok: false; error: string };
+          try {
+            print = await extractGarment({
+              data: {
+                image: await shrinkDataUrl(original, 1024),
+                slot: spec.slot,
+                label: spec.label,
+              },
+            });
+          } catch {
+            continue;
+          }
+          if (!print.ok) continue;
+          let cutout: string;
+          try {
+            cutout = await shrinkDataUrl(await toLocalDataUrl(print.image), 900, 0.85);
+          } catch {
+            continue;
+          }
+          const piece = await commitExtracted(spec, cutout, hash, i);
+          if (!piece) continue;
+          out.push(piece);
+          onPiece(piece);
+        }
+      } catch (e) {
+        if (!out.length) known.delete(hash);
+        throw e;
+      }
+      if (!out.length) {
+        known.delete(hash);
+        throw new ScanEmpty();
+      }
+      return out;
+    },
+    [canPrint, commitExtracted, processOne],
+  );
+
   const processFiles = useCallback(
     async (list: FileList | File[] | null) => {
       const images = [...(list ?? [])].filter((f) => f.type.startsWith("image/"));
@@ -261,11 +474,8 @@ export function Studio() {
       }
       setError(null);
       setBusy(true);
-      const known = new Set(
-        useCloset
-          .getState()
-          .garments.map((g) => g.fileHash)
-          .filter((h): h is string => Boolean(h)),
+      const known = collectKnownHashes(
+        useCloset.getState().garments.map((g) => g.fileHash),
       );
       let next = 0;
       let done = 0;
@@ -311,6 +521,79 @@ export function Studio() {
     },
     [processOne, ensureLookbook],
   );
+
+  const scanFiles = useCallback(
+    async (list: FileList | File[] | null) => {
+      const images = [...(list ?? [])].filter((f) => f.type.startsWith("image/"));
+      if (!images.length) {
+        setError("Those files are not images.");
+        return;
+      }
+      setError(null);
+      setBusy(true);
+      const known = collectKnownHashes(
+        useCloset.getState().garments.map((g) => g.fileHash),
+      );
+      let next = 0;
+      let done = 0;
+      const total = images.length;
+      const misses: string[] = [];
+      const already: string[] = [];
+      const worker = async () => {
+        for (;;) {
+          const idx = next++;
+          if (idx >= total) return;
+          const file = images[idx]!;
+          try {
+            await processScanFile(file, known, (piece) => {
+              setSaved((cur) => [piece, ...cur]);
+              setProgress(`${idx + 1} of ${total} · ${piece.name}`);
+            });
+            done++;
+            const last = useCloset.getState().garments[0]?.name;
+            if (last) setProgress(`${done} of ${total} · ${last}`);
+            else setProgress(`${done} of ${total}`);
+          } catch (e) {
+            done++;
+            if (e instanceof AlreadyInCloset) {
+              already.push(file.name);
+              setProgress(`${done} of ${total} · Already in the closet.`);
+            } else if (e instanceof NotClothes) {
+              setSkipped((n) => n + 1);
+              setProgress(`${done} of ${total} · Not clothes.`);
+            } else if (e instanceof NeedPrint) {
+              misses.push(file.name);
+              setProgress(`${done} of ${total} · Need catalog covers to split a look.`);
+            } else if (e instanceof ScanEmpty) {
+              misses.push(file.name);
+              setProgress(`${done} of ${total}`);
+            } else if (e instanceof PageRejected) {
+              misses.push(file.name);
+              setProgress(`${done} of ${total}`);
+            } else {
+              misses.push(file.name);
+              setProgress(`${done} of ${total}`);
+            }
+          }
+        }
+      };
+      const n = Math.min(3, total);
+      await Promise.all(Array.from({ length: n }, () => worker()));
+      ensureLookbook();
+      setBusy(false);
+      setProgress("");
+      const count = useCloset.getState().garments.filter((g) => !g.archived).length;
+      if (count > 0) setSavedFlash(`Saved on this URL · ${count} pieces.`);
+      if (misses.length) setFailed((cur) => [...misses, ...cur]);
+      if (already.length) setDupes((cur) => [...already, ...cur]);
+    },
+    [processScanFile, ensureLookbook],
+  );
+
+  const dismissPiece = (id: string) => {
+    removeGarment(id);
+    setSaved((cur) => cur.filter((s) => s.id !== id));
+  };
 
   const addFromUrl = async () => {
     const href = url.trim();
@@ -503,15 +786,74 @@ export function Studio() {
         .filter((f): f is File => !!f);
       if (files.length) {
         e.preventDefault();
-        void processFiles(files);
+        if (tab === "scan") void scanFiles(files);
+        else void processFiles(files);
       }
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [processFiles]);
+  }, [processFiles, scanFiles, tab]);
 
   return (
     <div className="space-y-8">
+      <div className="flex gap-2">
+        <Button
+          variant={tab === "scan" ? "primary" : "ghost"}
+          onClick={() => setTab("scan")}
+          disabled={busy && tab !== "scan"}
+        >
+          Scan photos
+        </Button>
+        <Button
+          variant={tab === "dump" ? "primary" : "ghost"}
+          onClick={() => setTab("dump")}
+          disabled={busy && tab !== "dump"}
+        >
+          One piece
+        </Button>
+      </div>
+
+      {tab === "scan" && (
+        <section
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            void scanFiles(e.dataTransfer.files);
+          }}
+          className="border border-dashed border-hairline-strong bg-card px-6 py-12 text-center"
+        >
+          <p className="font-editorial text-3xl md:text-4xl tracking-tight">
+            Scan the camera roll.
+          </p>
+          <p className="mt-3 mx-auto max-w-md text-sm text-ink-soft leading-relaxed">
+            Drop many photos. We pull the clothes — not the pizza, not you.
+            A look splits into each piece on paper.
+          </p>
+          <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+            <Button onClick={() => scanRef.current?.click()} disabled={busy} size="lg">
+              <Images className="size-4" />
+              Scan photos
+            </Button>
+            <Button variant="ghost" disabled={busy} className="pointer-events-none opacity-70">
+              <ClipboardPaste className="size-4" />
+              Or paste
+            </Button>
+          </div>
+          <input
+            ref={scanRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              void scanFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </section>
+      )}
+
+      {tab === "dump" && (
       <section
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
@@ -611,6 +953,7 @@ export function Studio() {
           }}
         />
       </section>
+      )}
 
       {busy && (
         <div className="flex items-center gap-3 border border-hairline bg-card px-4 py-3 text-sm">
@@ -632,6 +975,11 @@ export function Studio() {
       {error && (
         <p className="text-sm text-accent border border-accent/40 bg-card px-4 py-3">
           {error}
+        </p>
+      )}
+      {skipped > 0 && (
+        <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
+          Not clothes.{skipped > 1 ? ` · ${skipped} photos.` : ""}
         </p>
       )}
       {rejected.length > 0 && (
@@ -696,12 +1044,11 @@ export function Studio() {
       {saved.length > 0 && (
         <section className="space-y-4">
           <p className="text-sm text-success">
-            {saved.length} in the closet. Official plates replace a cover when you
-            tap them.
+            {saved.length} in the closet. Skip a tile if it is not a piece.
           </p>
-          <ul className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <ul className="flex gap-4 overflow-x-auto pb-2">
             {saved.map((g) => (
-              <li key={g.id} className="space-y-2">
+              <li key={g.id} className="w-36 shrink-0 space-y-2">
                 <div className="border border-hairline bg-paper-deep aspect-page">
                   <img
                     src={g.cutout}
@@ -710,9 +1057,16 @@ export function Studio() {
                   />
                 </div>
                 <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-sm">{g.name}</p>
+                  <p className="text-sm leading-snug">{g.name}</p>
                   <span className="micro text-ink-soft">{g.category}</span>
                 </div>
+                <button
+                  type="button"
+                  className="micro text-ink-soft hover:text-ink"
+                  onClick={() => dismissPiece(g.id)}
+                >
+                  Not this
+                </button>
                 {!g.matches && (
                   <button
                     type="button"
@@ -763,6 +1117,39 @@ async function toLocalDataUrl(src: string): Promise<string> {
     r.onerror = () => reject(new Error("Could not download print"));
     r.readAsDataURL(blob);
   });
+}
+
+const PAPER = { r: 244, g: 239, b: 230 };
+
+/** Imagine left the page blank — do not commit an invented extra. */
+async function isBlankPaper(src: string): Promise<boolean> {
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("blank"));
+      el.src = src;
+    });
+    const w = 80;
+    const h = 100;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return false;
+    ctx.drawImage(img, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const dr = Math.abs(data[i]! - PAPER.r);
+      const dg = Math.abs(data[i + 1]! - PAPER.g);
+      const db = Math.abs(data[i + 2]! - PAPER.b);
+      if (dr + dg + db >= 28) n++;
+    }
+    return n < w * h * 0.04;
+  } catch {
+    return false;
+  }
 }
 
 async function shrinkDataUrl(src: string, max: number, q = 0.82): Promise<string> {
