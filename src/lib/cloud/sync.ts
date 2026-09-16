@@ -3,7 +3,7 @@ import {
   isIdbKey,
   refImageKey,
 } from "../images.ts";
-import { scrubRack } from "../rack.ts";
+import { livePool, scrubRack } from "../rack.ts";
 import { useCloset } from "../store.ts";
 import type { DailyDrop, Garment, Look, WearEntry } from "../types.ts";
 import { getAccount, patchAccount, setAccountProgress, setLocalOnly } from "./account.ts";
@@ -15,13 +15,18 @@ import {
   prefetchEagerThumbs,
   uploadKind,
 } from "./blobs.ts";
-import { LOCAL_ONLY_CAPTION } from "./copy.ts";
 import {
   closetImagesBucket,
   getSupabase,
   refObjectPath,
 } from "./client.ts";
-import { pulledCopy, savingProgress } from "./copy.ts";
+import {
+  LOCAL_ONLY_CAPTION,
+  backupFailedCopy,
+  backingUpCopy,
+  pulledCopy,
+  savedAccountCopy,
+} from "./copy.ts";
 import { supabaseConfigured } from "./env.ts";
 import {
   accountPool,
@@ -191,6 +196,16 @@ function applyLocal(next: CloudMeta) {
   }
 }
 
+async function countAccountThumbs(userId: string): Promise<number> {
+  const sb = getSupabase();
+  if (!sb) return 0;
+  const { data, error } = await sb.storage
+    .from(closetImagesBucket())
+    .list(userId, { limit: 1000 });
+  if (error || !data) return 0;
+  return data.filter((row) => row.name && row.name !== "me").length;
+}
+
 async function pullThumbs(garments: CloudMeta["garments"]) {
   const pool = accountPool(garments);
   const n = pool.length;
@@ -217,32 +232,48 @@ async function pushNow(withProgress: boolean) {
   if (pushing) return;
   pushing = true;
   try {
-  const garments = accountPool(useCloset.getState().garments) as Garment[];
-  const conc = garments.length && withProgress ? 3 : 2;
-  if (garments.length > 0) {
-    let done = 0;
-    await mapPool(garments, conc, async (g) => {
-      await uploadKind(user.id, g, "t");
-      if (withProgress) {
+    const garments = accountPool(useCloset.getState().garments) as Garment[];
+    const total = garments.length;
+    const conc = total && withProgress ? 3 : 2;
+    let failed = 0;
+    if (total > 0) {
+      let done = 0;
+      await mapPool(garments, conc, async (g) => {
+        const ok = await uploadKind(user.id, g, "t");
+        if (!ok) failed += 1;
         done += 1;
-        setAccountProgress(savingProgress(done, garments.length));
-      }
+        if (withProgress) setAccountProgress(backingUpCopy(done, total));
+      });
+    }
+    if (failed > 0) {
+      setLocalOnly(true);
+      setAccountProgress(backupFailedCopy(failed));
+      return;
+    }
+    await upsertMeta(user.id);
+    if (getAccount().localOnly) {
+      setAccountProgress(LOCAL_ONLY_CAPTION);
+      return;
+    }
+    if (withProgress) {
+      setAccountProgress(savedAccountCopy(total));
+      window.setTimeout(() => {
+        if (getAccount().progress === savedAccountCopy(total)) setAccountProgress(null);
+      }, 4000);
+    }
+    void mapPool(garments, 2, async (g) => {
+      await uploadKind(user.id, g, "c");
+      await uploadKind(user.id, g, "o");
     });
-  }
-  await upsertMeta(user.id);
-  if (getAccount().localOnly) {
-    setAccountProgress(LOCAL_ONLY_CAPTION);
-    return;
-  }
-  if (withProgress) setAccountProgress(null);
-  void mapPool(garments, 2, async (g) => {
-    await uploadKind(user.id, g, "c");
-    await uploadKind(user.id, g, "o");
-  });
-  void uploadRef(user.id, useCloset.getState().refPhoto);
+    void uploadRef(user.id, useCloset.getState().refPhoto);
   } finally {
     pushing = false;
   }
+}
+
+export function backupPhotos(): void {
+  clearUploaded();
+  void pushNow(true);
 }
 
 function schedulePush() {
@@ -279,6 +310,14 @@ async function firstLink(userId: string) {
         userId,
         accountPool(useCloset.getState().garments).map((g) => g.id),
       );
+    }
+    const pool = livePool(useCloset.getState().garments);
+    if (pool.length > 0) {
+      const thumbs = await countAccountThumbs(userId);
+      if (thumbs < pool.length) {
+        clearUploaded();
+        await pushNow(true);
+      }
     }
   } finally {
     linking = false;

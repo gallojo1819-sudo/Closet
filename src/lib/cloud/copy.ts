@@ -19,6 +19,14 @@ export function savingProgress(done: number, total: number): string {
   return `Saving ${done}/${total} on your account.`;
 }
 
+export function backingUpCopy(done: number, total: number): string {
+  return `Backing up photos · ${done}/${total}`;
+}
+
+export function backupFailedCopy(n: number): string {
+  return `${n} photos failed — tap Backup`;
+}
+
 export function pulledCopy(count: number): string {
   return `${count} pieces on this phone.`;
 }

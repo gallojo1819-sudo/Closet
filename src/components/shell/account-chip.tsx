@@ -7,6 +7,7 @@ import {
   signOutAccount,
   useAccount,
 } from "@/lib/cloud/account";
+import { backupPhotos } from "@/lib/cloud/sync";
 import { LOCAL_ONLY_CAPTION, SIGN_IN_PROMPT, savedAccountCopy } from "@/lib/cloud/copy";
 import { cn } from "@/lib/utils";
 
@@ -17,38 +18,30 @@ export function AccountChip({ night, count }: { night: boolean; count: number })
   if (!account.configured) return null;
   if (account.pending) return null;
 
-  if (account.progress) {
-    return <span className={cn("micro max-w-[14rem] truncate sm:max-w-none", quiet)}>{account.progress}</span>;
-  }
-  if (account.user && account.localOnly) {
-    return <span className={cn("micro max-w-[16rem] truncate sm:max-w-none", quiet)}>{LOCAL_ONLY_CAPTION}</span>;
-  }
-
-  if (!account.user) {
-    return (
-      <>
-        <button
-          type="button"
-          onClick={() => openAccountDialog()}
-          className={cn("micro text-left hover:opacity-80", quiet)}
-        >
-          {SIGN_IN_PROMPT}
-        </button>
-        {account.dialogOpen && <SignInDialog night={night} />}
-      </>
-    );
-  }
+  let label = SIGN_IN_PROMPT;
+  if (account.progress) label = account.progress;
+  else if (account.user && account.localOnly) label = LOCAL_ONLY_CAPTION;
+  else if (account.user) label = savedAccountCopy(count);
 
   return (
     <>
       <button
         type="button"
         onClick={() => openAccountDialog()}
-        className={cn("micro max-w-[11rem] truncate sm:max-w-none hover:opacity-80", quiet)}
+        className={cn(
+          "micro text-left hover:opacity-80",
+          account.user ? "max-w-[14rem] truncate sm:max-w-none" : "",
+          quiet,
+        )}
       >
-        {savedAccountCopy(count)}
+        {label}
       </button>
-      {account.dialogOpen && <SignedInDialog night={night} email={account.user.email} />}
+      {account.dialogOpen &&
+        (account.user ? (
+          <SignedInDialog night={night} email={account.user.email} />
+        ) : (
+          <SignInDialog night={night} />
+        ))}
     </>
   );
 }
@@ -150,8 +143,18 @@ function SignedInDialog({ night, email }: { night: boolean; email: string | null
         </p>
         <button
           type="button"
+          onClick={() => {
+            backupPhotos();
+            closeAccountDialog();
+          }}
+          className="mt-5 h-11 w-full bg-accent text-sm text-paper"
+        >
+          Backup photos
+        </button>
+        <button
+          type="button"
           onClick={() => void signOutAccount()}
-          className="mt-5 h-11 w-full border border-hairline text-sm"
+          className="mt-3 h-11 w-full border border-hairline text-sm"
         >
           Sign out
         </button>

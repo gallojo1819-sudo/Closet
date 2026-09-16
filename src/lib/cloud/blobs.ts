@@ -68,7 +68,6 @@ export async function fetchCloudBlob(id: string, kind: BlobKind): Promise<boolea
   if (pending) return pending;
   const work = (async () => {
     if (await hasLocalBlob(id, kind)) {
-      uploaded.add(mark);
       return true;
     }
     const user = getAccount().user;
@@ -132,13 +131,13 @@ async function blobFor(g: Garment, kind: BlobKind): Promise<Blob | null> {
   return null;
 }
 
-export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Promise<void> {
+export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Promise<boolean> {
   const mark = `${g.id}:${kind}`;
-  if (uploaded.has(mark)) return;
+  if (uploaded.has(mark)) return true;
   const sb = getSupabase();
-  if (!sb) return;
+  if (!sb) return false;
   const blob = await blobFor(g, kind);
-  if (!blob) return;
+  if (!blob) return true;
   const { error } = await sb.storage.from(closetImagesBucket()).upload(
     garmentObjectPath(userId, g.id, kind),
     blob,
@@ -146,9 +145,10 @@ export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Pr
   );
   if (error) {
     if (isForbidden(error) || isRetryableCloudError(error)) setLocalOnly(true);
-    return;
+    return false;
   }
   uploaded.add(mark);
+  return true;
 }
 
 export function isForbidden(error: { statusCode?: string; status?: number; message?: string }): boolean {
