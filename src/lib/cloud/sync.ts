@@ -28,6 +28,7 @@ import {
   mergeAccount,
   type CloudMeta,
 } from "./merge.ts";
+import { onOnlineIntent, visibleCloudIntent } from "./online.ts";
 import { loadingPhotosCopy } from "./open-plan.ts";
 
 const LAST_KEY = "closet.cloud.last";
@@ -36,6 +37,7 @@ const PUSH_MS = 1000;
 type LastSnap = { userId: string; ids: string[] };
 
 let linking = false;
+let pushing = false;
 let pushTimer: number | undefined;
 let started = false;
 const uploadedRef = new Set<string>();
@@ -123,8 +125,8 @@ async function upsertMeta(userId: string) {
     { onConflict: "user_id" },
   );
   if (error) {
-    if (isForbidden(error)) setLocalOnly(true);
-    else setAccountProgress("Could not save to your account.");
+    setLocalOnly(true);
+    if (!isForbidden(error)) setAccountProgress("Could not save to your account.");
     return;
   }
   setLocalOnly(false);
@@ -207,6 +209,14 @@ async function pullThumbs(garments: CloudMeta["garments"]) {
 async function pushNow(withProgress: boolean) {
   const user = getAccount().user;
   if (!user) return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    setLocalOnly(true);
+    setAccountProgress(LOCAL_ONLY_CAPTION);
+    return;
+  }
+  if (pushing) return;
+  pushing = true;
+  try {
   const garments = accountPool(useCloset.getState().garments) as Garment[];
   const conc = garments.length && withProgress ? 3 : 2;
   if (garments.length > 0) {
@@ -230,6 +240,9 @@ async function pushNow(withProgress: boolean) {
     await uploadKind(user.id, g, "o");
   });
   void uploadRef(user.id, useCloset.getState().refPhoto);
+  } finally {
+    pushing = false;
+  }
 }
 
 function schedulePush() {
@@ -286,13 +299,19 @@ async function pullOnVisible() {
       /* session restore is best-effort */
     }
   }
+  let needPush = getAccount().localOnly;
   linking = true;
   try {
     const cloud = await fetchMeta(user.id);
     const local = snapshot();
     const last = readLast(user.id);
     const result = mergeAccount({ local, cloud, lastCloudIds: last });
-    if (!result.appliedCloud) return;
+    const intent = visibleCloudIntent({
+      action: result.action,
+      appliedCloud: result.appliedCloud,
+    });
+    if (intent === "push") needPush = true;
+    if (intent !== "apply") return;
     const before = new Set(accountPool(local.garments).map((g) => g.id));
     const after = accountPool(result.next.garments).map((g) => g.id);
     const changed =
@@ -303,10 +322,11 @@ async function pullOnVisible() {
     if (n > 0) setAccountProgress(pulledCopy(n));
     await pullThumbs(result.next.garments);
     writeLast(user.id, after);
-    if (result.action === "union" || result.action === "push") schedulePush();
+    if (result.action === "union" || result.action === "push") needPush = true;
   } finally {
     linking = false;
   }
+  if (needPush) schedulePush();
 }
 
 export function startCloudSync(): () => void {
@@ -339,9 +359,33 @@ export function startCloudSync(): () => void {
     }
     void pullOnVisible();
   };
+  const retryOnline = () => {
+    const localCount = accountPool(useCloset.getState().garments).length;
+    if (
+      onOnlineIntent({
+        online: typeof navigator === "undefined" || navigator.onLine !== false,
+        signedIn: Boolean(getAccount().user),
+        localCount,
+        localOnly: getAccount().localOnly,
+      }) !== "push"
+    ) {
+      return;
+    }
+    schedulePush();
+  };
+  const onOffline = () => {
+    setLocalOnly(true);
+    setAccountProgress(LOCAL_ONLY_CAPTION);
+  };
   document.addEventListener("visibilitychange", onVis);
   window.addEventListener("focus", onVis);
   window.addEventListener("pageshow", onVis);
+  window.addEventListener("online", retryOnline);
+  window.addEventListener("offline", onOffline);
+  const conn = (
+    navigator as Navigator & { connection?: { addEventListener?: typeof window.addEventListener; removeEventListener?: typeof window.removeEventListener } }
+  ).connection;
+  conn?.addEventListener?.("change", retryOnline);
 
   const unsubStore = useCloset.subscribe((s, prev) => {
     if (s.refPhoto !== prev.refPhoto) uploadedRef.delete("me:ref");
@@ -373,6 +417,9 @@ export function startCloudSync(): () => void {
     document.removeEventListener("visibilitychange", onVis);
     window.removeEventListener("focus", onVis);
     window.removeEventListener("pageshow", onVis);
+    window.removeEventListener("online", retryOnline);
+    window.removeEventListener("offline", onOffline);
+    conn?.removeEventListener?.("change", retryOnline);
     unsubStore();
     if (pushTimer !== undefined) window.clearTimeout(pushTimer);
   };

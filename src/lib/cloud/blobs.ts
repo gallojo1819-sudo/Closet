@@ -7,6 +7,7 @@ import {
 import type { Garment } from "../types.ts";
 import { getAccount, setLocalOnly } from "./account.ts";
 import { LOCAL_ONLY_CAPTION } from "./copy.ts";
+import { isRetryableCloudError } from "./online.ts";
 import {
   closetImagesBucket,
   garmentObjectPath,
@@ -144,7 +145,7 @@ export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Pr
     { upsert: true, contentType: blob.type || "image/jpeg" },
   );
   if (error) {
-    if (isForbidden(error)) setLocalOnly(true);
+    if (isForbidden(error) || isRetryableCloudError(error)) setLocalOnly(true);
     return;
   }
   uploaded.add(mark);
