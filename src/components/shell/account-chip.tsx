@@ -3,7 +3,7 @@ import {
   closeAccountDialog,
   openAccountDialog,
   sendMagicLink,
-  signInWithApple,
+  signInWithGoogle,
   signOutAccount,
   useAccount,
 } from "@/lib/cloud/account";
@@ -85,10 +85,10 @@ function SignInDialog({ night }: { night: boolean }) {
         </p>
         <button
           type="button"
-          onClick={() => void signInWithApple()}
+          onClick={() => void signInWithGoogle()}
           className="mt-5 h-11 w-full bg-accent text-sm text-paper"
         >
-          Sign in with Apple
+          Sign in with Google
         </button>
         {account.emailSent ? (
           <p className="mt-4 text-sm text-ink-soft">Check your email for the link.</p>

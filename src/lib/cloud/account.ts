@@ -94,6 +94,28 @@ export async function signInWithApple(): Promise<void> {
   if (error) patchAccount({ error: error.message });
 }
 
+export async function signInWithGoogle(): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) {
+    patchAccount({ error: "Account is not configured." });
+    return;
+  }
+  patchAccount({ error: null });
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: authRedirectTo(),
+      skipBrowserRedirect: false,
+    },
+  });
+  if (error) {
+    const msg = error.message ?? "";
+    patchAccount({
+      error: /provider is not enabled/i.test(msg) ? "Google isn’t on yet." : msg,
+    });
+  }
+}
+
 export async function sendMagicLink(email: string): Promise<void> {
   const sb = getSupabase();
   if (!sb) {
