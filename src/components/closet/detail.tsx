@@ -26,6 +26,7 @@ import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
 import { CATEGORIES, SEASONS, type Category, type Garment } from "@/lib/types";
 import { seasonsOf } from "@/lib/season";
 import { guessTuck, tuckOf } from "@/lib/tuck";
+import { fetchCloudBlob } from "@/lib/cloud/blobs";
 import { useCloset } from "@/lib/store";
 import { useImageSrc } from "@/lib/use-image";
 import { cn, todayISO } from "@/lib/utils";
@@ -141,6 +142,11 @@ export function GarmentDetail({
   const cpw = costPerWear(garment);
   const md = useMdUp();
   void getTile;
+
+  useEffect(() => {
+    void fetchCloudBlob(garment.id, "c");
+    void fetchCloudBlob(garment.id, "o");
+  }, [garment.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -1,8 +1,6 @@
 import {
   getImage,
-  imageKey,
   isIdbKey,
-  putImage,
   refImageKey,
 } from "../images.ts";
 import { scrubRack } from "../rack.ts";
@@ -10,8 +8,15 @@ import { useCloset } from "../store.ts";
 import type { DailyDrop, Garment, Look, WearEntry } from "../types.ts";
 import { getAccount, patchAccount, setAccountProgress } from "./account.ts";
 import {
+  clearUploaded,
+  forgetUploaded,
+  mapPool,
+  prefetchEagerThumbs,
+  uploadGarmentBlobs,
+  uploadKind,
+} from "./blobs.ts";
+import {
   closetImagesBucket,
-  garmentObjectPath,
   getSupabase,
   refObjectPath,
 } from "./client.ts";
@@ -22,6 +27,7 @@ import {
   mergeAccount,
   type CloudMeta,
 } from "./merge.ts";
+import { loadingPhotosCopy } from "./open-plan.ts";
 
 const LAST_KEY = "closet.cloud.last";
 const PUSH_MS = 1000;
@@ -31,7 +37,7 @@ type LastSnap = { userId: string; ids: string[] };
 let linking = false;
 let pushTimer: number | undefined;
 let started = false;
-const uploaded = new Set<string>();
+const uploadedRef = new Set<string>();
 
 function readLast(userId: string): string[] | null {
   if (typeof window === "undefined") return null;
@@ -67,18 +73,6 @@ function snapshot(): CloudMeta {
     refPhoto: Boolean(s.refPhoto),
     v: 6,
   };
-}
-
-async function mapPool<T>(items: T[], n: number, worker: (item: T) => Promise<void>): Promise<void> {
-  if (items.length === 0) return;
-  let i = 0;
-  const run = async () => {
-    while (i < items.length) {
-      const item = items[i++];
-      await worker(item);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, run));
 }
 
 async function fetchMeta(userId: string): Promise<CloudMeta | null> {
@@ -131,52 +125,18 @@ async function upsertMeta(userId: string) {
   else writeLast(userId, garments.map((g) => g.id));
 }
 
-async function blobFor(g: Garment, kind: "o" | "c" | "t"): Promise<Blob | null> {
-  const primary = imageKey(g.id, kind);
-  try {
-    const hit = await getImage(primary);
-    if (hit) return hit;
-  } catch {
-    /* */
-  }
-  try {
-    if (kind === "o" && isIdbKey(g.imageSrc)) return await getImage(g.imageSrc);
-    if (kind === "c" && isIdbKey(g.cutoutSrc)) return await getImage(g.cutoutSrc);
-  } catch {
-    /* */
-  }
-  return null;
-}
-
-async function uploadGarment(userId: string, g: Garment): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) return;
-  for (const kind of ["t", "c", "o"] as const) {
-    const mark = `${g.id}:${kind}`;
-    if (uploaded.has(mark)) continue;
-    const blob = await blobFor(g, kind);
-    if (!blob) continue;
-    const { error } = await sb.storage.from(closetImagesBucket()).upload(
-      garmentObjectPath(userId, g.id, kind),
-      blob,
-      { upsert: true, contentType: blob.type || "image/jpeg" },
-    );
-    if (!error) uploaded.add(mark);
-  }
-}
-
 async function uploadRef(userId: string, refPhoto: string | null): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
   const mark = "me:ref";
   if (!refPhoto) {
-    if (uploaded.has(mark)) {
+    if (uploadedRef.has(mark)) {
       await sb.storage.from(closetImagesBucket()).remove([refObjectPath(userId)]);
-      uploaded.delete(mark);
+      uploadedRef.delete(mark);
     }
     return;
   }
-  if (uploaded.has(mark)) return;
+  if (uploadedRef.has(mark)) return;
   const key = isIdbKey(refPhoto) ? refPhoto : refImageKey();
   let blob: Blob | null = null;
   try {
@@ -190,49 +150,7 @@ async function uploadRef(userId: string, refPhoto: string | null): Promise<void>
     blob,
     { upsert: true, contentType: blob.type || "image/jpeg" },
   );
-  if (!error) uploaded.add(mark);
-}
-
-async function downloadKind(userId: string, id: string, kind: "o" | "c" | "t"): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) return;
-  const key = imageKey(id, kind);
-  try {
-    const existing = await getImage(key);
-    if (existing) {
-      uploaded.add(`${id}:${kind}`);
-      return;
-    }
-  } catch {
-    /* */
-  }
-  const { data, error } = await sb.storage
-    .from(closetImagesBucket())
-    .download(garmentObjectPath(userId, id, kind));
-  if (error || !data) return;
-  await putImage(key, data);
-  uploaded.add(`${id}:${kind}`);
-}
-
-async function downloadRef(userId: string): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) return;
-  const key = refImageKey();
-  try {
-    const existing = await getImage(key);
-    if (existing) {
-      uploaded.add("me:ref");
-      if (!useCloset.getState().refPhoto) useCloset.setState({ refPhoto: key });
-      return;
-    }
-  } catch {
-    /* */
-  }
-  const { data, error } = await sb.storage.from(closetImagesBucket()).download(refObjectPath(userId));
-  if (error || !data) return;
-  await putImage(key, data);
-  uploaded.add("me:ref");
-  useCloset.setState({ refPhoto: key });
+  if (!error) uploadedRef.add(mark);
 }
 
 function applyLocal(next: CloudMeta) {
@@ -263,49 +181,46 @@ function applyLocal(next: CloudMeta) {
   if (next.refPhoto && !current.refPhoto) {
     useCloset.setState({ refPhoto: refImageKey() });
   }
-  useCloset.getState().ensureLookbook();
 }
 
-async function pullBlobs(userId: string, garments: CloudMeta["garments"], announce: boolean) {
-  const pool = accountPool(garments) as Garment[];
-  await mapPool(pool, 6, async (g) => {
-    await downloadKind(userId, g.id, "t");
-  });
-  if (announce) {
-    setAccountProgress(pulledCopy(pool.length));
-    window.setTimeout(() => {
-      if (getAccount().progress === pulledCopy(pool.length)) setAccountProgress(null);
-    }, 4000);
-  }
-  void mapPool(pool, 3, async (g) => {
-    await downloadKind(userId, g.id, "c");
-    await downloadKind(userId, g.id, "o");
-  });
-  if (useCloset.getState().refPhoto || garments.length > 0) {
-    void downloadRef(userId);
-  }
+async function pullThumbs(garments: CloudMeta["garments"]) {
+  const pool = accountPool(garments);
+  const n = pool.length;
+  if (n === 0) return;
+  setAccountProgress(pulledCopy(n));
+  await prefetchEagerThumbs(
+    pool.map((g) => g.id),
+    (done, total) => setAccountProgress(loadingPhotosCopy(done, total)),
+  );
+  setAccountProgress(pulledCopy(n));
+  window.setTimeout(() => {
+    if (getAccount().progress === pulledCopy(n)) setAccountProgress(null);
+  }, 4000);
 }
 
 async function pushNow(withProgress: boolean) {
   const user = getAccount().user;
   if (!user) return;
   const garments = accountPool(useCloset.getState().garments) as Garment[];
+  await upsertMeta(user.id);
   if (withProgress && garments.length > 0) {
     let done = 0;
     await mapPool(garments, 3, async (g) => {
-      await uploadGarment(user.id, g);
+      await uploadKind(user.id, g, "t");
       done += 1;
       setAccountProgress(savingProgress(done, garments.length));
     });
-    await uploadRef(user.id, useCloset.getState().refPhoto);
     setAccountProgress(null);
-  } else {
-    await mapPool(garments, 3, async (g) => {
-      await uploadGarment(user.id, g);
+    void mapPool(garments, 2, async (g) => {
+      await uploadKind(user.id, g, "c");
+      await uploadKind(user.id, g, "o");
     });
-    await uploadRef(user.id, useCloset.getState().refPhoto);
+  } else {
+    void mapPool(garments, 2, async (g) => {
+      await uploadGarmentBlobs(user.id, g);
+    });
   }
-  await upsertMeta(user.id);
+  void uploadRef(user.id, useCloset.getState().refPhoto);
 }
 
 function schedulePush() {
@@ -327,8 +242,13 @@ async function firstLink(userId: string) {
     const result = mergeAccount({ local, cloud, lastCloudIds: last });
     if (result.appliedCloud) {
       applyLocal(result.next);
-      const pulled = result.action === "pull";
-      await pullBlobs(userId, result.next.garments, pulled);
+      const n = accountPool(result.next.garments).length;
+      if (n > 0) setAccountProgress(pulledCopy(n));
+      await new Promise<void>((resolve) => {
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => resolve());
+        else resolve();
+      });
+      await pullThumbs(result.next.garments);
     }
     if (result.action === "push" || result.action === "union") {
       await pushNow(result.action === "push");
@@ -370,7 +290,9 @@ async function pullOnVisible() {
       after.length !== before.size || after.some((id) => !before.has(id));
     if (!changed && result.next.looks.length === local.looks.length) return;
     applyLocal(result.next);
-    await pullBlobs(user.id, result.next.garments, false);
+    const n = after.length;
+    if (n > 0) setAccountProgress(pulledCopy(n));
+    await pullThumbs(result.next.garments);
     writeLast(user.id, after);
     if (result.action === "union" || result.action === "push") schedulePush();
   } finally {
@@ -413,14 +335,13 @@ export function startCloudSync(): () => void {
   window.addEventListener("pageshow", onVis);
 
   const unsubStore = useCloset.subscribe((s, prev) => {
-    if (s.refPhoto !== prev.refPhoto) uploaded.delete("me:ref");
+    if (s.refPhoto !== prev.refPhoto) uploadedRef.delete("me:ref");
     if (s.garments !== prev.garments) {
-      if (s.garments.length === 0 && prev.garments.length > 0) uploaded.clear();
+      if (s.garments.length === 0 && prev.garments.length > 0) clearUploaded();
       else {
         const ids = new Set(s.garments.map((g) => g.id));
-        for (const mark of [...uploaded]) {
-          const id = mark.split(":")[0];
-          if (id && id !== "me" && !ids.has(id)) uploaded.delete(mark);
+        for (const g of prev.garments) {
+          if (!ids.has(g.id)) forgetUploaded(g.id);
         }
       }
     }

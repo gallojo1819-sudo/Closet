@@ -150,7 +150,7 @@ export function LookSheet({
   return (
     <Overlay onClose={onClose} getAnchor={getCard} zClass="z-[60]">
         <div className="relative border-b border-hairline bg-paper aspect-[4/5] overflow-hidden">
-          <LookKit pieces={activePieces} className="border-0" />
+          <LookKit pieces={activePieces} thumb={false} className="border-0" />
           {showMe && painted && (
             <img
               key={painted}

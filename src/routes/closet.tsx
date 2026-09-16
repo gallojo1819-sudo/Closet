@@ -352,7 +352,10 @@ function ClosetPage() {
                 index={i}
                 always={24}
                 placeholder={
-                  <div className="aspect-page border border-hairline bg-paper-deep" />
+                  <div>
+                    <div className="aspect-page border border-hairline bg-paper-deep" />
+                    <p className="mt-2 text-sm leading-snug">{g.name}</p>
+                  </div>
                 }
               >
               <GarmentTile

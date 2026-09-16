@@ -232,8 +232,14 @@ function LookbookPage() {
   }, [focusLook]);
 
   useEffect(() => {
-    if (!hydrated) return;
-    ensureLookbook();
+    if (!hydrated || garments.length === 0) return;
+    const run = () => useCloset.getState().ensureLookbook();
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(run, { timeout: 2500 });
+      return () => cancelIdleCallback(id);
+    }
+    const t = window.setTimeout(run, 0);
+    return () => window.clearTimeout(t);
   }, [hydrated, garments.length, ensureLookbook]);
 
   const openHero = (g: Garment, el?: HTMLElement | null) => {

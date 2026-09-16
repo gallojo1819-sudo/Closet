@@ -8,9 +8,11 @@ import { cn } from "@/lib/utils";
 export function LookKit({
   pieces,
   className,
+  thumb = true,
 }: {
   pieces: Garment[];
   className?: string;
+  thumb?: boolean;
 }) {
   const core = kitCells(pieces);
   const lay = spreadPieces(pieces);
@@ -27,7 +29,8 @@ export function LookKit({
           <div key={g.id} className="relative min-h-0 min-w-0 overflow-hidden">
             <GarmentImg
               garment={g}
-              eager
+              thumb={thumb}
+              eager={!thumb}
               className="absolute inset-0 h-full w-full object-contain"
             />
           </div>
@@ -38,6 +41,7 @@ export function LookKit({
   return (
     <FlatLay
       pieces={lay}
+      thumb={thumb}
       className={cn("h-full w-full border-0 bg-paper", className)}
       passive
     />

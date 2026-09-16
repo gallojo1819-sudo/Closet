@@ -15,6 +15,7 @@ import {
 import { useCloset } from "@/lib/store";
 import type { Garment, Occasion } from "@/lib/types";
 import { layersForOnMe } from "@/lib/look";
+import { fetchCloudBlob } from "@/lib/cloud/blobs";
 import { livePool } from "@/lib/rack";
 import { slotOf } from "@/lib/style";
 import { tuckDressingLines } from "@/lib/tuck";
@@ -39,6 +40,7 @@ export async function dressLook(
   const worn = layersForOnMe(pieces.filter((g) => allowed.has(g.id)));
   const layers: { name: string; category: string; url: string }[] = [];
   for (const g of worn) {
+    await fetchCloudBlob(g.id, "c");
     const cover =
       g.cutoutSrc && g.cutoutSrc !== g.imageSrc ? g.cutoutSrc : imageKey(g.id, "c");
     const raw = await asDataUrl(cover);

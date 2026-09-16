@@ -27,10 +27,12 @@ export function FlatLay({
   pieces,
   className,
   passive,
+  thumb = true,
 }: {
   pieces: Garment[];
   className?: string;
   passive?: boolean;
+  thumb?: boolean;
 }) {
   const seen: Record<string, number> = {};
   return (
@@ -67,6 +69,8 @@ export function FlatLay({
           >
             <GarmentImg
               garment={g}
+              thumb={thumb}
+              eager={!thumb}
               className="w-full aspect-page object-contain drop-shadow-sm"
             />
           </div>

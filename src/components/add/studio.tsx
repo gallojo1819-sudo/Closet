@@ -2,7 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, ClipboardPaste, Images, Link2, Loader2, Tag, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { imageKey, putImage, putThumb, dataUrlToBlob, fileFingerprint } from "@/lib/images";
+import {
+  ADDING_NAME,
+  addProgress,
+  readAddConcurrency,
+  shrinkFile,
+} from "@/lib/ingest";
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
+import { enqueuePrint } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
 import { classifyScan, extractGarment, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
 import { nameWithColor, preferPixels, sampleCover } from "@/lib/color";
@@ -89,7 +96,7 @@ export function Studio() {
   const addGarment = useCloset((s) => s.addGarment);
   const updateGarment = useCloset((s) => s.updateGarment);
   const removeGarment = useCloset((s) => s.removeGarment);
-  const ensureLookbook = useCloset((s) => s.ensureLookbook);
+
   const [tab, setTab] = useState<"scan" | "dump">("scan");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
@@ -179,124 +186,6 @@ export function Studio() {
     [addGarment],
   );
 
-  const processOne = useCallback(
-    async (file: File, known: Set<string>): Promise<Saved> => {
-      const id = uid("g");
-      const hash = await fileFingerprint(file);
-      if (known.has(hash)) throw new AlreadyInCloset();
-      known.add(hash);
-      try {
-      const raw = await readAsImageSrc(file);
-      const original = await shrinkDataUrl(raw, 1280, 0.85);
-      const matte = await matteToPaper(original);
-      if (matte.kind === "page" && !canPrint) {
-        throw new PageRejected();
-      }
-      let cutout = matte.cutoutSrc;
-      let source: ImageSource =
-        matte.kind === "studio"
-          ? "official"
-          : matte.quality === "busy"
-            ? "photo"
-            : "segmented";
-      // Studio/official plates stay on paper. Imagine is how three shirts become one polo.
-      if ((matte.kind === "phone" || matte.kind === "page") && canPrint) {
-        try {
-          const print = await printGarment({
-            data: { image: await shrinkDataUrl(original, 1024) },
-          });
-          if (print.ok) {
-            cutout = await shrinkDataUrl(await toLocalDataUrl(print.image), 900, 0.85);
-            source = "cutout";
-          }
-        } catch {
-          /* paper pad stays */
-        }
-      }
-      if (matte.kind === "page" && source !== "cutout") {
-        throw new PageRejected();
-      }
-      let name = "";
-      let category: Category = "other";
-      let subtype = "";
-      let colors: string[] = [];
-      let material = "";
-      let brand = "";
-      let fit: "slim" | "regular" | "relaxed" = "regular";
-      let formality: 1 | 2 | 3 | 4 | 5 = 3;
-      let warmth: 1 | 2 | 3 | 4 | 5 = 3;
-      let tuck: Tuck | undefined;
-      try {
-        const thumb = await shrinkDataUrl(cutout, 768);
-        const tag = await tagGarment({
-          data: {
-            image: thumb,
-            context:
-              matte.kind === "page" ? await shrinkDataUrl(original, 768) : undefined,
-          },
-        });
-        if (tag.ok && !badName(tag.name)) {
-          name = tag.name;
-          category = tag.category;
-          subtype = tag.subtype;
-          colors = tag.colors;
-          material = tag.material;
-          brand = tag.brand;
-          fit = tag.fit;
-          formality = tag.formality;
-          warmth = tag.warmth;
-          tuck = tag.tuck;
-        }
-      } catch {
-        /* fall through */
-      }
-      if (!name || badName(name) || category === "other") {
-        const guess = await guessGarment(cutout);
-        if (!name || badName(name)) name = guess.name;
-        if (category === "other") {
-          category = guess.category;
-          subtype = subtype || guess.subtype;
-          colors = colors.length ? colors : guess.colors;
-        }
-      }
-      try {
-        const sampled = await sampleCover(cutout);
-        colors = preferPixels(sampled, colors);
-        if (!name || isFakeName(name)) {
-          name = nameFromPixels({ category, subtype, name: name || "" }, colors);
-        } else if (colors[0]) {
-          name = nameWithColor(name, colors[0]);
-        }
-      } catch {
-        /* keep tag colors */
-      }
-      return await commit({
-        id,
-        original,
-        cover: cutout,
-        source,
-        name,
-        category,
-        subtype,
-        colors,
-        material,
-        brand,
-        fit,
-        formality,
-        warmth,
-        notes: matte.reason,
-        fileHash: hash,
-        tuck: tuck ?? guessTuck({ name, subtype, notes: matte.reason }),
-        quiet: true,
-      });
-      } catch (e) {
-        known.delete(hash);
-        throw e;
-      }
-    },
-    [canPrint, commit],
-  );
-
   const nameCutout = useCallback(async (cutout: string): Promise<{
     name: string;
     category: Category;
@@ -363,6 +252,68 @@ export function Studio() {
     }
     return { name, category, subtype, colors, material, brand, fit, formality, warmth, tuck };
   }, []);
+
+  const landMatte = useCallback(
+    async (opts: {
+      id: string;
+      original: string;
+      cover: string;
+      kind: string;
+      hash: string;
+      notes: string;
+    }): Promise<Saved> => {
+      const source: ImageSource =
+        opts.kind === "studio" ? "official" : opts.kind === "phone" ? "photo" : "segmented";
+      await putImage(imageKey(opts.id, "o"), dataUrlToBlob(opts.original));
+      await putImage(imageKey(opts.id, "c"), dataUrlToBlob(opts.cover));
+      await putThumb(opts.id, opts.cover).catch(() => {});
+      addGarment(
+        {
+          id: opts.id,
+          name: ADDING_NAME,
+          category: "other",
+          subtype: "",
+          colors: [],
+          material: "",
+          brand: "",
+          notes: opts.notes,
+          formality: 3,
+          warmth: 3,
+          seasons: [],
+          imageSrc: imageKey(opts.id, "o"),
+          cutoutSrc: imageKey(opts.id, "c"),
+          imageSource: source,
+          matteQuality: "ok",
+          fileHash: opts.hash,
+          tuck: guessTuck({ name: ADDING_NAME, subtype: "", notes: opts.notes }),
+        },
+        { quiet: true },
+      );
+      if (opts.kind === "phone" || opts.kind === "page") {
+        enqueuePrint(opts.id, opts.original);
+      }
+      const tagged = await nameCutout(opts.cover);
+      updateGarment(opts.id, {
+        name: tagged.name,
+        category: tagged.category,
+        subtype: tagged.subtype,
+        colors: tagged.colors,
+        material: tagged.material,
+        brand: tagged.brand,
+        fit: tagged.fit,
+        formality: tagged.formality,
+        warmth: tagged.warmth,
+        tuck: tagged.tuck ?? guessTuck({ name: tagged.name, subtype: tagged.subtype, notes: opts.notes }),
+      });
+      return {
+        id: opts.id,
+        name: tagged.name,
+        category: tagged.category,
+        cutout: opts.cover,
+      };
+    },
+    [addGarment, nameCutout, updateGarment],
+  );
 
   const commitExtracted = useCallback(
     async (
@@ -454,63 +405,74 @@ export function Studio() {
       file: File,
       known: Set<string>,
       onPiece: (piece: Saved) => void,
-    ): Promise<RouteResult> => {
+      onPreview: (piece: Saved) => void,
+      onDropPreview: (id: string) => void,
+    ): Promise<RouteResult & { previewId?: string }> => {
       const hash = await fileFingerprint(file);
       if (known.has(hash)) throw new AlreadyInCloset();
-      const raw = await readAsImageSrc(file);
-      const original = await shrinkDataUrl(raw, 1280, 0.85);
-
-      let kind: ScanKind = "garment";
-      let boxes: WornBox[] = [];
-      let classifiedOk = false;
+      known.add(hash);
+      const id = uid("g");
       try {
-        const res = await classifyScan({
-          data: { image: await shrinkDataUrl(original, 768) },
+        const shrunk = await shrinkFile(file);
+        onPreview({
+          id,
+          name: ADDING_NAME,
+          category: "other",
+          cutout: shrunk.objectUrl,
         });
-        if (res.ok) {
+
+        let kind: ScanKind = "garment";
+        let boxes: WornBox[] = [];
+        let classifiedOk = false;
+        const [classRes, matte] = await Promise.all([
+          classifyScan({
+            data: { image: await shrinkDataUrl(shrunk.dataUrl, 768) },
+          }).catch(() => null),
+          matteToPaper(shrunk.dataUrl),
+        ]);
+        if (classRes?.ok) {
           classifiedOk = true;
-          kind = res.kind;
-          boxes = res.boxes;
+          kind = classRes.kind;
+          boxes = classRes.boxes;
         }
-      } catch {
-        /* fall through to garment / filename skip */
-      }
 
-      if (kind === "skip" || (!classifiedOk && filenameLooksLikeSkip(file.name))) {
-        throw new NotClothes();
-      }
+        if (kind === "skip" || (!classifiedOk && filenameLooksLikeSkip(file.name))) {
+          throw new NotClothes();
+        }
 
-      if (kind === "garment") {
-        const piece = await processOne(file, known);
+        if (kind === "worn" && boxes.length >= 2) {
+          return {
+            type: "worn",
+            pick: {
+              id: uid("w"),
+              original: shrunk.dataUrl,
+              hash,
+              boxes,
+              done: [],
+            },
+            previewId: id,
+          };
+        }
+
+        if (matte.kind === "page" && !canPrint) throw new PageRejected();
+
+        const piece = await landMatte({
+          id,
+          original: shrunk.dataUrl,
+          cover: matte.cutoutSrc,
+          kind: matte.kind,
+          hash,
+          notes: matte.reason,
+        });
         onPiece(piece);
         return { type: "pieces", pieces: [piece] };
+      } catch (e) {
+        known.delete(hash);
+        onDropPreview(id);
+        throw e;
       }
-
-      if (!canPrint) throw new NeedPrint();
-
-      if (boxes.length >= 2) {
-        known.add(hash);
-        return {
-          type: "worn",
-          pick: { id: uid("w"), original, hash, boxes, done: [] },
-        };
-      }
-
-      if (boxes.length === 1) {
-        const box = boxes[0]!;
-        known.add(hash);
-        const piece = await pullWornBox(original, hash, box, 0);
-        if (!piece) {
-          known.delete(hash);
-          throw new ScanEmpty();
-        }
-        onPiece(piece);
-        return { type: "pieces", pieces: [piece] };
-      }
-
-      throw new ScanEmpty();
     },
-    [canPrint, processOne, pullWornBox],
+    [canPrint, landMatte],
   );
 
   const scanFiles = useCallback(
@@ -536,18 +498,27 @@ export function Studio() {
           if (idx >= total) return;
           const file = images[idx]!;
           try {
-            const routed = await processScanFile(file, known, (piece) => {
-              setSaved((cur) => [piece, ...cur]);
-              setProgress(`${idx + 1} of ${total} · ${piece.name}`);
-            });
+            const routed = await processScanFile(
+              file,
+              known,
+              (piece) => {
+                setSaved((cur) => [piece, ...cur.filter((s) => s.id !== piece.id)]);
+                setProgress(addProgress(idx + 1, total, piece.name));
+              },
+              (preview) => {
+                setSaved((cur) => [preview, ...cur.filter((s) => s.id !== preview.id)]);
+              },
+              (dropId) => setSaved((cur) => cur.filter((s) => s.id !== dropId)),
+            );
             done++;
             if (routed.type === "worn") {
+              const previewId = routed.previewId;
+              if (previewId) setSaved((cur) => cur.filter((s) => s.id !== previewId));
               setWornQueue((q) => [...q, routed.pick]);
-              setProgress(`${done} of ${total} · Tap the clothes.`);
+              setProgress(addProgress(done, total));
             } else {
               const last = routed.pieces.at(-1)?.name;
-              if (last) setProgress(`${done} of ${total} · ${last}`);
-              else setProgress(`${done} of ${total}`);
+              setProgress(addProgress(done, total, last));
             }
           } catch (e) {
             done++;
@@ -573,9 +544,14 @@ export function Studio() {
           }
         }
       };
-      const n = Math.min(3, total);
+      const n = Math.min(readAddConcurrency(), total);
       await Promise.all(Array.from({ length: n }, () => worker()));
-      ensureLookbook();
+      const idle = () => useCloset.getState().ensureLookbook();
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(idle, { timeout: 2500 });
+      } else {
+        window.setTimeout(idle, 0);
+      }
       setBusy(false);
       setProgress("");
       const count = useCloset.getState().garments.filter((g) => !g.archived).length;
@@ -583,7 +559,7 @@ export function Studio() {
       if (misses.length) setFailed((cur) => [...misses, ...cur]);
       if (already.length) setDupes((cur) => [...already, ...cur]);
     },
-    [processScanFile, ensureLookbook],
+    [processScanFile],
   );
 
   const dismissPiece = (id: string) => {
@@ -608,7 +584,9 @@ export function Studio() {
       setWornQueue((q) =>
         q.map((w, i) => (i === 0 ? { ...w, done: [...w.done, box.id] } : w)),
       );
-      ensureLookbook();
+      const idle = () => useCloset.getState().ensureLookbook();
+      if (typeof requestIdleCallback === "function") requestIdleCallback(idle, { timeout: 2500 });
+      else window.setTimeout(idle, 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not pull that piece.");
     } finally {
