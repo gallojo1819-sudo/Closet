@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useRouterState } from "@tanstack/react-router";
+import { startCloudSync } from "@/lib/cloud/sync";
 import { migrateImagesToIdb } from "@/lib/migrate";
 import { openPersistGate, useCloset } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let live = true;
+    let stopSync = () => {};
     void (async () => {
       try {
         await useCloset.persist.rehydrate();
@@ -35,9 +37,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       }
       void useCloset.getState().retitleFakeNames();
       void migrateImagesToIdb().catch(() => {});
+      if (live) stopSync = startCloudSync();
     })();
     return () => {
       live = false;
+      stopSync();
     };
   }, []);
 

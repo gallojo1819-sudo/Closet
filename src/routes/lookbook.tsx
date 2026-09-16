@@ -21,6 +21,8 @@ import {
 import { seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { spreadMicro, spreadTitle } from "@/lib/look";
+import { useAccount } from "@/lib/cloud/account";
+import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
 import { daysIdle, HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
@@ -143,6 +145,7 @@ function LookCard({
 
 function LookbookPage() {
   const hydrated = useCloset((s) => s.hydrated);
+  const account = useAccount();
   const garmentsAll = useCloset((s) => s.garments);
   const looksAll = useCloset((s) => s.looks);
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
@@ -411,7 +414,9 @@ function LookbookPage() {
       {!hydrated ? null : garments.length === 0 ? (
         <div className="mt-10 border border-hairline bg-card px-4 py-5">
           <p className="text-sm text-ink-soft">
-            Lookbook is this closet. Add pieces on Add — don’t re-upload here.
+            {account.user
+              ? "Lookbook is this closet. Add pieces on Add — don’t re-upload here."
+              : EMPTY_DEVICE_COPY}
           </p>
           <Link
             to="/add"

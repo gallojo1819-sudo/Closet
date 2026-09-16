@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
+import { AccountChip } from "@/components/shell/account-chip";
+import { useAccount } from "@/lib/cloud/account";
 import { compressRefBackup, putImage, refImageKey } from "@/lib/images";
 import { useCloset } from "@/lib/store";
 import { useImageSrc } from "@/lib/use-image";
@@ -229,6 +231,7 @@ export function TopBar() {
   const loadSample = useCloset((s) => s.loadSample);
   const emptyCloset = useCloset((s) => s.emptyCloset);
   const refPhoto = useCloset((s) => s.refPhoto);
+  const account = useAccount();
   const [refOpen, setRefOpen] = useState(false);
 
   useEffect(() => {
@@ -280,9 +283,12 @@ export function TopBar() {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-3">
-          <span className={cn("micro hidden sm:inline", night ? "text-champagne/70" : "text-ink-soft")}>
-            {count} pieces
-          </span>
+          <AccountChip night={night} count={count} />
+          {!(account.configured && account.user) && (
+            <span className={cn("micro hidden sm:inline", night ? "text-champagne/70" : "text-ink-soft")}>
+              {count} pieces
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setRefOpen(true)}
@@ -308,7 +314,9 @@ export function TopBar() {
             <button
               type="button"
               onClick={() => {
-                if (confirm("Remove the sample rack? Your photos stay if you’ve added any.")) emptyCloset();
+                if (confirm("Remove the sample rack? Your photos stay if you’ve added any.")) {
+                  emptyCloset({ sample: true });
+                }
               }}
               className={cn(
                 "micro opacity-60 hover:opacity-100",

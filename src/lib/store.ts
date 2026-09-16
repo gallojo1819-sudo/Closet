@@ -51,6 +51,8 @@ import {
   type House,
 } from "./style";
 import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
+import { isAccountSignedIn } from "./cloud/account";
+import { EMPTY_ACCOUNT_CONFIRM } from "./cloud/copy";
 import { todayISO, uid } from "./utils";
 
 export { mergeClosetPersist, openPersistGate, persistGate };
@@ -103,7 +105,7 @@ type ClosetState = {
   keepLook: (id: string, patch?: { garmentIds?: string[]; name?: string }) => void;
   newWeek: () => void;
   loadSample: () => void;
-  emptyCloset: () => void;
+  emptyCloset: (opts?: { sample?: boolean }) => void;
   importCloset: (payload: {
     garments: Garment[];
     looks: Look[];
@@ -724,7 +726,10 @@ export const useCloset = create<ClosetState>()(
         });
         get().ensureLookbook();
       },
-      emptyCloset: () => {
+      emptyCloset: (opts) => {
+        if (!opts?.sample && typeof window !== "undefined" && isAccountSignedIn()) {
+          if (!window.confirm(EMPTY_ACCOUNT_CONFIRM)) return;
+        }
         set({
           garments: [],
           looks: [],

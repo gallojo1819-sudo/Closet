@@ -111,6 +111,16 @@ export async function getImage(key: string): Promise<Blob | null> {
   });
 }
 
+export async function listImageKeys(): Promise<string[]> {
+  const db = await open();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).getAllKeys();
+    req.onsuccess = () => resolve((req.result as IDBValidKey[]).map(String));
+    req.onerror = () => reject(req.error ?? new Error("Could not list images"));
+  });
+}
+
 export async function deleteImage(key: string): Promise<void> {
   if (!isIdbKey(key)) return;
   const db = await open();

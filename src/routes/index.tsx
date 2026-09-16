@@ -6,6 +6,8 @@ import { LookBuilder } from "@/components/closet/look-builder";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, nameLook, neglectedPiece, sortLook } from "@/lib/look";
+import { useAccount } from "@/lib/cloud/account";
+import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
 import { HOUSE_LABEL, avoidedUniformLine, daysIdle, lookHouses } from "@/lib/style";
 import { useCloset } from "@/lib/store";
@@ -29,6 +31,7 @@ function Today() {
   const skipDrop = useCloset((s) => s.skipDrop);
   const saveLook = useCloset((s) => s.saveLook);
   const hydrated = useCloset((s) => s.hydrated);
+  const account = useAccount();
   const [view, setView] = useState<"paper" | "me">("paper");
   const [play, setPlay] = useState(false);
 
@@ -122,6 +125,9 @@ function Today() {
             "New York. Photograph what you own. We keep that picture."
           )}
         </p>
+        {hydrated && !account.user && (
+          <p className="mt-3 text-sm text-ink-soft">{EMPTY_DEVICE_COPY}</p>
+        )}
         <div className="mt-10 flex flex-wrap gap-3">
           <Link
             to="/add"

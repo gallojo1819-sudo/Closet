@@ -16,6 +16,8 @@ import {
 } from "@/lib/images";
 import { rackNotes } from "@/lib/gaps";
 import { daysIdle } from "@/lib/style";
+import { useAccount } from "@/lib/cloud/account";
+import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { useCloset } from "@/lib/store";
 import { CATEGORIES, type Category, type Garment, type Look } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,7 @@ async function embedSrc(src: string): Promise<string> {
 function ClosetPage() {
   const hydrated = useCloset((s) => s.hydrated);
   const garmentsAll = useCloset((s) => s.garments);
+  const account = useAccount();
   const importCloset = useCloset((s) => s.importCloset);
   const setRefPhoto = useCloset((s) => s.setRefPhoto);
   const removeGarment = useCloset((s) => s.removeGarment);
@@ -202,9 +205,9 @@ function ClosetPage() {
               Nothing in here yet. The grid is yours once you photograph a piece.
             </p>
           )}
-          {hydrated && garments.length === 0 && (
+          {hydrated && garments.length === 0 && !account.user && (
             <p className="mt-2 micro text-ink-soft">
-              This URL’s closet is empty. localhost and Vercel are different closets. Open closet-ten-hazel.vercel.app if you uploaded there.
+              {EMPTY_DEVICE_COPY}
             </p>
           )}
         </div>

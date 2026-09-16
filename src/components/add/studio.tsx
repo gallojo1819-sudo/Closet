@@ -24,6 +24,7 @@ import {
   searchOfficial,
   type OfficialHit,
 } from "@/lib/listing";
+import { savedFlashCopy } from "@/lib/cloud/copy";
 import { useCloset } from "@/lib/store";
 import type { Category, ImageSource, Tuck } from "@/lib/types";
 import { uid } from "@/lib/utils";
@@ -578,7 +579,7 @@ export function Studio() {
       setBusy(false);
       setProgress("");
       const count = useCloset.getState().garments.filter((g) => !g.archived).length;
-      if (count > 0) setSavedFlash(`Saved on this URL · ${count} pieces.`);
+      if (count > 0) setSavedFlash(savedFlashCopy(count));
       if (misses.length) setFailed((cur) => [...misses, ...cur]);
       if (already.length) setDupes((cur) => [...already, ...cur]);
     },
@@ -672,7 +673,7 @@ export function Studio() {
       });
       setSaved((cur) => [piece, ...cur]);
       setSavedFlash(
-        `Saved on this URL · ${useCloset.getState().garments.filter((g) => !g.archived).length} pieces.`,
+        savedFlashCopy(useCloset.getState().garments.filter((g) => !g.archived).length),
       );
       setUrl("");
     } catch (e) {
