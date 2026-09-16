@@ -15,6 +15,7 @@ export type AccountState = {
   dialogOpen: boolean;
   emailSent: boolean;
   error: string | null;
+  localOnly: boolean;
 };
 
 const listeners = new Set<() => void>();
@@ -27,6 +28,7 @@ const serverSnapshot: AccountState = {
   dialogOpen: false,
   emailSent: false,
   error: null,
+  localOnly: false,
 };
 
 let state: AccountState = { ...serverSnapshot };
@@ -61,6 +63,10 @@ export function useAccount(): AccountState {
 
 export function setAccountProgress(progress: string | null) {
   patchAccount({ progress });
+}
+
+export function setLocalOnly(on: boolean) {
+  patchAccount({ localOnly: on });
 }
 
 export function openAccountDialog() {
@@ -124,6 +130,7 @@ export async function signOutAccount(): Promise<void> {
     emailSent: false,
     error: null,
     progress: null,
+    localOnly: false,
   });
 }
 

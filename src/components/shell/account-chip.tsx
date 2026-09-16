@@ -7,7 +7,7 @@ import {
   signOutAccount,
   useAccount,
 } from "@/lib/cloud/account";
-import { SIGN_IN_PROMPT, savedAccountCopy } from "@/lib/cloud/copy";
+import { LOCAL_ONLY_CAPTION, SIGN_IN_PROMPT, savedAccountCopy } from "@/lib/cloud/copy";
 import { cn } from "@/lib/utils";
 
 export function AccountChip({ night, count }: { night: boolean; count: number }) {
@@ -19,6 +19,9 @@ export function AccountChip({ night, count }: { night: boolean; count: number })
 
   if (account.progress) {
     return <span className={cn("micro max-w-[14rem] truncate sm:max-w-none", quiet)}>{account.progress}</span>;
+  }
+  if (account.user && account.localOnly) {
+    return <span className={cn("micro max-w-[16rem] truncate sm:max-w-none", quiet)}>{LOCAL_ONLY_CAPTION}</span>;
   }
 
   if (!account.user) {

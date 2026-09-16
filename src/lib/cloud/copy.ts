@@ -24,3 +24,5 @@ export function pulledCopy(count: number): string {
 }
 
 export const EMPTY_ACCOUNT_CONFIRM = "Remove from this phone and your account?";
+
+export const LOCAL_ONLY_CAPTION = "On this phone — not on your account yet.";

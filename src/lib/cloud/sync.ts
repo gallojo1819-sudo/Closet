@@ -6,15 +6,16 @@ import {
 import { scrubRack } from "../rack.ts";
 import { useCloset } from "../store.ts";
 import type { DailyDrop, Garment, Look, WearEntry } from "../types.ts";
-import { getAccount, patchAccount, setAccountProgress } from "./account.ts";
+import { getAccount, patchAccount, setAccountProgress, setLocalOnly } from "./account.ts";
 import {
   clearUploaded,
   forgetUploaded,
+  isForbidden,
   mapPool,
   prefetchEagerThumbs,
-  uploadGarmentBlobs,
   uploadKind,
 } from "./blobs.ts";
+import { LOCAL_ONLY_CAPTION } from "./copy.ts";
 import {
   closetImagesBucket,
   getSupabase,
@@ -121,8 +122,13 @@ async function upsertMeta(userId: string) {
     },
     { onConflict: "user_id" },
   );
-  if (error) setAccountProgress("Could not save to your account.");
-  else writeLast(userId, garments.map((g) => g.id));
+  if (error) {
+    if (isForbidden(error)) setLocalOnly(true);
+    else setAccountProgress("Could not save to your account.");
+    return;
+  }
+  setLocalOnly(false);
+  writeLast(userId, garments.map((g) => g.id));
 }
 
 async function uploadRef(userId: string, refPhoto: string | null): Promise<void> {
@@ -202,24 +208,27 @@ async function pushNow(withProgress: boolean) {
   const user = getAccount().user;
   if (!user) return;
   const garments = accountPool(useCloset.getState().garments) as Garment[];
-  await upsertMeta(user.id);
-  if (withProgress && garments.length > 0) {
+  const conc = garments.length && withProgress ? 3 : 2;
+  if (garments.length > 0) {
     let done = 0;
-    await mapPool(garments, 3, async (g) => {
+    await mapPool(garments, conc, async (g) => {
       await uploadKind(user.id, g, "t");
-      done += 1;
-      setAccountProgress(savingProgress(done, garments.length));
-    });
-    setAccountProgress(null);
-    void mapPool(garments, 2, async (g) => {
-      await uploadKind(user.id, g, "c");
-      await uploadKind(user.id, g, "o");
-    });
-  } else {
-    void mapPool(garments, 2, async (g) => {
-      await uploadGarmentBlobs(user.id, g);
+      if (withProgress) {
+        done += 1;
+        setAccountProgress(savingProgress(done, garments.length));
+      }
     });
   }
+  await upsertMeta(user.id);
+  if (getAccount().localOnly) {
+    setAccountProgress(LOCAL_ONLY_CAPTION);
+    return;
+  }
+  if (withProgress) setAccountProgress(null);
+  void mapPool(garments, 2, async (g) => {
+    await uploadKind(user.id, g, "c");
+    await uploadKind(user.id, g, "o");
+  });
   void uploadRef(user.id, useCloset.getState().refPhoto);
 }
 

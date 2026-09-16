@@ -1,28 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, ClipboardPaste, Images, Link2, Loader2, Tag, Upload } from "lucide-react";
+import { Camera, ClipboardPaste, Images, Link2, Loader2, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { imageKey, putImage, putThumb, dataUrlToBlob, fileFingerprint } from "@/lib/images";
 import {
+  cameraInputProps,
+  handleCameraChange,
+  HEIC_ERROR,
+  imageFilesFromList,
+  libraryInputProps,
+} from "@/lib/camera";
+import {
   ADDING_NAME,
   addProgress,
+  NEW_PIECE_NAME,
   readAddConcurrency,
   shrinkFile,
+  withTimeout,
 } from "@/lib/ingest";
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
-import { enqueuePrint } from "@/lib/print-queue";
+import { enqueuePrint, enqueueTag } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
-import { classifyScan, extractGarment, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
-import { nameWithColor, preferPixels, sampleCover } from "@/lib/color";
+import { classifyScan, readAiStatus, tagGarment } from "@/lib/ai";
 import { guessGarment } from "@/lib/guess";
-import { isFakeName, nameFromPixels } from "@/lib/rack";
+import { isFakeName } from "@/lib/rack";
 import {
   collectKnownHashes,
   filenameLooksLikeSkip,
-  looksInventedExtra,
+  looksLikeFace,
   padBox,
   pieceFileHash,
   type ScanKind,
-  type ScanPiece,
   type WornBox,
 } from "@/lib/scan";
 import {
@@ -77,11 +84,6 @@ class NotClothes extends Error {
     super("Not clothes.");
   }
 }
-class NeedPrint extends Error {
-  constructor() {
-    super("Need catalog covers to split a look.");
-  }
-}
 class ScanEmpty extends Error {
   constructor() {
     super("Could not pull a garment.");
@@ -124,7 +126,6 @@ export function Studio() {
   const pickRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const tagRef = useRef<HTMLInputElement>(null);
-  const scanRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     readAiStatus()
@@ -186,73 +187,6 @@ export function Studio() {
     [addGarment],
   );
 
-  const nameCutout = useCallback(async (cutout: string): Promise<{
-    name: string;
-    category: Category;
-    subtype: string;
-    colors: string[];
-    material: string;
-    brand: string;
-    fit: "slim" | "regular" | "relaxed";
-    formality: 1 | 2 | 3 | 4 | 5;
-    warmth: 1 | 2 | 3 | 4 | 5;
-    tuck?: Tuck;
-  }> => {
-    let name = "";
-    let category: Category = "other";
-    let subtype = "";
-    let colors: string[] = [];
-    let material = "";
-    let brand = "";
-    let fit: "slim" | "regular" | "relaxed" = "regular";
-    let formality: 1 | 2 | 3 | 4 | 5 = 3;
-    let warmth: 1 | 2 | 3 | 4 | 5 = 3;
-    let tuck: Tuck | undefined;
-    try {
-      const tag = await tagGarment({
-        data: { image: await shrinkDataUrl(cutout, 768) },
-      });
-      if (tag.ok && !badName(tag.name)) {
-        name = tag.name;
-        category = tag.category;
-        subtype = tag.subtype;
-        colors = tag.colors;
-        material = tag.material;
-        brand = tag.brand;
-        fit = tag.fit;
-        formality = tag.formality;
-        warmth = tag.warmth;
-        tuck = tag.tuck;
-      }
-    } catch {
-      /* fall through */
-    }
-    if (!name || badName(name) || category === "other") {
-      const guess = await guessGarment(cutout);
-      if (!name || badName(name)) name = guess.name;
-      if (category === "other") {
-        category = guess.category;
-        subtype = subtype || guess.subtype;
-        colors = colors.length ? colors : guess.colors;
-      }
-    }
-    try {
-      const sampled = await sampleCover(cutout);
-      colors = preferPixels(sampled, colors);
-      if (!name || isFakeName(name)) {
-        name = nameFromPixels({ category, subtype, name: name || "" }, colors);
-      } else if (colors[0]) {
-        name = nameWithColor(name, colors[0]);
-      }
-    } catch {
-      /* keep tag colors */
-    }
-    if (!name || isFakeName(name)) {
-      name = nameFromPixels({ category, subtype, name: name || "" }, colors);
-    }
-    return { name, category, subtype, colors, material, brand, fit, formality, warmth, tuck };
-  }, []);
-
   const landMatte = useCallback(
     async (opts: {
       id: string;
@@ -265,15 +199,30 @@ export function Studio() {
       const source: ImageSource =
         opts.kind === "studio" ? "official" : opts.kind === "phone" ? "photo" : "segmented";
       await putImage(imageKey(opts.id, "o"), dataUrlToBlob(opts.original));
-      await putImage(imageKey(opts.id, "c"), dataUrlToBlob(opts.cover));
       await putThumb(opts.id, opts.cover).catch(() => {});
+      await putImage(imageKey(opts.id, "c"), dataUrlToBlob(opts.cover)).catch(() => {});
+      let name = NEW_PIECE_NAME;
+      let category: Category = "other";
+      let subtype = "";
+      let colors: string[] = [];
+      try {
+        const guess = await guessGarment(opts.cover);
+        if (guess.name && !isFakeName(guess.name)) {
+          name = guess.name;
+          category = guess.category;
+          subtype = guess.subtype;
+          colors = guess.colors;
+        }
+      } catch {
+        /* New piece */
+      }
       addGarment(
         {
           id: opts.id,
-          name: ADDING_NAME,
-          category: "other",
-          subtype: "",
-          colors: [],
+          name,
+          category,
+          subtype,
+          colors,
           material: "",
           brand: "",
           notes: opts.notes,
@@ -285,69 +234,20 @@ export function Studio() {
           imageSource: source,
           matteQuality: "ok",
           fileHash: opts.hash,
-          tuck: guessTuck({ name: ADDING_NAME, subtype: "", notes: opts.notes }),
+          tuck: guessTuck({ name, subtype, notes: opts.notes }),
         },
         { quiet: true },
       );
-      if (opts.kind === "phone" || opts.kind === "page") {
-        enqueuePrint(opts.id, opts.original);
-      }
-      const tagged = await nameCutout(opts.cover);
-      updateGarment(opts.id, {
-        name: tagged.name,
-        category: tagged.category,
-        subtype: tagged.subtype,
-        colors: tagged.colors,
-        material: tagged.material,
-        brand: tagged.brand,
-        fit: tagged.fit,
-        formality: tagged.formality,
-        warmth: tagged.warmth,
-        tuck: tagged.tuck ?? guessTuck({ name: tagged.name, subtype: tagged.subtype, notes: opts.notes }),
-      });
+      enqueueTag(opts.id, opts.cover);
+      enqueuePrint(opts.id, opts.original);
       return {
         id: opts.id,
-        name: tagged.name,
-        category: tagged.category,
+        name,
+        category,
         cutout: opts.cover,
       };
     },
-    [addGarment, nameCutout, updateGarment],
-  );
-
-  const commitExtracted = useCallback(
-    async (
-      spec: ScanPiece,
-      cutout: string,
-      hash: string,
-      index: number,
-      original: string,
-    ): Promise<Saved | null> => {
-      if (await isBlankPaper(cutout)) return null;
-      const tagged = await nameCutout(cutout);
-      if (looksInventedExtra(spec, tagged)) return null;
-      if (isFakeName(tagged.name)) return null;
-      return commit({
-        id: uid("g"),
-        original,
-        cover: cutout,
-        source: "cutout",
-        name: tagged.name,
-        category: tagged.category,
-        subtype: tagged.subtype,
-        colors: tagged.colors,
-        material: tagged.material,
-        brand: tagged.brand,
-        fit: tagged.fit,
-        formality: tagged.formality,
-        warmth: tagged.warmth,
-        notes: `scan · ${spec.slot} · ${spec.label}`,
-        fileHash: pieceFileHash(hash, spec.slot, index),
-        tuck: tagged.tuck ?? guessTuck({ name: tagged.name, subtype: tagged.subtype, notes: "" }),
-        quiet: true,
-      });
-    },
-    [commit, nameCutout],
+    [addGarment],
   );
 
   const pullWornBox = useCallback(
@@ -357,47 +257,21 @@ export function Studio() {
       box: WornBox,
       index: number,
     ): Promise<Saved | null> => {
-      if (!canPrint) return null;
+      if (looksLikeFace(box.name, box.category, box.box)) return null;
       let crop = photo;
-      let hasCrop = false;
-      if (box.box) {
-        crop = await cropDataUrl(photo, padBox(box.box));
-        hasCrop = true;
-      }
-      let printed: string | null = null;
-      try {
-        const print = await printGarment({
-          data: { image: await shrinkDataUrl(crop, 1024) },
-        });
-        if (print.ok) printed = print.image;
-      } catch {
-        /* fallback extract */
-      }
-      if (!printed) {
-        try {
-          const ext = await extractGarment({
-            data: {
-              image: await shrinkDataUrl(crop, 1024),
-              slot: box.slot,
-              label: box.name,
-            },
-          });
-          if (ext.ok) printed = ext.image;
-        } catch {
-          return null;
-        }
-      }
-      if (!printed) return null;
-      const cutout = await shrinkDataUrl(await toLocalDataUrl(printed), 900, 0.85);
-      return commitExtracted(
-        { slot: box.slot, label: box.name },
-        cutout,
-        hash,
-        index,
-        hasCrop ? crop : cutout,
-      );
+      if (box.box) crop = await cropDataUrl(photo, padBox(box.box));
+      const matte = await matteToPaper(crop);
+      if (matte.kind === "page") return null;
+      return landMatte({
+        id: uid("g"),
+        original: crop,
+        cover: matte.cutoutSrc,
+        kind: matte.kind,
+        hash: pieceFileHash(hash, box.slot, index),
+        notes: `worn · ${box.chip || box.name}`,
+      });
     },
-    [canPrint, commitExtracted],
+    [landMatte],
   );
 
   const processScanFile = useCallback(
@@ -407,11 +281,13 @@ export function Studio() {
       onPiece: (piece: Saved) => void,
       onPreview: (piece: Saved) => void,
       onDropPreview: (id: string) => void,
+      fromCamera?: boolean,
     ): Promise<RouteResult & { previewId?: string }> => {
       const hash = await fileFingerprint(file);
       if (known.has(hash)) throw new AlreadyInCloset();
       known.add(hash);
       const id = uid("g");
+      let saved = false;
       try {
         const shrunk = await shrinkFile(file);
         onPreview({
@@ -421,22 +297,25 @@ export function Studio() {
           cutout: shrunk.objectUrl,
         });
 
+        const matteP = matteToPaper(shrunk.dataUrl);
+        const classP = fromCamera
+          ? Promise.resolve(null)
+          : withTimeout(
+              classifyScan({
+                data: { image: await shrinkDataUrl(shrunk.dataUrl, 768) },
+              }).catch(() => null),
+              4000,
+            );
+        const [matte, classRes] = await Promise.all([matteP, classP]);
+
         let kind: ScanKind = "garment";
         let boxes: WornBox[] = [];
-        let classifiedOk = false;
-        const [classRes, matte] = await Promise.all([
-          classifyScan({
-            data: { image: await shrinkDataUrl(shrunk.dataUrl, 768) },
-          }).catch(() => null),
-          matteToPaper(shrunk.dataUrl),
-        ]);
-        if (classRes?.ok) {
-          classifiedOk = true;
+        if (classRes && "ok" in classRes && classRes.ok) {
           kind = classRes.kind;
           boxes = classRes.boxes;
         }
 
-        if (kind === "skip" || (!classifiedOk && filenameLooksLikeSkip(file.name))) {
+        if (kind === "skip" || filenameLooksLikeSkip(file.name)) {
           throw new NotClothes();
         }
 
@@ -447,14 +326,14 @@ export function Studio() {
               id: uid("w"),
               original: shrunk.dataUrl,
               hash,
-              boxes,
+              boxes: boxes.filter((b) => !looksLikeFace(b.name, b.category, b.box)),
               done: [],
             },
             previewId: id,
           };
         }
 
-        if (matte.kind === "page" && !canPrint) throw new PageRejected();
+        if (matte.kind === "page") throw new PageRejected();
 
         const piece = await landMatte({
           id,
@@ -464,20 +343,23 @@ export function Studio() {
           hash,
           notes: matte.reason,
         });
+        saved = true;
         onPiece(piece);
         return { type: "pieces", pieces: [piece] };
       } catch (e) {
-        known.delete(hash);
-        onDropPreview(id);
+        if (!saved) {
+          known.delete(hash);
+          onDropPreview(id);
+        }
         throw e;
       }
     },
-    [canPrint, landMatte],
+    [landMatte],
   );
 
   const scanFiles = useCallback(
-    async (list: FileList | File[] | null) => {
-      const images = [...(list ?? [])].filter((f) => f.type.startsWith("image/"));
+    async (list: FileList | File[] | null, opts?: { camera?: boolean }) => {
+      const images = imageFilesFromList(list);
       if (!images.length) {
         setError("Those files are not images.");
         return;
@@ -509,6 +391,7 @@ export function Studio() {
                 setSaved((cur) => [preview, ...cur.filter((s) => s.id !== preview.id)]);
               },
               (dropId) => setSaved((cur) => cur.filter((s) => s.id !== dropId)),
+              opts?.camera,
             );
             done++;
             if (routed.type === "worn") {
@@ -528,9 +411,8 @@ export function Studio() {
             } else if (e instanceof NotClothes) {
               setSkipped((n) => n + 1);
               setProgress(`${done} of ${total} · Not clothes.`);
-            } else if (e instanceof NeedPrint) {
-              misses.push(file.name);
-              setProgress(`${done} of ${total} · Need catalog covers to split a look.`);
+            } else if (e instanceof Error && e.message === HEIC_ERROR) {
+              setError(HEIC_ERROR);
             } else if (e instanceof ScanEmpty) {
               misses.push(file.name);
               setProgress(`${done} of ${total}`);
@@ -800,6 +682,41 @@ export function Studio() {
 
   return (
     <div className="space-y-8">
+      <div className="flex flex-col sm:flex-row gap-3">
+        <label className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 bg-accent px-5 text-sm text-paper">
+          <Camera className="size-4" />
+          Take photo
+          <input
+            ref={camRef}
+            {...cameraInputProps()}
+            className="sr-only"
+            onChange={(e) => {
+              handleCameraChange(
+                e.target.files,
+                (files) => void scanFiles(files, { camera: true }),
+                () => {
+                  e.target.value = "";
+                },
+              );
+            }}
+          />
+        </label>
+        <label className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 border border-hairline bg-transparent px-5 text-sm text-ink hover:border-hairline-strong">
+          <Images className="size-4" />
+          Photo library
+          <input
+            ref={pickRef}
+            {...libraryInputProps()}
+            className="sr-only"
+            onChange={(e) => {
+              const files = e.target.files;
+              e.target.value = "";
+              void scanFiles(files);
+            }}
+          />
+        </label>
+      </div>
+
       {worn && (
         <WornPicker
           photo={worn.original}
@@ -842,27 +759,7 @@ export function Studio() {
           <p className="mt-3 mx-auto max-w-md text-sm text-ink-soft leading-relaxed">
             Shoot it on the chair, on you, or the hanger. We’ll put it on paper.
           </p>
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <Button onClick={() => scanRef.current?.click()} disabled={busy} size="lg">
-              <Images className="size-4" />
-              Scan photos
-            </Button>
-            <Button variant="ghost" disabled={busy} className="pointer-events-none opacity-70">
-              <ClipboardPaste className="size-4" />
-              Or paste
-            </Button>
-          </div>
-          <input
-            ref={scanRef}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(e) => {
-              void scanFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
+          <p className="mt-8 text-sm text-ink-soft">Take photo or Photo library above. Or paste.</p>
         </section>
       )}
 
@@ -914,14 +811,6 @@ export function Studio() {
           </Button>
         </form>
         <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
-          <Button onClick={() => pickRef.current?.click()} disabled={busy}>
-            <Upload className="size-4" />
-            Choose photos
-          </Button>
-          <Button variant="ghost" onClick={() => camRef.current?.click()} disabled={busy}>
-            <Camera className="size-4" />
-            Take photo
-          </Button>
           <Button variant="ghost" onClick={() => tagRef.current?.click()} disabled={busy}>
             <Tag className="size-4" />
             Hangtag
@@ -931,28 +820,6 @@ export function Studio() {
             Or paste
           </Button>
         </div>
-        <input
-          ref={pickRef}
-          type="file"
-          accept="image/*"
-          multiple
-          hidden
-          onChange={(e) => {
-            void scanFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-        <input
-          ref={camRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-          onChange={(e) => {
-            void scanFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
         <input
           ref={tagRef}
           type="file"

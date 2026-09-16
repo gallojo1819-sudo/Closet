@@ -169,7 +169,7 @@ export function parseCropBox(raw: unknown): CropBox | null {
   });
 }
 
-function looksLikeFace(name: string, category: Category, box: CropBox | null): boolean {
+export function looksLikeFace(name: string, category: Category, box: CropBox | null): boolean {
   if (PERSON.test(name)) return true;
   if (category === "other" && PERSON.test(name)) return true;
   if (box && box.y < 0.18 && box.h < 0.28 && (category === "other" || PERSON.test(name))) {

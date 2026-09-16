@@ -5,7 +5,8 @@ import {
   putImage,
 } from "../images.ts";
 import type { Garment } from "../types.ts";
-import { getAccount } from "./account.ts";
+import { getAccount, setLocalOnly } from "./account.ts";
+import { LOCAL_ONLY_CAPTION } from "./copy.ts";
 import {
   closetImagesBucket,
   garmentObjectPath,
@@ -142,7 +143,20 @@ export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Pr
     blob,
     { upsert: true, contentType: blob.type || "image/jpeg" },
   );
-  if (!error) uploaded.add(mark);
+  if (error) {
+    if (isForbidden(error)) setLocalOnly(true);
+    return;
+  }
+  uploaded.add(mark);
+}
+
+export function isForbidden(error: { statusCode?: string; status?: number; message?: string }): boolean {
+  if (error.status === 403 || error.statusCode === "403") return true;
+  return /403|not allowed|row-level|unauthorized/i.test(error.message ?? "");
+}
+
+export function localOnlyCaption(): string {
+  return LOCAL_ONLY_CAPTION;
 }
 
 /** :t first so the other phone sees a picture, then :c, then :o. */

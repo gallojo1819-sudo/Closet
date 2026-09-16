@@ -3,11 +3,15 @@
  * addGarment happens before printGarment. Tests must not touch closet.v6.
  */
 
+import { HEIC_ERROR } from "./camera.ts";
+
 export const ADD_SHRINK_EDGE = 1280;
 export const ADD_SHRINK_QUALITY = 0.82;
 export const ADD_TILE_BUDGET_MS = 300;
 export const PRINT_TIMEOUT_MS = 12_000;
 export const ADDING_NAME = "Adding…";
+export const NEW_PIECE_NAME = "New piece";
+export { HEIC_ERROR };
 
 export type IngestStep = "shrink" | "preview" | "matte" | "save" | "tag" | "print";
 
@@ -69,6 +73,8 @@ export type IngestDeps = {
   tag: (cover: string) => Promise<{ name: string }>;
   enqueuePrint: (id: string, original: string) => void;
   onPreview: (input: { id: string; name: string; cutout: string }) => void;
+  patchName?: (name: string) => void;
+  guessName?: string;
 };
 
 export async function runIngestPiece(
@@ -88,19 +94,31 @@ export async function runIngestPiece(
 
   const matte = await deps.matte(shrunk.dataUrl);
   steps.push("matte");
+  const savedName =
+    deps.guessName && deps.guessName.trim() && deps.guessName !== ADDING_NAME
+      ? deps.guessName
+      : NEW_PIECE_NAME;
   await deps.save({
     id,
     original: shrunk.dataUrl,
     cover: matte.cutoutSrc,
-    name: ADDING_NAME,
+    name: savedName,
   });
   steps.push("save");
 
-  const tagged = await deps.tag(matte.cutoutSrc);
+  try {
+    const tagged = await deps.tag(matte.cutoutSrc);
+    if (tagged?.name) deps.patchName?.(tagged.name);
+  } catch {
+    /* tag 403 / hang — garment stays */
+  }
   steps.push("tag");
-  deps.enqueuePrint(id, shrunk.dataUrl);
+  try {
+    deps.enqueuePrint(id, shrunk.dataUrl);
+  } catch {
+    /* print reject — garment stays */
+  }
   steps.push("print");
-  void tagged;
 
   return { previewMs, steps };
 }
@@ -157,6 +175,10 @@ export async function shrinkFile(
     const objectUrl = URL.createObjectURL(blob);
     const dataUrl = await blobToDataUrl(blob);
     return { dataUrl, objectUrl };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/Couldn't read that photo/i.test(msg)) throw e;
+    throw new Error(HEIC_ERROR);
   } finally {
     bitmap?.close();
     if (fallbackUrl) URL.revokeObjectURL(fallbackUrl);
