@@ -14,7 +14,10 @@ import {
   mapPool,
   prefetchEagerThumbs,
   uploadKind,
+  wasUploaded,
 } from "./blobs.ts";
+import { isHomeEmail, WRONG_ACCOUNT } from "./home.ts";
+import { idbCount, rewriteCloudSrcs } from "./src.ts";
 import {
   closetImagesBucket,
   getSupabase,
@@ -22,10 +25,10 @@ import {
 } from "./client.ts";
 import {
   LOCAL_ONLY_CAPTION,
-  backupFailedCopy,
   backingUpCopy,
   pulledCopy,
   savedAccountCopy,
+  stillOnPhoneCopy,
 } from "./copy.ts";
 import { supabaseConfigured } from "./env.ts";
 import {
@@ -235,22 +238,37 @@ async function pushNow(withProgress: boolean) {
     const garments = accountPool(useCloset.getState().garments) as Garment[];
     const total = garments.length;
     const conc = total && withProgress ? 3 : 2;
-    let failed = 0;
     if (total > 0) {
       let done = 0;
       await mapPool(garments, conc, async (g) => {
-        const ok = await uploadKind(user.id, g, "t");
-        if (!ok) failed += 1;
+        await uploadKind(user.id, g, "t");
         done += 1;
         if (withProgress) setAccountProgress(backingUpCopy(done, total));
       });
+      await mapPool(garments, 2, async (g) => {
+        await uploadKind(user.id, g, "c");
+        await uploadKind(user.id, g, "o");
+      });
     }
-    if (failed > 0) {
+    const uploadedKinds = new Set<string>();
+    for (const g of garments) {
+      for (const kind of ["t", "c", "o"] as const) {
+        if (wasUploaded(g.id, kind)) uploadedKinds.add(`${g.id}:${kind}`);
+      }
+    }
+    const rewritten = rewriteCloudSrcs(garments, user.id, uploadedKinds);
+    const byId = new Map(rewritten.map((g) => [g.id, g]));
+    useCloset.setState({
+      garments: useCloset.getState().garments.map((g) => byId.get(g.id) ?? g),
+    });
+    await upsertMeta(user.id);
+    void uploadRef(user.id, useCloset.getState().refPhoto);
+    const remaining = idbCount(accountPool(useCloset.getState().garments));
+    if (remaining > 0) {
       setLocalOnly(true);
-      setAccountProgress(backupFailedCopy(failed));
+      setAccountProgress(stillOnPhoneCopy(remaining));
       return;
     }
-    await upsertMeta(user.id);
     if (getAccount().localOnly) {
       setAccountProgress(LOCAL_ONLY_CAPTION);
       return;
@@ -261,11 +279,6 @@ async function pushNow(withProgress: boolean) {
         if (getAccount().progress === savedAccountCopy(total)) setAccountProgress(null);
       }, 4000);
     }
-    void mapPool(garments, 2, async (g) => {
-      await uploadKind(user.id, g, "c");
-      await uploadKind(user.id, g, "o");
-    });
-    void uploadRef(user.id, useCloset.getState().refPhoto);
   } finally {
     pushing = false;
   }
@@ -289,9 +302,18 @@ function schedulePush() {
 async function firstLink(userId: string) {
   linking = true;
   try {
+    const email = getAccount().user?.email;
     const cloud = await fetchMeta(userId);
     const local = snapshot();
     const last = readLast(userId);
+    const localCount = accountPool(local.garments).length;
+    const cloudCount = cloud ? accountPool(cloud.garments).length : 0;
+    if (!isHomeEmail(email) && cloudCount === 0) {
+      patchAccount({ wrongAccount: true, progress: WRONG_ACCOUNT });
+      void localCount;
+      return;
+    }
+    patchAccount({ wrongAccount: false });
     const result = mergeAccount({ local, cloud, lastCloudIds: last });
     if (result.appliedCloud) {
       applyLocal(result.next);

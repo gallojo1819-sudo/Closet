@@ -1272,16 +1272,26 @@ export function isThisWeekLook(l: Look, monday: string): boolean {
 }
 
 /** 7 idle-first spreads, mixed weekday/out/weekend so it is not seven oxfords. */
-export function buildWeek(garments: Garment[], today = todayISO()): Look[] {
+export function buildWeek(
+  garments: Garment[],
+  today = todayISO(),
+  opts?: { excludeKeys?: string[]; usedCount?: Map<string, number> },
+): Look[] {
   const monday = mondayISO(today);
   const pool = lookbookPool(garments);
   const byId = new Map(pool.map((g) => [g.id, g]));
+  const usedCount = opts?.usedCount ?? new Map<string, number>();
   const tops = pool
     .filter((g) => {
       const s = slotOf(g);
       return s === "top" || s === "dress";
     })
-    .sort((a, b) => daysIdle(b, today) - daysIdle(a, today) || a.id.localeCompare(b.id));
+    .sort(
+      (a, b) =>
+        (usedCount.get(a.id) ?? 0) - (usedCount.get(b.id) ?? 0) ||
+        daysIdle(b, today) - daysIdle(a, today) ||
+        a.id.localeCompare(b.id),
+    );
   const chosen: Garment[] = [];
   const rest = [...tops];
   while (chosen.length < 7 && rest.length) {
@@ -1292,7 +1302,7 @@ export function buildWeek(garments: Garment[], today = todayISO()): Look[] {
   }
   const previous: string[] = [];
   const out: Look[] = [];
-  const keys = new Set<string>();
+  const keys = new Set<string>(opts?.excludeKeys ?? []);
   const pushLook = (occ: Occasion, locked: string[], i: number): boolean => {
     const ids = pickLook(pool, {
       occasion: occ,

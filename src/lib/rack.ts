@@ -78,13 +78,51 @@ export type ClosetRack = {
   seenLooks?: SeenMap;
 };
 
+/**
+ * Same fileHash + same name: keep the older, archive the newer, rewrite looks.
+ * Same name, different fileHash: leave both.
+ */
+export function dedupeSameFileHash<T extends ClosetRack>(
+  garments: T["garments"],
+  looks: T["looks"],
+): { garments: T["garments"]; looks: T["looks"] } {
+  const keep = new Map<string, string>();
+  const replace = new Map<string, string>();
+  const sorted = [...garments].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  const garmentsOut = garments.map((g) => ({ ...g }));
+  for (const g of sorted) {
+    const hash = (g.fileHash ?? "").trim();
+    if (!hash) continue;
+    const key = `${hash}::${(g.name ?? "").trim().toLowerCase()}`;
+    const kept = keep.get(key);
+    if (!kept) {
+      keep.set(key, g.id);
+      continue;
+    }
+    if (kept === g.id) continue;
+    replace.set(g.id, kept);
+    const row = garmentsOut.find((x) => x.id === g.id);
+    if (row) row.archived = true;
+  }
+  if (replace.size === 0) return { garments: garmentsOut, looks };
+  const looksOut = looks.map((l) => ({
+    ...l,
+    garmentIds: [...new Set(l.garmentIds.map((id) => replace.get(id) ?? id))],
+  }));
+  return { garments: garmentsOut, looks: looksOut };
+}
+
 /** If any real piece exists, demo rows are gone. Looks keep only ids that resolve. */
 export function scrubRack<T extends ClosetRack>(state: T): T & { purgedIds: string[] } {
   const hasReal = hasRealPieces(state.garments);
   const purgedIds = hasReal ? state.garments.filter((g) => g.demo === true).map((g) => g.id) : [];
-  const garments = hasReal ? state.garments.filter((g) => g.demo !== true) : state.garments;
+  let garments = hasReal ? state.garments.filter((g) => g.demo !== true) : state.garments;
+  let looks = state.looks;
+  const deduped = dedupeSameFileHash(garments, looks);
+  garments = deduped.garments;
+  looks = deduped.looks;
   const allowed = new Set(garments.filter((g) => !g.archived).map((g) => g.id));
-  const looks = scrubLooks(state.looks, allowed);
+  looks = scrubLooks(looks, allowed);
   let drop = state.drop;
   if (drop) {
     const ids = drop.garmentIds.filter((id) => allowed.has(id));

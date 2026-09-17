@@ -62,7 +62,11 @@ export async function hasLocalBlob(id: string, kind: BlobKind): Promise<boolean>
   }
 }
 
-export async function fetchCloudBlob(id: string, kind: BlobKind): Promise<boolean> {
+export async function fetchCloudBlob(
+  id: string,
+  kind: BlobKind,
+  userId?: string,
+): Promise<boolean> {
   const mark = `${id}:${kind}`;
   const pending = inflight.get(mark);
   if (pending) return pending;
@@ -70,16 +74,18 @@ export async function fetchCloudBlob(id: string, kind: BlobKind): Promise<boolea
     if (await hasLocalBlob(id, kind)) {
       return true;
     }
-    const user = getAccount().user;
-    if (!user) return false;
+    const uid = userId ?? getAccount().user?.id;
+    if (!uid) return false;
     const sb = getSupabase();
     if (!sb) return false;
     const { data, error } = await sb.storage
       .from(closetImagesBucket())
-      .download(garmentObjectPath(user.id, id, kind));
-    if (error || !data) return false;
+      .download(garmentObjectPath(uid, id, kind));
+    if (error || !data) {
+      if (error && isForbidden(error)) return false;
+      return false;
+    }
     await putImage(imageKey(id, kind), data);
-    uploaded.add(mark);
     return true;
   })();
   inflight.set(mark, work);

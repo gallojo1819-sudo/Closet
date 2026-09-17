@@ -18,6 +18,7 @@ import { rackNotes } from "@/lib/gaps";
 import { daysIdle } from "@/lib/style";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
+import { WRONG_ACCOUNT } from "@/lib/cloud/home";
 import { useCloset } from "@/lib/store";
 import { CATEGORIES, type Category, type Garment, type Look } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -204,6 +205,9 @@ function ClosetPage() {
             <p className="mt-3 text-sm text-ink-soft">
               Nothing in here yet. The grid is yours once you photograph a piece.
             </p>
+          )}
+          {hydrated && garments.length === 0 && account.wrongAccount && (
+            <p className="mt-2 micro text-ink-soft">{WRONG_ACCOUNT}</p>
           )}
           {hydrated && garments.length === 0 && !account.user && (
             <p className="mt-2 micro text-ink-soft">

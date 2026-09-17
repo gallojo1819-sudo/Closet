@@ -119,6 +119,30 @@ describe("lookFitsSeason", () => {
     assert.equal(lookFitsSeason(winter, "winter"), true);
   });
 
+  it("empty seasons[] is eligible for a Summer look if the combo is otherwise legal", () => {
+    const look = [
+      g({ id: "ox", name: "Navy oxford", subtype: "oxford", seasons: [], warmth: 2 }),
+      g({
+        id: "ch",
+        name: "Khaki chino",
+        subtype: "chino",
+        category: "bottom",
+        seasons: [],
+        warmth: 3,
+      }),
+      g({
+        id: "lf",
+        name: "Navy loafers",
+        subtype: "loafer",
+        category: "footwear",
+        seasons: [],
+        warmth: 2,
+      }),
+    ];
+    assert.deepEqual(seasonsOf(look[0]!), ["spring", "summer", "fall", "winter"]);
+    assert.equal(lookFitsSeason(look, "summer"), true);
+  });
+
   it("fall + oxford/chino/loafer always passes", () => {
     const look = [
       g({ id: "ox", name: "Navy oxford", subtype: "oxford", warmth: 2 }),

@@ -28,6 +28,7 @@ import {
   mondayISO,
   seenKey,
   stripRepeatBlazers,
+  unusedFromLooks,
 } from "./lookbook";
 import { isFakeName, nameFromPixels, scrubRack } from "./rack";
 import { preferPixels, sampleCover } from "./color";
@@ -52,11 +53,14 @@ import {
 } from "./style";
 import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
+import { allowSampleRack } from "./cloud/home";
 import { EMPTY_ACCOUNT_CONFIRM } from "./cloud/copy";
 import { todayISO, uid } from "./utils";
 
 export { mergeClosetPersist, openPersistGate, persistGate };
 export type { PersistedCloset };
+
+let coverUnusedRan = false;
 
 type ClosetState = {
   garments: Garment[];
@@ -457,7 +461,13 @@ export const useCloset = create<ClosetState>()(
       newWeek: () => {
         const s = get();
         if (!s.hydrated || s.garments.length === 0) return;
-        const week = buildWeek(s.garments);
+        const prevWeek = s.looks.filter((l) => l.id.startsWith("week_"));
+        const excludeKeys = prevWeek.map((l) => comboKey(l.garmentIds));
+        const usedCount = new Map<string, number>();
+        for (const l of s.looks) {
+          for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
+        }
+        const week = buildWeek(s.garments, undefined, { excludeKeys, usedCount });
         const looks = coverUnused(s.garments, mergeWeekLooks(s.looks, week));
         set({ looks });
       },
@@ -465,47 +475,22 @@ export const useCloset = create<ClosetState>()(
         const s = get();
         if (!s.hydrated) return;
         if (s.garments.length === 0) return;
-        let looks = enforcePieceCap(
-          stripRepeatBlazers(capChapterLooks(s.looks), s.garments),
-          s.garments,
-        );
         const monday = mondayISO();
-        if (looks.filter((l) => l.id.startsWith(`week_${monday}_`)).length < 7) {
+        const weekN = s.looks.filter((l) => l.id.startsWith(`week_${monday}_`)).length;
+        const unused = unusedFromLooks(s.garments, s.looks);
+        if (weekN >= 7 && unused.length === 0) return;
+        let looks = s.looks;
+        if (weekN < 7) {
           looks = mergeWeekLooks(looks, buildWeek(s.garments));
         }
-        const seenLooks: SeenLooks = { ...s.seenLooks };
-        for (const { id: occ } of OCCASIONS) {
-          const chapter = looks.filter((l) => mapOccasion(l.occasion) === occ);
-          const auto = chapter.filter((l) => l.lookbook && l.source !== "manual");
-          if (auto.length >= CHAPTER_CAP) continue;
-          const exclude = new Set([
-            ...(seenLooks[occ] ?? []),
-            ...chapter.map((l) => comboKey(l.garmentIds)),
-          ]);
-          const usedCount = new Map<string, number>();
-          for (const l of chapter) {
-            for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
-          }
-          const extra = buildChapter(s.garments, occ, {
-            exclude,
-            cap: CHAPTER_CAP - auto.length,
-            usedCount,
-          });
-          looks = [...looks, ...extra];
-          if (extra.length) {
-            seenLooks[occ] = [
-              ...new Set([
-                ...(seenLooks[occ] ?? []),
-                ...extra.map((l) => comboKey(l.garmentIds)),
-              ]),
-            ];
-          }
+        if (unused.length > 0 && !coverUnusedRan) {
+          looks = coverUnused(s.garments, looks);
+          coverUnusedRan = true;
         }
-        looks = coverUnused(s.garments, looks);
         const key = (list: Look[]) =>
           list.map((l) => `${l.lookbook ? "b" : "k"}:${l.id}:${l.occasion}`).join("|");
         if (key(s.looks) === key(looks)) return;
-        set({ looks, seenLooks });
+        set({ looks });
       },
       ensureOccasionBook: (occasion, season, house) => {
         const s = get();
@@ -715,6 +700,7 @@ export const useCloset = create<ClosetState>()(
         }
       },
       loadSample: () => {
+        if (!allowSampleRack(isAccountSignedIn())) return;
         set({
           garments: SEED_GARMENTS,
           looks: SEED_LOOKS,

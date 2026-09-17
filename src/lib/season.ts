@@ -54,11 +54,11 @@ export function guessSeason(g: Garment): Season[] {
   return ["fall", "spring"];
 }
 
-/** User chips win when seasons[] is set. Empty → guess. */
+/** User chips win when seasons[] is set. Empty → every season. */
 export function seasonsOf(g: Garment): Season[] {
   const listed = fromField(g);
   if (listed.length) return listed;
-  return guessSeason(g);
+  return ["spring", "summer", "fall", "winter"];
 }
 
 /**

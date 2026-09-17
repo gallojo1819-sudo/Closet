@@ -325,7 +325,7 @@ export function TopBar() {
             >
               Clear sample
             </button>
-          ) : count === 0 ? (
+          ) : count === 0 && !account.user ? (
             <button
               type="button"
               onClick={() => loadSample()}

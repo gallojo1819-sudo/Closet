@@ -70,6 +70,46 @@ describe("scrubRack", () => {
     assert.ok(!next.looks.some((l) => l.id === "l1"));
     assert.ok(!next.drop || !next.drop.garmentIds.includes("d1"));
   });
+
+  it("same fileHash and name archives the newer and rewrites looks", () => {
+    const a = g({
+      id: "old",
+      name: "Navy chino",
+      fileHash: "abc",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    const b = g({
+      id: "new",
+      name: "Navy chino",
+      fileHash: "abc",
+      createdAt: "2026-06-01T00:00:00.000Z",
+    });
+    const c = g({
+      id: "other",
+      name: "Navy chino",
+      fileHash: "zzz",
+      createdAt: "2026-03-01T00:00:00.000Z",
+    });
+    const next = scrubRack({
+      garments: [a, b, c],
+      looks: [
+        {
+          id: "l1",
+          name: "pair",
+          occasion: "weekday",
+          garmentIds: ["new", "other"],
+          source: "ai",
+          createdAt: "t",
+        },
+      ],
+      drop: null,
+      journal: [],
+    });
+    assert.equal(next.garments.find((x) => x.id === "new")?.archived, true);
+    assert.equal(next.garments.find((x) => x.id === "old")?.archived, false);
+    assert.equal(next.garments.find((x) => x.id === "other")?.archived, false);
+    assert.deepEqual(next.looks[0]?.garmentIds, ["old", "other"]);
+  });
 });
 
 describe("isFakeName", () => {

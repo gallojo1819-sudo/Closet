@@ -4,6 +4,7 @@ import {
   applyShuffle,
   buildChapter,
   buildLookbook,
+  buildWeek,
   CHAPTER_CAP,
   comboKey,
   enforcePieceCap,
@@ -14,6 +15,7 @@ import {
   lookFitsOccasion,
   looksForHero,
   mergeLookbook,
+  mergeWeekLooks,
   moreLikeThis,
   stripRepeatBlazers,
 } from "./lookbook.ts";
@@ -60,6 +62,29 @@ function closet(nTop: number, nBottom: number, nShoe: number, extra: Garment[] =
   );
   return [...tops, ...bottoms, ...shoes, ...extra];
 }
+
+describe("buildWeek", () => {
+  it("4× New week weekday looks do not repeat the same trio on a 40-plate fixture", () => {
+    const g = closet(15, 15, 10);
+    let looks: Look[] = [];
+    const weekdayKeys: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const prevWeek = looks.filter((l) => l.id.startsWith("week_"));
+      const excludeKeys = prevWeek.map((l) => comboKey(l.garmentIds));
+      const usedCount = new Map<string, number>();
+      for (const l of looks) {
+        for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
+      }
+      const week = buildWeek(g, "2026-09-14", { excludeKeys, usedCount });
+      looks = mergeWeekLooks(looks, week);
+      for (const l of week.filter((x) => x.occasion === "weekday")) {
+        weekdayKeys.push(comboKey(l.garmentIds));
+      }
+    }
+    assert.ok(weekdayKeys.length >= 4, `weekday looks=${weekdayKeys.length}`);
+    assert.equal(new Set(weekdayKeys).size, weekdayKeys.length);
+  });
+});
 
 describe("buildLookbook", () => {
   it("caps each chapter at 10, four chapters, not 97", () => {

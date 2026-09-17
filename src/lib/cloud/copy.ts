@@ -27,6 +27,10 @@ export function backupFailedCopy(n: number): string {
   return `${n} photos failed — tap Backup`;
 }
 
+export function stillOnPhoneCopy(n: number): string {
+  return `${n} photos still on this phone only — tap Backup`;
+}
+
 export function pulledCopy(count: number): string {
   return `${count} pieces on this phone.`;
 }
