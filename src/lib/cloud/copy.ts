@@ -31,6 +31,24 @@ export function stillOnPhoneCopy(n: number): string {
   return `${n} photos still on this phone only — tap Backup`;
 }
 
+export function cloudErrorCopy(error: unknown): string {
+  const e = error as {
+    status?: number;
+    statusCode?: string | number;
+    message?: string;
+    error?: string;
+  } | null;
+  const status = e && typeof e === "object" ? (e.status ?? e.statusCode ?? "") : "";
+  const msg =
+    e && typeof e === "object"
+      ? (e.message || e.error || "")
+      : error instanceof Error
+        ? error.message
+        : String(error);
+  const line = `Backup failed · ${status} ${msg}`.replace(/\s+/g, " ").trim();
+  return line.endsWith("·") ? "Backup failed" : line;
+}
+
 export function pulledCopy(count: number): string {
   return `${count} pieces on this phone.`;
 }

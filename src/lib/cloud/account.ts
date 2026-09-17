@@ -17,6 +17,7 @@ export type AccountState = {
   error: string | null;
   localOnly: boolean;
   wrongAccount: boolean;
+  listedThumbs: number | null;
 };
 
 const listeners = new Set<() => void>();
@@ -31,6 +32,7 @@ const serverSnapshot: AccountState = {
   error: null,
   localOnly: false,
   wrongAccount: false,
+  listedThumbs: null,
 };
 
 let state: AccountState = { ...serverSnapshot };
@@ -156,6 +158,7 @@ export async function signOutAccount(): Promise<void> {
     progress: null,
     localOnly: false,
     wrongAccount: false,
+    listedThumbs: null,
   });
 }
 

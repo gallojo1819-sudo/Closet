@@ -48,7 +48,7 @@ function emptyFilterCopy(
   else if (houseChip !== "all") {
     hint = `Clear ${HOUSE_CHIPS.find((h) => h.id === houseChip)?.label ?? "house"} or switch Weekend.`;
   } else if (color) hint = `Clear ${color} or switch Weekend.`;
-  return `Nothing in this closet for ${named.join(" × ")}. ${hint}`;
+  return `None in ${named.join(" · ")}. ${hint}`;
 }
 
 export const Route = createFileRoute("/lookbook")({
@@ -209,7 +209,7 @@ function LookbookPage() {
     });
   }, [weekLooks, book, garments, occasion, season, houseChip, color, canBuild]);
 
-  const unused = useMemo(() => unusedFromLooks(garments, book), [garments, book]);
+  const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const usedN = garments.length - unused.length;
   const rack = useMemo(
     () => [...garments].sort((a, b) => daysIdle(b) - daysIdle(a) || a.id.localeCompare(b.id)),

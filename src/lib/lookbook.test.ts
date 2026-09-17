@@ -18,6 +18,7 @@ import {
   mergeWeekLooks,
   moreLikeThis,
   stripRepeatBlazers,
+  unusedFromLooks,
 } from "./lookbook.ts";
 import { lookFitsSeason } from "./season.ts";
 import type { Garment, Look } from "./types.ts";
@@ -76,6 +77,25 @@ describe("buildWeek", () => {
         for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
       }
       const week = buildWeek(g, "2026-09-14", { excludeKeys, usedCount });
+      const inWeek = new Map<string, number>();
+      for (const l of week) {
+        for (const id of l.garmentIds) inWeek.set(id, (inWeek.get(id) ?? 0) + 1);
+      }
+      for (const n of inWeek.values()) {
+        assert.ok(n <= 1, "cap any id at 1 look in the new week of 7");
+      }
+      let topId = "";
+      let topN = -1;
+      for (const [id, n] of usedCount) {
+        if (n > topN) {
+          topId = id;
+          topN = n;
+        }
+      }
+      if (topId) {
+        const hubHits = week.filter((l) => l.garmentIds.includes(topId)).length;
+        assert.ok(hubHits <= 1, `top-frequency ${topId} in ${hubHits} of 7`);
+      }
       looks = mergeWeekLooks(looks, week);
       for (const l of week.filter((x) => x.occasion === "weekday")) {
         weekdayKeys.push(comboKey(l.garmentIds));
@@ -83,6 +103,24 @@ describe("buildWeek", () => {
     }
     assert.ok(weekdayKeys.length >= 4, `weekday looks=${weekdayKeys.length}`);
     assert.equal(new Set(weekdayKeys).size, weekdayKeys.length);
+  });
+
+  it("unused rail is membership in looks[].garmentIds, including non-lookbook rows", () => {
+    const g = closet(2, 2, 2);
+    const looks: Look[] = [
+      {
+        id: "manual_1",
+        name: "Kept",
+        occasion: "weekday",
+        garmentIds: ["t1", "b1", "s1"],
+        source: "manual",
+        lookbook: false,
+        createdAt: "2026-09-01T12:00:00.000Z",
+      },
+    ];
+    const unused = unusedFromLooks(g, looks);
+    assert.equal(unused.some((x) => x.id === "t1"), false);
+    assert.equal(unused.some((x) => x.id === "b1"), false);
   });
 });
 

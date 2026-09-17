@@ -7,7 +7,6 @@ import {
 import type { Garment } from "../types.ts";
 import { getAccount, setLocalOnly } from "./account.ts";
 import { LOCAL_ONLY_CAPTION } from "./copy.ts";
-import { isRetryableCloudError } from "./online.ts";
 import {
   closetImagesBucket,
   garmentObjectPath,
@@ -121,21 +120,46 @@ export async function prefetchEagerThumbs(
   });
 }
 
-/** :t from imageKey id t, else cutoutSrc, else imageSrc. */
+/** imageKey(id, kind), then cutoutSrc, then imageSrc, then the other kinds (a cover can fill :t). */
 export function uploadBlobKeys(
   g: { id: string; imageSrc?: string; cutoutSrc?: string },
   kind: BlobKind,
 ): string[] {
   const keys = [imageKey(g.id, kind)];
-  if (kind === "t") {
-    if (isIdbKey(g.cutoutSrc)) keys.push(g.cutoutSrc);
-    if (isIdbKey(g.imageSrc)) keys.push(g.imageSrc);
-  } else if (kind === "c" && isIdbKey(g.cutoutSrc)) {
-    keys.push(g.cutoutSrc);
-  } else if (kind === "o" && isIdbKey(g.imageSrc)) {
-    keys.push(g.imageSrc);
+  if (isIdbKey(g.cutoutSrc)) keys.push(g.cutoutSrc);
+  if (isIdbKey(g.imageSrc)) keys.push(g.imageSrc);
+  for (const k of ["t", "c", "o"] as const) {
+    if (k !== kind) keys.push(imageKey(g.id, k));
   }
   return [...new Set(keys)];
+}
+
+export function needsJpegConvert(type: string | undefined | null): boolean {
+  const t = (type ?? "").toLowerCase();
+  return t !== "image/jpeg" && t !== "image/jpg";
+}
+
+export async function blobAsJpeg(blob: Blob): Promise<Blob> {
+  if (!needsJpegConvert(blob.type)) return blob;
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") {
+    return blob;
+  }
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, bitmap.width);
+    c.height = Math.max(1, bitmap.height);
+    const ctx = c.getContext("2d");
+    if (!ctx) throw new Error("canvas");
+    ctx.drawImage(bitmap, 0, 0);
+    const out = await new Promise<Blob | null>((resolve) =>
+      c.toBlob(resolve, "image/jpeg", 0.85),
+    );
+    if (!out) throw new Error("jpeg");
+    return out;
+  } finally {
+    bitmap.close();
+  }
 }
 
 async function blobFor(g: Garment, kind: BlobKind): Promise<Blob | null> {
@@ -150,25 +174,75 @@ async function blobFor(g: Garment, kind: BlobKind): Promise<Blob | null> {
   return null;
 }
 
+export function countTjpgFromLists(
+  level1: { name: string }[],
+  nested: Record<string, { name: string }[]>,
+): number {
+  let n = 0;
+  for (const row of level1) {
+    if (!row.name || row.name === "me") continue;
+    if (row.name === "t.jpg") {
+      n += 1;
+      continue;
+    }
+    if (/\.[a-z0-9]+$/i.test(row.name) && row.name !== "t.jpg") continue;
+    const files = nested[row.name] ?? [];
+    if (files.some((f) => f.name === "t.jpg")) n += 1;
+  }
+  return n;
+}
+
+export async function countListedThumbs(userId: string): Promise<number> {
+  const sb = getSupabase();
+  if (!sb) return 0;
+  const { data: level1, error } = await sb.storage
+    .from(closetImagesBucket())
+    .list(userId, { limit: 1000 });
+  if (error) throw error;
+  if (!level1) return 0;
+  const nested: Record<string, { name: string }[]> = {};
+  const folders = level1.filter(
+    (row) => row.name && row.name !== "me" && !/\.jpg$/i.test(row.name),
+  );
+  await mapPool(folders, 6, async (row) => {
+    const { data, error: nestedErr } = await sb.storage
+      .from(closetImagesBucket())
+      .list(`${userId}/${row.name}`, { limit: 20 });
+    if (nestedErr) throw nestedErr;
+    nested[row.name] = data ?? [];
+  });
+  return countTjpgFromLists(level1, nested);
+}
+
 export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Promise<boolean> {
   const mark = `${g.id}:${kind}`;
   if (uploaded.has(mark)) return true;
   const sb = getSupabase();
   if (!sb) return false;
-  const blob = await blobFor(g, kind);
-  if (!blob) return kind !== "t";
-  const { error } = await sb.storage.from(closetImagesBucket()).upload(
-    garmentObjectPath(userId, g.id, kind),
-    blob,
-    { upsert: true, contentType: blob.type || "image/jpeg" },
-  );
+  const raw = await blobFor(g, kind);
+  if (!raw) return kind !== "t";
+  let blob: Blob;
+  try {
+    blob = await blobAsJpeg(raw);
+  } catch (err) {
+    setLocalOnly(true);
+    throw err;
+  }
+  const path = garmentObjectPath(userId, g.id, kind);
+  const { error } = await sb.storage.from(closetImagesBucket()).upload(path, blob, {
+    upsert: true,
+    contentType: "image/jpeg",
+  });
   if (error) {
-    if (isForbidden(error)) {
-      setLocalOnly(true);
-      throw error;
-    }
-    if (isRetryableCloudError(error)) setLocalOnly(true);
-    return false;
+    setLocalOnly(true);
+    throw error;
+  }
+  const { data: landed, error: dlErr } = await sb.storage
+    .from(closetImagesBucket())
+    .download(path);
+  if (dlErr || !landed || landed.size === 0) {
+    setLocalOnly(true);
+    throw dlErr ?? new Error(`download miss ${path}`);
   }
   uploaded.add(mark);
   const canonical = imageKey(g.id, kind);

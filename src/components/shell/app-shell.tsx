@@ -3,7 +3,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { useAccount } from "@/lib/cloud/account";
 import { accountPool } from "@/lib/cloud/merge";
 import { stillOnPhoneCopy } from "@/lib/cloud/copy";
-import { idbCount, shouldShowBackupBanner } from "@/lib/cloud/src";
+import { backupRemaining, idbCount, shouldShowBackupBanner } from "@/lib/cloud/src";
 import { backupPhotos, startCloudSync } from "@/lib/cloud/sync";
 import { livePool } from "@/lib/rack";
 import { migrateImagesToIdb } from "@/lib/migrate";
@@ -15,12 +15,22 @@ import { TopBar } from "./top-bar";
 function BackupBanner({ night }: { night: boolean }) {
   const account = useAccount();
   const garments = useCloset((s) => s.garments);
-  const remaining = idbCount(accountPool(garments));
+  const liveCount = livePool(garments).length;
+  const idbRemaining = idbCount(accountPool(garments));
+  const remaining =
+    account.listedThumbs == null
+      ? idbRemaining
+      : backupRemaining({
+          idbRemaining,
+          listedThumbs: account.listedThumbs,
+          liveCount,
+        });
   const show = shouldShowBackupBanner({
     signedIn: Boolean(account.user),
-    liveCount: livePool(garments).length,
-    remaining,
+    liveCount,
+    remaining: idbRemaining,
     localOnly: account.localOnly,
+    listedThumbs: account.listedThumbs,
   });
   if (!show) return null;
   const label =
@@ -59,6 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     liveCount: livePool(garments).length,
     remaining: idbCount(accountPool(garments)),
     localOnly: account.localOnly,
+    listedThumbs: account.listedThumbs,
   });
 
   useEffect(() => {

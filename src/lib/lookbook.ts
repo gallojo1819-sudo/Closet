@@ -1271,7 +1271,20 @@ export function isThisWeekLook(l: Look, monday: string): boolean {
   return l.id.startsWith(`week_${monday}_`);
 }
 
-/** 7 idle-first spreads, mixed weekday/out/weekend so it is not seven oxfords. */
+export function lookCountMap(looks: Look[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const l of looks) {
+    for (const id of l.garmentIds) m.set(id, (m.get(id) ?? 0) + 1);
+  }
+  return m;
+}
+
+/** Scarce pieces first. Hubs with 159 looks get 1/160. */
+export function weekWeight(lookCount: number): number {
+  return 1 / (1 + lookCount);
+}
+
+/** 7 scarce-first spreads. Each id at most once in the week. Pool is livePool, not the book. */
 export function buildWeek(
   garments: Garment[],
   today = todayISO(),
@@ -1281,52 +1294,54 @@ export function buildWeek(
   const pool = lookbookPool(garments);
   const byId = new Map(pool.map((g) => [g.id, g]));
   const usedCount = opts?.usedCount ?? new Map<string, number>();
-  const tops = pool
-    .filter((g) => {
-      const s = slotOf(g);
-      return s === "top" || s === "dress";
-    })
-    .sort(
-      (a, b) =>
-        (usedCount.get(a.id) ?? 0) - (usedCount.get(b.id) ?? 0) ||
-        daysIdle(b, today) - daysIdle(a, today) ||
-        a.id.localeCompare(b.id),
-    );
-  const chosen: Garment[] = [];
-  const rest = [...tops];
-  while (chosen.length < 7 && rest.length) {
-    const prev = chosen[chosen.length - 1];
-    let i = rest.findIndex((t) => !prev || t.subtype !== prev.subtype);
-    if (i < 0) i = 0;
-    chosen.push(rest.splice(i, 1)[0]!);
-  }
-  const previous: string[] = [];
+  const weightOf = (id: string) => weekWeight(usedCount.get(id) ?? 0);
+  const weekUsed = new Set<string>();
   const out: Look[] = [];
   const keys = new Set<string>(opts?.excludeKeys ?? []);
+
+  const available = () => pool.filter((g) => !weekUsed.has(g.id));
+  const scarceTops = () =>
+    available()
+      .filter((g) => {
+        const s = slotOf(g);
+        return s === "top" || s === "dress";
+      })
+      .sort(
+        (a, b) =>
+          weightOf(b.id) - weightOf(a.id) ||
+          daysIdle(b, today) - daysIdle(a, today) ||
+          a.id.localeCompare(b.id),
+      );
+
   const pushLook = (occ: Occasion, locked: string[], i: number): boolean => {
-    const ids = pickLook(pool, {
+    const avail = available();
+    const lockedOk = locked.filter((id) => !weekUsed.has(id) && byId.has(id));
+    const ids = pickLook(avail, {
       occasion: occ,
       moment: "day",
       weather: weatherForOcc(occ),
-      lockedIds: locked,
-      previousIds: previous,
+      lockedIds: lockedOk,
     });
-    let pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
-    const hero = locked[0] ? byId.get(locked[0]) : undefined;
-    if (hero && !pieces.some((p) => p.id === hero.id)) {
+    let pieces = ids
+      .map((id) => byId.get(id))
+      .filter((x): x is Garment => x !== undefined && !weekUsed.has(x.id));
+    const hero = lockedOk[0] ? byId.get(lockedOk[0]) : undefined;
+    if (hero && !weekUsed.has(hero.id) && !pieces.some((p) => p.id === hero.id)) {
       const restP = pieces.filter((p) => {
         const s = slotOf(p);
         return s !== "top" && s !== "dress";
       });
       pieces = [hero, ...restP];
     }
+    pieces = pieces.filter((p) => !weekUsed.has(p.id));
     if (pieces.length < 3 || lookClashes(pieces)) return false;
-    if (!lookFitsOccasion(pieces, occ, pool) && locked.length) return false;
+    if (!lookFitsOccasion(pieces, occ, avail) && lockedOk.length) return false;
     const lookIds = pieces.map((p) => p.id);
+    if (lookIds.some((id) => weekUsed.has(id))) return false;
     const key = comboKey(lookIds);
     if (keys.has(key)) return false;
     keys.add(key);
-    previous.push(...lookIds);
+    for (const id of lookIds) weekUsed.add(id);
     out.push({
       id: `week_${monday}_${i}`,
       name: nameOf(pieces),
@@ -1338,9 +1353,10 @@ export function buildWeek(
     });
     return true;
   };
+
   for (let i = 0; i < 7; i++) {
     const occ = WEEK_ENERGIES[i]!;
-    const top = chosen[i];
+    const top = scarceTops()[0];
     if (top && pushLook(occ, [top.id], i)) continue;
     pushLook(occ, [], i);
   }
@@ -1359,7 +1375,7 @@ export function mergeWeekLooks(looks: Look[], week: Look[]): Look[] {
 
 export function unusedFromLooks(garments: Garment[], looks: Look[]): Garment[] {
   const pool = lookbookPool(garments);
-  const used = new Set(looks.filter((l) => l.lookbook).flatMap((l) => l.garmentIds));
+  const used = new Set(looks.flatMap((l) => l.garmentIds));
   return pool
     .filter((g) => !used.has(g.id))
     .sort((a, b) => daysIdle(b) - daysIdle(a) || a.id.localeCompare(b.id));

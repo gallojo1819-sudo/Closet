@@ -16,19 +16,16 @@ import {
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
 import {
   applyShuffle,
-  buildChapter,
   buildWeek,
-  capChapterLooks,
   CHAPTER_CAP,
   comboKey,
-  coverUnused,
   enforcePieceCap,
   fillOccasionLooks,
+  lookCountMap,
   mergeWeekLooks,
   mondayISO,
   seenKey,
   stripRepeatBlazers,
-  unusedFromLooks,
 } from "./lookbook";
 import { isFakeName, nameFromPixels, scrubRack } from "./rack";
 import { preferPixels, sampleCover } from "./color";
@@ -59,8 +56,6 @@ import { todayISO, uid } from "./utils";
 
 export { mergeClosetPersist, openPersistGate, persistGate };
 export type { PersistedCloset };
-
-let coverUnusedRan = false;
 
 type ClosetState = {
   garments: Garment[];
@@ -463,13 +458,11 @@ export const useCloset = create<ClosetState>()(
         if (!s.hydrated || s.garments.length === 0) return 0;
         const prevWeek = s.looks.filter((l) => l.id.startsWith("week_"));
         const excludeKeys = prevWeek.map((l) => comboKey(l.garmentIds));
-        const usedCount = new Map<string, number>();
-        for (const l of s.looks) {
-          for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
-        }
-        const week = buildWeek(s.garments, undefined, { excludeKeys, usedCount });
-        const looks = coverUnused(s.garments, mergeWeekLooks(s.looks, week));
-        set({ looks });
+        const week = buildWeek(s.garments, undefined, {
+          excludeKeys,
+          usedCount: lookCountMap(s.looks),
+        });
+        set({ looks: mergeWeekLooks(s.looks, week) });
         return week.length;
       },
       ensureLookbook: () => {
@@ -478,20 +471,12 @@ export const useCloset = create<ClosetState>()(
         if (s.garments.length === 0) return;
         const monday = mondayISO();
         const weekN = s.looks.filter((l) => l.id.startsWith(`week_${monday}_`)).length;
-        const unused = unusedFromLooks(s.garments, s.looks);
-        if (weekN >= 7 && unused.length === 0) return;
-        let looks = s.looks;
-        if (weekN < 7) {
-          looks = mergeWeekLooks(looks, buildWeek(s.garments));
-        }
-        if (unused.length > 0 && !coverUnusedRan) {
-          looks = coverUnused(s.garments, looks);
-          coverUnusedRan = true;
-        }
-        const key = (list: Look[]) =>
-          list.map((l) => `${l.lookbook ? "b" : "k"}:${l.id}:${l.occasion}`).join("|");
-        if (key(s.looks) === key(looks)) return;
-        set({ looks });
+        if (weekN >= 7) return;
+        const week = buildWeek(s.garments, undefined, {
+          excludeKeys: s.looks.filter((l) => l.id.startsWith("week_")).map((l) => comboKey(l.garmentIds)),
+          usedCount: lookCountMap(s.looks),
+        });
+        set({ looks: mergeWeekLooks(s.looks, week) });
       },
       ensureOccasionBook: (occasion, season, house) => {
         const s = get();

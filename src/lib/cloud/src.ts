@@ -76,14 +76,26 @@ export function applyBackupToStore<T extends SrcGarment>(
   return getGarments();
 }
 
-/** Sticky backup banner. Hide only when no live idb: refs remain. */
+/** Sticky backup banner. Hide only when remaining is 0 and listed thumbs cover the rack. */
 export function shouldShowBackupBanner(input: {
   signedIn: boolean;
   liveCount: number;
   remaining: number;
   localOnly?: boolean;
+  listedThumbs?: number | null;
 }): boolean {
   if (!input.signedIn || input.liveCount <= 0) return false;
-  if (input.remaining === 0) return false;
-  return input.remaining > 0 || Boolean(input.localOnly);
+  if (input.remaining > 0) return true;
+  if (typeof input.listedThumbs === "number" && input.listedThumbs < input.liveCount) {
+    return true;
+  }
+  return false;
+}
+
+export function backupRemaining(input: {
+  idbRemaining: number;
+  listedThumbs: number;
+  liveCount: number;
+}): number {
+  return Math.max(input.idbRemaining, Math.max(0, input.liveCount - input.listedThumbs));
 }

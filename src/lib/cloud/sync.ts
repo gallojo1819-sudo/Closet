@@ -9,6 +9,7 @@ import type { DailyDrop, Garment, Look, WearEntry } from "../types.ts";
 import { getAccount, patchAccount, setAccountProgress, setLocalOnly } from "./account.ts";
 import {
   clearUploaded,
+  countListedThumbs,
   forgetUploaded,
   isForbidden,
   mapPool,
@@ -17,7 +18,7 @@ import {
   wasUploaded,
 } from "./blobs.ts";
 import { isHomeEmail, WRONG_ACCOUNT } from "./home.ts";
-import { applyBackupToStore, idbCount } from "./src.ts";
+import { applyBackupToStore, backupRemaining, idbCount } from "./src.ts";
 import {
   closetImagesBucket,
   getSupabase,
@@ -26,6 +27,7 @@ import {
 import {
   LOCAL_ONLY_CAPTION,
   backingUpCopy,
+  cloudErrorCopy,
   pulledCopy,
   savedAccountCopy,
   stillOnPhoneCopy,
@@ -201,13 +203,11 @@ function applyLocal(next: CloudMeta) {
 }
 
 async function countAccountThumbs(userId: string): Promise<number> {
-  const sb = getSupabase();
-  if (!sb) return 0;
-  const { data, error } = await sb.storage
-    .from(closetImagesBucket())
-    .list(userId, { limit: 1000 });
-  if (error || !data) return 0;
-  return data.filter((row) => row.name && row.name !== "me").length;
+  try {
+    return await countListedThumbs(userId);
+  } catch {
+    return 0;
+  }
 }
 
 async function pullThumbs(garments: CloudMeta["garments"]) {
@@ -253,7 +253,8 @@ async function pushNow(withProgress: boolean) {
         });
       }
     } catch (err) {
-      if (!isForbidden(err as { message?: string })) throw err;
+      setLocalOnly(true);
+      setAccountProgress(cloudErrorCopy(err));
     }
     const uploadedKinds = new Set<string>();
     for (const g of garments) {
@@ -275,10 +276,25 @@ async function pushNow(withProgress: boolean) {
       holdPush = false;
     }
     void uploadRef(user.id, useCloset.getState().refPhoto);
-    const remaining = idbCount(accountPool(useCloset.getState().garments));
+    const liveN = livePool(useCloset.getState().garments).length;
+    let listed = 0;
+    try {
+      listed = await countListedThumbs(user.id);
+    } catch (err) {
+      setLocalOnly(true);
+      setAccountProgress(cloudErrorCopy(err));
+    }
+    patchAccount({ listedThumbs: listed });
+    const remaining = backupRemaining({
+      idbRemaining: idbCount(accountPool(useCloset.getState().garments)),
+      listedThumbs: listed,
+      liveCount: liveN,
+    });
     if (remaining > 0) {
       setLocalOnly(true);
-      setAccountProgress(stillOnPhoneCopy(remaining));
+      if (!getAccount().progress || getAccount().progress?.startsWith("Backing up") || getAccount().progress?.startsWith("Saved")) {
+        setAccountProgress(stillOnPhoneCopy(remaining));
+      }
       return;
     }
     if (getAccount().localOnly) {

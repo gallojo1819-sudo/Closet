@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   applyBackupToStore,
+  backupRemaining,
   cloudSrc,
   idbCount,
   isCloudSrc,
@@ -67,7 +68,7 @@ describe("rewriteCloudSrcs", () => {
 });
 
 describe("shouldShowBackupBanner", () => {
-  it("hides only when remaining is 0", () => {
+  it("hides only when remaining is 0 and listed thumbs cover the rack", () => {
     assert.equal(
       shouldShowBackupBanner({ signedIn: true, liveCount: 145, remaining: 145 }),
       true,
@@ -77,8 +78,32 @@ describe("shouldShowBackupBanner", () => {
       false,
     );
     assert.equal(
+      shouldShowBackupBanner({
+        signedIn: true,
+        liveCount: 145,
+        remaining: 0,
+        listedThumbs: 0,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldShowBackupBanner({
+        signedIn: true,
+        liveCount: 145,
+        remaining: 0,
+        listedThumbs: 145,
+      }),
+      false,
+    );
+    assert.equal(
       shouldShowBackupBanner({ signedIn: false, liveCount: 145, remaining: 12 }),
       false,
     );
+  });
+
+  it("backupRemaining is 0 only when idb is 0 and listed thumbs cover N", () => {
+    assert.equal(backupRemaining({ idbRemaining: 145, listedThumbs: 0, liveCount: 145 }), 145);
+    assert.equal(backupRemaining({ idbRemaining: 0, listedThumbs: 0, liveCount: 145 }), 145);
+    assert.equal(backupRemaining({ idbRemaining: 0, listedThumbs: 145, liveCount: 145 }), 0);
   });
 });
