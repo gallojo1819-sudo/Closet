@@ -4,7 +4,7 @@ import {
   refImageKey,
 } from "../images.ts";
 import { livePool, scrubRack } from "../rack.ts";
-import { useCloset } from "../store.ts";
+import { openPersistGate, useCloset } from "../store.ts";
 import type { DailyDrop, Garment, Look, WearEntry } from "../types.ts";
 import { getAccount, patchAccount, setAccountProgress, setLocalOnly } from "./account.ts";
 import {
@@ -17,7 +17,7 @@ import {
   wasUploaded,
 } from "./blobs.ts";
 import { isHomeEmail, WRONG_ACCOUNT } from "./home.ts";
-import { idbCount, rewriteCloudSrcs } from "./src.ts";
+import { applyBackupToStore, idbCount } from "./src.ts";
 import {
   closetImagesBucket,
   getSupabase,
@@ -46,6 +46,7 @@ type LastSnap = { userId: string; ids: string[] };
 
 let linking = false;
 let pushing = false;
+let holdPush = false;
 let pushTimer: number | undefined;
 let started = false;
 const uploadedRef = new Set<string>();
@@ -238,17 +239,21 @@ async function pushNow(withProgress: boolean) {
     const garments = accountPool(useCloset.getState().garments) as Garment[];
     const total = garments.length;
     const conc = total && withProgress ? 3 : 2;
-    if (total > 0) {
-      let done = 0;
-      await mapPool(garments, conc, async (g) => {
-        await uploadKind(user.id, g, "t");
-        done += 1;
-        if (withProgress) setAccountProgress(backingUpCopy(done, total));
-      });
-      await mapPool(garments, 2, async (g) => {
-        await uploadKind(user.id, g, "c");
-        await uploadKind(user.id, g, "o");
-      });
+    try {
+      if (total > 0) {
+        let done = 0;
+        await mapPool(garments, conc, async (g) => {
+          await uploadKind(user.id, g, "t");
+          done += 1;
+          if (withProgress) setAccountProgress(backingUpCopy(done, total));
+        });
+        await mapPool(garments, 2, async (g) => {
+          await uploadKind(user.id, g, "c");
+          await uploadKind(user.id, g, "o");
+        });
+      }
+    } catch (err) {
+      if (!isForbidden(err as { message?: string })) throw err;
     }
     const uploadedKinds = new Set<string>();
     for (const g of garments) {
@@ -256,12 +261,19 @@ async function pushNow(withProgress: boolean) {
         if (wasUploaded(g.id, kind)) uploadedKinds.add(`${g.id}:${kind}`);
       }
     }
-    const rewritten = rewriteCloudSrcs(garments, user.id, uploadedKinds);
-    const byId = new Map(rewritten.map((g) => [g.id, g]));
-    useCloset.setState({
-      garments: useCloset.getState().garments.map((g) => byId.get(g.id) ?? g),
-    });
-    await upsertMeta(user.id);
+    holdPush = true;
+    try {
+      openPersistGate();
+      applyBackupToStore(
+        () => useCloset.getState().garments,
+        (next) => useCloset.setState({ garments: next }),
+        user.id,
+        uploadedKinds,
+      );
+      await upsertMeta(user.id);
+    } finally {
+      holdPush = false;
+    }
     void uploadRef(user.id, useCloset.getState().refPhoto);
     const remaining = idbCount(accountPool(useCloset.getState().garments));
     if (remaining > 0) {
@@ -290,7 +302,7 @@ export function backupPhotos(): void {
 }
 
 function schedulePush() {
-  if (linking) return;
+  if (linking || holdPush) return;
   if (!getAccount().user) return;
   if (typeof window === "undefined") return;
   window.clearTimeout(pushTimer);

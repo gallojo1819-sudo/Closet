@@ -1,6 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { cloudSrc, idbCount, isCloudSrc, parseCloudSrc, rewriteCloudSrcs } from "./src.ts";
+import {
+  applyBackupToStore,
+  cloudSrc,
+  idbCount,
+  isCloudSrc,
+  parseCloudSrc,
+  rewriteCloudSrcs,
+  shouldShowBackupBanner,
+} from "./src.ts";
 
 /** Fake user — tests never read or write closet.v6. */
 void "fake-user-joe";
@@ -18,5 +26,59 @@ describe("rewriteCloudSrcs", () => {
     assert.equal(isCloudSrc(next[0]!.cutoutSrc), true);
     assert.equal(parseCloudSrc(next[0]!.cutoutSrc)?.kind, "t");
     assert.equal(cloudSrc(user, "a", "t"), next[0]!.cutoutSrc);
+  });
+
+  it("fake 3-garment backup: idbCount is 0 and upsert payload has sb: not idb:", () => {
+    const user = "11111111-1111-1111-1111-111111111111";
+    const pre = [
+      { id: "g1", imageSrc: "idb:g1:o", cutoutSrc: "idb:g1:c" },
+      { id: "g2", imageSrc: "idb:g2:o", cutoutSrc: "idb:g2:c" },
+      { id: "g3", imageSrc: "idb:g3:o", cutoutSrc: "idb:g3:c" },
+    ];
+    const uploaded = new Set([
+      "g1:t",
+      "g1:c",
+      "g1:o",
+      "g2:t",
+      "g2:c",
+      "g2:o",
+      "g3:t",
+      "g3:c",
+      "g3:o",
+    ]);
+    let store = { garments: pre };
+    const fromState = applyBackupToStore(
+      () => store.garments,
+      (next) => {
+        store = { garments: next };
+      },
+      user,
+      uploaded,
+    );
+    assert.equal(idbCount(fromState), 0);
+    assert.equal(idbCount(store.garments), 0);
+    const payload = JSON.stringify({ garments: store.garments });
+    assert.equal(payload.includes("idb:"), false);
+    assert.equal(payload.includes("sb:"), true);
+    assert.equal(parseCloudSrc(store.garments[0]!.cutoutSrc)?.kind, "c");
+    assert.equal(parseCloudSrc(store.garments[0]!.imageSrc)?.kind, "o");
+    assert.notEqual(fromState, pre);
+  });
+});
+
+describe("shouldShowBackupBanner", () => {
+  it("hides only when remaining is 0", () => {
+    assert.equal(
+      shouldShowBackupBanner({ signedIn: true, liveCount: 145, remaining: 145 }),
+      true,
+    );
+    assert.equal(
+      shouldShowBackupBanner({ signedIn: true, liveCount: 145, remaining: 0, localOnly: true }),
+      false,
+    );
+    assert.equal(
+      shouldShowBackupBanner({ signedIn: false, liveCount: 145, remaining: 12 }),
+      false,
+    );
   });
 });

@@ -107,7 +107,7 @@ type ClosetState = {
   resetChapter: (occasion: Occasion, season?: Season, house?: House) => void;
   markSeen: (occasion: Occasion, keys: string[], house?: House) => void;
   keepLook: (id: string, patch?: { garmentIds?: string[]; name?: string }) => void;
-  newWeek: () => void;
+  newWeek: () => number;
   loadSample: () => void;
   emptyCloset: (opts?: { sample?: boolean }) => void;
   importCloset: (payload: {
@@ -460,7 +460,7 @@ export const useCloset = create<ClosetState>()(
         })),
       newWeek: () => {
         const s = get();
-        if (!s.hydrated || s.garments.length === 0) return;
+        if (!s.hydrated || s.garments.length === 0) return 0;
         const prevWeek = s.looks.filter((l) => l.id.startsWith("week_"));
         const excludeKeys = prevWeek.map((l) => comboKey(l.garmentIds));
         const usedCount = new Map<string, number>();
@@ -470,6 +470,7 @@ export const useCloset = create<ClosetState>()(
         const week = buildWeek(s.garments, undefined, { excludeKeys, usedCount });
         const looks = coverUnused(s.garments, mergeWeekLooks(s.looks, week));
         set({ looks });
+        return week.length;
       },
       ensureLookbook: () => {
         const s = get();

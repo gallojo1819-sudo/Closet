@@ -106,6 +106,14 @@ describe("mergeGarments", () => {
     assert.equal(next.length, 3);
   });
 
+  it("closet_meta sb: srcs win over local idb: on the same id", () => {
+    const local = [{ id: "a", imageSrc: "idb:a:o", cutoutSrc: "idb:a:c" }];
+    const cloud = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c.jpg" }];
+    const next = mergeGarments({ local, cloud, lastCloudIds: ["a"] });
+    assert.equal(next[0]?.imageSrc, "sb:u/a/o.jpg");
+    assert.equal(next[0]?.cutoutSrc, "sb:u/a/c.jpg");
+  });
+
   it("after first link, a cloud delete drops that id; unpushed local adds stay", () => {
     const local = [g("keep"), g("gone"), g("new-on-phone")];
     const cloud = [g("keep")];

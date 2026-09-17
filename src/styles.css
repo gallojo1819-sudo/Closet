@@ -127,8 +127,44 @@
   animation: rise 400ms var(--ease-atelier) both;
 }
 
+@keyframes paper-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+.paper-shimmer {
+  background-color: var(--color-paper-deep);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(251 248 241 / 0.72) 50%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: paper-shimmer 1.15s ease-in-out infinite;
+}
+
+@keyframes week-crossfade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.week-crossfade {
+  animation: week-crossfade 180ms ease both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .rise {
+  .rise,
+  .paper-shimmer,
+  .week-crossfade {
     animation: none;
   }
 }

@@ -1,10 +1,18 @@
+import { isCloudSrc } from "./src.ts";
+
 /**
  * Account merge. closet.v6 + IDB stay a cache.
  * Never replace a non-empty local rack with an empty cloud.
  * Tests use a fake user and must not touch closet.v6.
  */
 
-export type CloudGarment = { id: string; archived?: boolean; demo?: boolean };
+export type CloudGarment = {
+  id: string;
+  archived?: boolean;
+  demo?: boolean;
+  imageSrc?: string;
+  cutoutSrc?: string;
+};
 
 export type CloudLook = { id: string; garmentIds: string[] };
 
@@ -49,6 +57,18 @@ export function unionById<T extends { id: string }>(local: T[], cloud: T[]): T[]
   return [...map.values()];
 }
 
+/** closet_meta sb: srcs win over local idb: on the same id. Other local fields stay. */
+export function preferAccountSrcs<T extends CloudGarment>(local: T, cloud: T | undefined): T {
+  if (!cloud) return local;
+  const imageSrc = isCloudSrc(cloud.imageSrc)
+    ? cloud.imageSrc
+    : (local.imageSrc ?? cloud.imageSrc);
+  const cutoutSrc = isCloudSrc(cloud.cutoutSrc)
+    ? cloud.cutoutSrc
+    : (local.cutoutSrc ?? cloud.cutoutSrc);
+  return { ...cloud, ...local, imageSrc, cutoutSrc };
+}
+
 /**
  * First link (lastCloudIds === null): union by id.
  * Later: cloud is the account; local-only ids that were in lastCloudIds were
@@ -62,7 +82,10 @@ export function mergeGarments<T extends CloudGarment>(opts: {
   const localReal = accountPool(opts.local);
   const cloudReal = accountPool(opts.cloud);
   if (cloudReal.length === 0) return localReal;
-  if (opts.lastCloudIds === null) return unionById(localReal, cloudReal);
+  const cloudMap = new Map(cloudReal.map((g) => [g.id, g]));
+  if (opts.lastCloudIds === null) {
+    return unionById(localReal, cloudReal).map((g) => preferAccountSrcs(g, cloudMap.get(g.id)));
+  }
 
   const last = new Set(opts.lastCloudIds);
   const cloudIds = new Set(cloudReal.map((g) => g.id));
@@ -70,7 +93,7 @@ export function mergeGarments<T extends CloudGarment>(opts: {
   for (const g of cloudReal) next.set(g.id, g);
   for (const g of localReal) {
     if (cloudIds.has(g.id)) {
-      next.set(g.id, g);
+      next.set(g.id, preferAccountSrcs(g, cloudMap.get(g.id)));
       continue;
     }
     if (!last.has(g.id)) next.set(g.id, g);

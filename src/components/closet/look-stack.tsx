@@ -15,7 +15,7 @@ export function LookStack({
         <div key={g.id} className="bg-paper-deep aspect-page">
           <GarmentImg
             garment={g}
-            className="h-full w-full object-contain p-[8%]"
+            className="h-full w-full object-contain p-[4%]"
           />
         </div>
       ))}

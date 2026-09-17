@@ -203,7 +203,7 @@ function Today() {
             >
               <span className="micro text-ink-soft">{weekdayLetter(iso)}</span>
               {first ? (
-                <GarmentImg garment={first} alt="" className="size-8 object-contain" />
+                <GarmentImg garment={first} alt="" nudge={false} className="size-8 object-contain" />
               ) : (
                 <span className="size-8 border border-dashed border-hairline" />
               )}
@@ -276,6 +276,7 @@ function Today() {
                     <GarmentImg
                       garment={g}
                       alt=""
+                      nudge={false}
                       className="size-14 object-contain bg-paper-deep"
                     />
                     {locked && (

@@ -121,18 +121,31 @@ export async function prefetchEagerThumbs(
   });
 }
 
-async function blobFor(g: Garment, kind: BlobKind): Promise<Blob | null> {
-  try {
-    const hit = await getImage(imageKey(g.id, kind));
-    if (hit) return hit;
-  } catch {
-    /* */
+/** :t from imageKey id t, else cutoutSrc, else imageSrc. */
+export function uploadBlobKeys(
+  g: { id: string; imageSrc?: string; cutoutSrc?: string },
+  kind: BlobKind,
+): string[] {
+  const keys = [imageKey(g.id, kind)];
+  if (kind === "t") {
+    if (isIdbKey(g.cutoutSrc)) keys.push(g.cutoutSrc);
+    if (isIdbKey(g.imageSrc)) keys.push(g.imageSrc);
+  } else if (kind === "c" && isIdbKey(g.cutoutSrc)) {
+    keys.push(g.cutoutSrc);
+  } else if (kind === "o" && isIdbKey(g.imageSrc)) {
+    keys.push(g.imageSrc);
   }
-  try {
-    if (kind === "o" && isIdbKey(g.imageSrc)) return await getImage(g.imageSrc);
-    if (kind === "c" && isIdbKey(g.cutoutSrc)) return await getImage(g.cutoutSrc);
-  } catch {
-    /* */
+  return [...new Set(keys)];
+}
+
+async function blobFor(g: Garment, kind: BlobKind): Promise<Blob | null> {
+  for (const key of uploadBlobKeys(g, kind)) {
+    try {
+      const hit = await getImage(key);
+      if (hit) return hit;
+    } catch {
+      /* */
+    }
   }
   return null;
 }
@@ -143,17 +156,30 @@ export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Pr
   const sb = getSupabase();
   if (!sb) return false;
   const blob = await blobFor(g, kind);
-  if (!blob) return true;
+  if (!blob) return kind !== "t";
   const { error } = await sb.storage.from(closetImagesBucket()).upload(
     garmentObjectPath(userId, g.id, kind),
     blob,
     { upsert: true, contentType: blob.type || "image/jpeg" },
   );
   if (error) {
-    if (isForbidden(error) || isRetryableCloudError(error)) setLocalOnly(true);
+    if (isForbidden(error)) {
+      setLocalOnly(true);
+      throw error;
+    }
+    if (isRetryableCloudError(error)) setLocalOnly(true);
     return false;
   }
   uploaded.add(mark);
+  const canonical = imageKey(g.id, kind);
+  if (kind === "t") {
+    try {
+      const existing = await getImage(canonical);
+      if (!existing) await putImage(canonical, blob);
+    } catch {
+      /* IDB cache is best-effort */
+    }
+  }
   return true;
 }
 

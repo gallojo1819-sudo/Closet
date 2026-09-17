@@ -31,7 +31,7 @@ export function GarmentTile({
       >
         <GarmentImg
           garment={garment}
-          className="absolute inset-0 h-full w-full object-contain p-[8%]"
+          className="absolute inset-0 h-full w-full object-contain p-[4%]"
         />
         {selecting && (
           <span

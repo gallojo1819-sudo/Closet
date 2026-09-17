@@ -71,6 +71,7 @@ export function FlatLay({
               garment={g}
               thumb={thumb}
               eager={!thumb}
+              nudge={false}
               className="w-full aspect-page object-contain drop-shadow-sm"
             />
           </div>

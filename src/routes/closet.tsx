@@ -357,7 +357,7 @@ function ClosetPage() {
                 always={24}
                 placeholder={
                   <div>
-                    <div className="aspect-page border border-hairline bg-paper-deep" />
+                    <div className="aspect-page border border-hairline paper-shimmer" />
                     <p className="mt-2 text-sm leading-snug">{g.name}</p>
                   </div>
                 }

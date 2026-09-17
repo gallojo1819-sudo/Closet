@@ -129,7 +129,7 @@ function LookCard({
             ref={cardRef}
             onClick={onOpen}
             aria-label={look.name}
-            className="block w-full aspect-[4/5] border border-hairline bg-paper"
+            className="block w-full aspect-[4/5] border border-hairline paper-shimmer"
           />
         }
       >
@@ -152,6 +152,8 @@ function LookbookPage() {
   const newWeek = useCloset((s) => s.newWeek);
   const wearToday = useCloset((s) => s.wearToday);
   const [play, setPlay] = useState(false);
+  const [weekPulse, setWeekPulse] = useState(0);
+  const [weekNote, setWeekNote] = useState<string | null>(null);
   const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]["id"]>("weekday");
   const [seasonChip, setSeasonChip] = useState<"auto" | Season>("auto");
   const [houseChip, setHouseChip] = useState<"all" | House>("all");
@@ -398,7 +400,11 @@ function LookbookPage() {
       <div className="mt-6 flex flex-wrap gap-3">
       <button
         type="button"
-        onClick={() => newWeek()}
+        onClick={() => {
+          const n = newWeek();
+          setWeekNote(`New week · ${n} looks`);
+          setWeekPulse((x) => x + 1);
+        }}
         className="inline-flex h-11 items-center border border-hairline px-4 text-sm text-ink hover:border-hairline-strong"
       >
         New week
@@ -447,12 +453,19 @@ function LookbookPage() {
         <>
       <section className="mt-10">
         <p className="micro text-ink-soft">This week</p>
+        {weekNote && <p className="mt-1 micro text-ink-soft">{weekNote}</p>}
         {shown.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">
             {emptyFilterCopy(chapterLabel, seasonLabel, seasonChip, houseChip, color)}
           </p>
         ) : (
-          <ul className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          <ul
+            key={weekPulse}
+            className={cn(
+              "mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-8",
+              weekPulse > 0 && "week-crossfade",
+            )}
+          >
             {shown.map((look, i) => {
               const pieces = piecesFor(look);
               if (pieces.length < 3) return null;
