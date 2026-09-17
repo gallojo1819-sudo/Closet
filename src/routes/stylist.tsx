@@ -5,6 +5,13 @@ import { FlatLay } from "@/components/closet/flat-lay";
 import { ensureLookOnMe } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { askStylist } from "@/lib/ai";
+import {
+  WHICH_PIECE,
+  dressReply,
+  looksLikePieceAsk,
+  occasionFromDressPrompt,
+  resolvePiecesFromText,
+} from "@/lib/dress";
 import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
 import { daysIdle, defaultOccasion, HOUSE_LABEL, housesOf, momentOfDay } from "@/lib/style";
@@ -130,6 +137,7 @@ function StylistPage() {
   const pushMessage = useCloset((s) => s.pushMessage);
   const saveLook = useCloset((s) => s.saveLook);
   const setDrop = useCloset((s) => s.setDrop);
+  const outfitWith = useCloset((s) => s.outfitWith);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -139,6 +147,34 @@ function StylistPage() {
     pushMessage({ role: "user", text: q });
     setText("");
     setBusy(true);
+    const named = resolvePiecesFromText(q, owned);
+    if (named.length === 0 && looksLikePieceAsk(q)) {
+      pushMessage({ role: "stylist", text: WHICH_PIECE });
+      setBusy(false);
+      return;
+    }
+    if (named.length > 0) {
+      const occasion = occasionFromDressPrompt(q, drop?.occasion);
+      const look = outfitWith(
+        named.map((g) => g.id),
+        occasion,
+      );
+      if (look) {
+        const pieces = look.garmentIds
+          .map((id) => owned.find((g) => g.id === id))
+          .filter((g): g is Garment => Boolean(g));
+        pushMessage({
+          role: "stylist",
+          text: dressReply(pieces, occasion, named.map((g) => g.id)),
+          lookId: look.id,
+          garmentIds: look.garmentIds,
+        });
+      } else {
+        pushMessage({ role: "stylist", text: WHICH_PIECE });
+      }
+      setBusy(false);
+      return;
+    }
     const closet = forStylist
       .map((g) => {
         const idle = daysIdle(g);
@@ -196,7 +232,7 @@ function StylistPage() {
         occasion,
         garmentIds: res.garmentIds,
         source: "manual",
-        lookbook: true,
+        lookbook: false,
       });
       garmentIds = res.garmentIds;
       setDrop({
@@ -312,7 +348,7 @@ function StylistPage() {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Occasion, time, weather, a feeling…"
+          placeholder="Wear the cream cable"
           disabled={owned.length === 0}
           className="h-12 flex-1 border border-champagne/25 bg-night-elev px-3 text-sm text-champagne placeholder:text-champagne/40 disabled:opacity-40"
         />

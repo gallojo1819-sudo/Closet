@@ -7,7 +7,9 @@ import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { colorLine } from "@/lib/color";
 import { nameLook, spreadTitle } from "@/lib/look";
-import { comboKey, moreLikeThis } from "@/lib/lookbook";
+import { moreOutfitsForLook } from "@/lib/dress";
+import { comboKey } from "@/lib/lookbook";
+import { mapOccasion } from "@/lib/types";
 import { slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import type { Garment, Look, Occasion } from "@/lib/types";
@@ -32,6 +34,7 @@ export function LookSheet({
   onWear,
   onOpenLook,
   getCard,
+  initialLocked,
 }: {
   look: Look;
   pieces: Garment[];
@@ -41,7 +44,9 @@ export function LookSheet({
   onWear: () => void;
   onOpenLook: (look: Look) => void;
   getCard?: () => HTMLElement | null;
+  initialLocked?: string[];
 }) {
+  void book;
   const [ids, setIds] = useState(look.garmentIds);
   const [swapSlot, setSwapSlot] = useState<WearSlot | null>(null);
   const closetById = useMemo(() => new Map(closet.map((g) => [g.id, g])), [closet]);
@@ -58,7 +63,9 @@ export function LookSheet({
   const [dressing, setDressing] = useState(false);
   const [dressError, setDressError] = useState<string | null>(null);
   const [showAlts, setShowAlts] = useState(false);
-  const [lockedIds, setLockedIds] = useState<string[]>([]);
+  const [lockedIds, setLockedIds] = useState<string[]>(
+    () => initialLocked?.filter((id) => look.garmentIds.includes(id)) ?? [],
+  );
   const gen = useRef(0);
   const piecesRef = useRef(activePieces);
   piecesRef.current = activePieces;
@@ -104,10 +111,30 @@ export function LookSheet({
   useEffect(() => {
     setIds(look.garmentIds);
     setSwapSlot(null);
-    setLockedIds((prev) => prev.filter((id) => look.garmentIds.includes(id)));
+    setLockedIds(
+      (initialLocked ?? []).filter((id) => look.garmentIds.includes(id)),
+    );
   }, [look.id]);
 
-  const alts = showAlts ? moreLikeThis(look, book, closet, 3, lockedIds) : null;
+  const lockForMore = lockedIds.length ? lockedIds : look.garmentIds.slice(0, 1);
+  const alts = showAlts
+    ? moreOutfitsForLook({
+        seedIds: ids,
+        lockedIds: lockForMore,
+        garments: closet,
+        looks,
+        occasion: mapOccasion(look.occasion),
+        n: 3,
+      }).map((a, i) => ({
+        id: `more_${look.id}_${i}_${a.garmentIds.join("_")}`,
+        name: a.pieces[0]?.name ?? look.name,
+        occasion: look.occasion,
+        garmentIds: a.garmentIds,
+        source: "manual" as const,
+        lookbook: false,
+        createdAt: look.createdAt,
+      }))
+    : null;
 
   const runDress = () => {
     if (dressing) return;
@@ -162,9 +189,12 @@ export function LookSheet({
         </div>
         <div className="p-4 flex flex-col gap-4">
           <div>
-            <p>{spreadTitle(activePieces, look.occasion as Occasion)}</p>
+            <p>{look.name.includes(" · ") ? look.name : spreadTitle(activePieces, look.occasion as Occasion)}</p>
             <p className="micro text-ink-soft">
-              {colorLine(activePieces).replace(/\.$/, "") || look.occasion}
+              {activePieces
+                .filter((g) => !look.name.toLowerCase().includes(g.name.toLowerCase()))
+                .map((g) => g.name)
+                .join(" · ") || colorLine(activePieces).replace(/\.$/, "") || look.occasion}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -327,7 +357,7 @@ export function LookSheet({
             onClick={() => setShowAlts(true)}
             className="micro self-start border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
           >
-            Also with this
+            More like this
           </button>
           {alts &&
             (alts.length === 0 ? (

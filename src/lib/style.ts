@@ -486,6 +486,8 @@ export function pickLook(
     lockedIds?: string[];
     /** Pair keys (bottom|shoe, top|bottom) worn this week — score −12 unless locked. */
     repeatPairs?: Set<string> | string[];
+    /** Scarce-first: 1/(1+lookCount). Dress-this-piece partners. */
+    usedCount?: Map<string, number>;
   },
 ): string[] {
   const pool = livePool(garments);
@@ -530,6 +532,7 @@ export function pickLook(
     if (season === "summer" && (g.warmth >= 4 || isOvercoatPiece(g))) s -= 4;
     if (season === "winter" && isLinenCampPiece(g)) s -= 6;
     if (season === "winter" && g.warmth <= 2) s -= 2;
+    if (opts.usedCount) s += 8 / (1 + (opts.usedCount.get(g.id) ?? 0));
     return s + Math.random() * 0.25;
   };
 

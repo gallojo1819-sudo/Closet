@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
 import { LookBuilder } from "@/components/closet/look-builder";
+import { LookSheet } from "@/components/closet/look-sheet";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, nameLook, neglectedPiece, sortLook } from "@/lib/look";
@@ -11,7 +12,7 @@ import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
 import { HOUSE_LABEL, avoidedUniformLine, daysIdle, lookHouses } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import { OCCASIONS, type Occasion } from "@/lib/types";
+import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
 import { getNycWeather } from "@/lib/weather";
 import { cn, formatLongDate, lastDays, todayISO, weekdayLetter } from "@/lib/utils";
 
@@ -30,10 +31,13 @@ function Today() {
   const wearToday = useCloset((s) => s.wearToday);
   const skipDrop = useCloset((s) => s.skipDrop);
   const saveLook = useCloset((s) => s.saveLook);
+  const outfitWith = useCloset((s) => s.outfitWith);
+  const looksAll = useCloset((s) => s.looks);
   const hydrated = useCloset((s) => s.hydrated);
   const account = useAccount();
   const [view, setView] = useState<"paper" | "me">("paper");
   const [play, setPlay] = useState(false);
+  const [dressed, setDressed] = useState<Look | null>(null);
 
   const ownedCount = garments.filter((g) => !g.archived).length;
 
@@ -295,6 +299,17 @@ function Today() {
                   <button
                     type="button"
                     disabled={done}
+                    onClick={() => {
+                      const look = outfitWith([g.id]);
+                      if (look) setDressed(look);
+                    }}
+                    className="micro text-ink-soft hover:text-ink disabled:opacity-30"
+                  >
+                    Outfit with this
+                  </button>
+                  <button
+                    type="button"
+                    disabled={done}
                     onClick={() => toggleLock(g.id)}
                     className="micro text-ink-soft hover:text-ink disabled:opacity-30"
                   >
@@ -373,6 +388,23 @@ function Today() {
           )}
         </div>
       </div>
+      {dressed && dressed.garmentIds.length >= 2 && (
+        <LookSheet
+          look={dressed}
+          pieces={dressed.garmentIds
+            .map((id) => garments.find((g) => g.id === id))
+            .filter((g): g is Garment => Boolean(g))}
+          book={looksAll}
+          closet={garments}
+          initialLocked={drop?.lockedIds}
+          onClose={() => setDressed(null)}
+          onWear={() => {
+            wearToday(dressed.garmentIds);
+            setDressed(null);
+          }}
+          onOpenLook={(next) => setDressed(next)}
+        />
+      )}
     </div>
   );
 }

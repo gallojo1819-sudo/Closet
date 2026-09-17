@@ -52,6 +52,7 @@ import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type O
 import { isAccountSignedIn } from "./cloud/account";
 import { allowSampleRack } from "./cloud/home";
 import { EMPTY_ACCOUNT_CONFIRM } from "./cloud/copy";
+import { dressThisPiece } from "./dress";
 import { todayISO, uid } from "./utils";
 
 export { mergeClosetPersist, openPersistGate, persistGate };
@@ -102,6 +103,7 @@ type ClosetState = {
   resetChapter: (occasion: Occasion, season?: Season, house?: House) => void;
   markSeen: (occasion: Occasion, keys: string[], house?: House) => void;
   keepLook: (id: string, patch?: { garmentIds?: string[]; name?: string }) => void;
+  outfitWith: (lockedIds: string[], occasion?: Occasion) => Look | null;
   newWeek: () => number;
   loadSample: () => void;
   emptyCloset: (opts?: { sample?: boolean }) => void;
@@ -320,14 +322,50 @@ export const useCloset = create<ClosetState>()(
               ...look,
               id,
               occasion,
-              source: "manual",
-              lookbook: true,
+              source: look.source ?? "manual",
+              lookbook: look.lookbook ?? true,
               createdAt: new Date().toISOString(),
             },
             ...s.looks,
           ],
         }));
         return id;
+      },
+      outfitWith: (lockedIds, occasion) => {
+        const s = get();
+        const dressed = dressThisPiece({
+          lockedIds,
+          garments: s.garments,
+          looks: s.looks,
+          occasion: occasion ?? s.drop?.occasion ?? "out",
+          weather: s.drop?.weather,
+          journal: s.journal,
+        });
+        if (!dressed) return null;
+        const star =
+          dressed.pieces.find((g) => dressed.lockedIds.includes(g.id)) ??
+          dressed.pieces[0]!;
+        const id = get().saveLook({
+          name: `${star.name} · ${dressed.occasion}`,
+          occasion: dressed.occasion,
+          garmentIds: dressed.garmentIds,
+          source: "manual",
+          lookbook: false,
+        });
+        set({
+          drop: {
+            date: todayISO(),
+            garmentIds: dressed.garmentIds,
+            worn: false,
+            verdict: "pending",
+            weather: s.drop?.weather,
+            occasion: dressed.occasion,
+            moment: momentOfDay(),
+            lockedIds: dressed.lockedIds,
+            lockNote: null,
+          },
+        });
+        return get().looks.find((l) => l.id === id) ?? null;
       },
       keepLook: (id, patch) => {
         set((s) => ({

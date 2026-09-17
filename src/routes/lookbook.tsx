@@ -151,6 +151,7 @@ function LookbookPage() {
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
   const newWeek = useCloset((s) => s.newWeek);
   const wearToday = useCloset((s) => s.wearToday);
+  const outfitWith = useCloset((s) => s.outfitWith);
   const [play, setPlay] = useState(false);
   const [weekPulse, setWeekPulse] = useState(0);
   const [weekNote, setWeekNote] = useState<string | null>(null);
@@ -161,6 +162,7 @@ function LookbookPage() {
   const [colorOpen, setColorOpen] = useState(false);
   const drop = useCloset((s) => s.drop);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [dressed, setDressed] = useState<Look | null>(null);
   const [heroId, setHeroId] = useState<string | null>(null);
   const [heroLooks, setHeroLooks] = useState<Look[]>([]);
   const cardEls = useRef(new Map<string, HTMLElement>());
@@ -257,10 +259,11 @@ function LookbookPage() {
     return openId ? cardEls.current.get(openId) ?? null : null;
   }, [openId]);
 
-  const allOpenLooks = [...shown, ...heroShown, ...book];
+  const allOpenLooks = [...shown, ...heroShown, ...book, ...looksAll];
   const openLook =
+    (dressed && dressed.id === openId ? dressed : null) ??
+    looksAll.find((l) => l.id === openId) ??
     allOpenLooks.find((l) => l.id === openId) ??
-    book.find((l) => l.id === openId) ??
     null;
   const openPieces = openLook ? piecesFor(openLook) : [];
 
@@ -501,14 +504,27 @@ function LookbookPage() {
             <p className="mt-2 micro text-ink-soft">Not in a look yet</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {unused.map((g) => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={(e) => openHero(g, e.currentTarget)}
-                  className="micro border border-hairline px-3 py-2 text-ink hover:border-hairline-strong"
-                >
-                  {g.name}
-                </button>
+                <span key={g.id} className="inline-flex items-center gap-1 border border-hairline">
+                  <button
+                    type="button"
+                    onClick={(e) => openHero(g, e.currentTarget)}
+                    className="micro px-3 py-2 text-ink hover:text-ink"
+                  >
+                    {g.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const look = outfitWith([g.id]);
+                      if (!look) return;
+                      setDressed(look);
+                      setOpenId(look.id);
+                    }}
+                    className="micro border-l border-hairline px-3 py-2 text-ink-soft hover:text-ink"
+                  >
+                    Outfit with this
+                  </button>
+                </span>
               ))}
             </div>
           </>
@@ -582,10 +598,14 @@ function LookbookPage() {
           pieces={openPieces}
           book={book}
           closet={garments}
+          initialLocked={openLook.lookbook === false ? drop?.lockedIds : undefined}
           getCard={getOpenCard}
           onClose={() => setOpenId(null)}
           onWear={() => wearToday(openPieces.map((g) => g.id))}
-          onOpenLook={(next) => setOpenId(next.id)}
+          onOpenLook={(next) => {
+            setDressed(next);
+            setOpenId(next.id);
+          }}
         />
       )}
         </>

@@ -1,8 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
-import { lookMissing } from "./gaps";
 import { livePool } from "./rack";
 import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
-import { defaultOccasion, HOUSE_LABEL, houseMixPenalty, lookHouses, momentOfDay, pickLook } from "./style";
+import {
+  dressReply,
+  dressThisPiece,
+  occasionFromDressPrompt,
+  resolvePiecesFromText,
+} from "./dress";
+import { defaultOccasion, houseMixPenalty, momentOfDay, pickLook } from "./style";
 import type { Category, Garment, Occasion } from "./types";
 
 export type TagResult = {
@@ -404,7 +409,25 @@ function resolveStylistLook(
   f: number,
   grokText?: string,
 ): { text: string; garmentIds: string[]; occasion: Occasion } {
-  const occasion = occasionFromPrompt(prompt);
+  const named = resolvePiecesFromText(prompt, garments);
+  const occasion = named.length
+    ? occasionFromDressPrompt(prompt)
+    : occasionFromPrompt(prompt);
+  if (named.length) {
+    const dressed = dressThisPiece({
+      lockedIds: named.map((g) => g.id),
+      garments,
+      occasion,
+      weather: { f, label: "Fair", code: 2 },
+    });
+    if (dressed) {
+      return {
+        text: dressReply(dressed.pieces, dressed.occasion, dressed.lockedIds),
+        garmentIds: dressed.garmentIds,
+        occasion: dressed.occasion,
+      };
+    }
+  }
   const skip = /skip/.test(prompt.toLowerCase());
   const valid = new Set(garments.map((g) => g.id));
   let ids = grokText ? parseLookLine(grokText, valid) : [];
@@ -422,26 +445,11 @@ function resolveStylistLook(
       .map((id) => garments.find((g) => g.id === id))
       .filter((g): g is Garment => Boolean(g));
   }
-  const houses = lookHouses(pieces)
-    .slice(0, 2)
-    .map((h) => HOUSE_LABEL[h])
-    .join(" × ");
-  const line = houses ? `${houses} — ${occasion} ${f}°` : `${occasion} ${f}°`;
-  const names = pieces.map((g) => g.name).join("\n");
-  let stripped = grokText
-    ? grokText.replace(/\n?LOOK:\s*[^\n]+/i, "").trim()
-    : "";
-  const hole = lookMissing(pieces, garments);
-  const missing = hole
-    ? `MISSING: ${hole.title.toLowerCase()} — ${hole.finishes}`
-    : "";
-  if (stripped && missing && !/MISSING:/i.test(stripped)) {
-    stripped = `${stripped}\n${missing}`;
-  }
-  const text = stripped
-    ? stripped
-    : `${line}\n${names}${missing ? `\n${missing}` : ""}`;
-  return { text, garmentIds: ids, occasion };
+  return {
+    text: dressReply(pieces, occasion, named.map((g) => g.id)),
+    garmentIds: ids,
+    occasion,
+  };
 }
 
 const CHAT_MODELS = ["grok-4.5", "grok-4.3", "grok-4"] as const;
@@ -518,11 +526,8 @@ ${data.closet.slice(0, 6000)}`,
         if (text.trim() && rack.length) {
           return { ok: true, ...resolveStylistLook(rack, data.prompt, f, text) };
         }
-        if (text.trim()) return { ok: true, text, garmentIds: [], occasion: occasionFromPrompt(data.prompt) };
       }
-      if (r.status !== 403 && r.status !== 404 && r.status !== 422) {
-        return fallback();
-      }
+      if (rack.length) return fallback();
     }
     return fallback();
   });

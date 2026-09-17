@@ -42,6 +42,8 @@ function ClosetPage() {
   const setRefPhoto = useCloset((s) => s.setRefPhoto);
   const removeGarment = useCloset((s) => s.removeGarment);
   const wearToday = useCloset((s) => s.wearToday);
+  const outfitWith = useCloset((s) => s.outfitWith);
+  const drop = useCloset((s) => s.drop);
   const [filter, setFilter] = useState<Filter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [heroLooks, setHeroLooks] = useState<Look[]>([]);
@@ -393,6 +395,13 @@ function ClosetPage() {
             setHeroLooks(looksForHero(open, garments));
             setHeroOpen(null);
           }}
+          onOutfit={() => {
+            const look = outfitWith([open.id]);
+            if (!look) return;
+            setOpenPiece(null);
+            setHeroLooks([]);
+            setHeroOpen(look);
+          }}
         />
       )}
       {heroLooks.length > 0 && !heroOpen && (
@@ -446,6 +455,7 @@ function ClosetPage() {
             .filter((g): g is Garment => Boolean(g))}
           book={heroLooks}
           closet={garments}
+          initialLocked={heroOpen.lookbook === false ? drop?.lockedIds : undefined}
           onClose={() => setHeroOpen(null)}
           onWear={() => {
             wearToday(

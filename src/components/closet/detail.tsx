@@ -112,11 +112,13 @@ export function GarmentDetail({
   onClose,
   getTile,
   onLooks,
+  onOutfit,
 }: {
   garment: Garment;
   onClose: () => void;
   getTile?: () => HTMLElement | null;
   onLooks?: () => void;
+  onOutfit?: () => void;
 }) {
   const wearToday = useCloset((s) => s.wearToday);
   const removeGarment = useCloset((s) => s.removeGarment);
@@ -641,6 +643,9 @@ export function GarmentDetail({
             )}
           </div>
           <div className="mt-auto flex flex-wrap gap-2 pt-4">
+            {onOutfit && (
+              <Button onClick={onOutfit}>Outfit with this</Button>
+            )}
             {onLooks && (
               <Button variant="ghost" onClick={onLooks}>
                 5 looks with this

@@ -16,7 +16,7 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/style.test.ts src/lib/lookbook.test.ts src/lib/lookbook.invariants.test.ts src/lib/store.persist.test.ts src/lib/cloud/merge.test.ts src/lib/cloud/open-plan.test.ts src/lib/cloud/online.test.ts src/lib/cloud/src.test.ts src/lib/cloud/blobs.test.ts src/lib/cloud/home.test.ts src/lib/ingest.test.ts src/lib/camera.test.ts src/lib/color.test.ts src/lib/look.test.ts src/lib/gaps.test.ts src/lib/describe.test.ts src/lib/tuck.test.ts src/lib/season.test.ts src/lib/rack.test.ts src/lib/scan.test.ts",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/style.test.ts src/lib/lookbook.test.ts src/lib/lookbook.invariants.test.ts src/lib/store.persist.test.ts src/lib/cloud/merge.test.ts src/lib/cloud/open-plan.test.ts src/lib/cloud/online.test.ts src/lib/cloud/src.test.ts src/lib/cloud/blobs.test.ts src/lib/cloud/home.test.ts src/lib/ingest.test.ts src/lib/camera.test.ts src/lib/color.test.ts src/lib/look.test.ts src/lib/gaps.test.ts src/lib/describe.test.ts src/lib/tuck.test.ts src/lib/season.test.ts src/lib/rack.test.ts src/lib/scan.test.ts src/lib/dress.test.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
