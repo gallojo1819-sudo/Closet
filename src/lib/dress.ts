@@ -1,5 +1,6 @@
 import { lookCountMap } from "./lookbook.ts";
 import { livePool } from "./rack.ts";
+import { houseLegalCombo, type House } from "./houses.ts";
 import {
   momentOfDay,
   pairKey,
@@ -87,7 +88,7 @@ export function occasionFromDressPrompt(
 }
 
 const PIECE_WORD =
-  /cable|loafer|oxford|knit|jean|chino|hoodie|polo|blazer|coat|mule|sneaker|trouser|camp|rugby|sweater|merino|boot|cap|belt|tee|shirt/;
+  /cable|loafer|oxford|knit|jean|chino|hoodie|polo|blazer|coat|mule|sneaker|trouser|camp|rugby|sweater|merino|boot|cap|belt|tee|shirt|990|sangallo|serafino/;
 
 export function looksLikePieceAsk(prompt: string): boolean {
   const p = prompt.toLowerCase();
@@ -119,12 +120,14 @@ export function dressThisPiece(opts: {
   journal?: WearEntry[];
   previousIds?: string[];
   repeatPairs?: Set<string>;
+  house?: House | "all" | null;
 }): DressResult | null {
   const pool = livePool(opts.garments);
   const lockedIds = [...new Set(opts.lockedIds)].filter((id) =>
     pool.some((g) => g.id === id),
   );
-  if (!lockedIds.length) return null;
+  const house = opts.house && opts.house !== "all" ? opts.house : undefined;
+  if (!lockedIds.length && !house) return null;
   const occasion = mapOccasion(opts.occasion ?? "out");
   const usedCount = lookCountMap(opts.looks ?? []);
   const repeats =
@@ -137,13 +140,19 @@ export function dressThisPiece(opts: {
     previousIds: opts.previousIds,
     repeatPairs: repeats,
     usedCount,
+    legalCombo: house
+      ? (p) => houseLegalCombo(p, house, occasion)
+      : undefined,
   });
   const ordered = [...lockedIds.filter((id) => !ids.includes(id)), ...ids];
   const pieces = ordered
     .map((id) => pool.find((g) => g.id === id))
     .filter((g): g is Garment => Boolean(g));
-  if (!lockedIds.every((id) => pieces.some((g) => g.id === id))) return null;
+  if (lockedIds.length && !lockedIds.every((id) => pieces.some((g) => g.id === id))) {
+    return null;
+  }
   if (pieces.length < 2) return null;
+  if (house && !houseLegalCombo(pieces, house, occasion)) return null;
   return { garmentIds: pieces.map((g) => g.id), occasion, pieces, lockedIds };
 }
 
@@ -155,6 +164,7 @@ export function moreOutfitsForLook(opts: {
   occasion: Occasion;
   weather?: WeatherSnap;
   n?: number;
+  house?: House | "all" | null;
 }): DressResult[] {
   const n = opts.n ?? 3;
   const pool = livePool(opts.garments);
@@ -182,6 +192,7 @@ export function moreOutfitsForLook(opts: {
       weather: opts.weather,
       previousIds: [...banned],
       repeatPairs: usedPairs,
+      house: opts.house,
     });
     if (!dressed) break;
     const key = [...dressed.garmentIds].sort().join("|");

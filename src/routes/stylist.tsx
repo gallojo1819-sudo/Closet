@@ -12,6 +12,7 @@ import {
   occasionFromDressPrompt,
   resolvePiecesFromText,
 } from "@/lib/dress";
+import { houseFromPrompt } from "@/lib/houses";
 import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
 import { daysIdle, defaultOccasion, HOUSE_LABEL, housesOf, momentOfDay } from "@/lib/style";
@@ -148,16 +149,19 @@ function StylistPage() {
     setText("");
     setBusy(true);
     const named = resolvePiecesFromText(q, owned);
-    if (named.length === 0 && looksLikePieceAsk(q)) {
-      pushMessage({ role: "stylist", text: WHICH_PIECE });
+    const houseHint = houseFromPrompt(q);
+    if (named.length === 0 && looksLikePieceAsk(q) && !houseHint) {
+      pushMessage({ role: "stylist", text: "Tap the piece on Closet." });
       setBusy(false);
       return;
     }
-    if (named.length > 0) {
+    if (named.length > 0 || houseHint) {
       const occasion = occasionFromDressPrompt(q, drop?.occasion);
+      const house = houseFromPrompt(q);
       const look = outfitWith(
         named.map((g) => g.id),
         occasion,
+        house ?? houseHint ?? undefined,
       );
       if (look) {
         const pieces = look.garmentIds

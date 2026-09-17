@@ -4,42 +4,17 @@ import { lastDays, todayISO } from "./utils.ts";
 import { isLinenCampPiece, isOvercoatPiece, seasonFromWeather } from "./season.ts";
 import { livePool } from "./rack.ts";
 import { onlyTopIsUntucked, resolveTuck } from "./tuck.ts";
+import {
+  HOUSE_CHIPS,
+  HOUSE_LABEL,
+  housesOf,
+  leadHouse,
+  lookHouses,
+  type House,
+} from "./houses.ts";
 
-export type { Moment, Occasion };
-export type House =
-  | "ralph"
-  | "ald"
-  | "faloni"
-  | "italianWinter"
-  | "fiveFourFive"
-  | "sweetStable";
-
-export const HOUSE_LABEL: Record<House, string> = {
-  ralph: "Ralph",
-  ald: "ALD",
-  faloni: "Faloni",
-  italianWinter: "Italian winter",
-  fiveFourFive: "FiveFourFive",
-  sweetStable: "Sweet Stable",
-};
-
-export const HOUSE_CHIPS: { id: House; label: string }[] = [
-  { id: "ralph", label: "Ralph" },
-  { id: "ald", label: "ALD" },
-  { id: "faloni", label: "Faloni" },
-  { id: "fiveFourFive", label: "545" },
-  { id: "sweetStable", label: "Sweet Stable" },
-  { id: "italianWinter", label: "Italian winter" },
-];
-
-const HOUSES: House[] = [
-  "ralph",
-  "ald",
-  "faloni",
-  "italianWinter",
-  "fiveFourFive",
-  "sweetStable",
-];
+export type { Moment, Occasion, House };
+export { HOUSE_CHIPS, HOUSE_LABEL, housesOf, leadHouse, lookHouses };
 
 export function defaultOccasion(d = new Date()): Occasion {
   const day = d.getDay();
@@ -61,35 +36,7 @@ export function daysIdle(g: Garment, today = todayISO()): number {
   return Math.max(0, Math.round(ms / 86_400_000));
 }
 
-export function housesOf(g: Garment): House[] {
-  const blob = `${g.subtype} ${g.name} ${g.material} ${g.colors.join(" ")} ${g.notes}`.toLowerCase();
-  const houses = new Set<House>();
-  if (/oxford|polo|chino|cable|blazer/.test(blob) && !/\bhoodies?\b/.test(blob)) {
-    houses.add("ralph");
-  }
-  if (/trouser/.test(blob) && g.formality >= 3) houses.add("ralph");
-  if (/loafer/.test(blob) && g.formality >= 3) houses.add("ralph");
-  if (
-    /navy/.test(blob) &&
-    g.formality >= 3 &&
-    g.formality <= 4 &&
-    !/\bhoodies?\b/.test(blob)
-  ) {
-    houses.add("ralph");
-  }
-  if (/\bhoodies?\b|graphic|90s|90's|\bflag\b/.test(blob)) houses.add("ald");
-  if (/rugby|oversized|yankee|\b990\b|new balance/.test(blob)) houses.add("ald");
-  if (g.formality >= 2 && g.formality <= 3 && /jean|cap|loafer|cream/.test(blob)) {
-    houses.add("ald");
-  }
-  if (g.warmth <= 2 && /linen|silk|no-show/.test(blob)) houses.add("faloni");
-  if (g.warmth <= 2 && /trouser/.test(blob) && /light|linen/.test(blob)) houses.add("faloni");
-  if (/cashmere|flannel|merino|suede|overcoat/.test(blob)) houses.add("italianWinter");
-  if (/linen|sangallo|tailored short|light cashmere/.test(blob)) houses.add("fiveFourFive");
-  if (/rugby|gingham|cord|horse|equestrian|ski/.test(blob)) houses.add("sweetStable");
-  if (houses.size === 0) houses.add(g.formality >= 3 ? "ralph" : "ald");
-  return [...houses];
-}
+
 
 function houseClimateScore(g: Garment, f: number, occasion: Occasion): number {
   const hs = housesOf(g);
@@ -102,10 +49,9 @@ function houseClimateScore(g: Garment, f: number, occasion: Occasion): number {
   ) {
     s += 1.4;
   }
-  if (occasion === "weekday" && hs.includes("sweetStable")) s += 1.1;
   if (
     (occasion === "weekday" || occasion === "out") &&
-    hs.includes("ralph")
+    hs.includes("polo")
   ) {
     s += 1.1;
   }
@@ -392,29 +338,7 @@ export function houseMixPenalty(pieces: Garment[]): number {
   return p;
 }
 
-/** House the TOP belongs to. Default PoloDefault (ralph) when unsure. */
-export function leadHouse(pieces: Garment[]): House {
-  const top =
-    pieces.find((g) => {
-      const s = slotOf(g);
-      return s === "top" || s === "dress";
-    }) ?? pieces[0];
-  if (!top) return "ralph";
-  const b = blobOf(top);
-  if (isCampCollar(top) || isItalianKnitPolo(top) || (/linen/.test(b) && top.warmth <= 2 && !isSangalloPiece(top))) {
-    return "faloni";
-  }
-  if (isRugbyPiece(top) || isOversizedOxford(top) || isGraphic(top)) return "ald";
-  if (isFairIsle(top) || /gingham/.test(b)) return "sweetStable";
-  if (isSangalloPiece(top) || /resort/.test(b)) return "fiveFourFive";
-  if (isHeavyCable(top)) return "ralph";
-  if (/oxford|polo/.test(b) || (/cable/.test(b) && !isHeavyCable(top))) return "ralph";
-  if (/merino|turtleneck|rollneck|flannel|cashmere/.test(b)) return "italianWinter";
-  if (/linen/.test(b) || (/knit/.test(b) && top.warmth <= 2 && /silk|linen|soft/.test(b))) {
-    return "faloni";
-  }
-  return "ralph";
-}
+
 
 export function pairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
@@ -488,6 +412,8 @@ export function pickLook(
     repeatPairs?: Set<string> | string[];
     /** Scarce-first: 1/(1+lookCount). Dress-this-piece partners. */
     usedCount?: Map<string, number>;
+    /** House HARD filter. Empty rather than PoloDefault. */
+    legalCombo?: (pieces: Garment[]) => boolean;
   },
 ): string[] {
   const pool = livePool(garments);
@@ -608,10 +534,11 @@ export function pickLook(
       }
     }
   }
-  const legal = combos.filter(
-    (c) => houseMixPenalty(c.pieces) >= -8 && !clashes(c.pieces),
-  );
-  const ok = (legal.length ? legal : combos.filter((c) => !clashes(c.pieces))).filter(
+  const houseOk = opts.legalCombo
+    ? combos.filter((c) => !clashes(c.pieces) && opts.legalCombo!(c.pieces))
+    : combos.filter((c) => houseMixPenalty(c.pieces) >= -8 && !clashes(c.pieces));
+  const legal = houseOk;
+  const ok = (legal.length ? legal : opts.legalCombo ? legal : combos.filter((c) => !clashes(c.pieces))).filter(
     (c) => c.h >= 0,
   );
   const poolC = (ok.length ? ok : legal).sort((a, b) => b.s - a.s);
@@ -706,10 +633,4 @@ export function pickLook(
   return ids;
 }
 
-export function lookHouses(pieces: Garment[]): House[] {
-  const counts = Object.fromEntries(HOUSES.map((h) => [h, 0])) as Record<House, number>;
-  for (const g of pieces) {
-    for (const h of housesOf(g)) counts[h] += 1;
-  }
-  return HOUSES.filter((h) => counts[h] > 0).sort((a, b) => counts[b] - counts[a]);
-}
+

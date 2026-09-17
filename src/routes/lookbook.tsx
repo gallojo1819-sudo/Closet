@@ -12,6 +12,8 @@ import { useImageSrc } from "@/lib/use-image";
 import {
   chapterVisible,
   comboKey,
+  buildWeek,
+  lookCountMap,
   lookbookPool,
   looksForHero,
   mondayISO,
@@ -20,13 +22,14 @@ import {
 } from "@/lib/lookbook";
 import { seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
-import { spreadMicro, spreadTitle } from "@/lib/look";
+import { spreadTitle } from "@/lib/look";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
+import { houseGapNote, HOUSE_LABEL, leadHouse } from "@/lib/houses";
 import { daysIdle, HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
+import { mapOccasion, OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function emptyFilterCopy(
@@ -106,6 +109,8 @@ function LookCard({
   onOpen,
   cardRef,
   season,
+  houseLabel,
+  note,
 }: {
   look: Look;
   pieces: Garment[];
@@ -114,6 +119,8 @@ function LookCard({
   onOpen: () => void;
   cardRef: (el: HTMLElement | null) => void;
   season: string;
+  houseLabel: string;
+  note?: string | null;
 }) {
   return (
     <li
@@ -137,8 +144,9 @@ function LookCard({
       </IdleMount>
       <p className="mt-3">{spreadTitle(pieces, look.occasion as Occasion)}</p>
       <p className="micro text-ink-soft">
-        {spreadMicro(pieces, look.occasion as Occasion, season)}
+        {houseLabel} · {look.occasion} · {season}
       </p>
+      {note && <p className="micro mt-1 text-ink-soft">{note}</p>}
     </li>
   );
 }
@@ -203,13 +211,22 @@ function LookbookPage() {
     [book, monday],
   );
   const shown = useMemo(() => {
+    if (houseChip !== "all") {
+      const week = buildWeek(garments, undefined, {
+        usedCount: lookCountMap(looksAll),
+        house: houseChip,
+      });
+      return week.filter((l) => mapOccasion(l.occasion) === occasion);
+    }
     return chapterVisible(weekLooks.length ? weekLooks : book, garments, occasion, {
       season,
-      house: houseChip,
+      house: "all",
       color,
       min: canBuild ? 3 : 0,
     });
-  }, [weekLooks, book, garments, occasion, season, houseChip, color, canBuild]);
+  }, [weekLooks, book, garments, occasion, season, houseChip, color, canBuild, looksAll]);
+  const houseNote =
+    houseChip === "all" ? null : houseGapNote(houseChip, garments);
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const usedN = garments.length - unused.length;
@@ -459,7 +476,9 @@ function LookbookPage() {
         {weekNote && <p className="mt-1 micro text-ink-soft">{weekNote}</p>}
         {shown.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">
-            {emptyFilterCopy(chapterLabel, seasonLabel, seasonChip, houseChip, color)}
+            {houseNote
+              ? houseNote
+              : emptyFilterCopy(chapterLabel, seasonLabel, seasonChip, houseChip, color)}
           </p>
         ) : (
           <ul
@@ -479,6 +498,12 @@ function LookbookPage() {
                   pieces={pieces}
                   index={i}
                   season={season}
+                  houseLabel={
+                    houseChip === "all"
+                      ? HOUSE_LABEL[leadHouse(pieces, occasion)]
+                      : HOUSE_LABEL[houseChip]
+                  }
+                  note={houseNote}
                   highlight={highlightId === look.id}
                   onOpen={() => {
                     lastAnchor.current = cardEls.current.get(look.id) ?? null;
@@ -515,7 +540,11 @@ function LookbookPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const look = outfitWith([g.id]);
+                      const look = outfitWith(
+                        [g.id],
+                        occasion,
+                        houseChip === "all" ? undefined : houseChip,
+                      );
                       if (!look) return;
                       setDressed(look);
                       setOpenId(look.id);
@@ -599,6 +628,7 @@ function LookbookPage() {
           book={book}
           closet={garments}
           initialLocked={openLook.lookbook === false ? drop?.lockedIds : undefined}
+          house={houseChip === "all" ? undefined : houseChip}
           getCard={getOpenCard}
           onClose={() => setOpenId(null)}
           onWear={() => wearToday(openPieces.map((g) => g.id))}

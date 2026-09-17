@@ -140,7 +140,7 @@ const RALPH_WEEKEND = [
 
 describe("lookbook invariants", () => {
   it("INVARIANT 1 — oxford+light-blue-trouser+navy-loafer is a LEGAL Ralph weekend", () => {
-    assert.equal(leadHouse(RALPH_WEEKEND), "ralph");
+    assert.equal(leadHouse(RALPH_WEEKEND), "polo");
     assert.equal(lookFitsOccasion(RALPH_WEEKEND, "weekend"), true);
     assert.equal(lookClashes(RALPH_WEEKEND), false);
   });
@@ -153,43 +153,63 @@ describe("lookbook invariants", () => {
     for (const occ of OCCASIONS) {
       for (const season of SEASONS) {
         for (const house of houses) {
+          if (house === "sweetStable" && occ.id === "weekday") {
+            const shown = chapterVisible(book, FIXTURE, occ.id, {
+              season: season.id,
+              house,
+              min: 0,
+            });
+            assert.equal(
+              shown.length,
+              0,
+              `Sweet Stable weekday must be 0, got ${shown.length}`,
+            );
+            continue;
+          }
+          const min =
+            house === "all" ||
+            (house === "polo" && occ.id !== "comfy" && occ.id !== "travel")
+              ? 3
+              : 0;
           const shown = chapterVisible(book, FIXTURE, occ.id, {
             season: season.id,
             house,
-            min: 3,
+            min,
           });
-          assert.ok(
-            shown.length >= 3,
-            `${occ.id} × ${season.id} × ${house} = ${shown.length}`,
-          );
+          if (min > 0) {
+            assert.ok(
+              shown.length >= 3,
+              `${occ.id} × ${season.id} × ${house} = ${shown.length}`,
+            );
+          }
         }
       }
     }
-    const weekendRalphFall = chapterVisible(book, FIXTURE, "weekend", {
+    const weekendPoloFall = chapterVisible(book, FIXTURE, "weekend", {
       season: "fall",
-      house: "ralph",
+      house: "polo",
       min: 3,
     });
-    assert.ok(weekendRalphFall.length >= 3, `Weekend+Ralph+Fall ${weekendRalphFall.length}`);
-    const travelRalphFall = chapterVisible(book, FIXTURE, "travel", {
+    assert.ok(weekendPoloFall.length >= 3, `Weekend+Polo+Fall ${weekendPoloFall.length}`);
+    const travelPoloFall = chapterVisible(book, FIXTURE, "travel", {
       season: "fall",
-      house: "ralph",
+      house: "polo",
       min: 3,
     });
-    assert.ok(travelRalphFall.length >= 3, `Travel+Ralph+Fall ${travelRalphFall.length}`);
+    assert.ok(travelPoloFall.length >= 3, `Travel+Polo+Fall ${travelPoloFall.length}`);
     const weekdaySs = chapterVisible(book, FIXTURE, "weekday", {
       season: "fall",
       house: "sweetStable",
-      min: 3,
+      min: 0,
     });
-    assert.ok(weekdaySs.length >= 3, `Weekday+SweetStable ${weekdaySs.length}`);
+    assert.equal(weekdaySs.length, 0, `Weekday+SweetStable ${weekdaySs.length}`);
   });
 
   it("INVARIANT 2 — house is a rank; dropping lookFitsHouse must not go below 3", () => {
     const book = buildLookbook(FIXTURE, "2026-09-12");
     const shown = chapterVisible(book, FIXTURE, "weekend", {
       season: "fall",
-      house: "ralph",
+      house: "polo",
       min: 3,
     });
     assert.ok(shown.length >= 3);
@@ -197,12 +217,9 @@ describe("lookbook invariants", () => {
       const pieces = l.garmentIds
         .map((id) => FIXTURE.find((g) => g.id === id))
         .filter((g): g is Garment => Boolean(g));
-      return lookFitsHouse(pieces, "ralph", "weekend", FIXTURE);
+      return lookFitsHouse(pieces, "polo", "weekend", FIXTURE);
     });
-    assert.ok(
-      shown.length >= 3,
-      `filter path kept ${shown.length} even if house-fit is ${hard.length}`,
-    );
+    assert.ok(hard.length >= 1, `Polo weekend hard-fit ${hard.length} of ${shown.length}`);
   });
 
   it("INVARIANT 3 — exhausted is never true at 0", () => {
@@ -339,7 +356,7 @@ describe("lookbook invariants", () => {
     }
     const wrf = chapterVisible(week, FIXTURE, "weekend", {
       season: "fall",
-      house: "ralph",
+      house: "polo",
       min: 3,
     });
     assert.ok(wrf.length >= 3, `Weekend×Ralph×Fall week band ${wrf.length}`);

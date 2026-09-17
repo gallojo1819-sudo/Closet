@@ -103,7 +103,7 @@ type ClosetState = {
   resetChapter: (occasion: Occasion, season?: Season, house?: House) => void;
   markSeen: (occasion: Occasion, keys: string[], house?: House) => void;
   keepLook: (id: string, patch?: { garmentIds?: string[]; name?: string }) => void;
-  outfitWith: (lockedIds: string[], occasion?: Occasion) => Look | null;
+  outfitWith: (lockedIds: string[], occasion?: Occasion, house?: House) => Look | null;
   newWeek: () => number;
   loadSample: () => void;
   emptyCloset: (opts?: { sample?: boolean }) => void;
@@ -331,7 +331,7 @@ export const useCloset = create<ClosetState>()(
         }));
         return id;
       },
-      outfitWith: (lockedIds, occasion) => {
+      outfitWith: (lockedIds, occasion, house) => {
         const s = get();
         const dressed = dressThisPiece({
           lockedIds,
@@ -340,6 +340,7 @@ export const useCloset = create<ClosetState>()(
           occasion: occasion ?? s.drop?.occasion ?? "out",
           weather: s.drop?.weather,
           journal: s.journal,
+          house,
         });
         if (!dressed) return null;
         const star =

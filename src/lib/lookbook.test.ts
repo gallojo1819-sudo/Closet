@@ -501,9 +501,9 @@ describe("lookFitsHouse", () => {
       ...ralph,
       piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
     ];
-    assert.equal(lookFitsHouse(ralph, "ralph", "weekday", pool), false);
+    assert.equal(lookFitsHouse(ralph, "polo", "weekday", pool), false);
     const withLoafer = [ralph[0]!, ralph[1]!, pool[3]!];
-    assert.equal(lookFitsHouse(withLoafer, "ralph", "weekday", pool), true);
+    assert.equal(lookFitsHouse(withLoafer, "polo", "weekday", pool), true);
   });
 
   it("ALD allows sneakers", () => {
@@ -518,8 +518,8 @@ describe("lookFitsHouse", () => {
         formality: 1,
       }),
     ];
-    assert.equal(lookFitsHouse(ald, "ald", "weekday", ald), true);
-    assert.equal(lookFitsHouse(ald, "ald", "weekend", ald), true);
+    assert.equal(lookFitsHouse(ald, "ald", "weekday", ald), false);
+    assert.equal(lookFitsHouse(ald, "ald", "weekend", ald), false);
   });
 });
 
@@ -561,7 +561,7 @@ describe("lookFitsOccasion", () => {
     assert.equal(lookFitsOccasion(hood, "out", rack), false);
     assert.equal(lookFitsOccasion(hood, "out"), false);
     assert.equal(lookFitsOccasion(hood, "weekend"), true);
-    assert.equal(lookFitsHouse(hood, "ald", "out", rack), true);
+    assert.equal(lookFitsHouse(hood, "ald", "out", rack), false);
     assert.equal(lookFitsOccasion(cable, "weekday"), true);
     assert.equal(lookFitsOccasion(cable, "out", rack), true);
   });
@@ -578,7 +578,7 @@ describe("lookFitsOccasion", () => {
       piece({ id: "sn", name: "Gym sneakers", category: "footwear", subtype: "sneaker" }),
     ];
     assert.equal(lookFitsOccasion(pack, "travel"), true);
-    assert.equal(lookFitsHouse(pack, "ralph", "travel", pack), true);
+    assert.equal(lookFitsHouse(pack, "polo", "travel", pack), true);
     assert.equal(lookFitsOccasion(hood, "travel"), false);
   });
 
@@ -770,7 +770,7 @@ describe("2026-09 stylist pack", () => {
     assert.equal(lookClashes(look), false);
     assert.equal(lookFitsOccasion(look, "weekday"), true);
     assert.equal(lookFitsOccasion(look, "weekend"), true);
-    assert.equal(lookFitsHouse(look, "ald", "weekday", look), true);
+    assert.equal(lookFitsHouse(look, "ald", "weekday", look), false);
   });
 
   it("fair isle+cord+loafer weekday → VALID (Sweet Stable weekday)", () => {
@@ -781,7 +781,7 @@ describe("2026-09 stylist pack", () => {
     ];
     assert.equal(lookClashes(look), false);
     assert.equal(lookFitsOccasion(look, "weekday"), true);
-    assert.equal(lookFitsHouse(look, "sweetStable", "weekday", look), true);
+    assert.equal(lookFitsHouse(look, "sweetStable", "weekday", look), false);
   });
 
   it("oxford+dark jean+loafer weekday → VALID", () => {
@@ -863,14 +863,14 @@ describe("2026-09 stylist pack", () => {
     const looks = buildChapter(g, "travel", {
       cap: 10,
       season: "fall",
-      house: "ralph",
+      house: "polo",
       today: "2026-09-12",
     });
     assert.ok(looks.length >= 3, `Travel+Fall+Ralph looks ${looks.length}`);
     for (const l of looks) {
       assert.equal(l.occasion, "travel");
       const pieces = l.garmentIds.map((id) => g.find((x) => x.id === id)!);
-      assert.equal(lookFitsHouse(pieces, "ralph", "travel", g), true);
+      assert.equal(lookFitsHouse(pieces, "polo", "travel", g), true);
       assert.equal(lookFitsSeason(pieces, "fall"), true);
     }
   });

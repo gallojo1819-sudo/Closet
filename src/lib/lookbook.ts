@@ -18,6 +18,7 @@ import {
   slotOf,
   type House,
 } from "./style.ts";
+import { houseFingerprintOk, houseLegalCombo, mapHouse } from "./houses.ts";
 import { lookFitsSeason, seasonRank, weatherForSeason, type Season } from "./season.ts";
 import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "./types.ts";
 import { todayISO } from "./utils.ts";
@@ -107,7 +108,7 @@ export function lookAllowsBlazer(core: Garment[], jacket: Garment, occasion?: Oc
       !/fair\s*isle/.test(tb));
   if (!shirt) return false;
   const house = leadHouse(core);
-  if (house === "ralph" && isHeavyCable(top)) return false;
+  if (house === "polo" && isHeavyCable(top)) return false;
   if (occasion === "weekend" && isFairIsle(top)) return false;
   if (bottom && isSandPiece(top) && isSandPiece(bottom) && isSandPiece(jacket)) {
     return false;
@@ -297,7 +298,7 @@ export function lookFitsOccasion(
   const distressed = bottoms.some(isDistressedJean);
   const shorts = bottoms.some(isShortsPiece);
   const blazer = pieces.some(isBlazerPiece);
-  const legalBottom = chino || trouser || jean;
+  const legalBottom = chino || trouser || jean || cord;
 
   if (shorts && o === "weekday") return false;
   if (distressed && o !== "weekend" && o !== "comfy") return false;
@@ -325,7 +326,11 @@ export function lookFitsOccasion(
       return knit && legalBottom && loafer;
     }
     if (house === "fiveFourFive") {
-      return (camp || /linen|sangallo/.test(blob)) && legalBottom && (loafer || mule);
+      return (
+        (camp || /linen|sangallo|serafino|bowling/.test(blob)) &&
+        legalBottom &&
+        (loafer || mule || sneaker)
+      );
     }
     if (hoodie || graphic) return false;
     if (!(oxford || polo || cable)) return false;
@@ -355,7 +360,20 @@ export function lookFitsOccasion(
     if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
     if ((hoodie || graphic) && !((jean || chino) && sneaker)) return false;
     // oxford + trouser + loafer is legal Ralph weekend — not a tuxedo ban
-    return legalBottom || rugby || fairIsle || camp || sneaker || loafer || boot || oxford || polo || knit;
+    return (
+      legalBottom ||
+      rugby ||
+      fairIsle ||
+      camp ||
+      sneaker ||
+      loafer ||
+      boot ||
+      mule ||
+      oxford ||
+      polo ||
+      knit ||
+      /sangallo|serafino|bowling/.test(blob)
+    );
   }
 
   if (o === "comfy") {
@@ -385,29 +403,14 @@ export function lookFitsOccasion(
 
 export function lookFitsHouse(
   pieces: Garment[],
-  house: House,
+  house: House | string,
   occasion: Occasion,
   pool?: Garment[],
 ): boolean {
-  if (leadHouse(pieces) !== house) return false;
-  if (house === "ralph") {
-    const rack = pool ?? [];
-    const hasLoafer = rack.some((g) => /loafer/.test(`${g.subtype} ${g.name}`.toLowerCase()));
-    const sneaker = shoesOf(pieces).some((g) =>
-      /sneaker|trainer|\b990\b|jordan|\baj4\b/.test(`${g.subtype} ${g.name}`.toLowerCase()),
-    );
-    if (hasLoafer && sneaker) return false;
-  }
-  if (house === "faloni") {
-    if (pieces.some((g) => /blazer|sport\s*coats?|cord/.test(`${g.subtype} ${g.name}`.toLowerCase()))) {
-      return false;
-    }
-    const top = topsOf(pieces)[0];
-    if (top && !(isCampCollar(top) || /linen/.test(`${top.subtype} ${top.name}`.toLowerCase()))) {
-      return false;
-    }
-  }
-  return lookFitsOccasion(pieces, occasion, pool, house);
+  const h = mapHouse(house);
+  if (h === "all") return true;
+  if (!houseFingerprintOk(pieces, h, occasion)) return false;
+  return lookFitsOccasion(pieces, occasion, pool, h);
 }
 
 export function seenKey(occasion: Occasion, house?: House | "all" | null): string {
@@ -568,6 +571,7 @@ export function buildChapter(
   const tryPush = (pieces: Garment[], force = false): boolean => {
     if (pieces.length < 3) return false;
     if (!lookFitsOccasion(pieces, occasion, pool)) return false;
+    if (house && !houseLegalCombo(pieces, house, occasion)) return false;
     if (season && !lookFitsSeason(pieces, season)) return false;
     if (beigePlateCount(pieces) >= 3) return false;
     if (!force) {
@@ -605,6 +609,7 @@ export function buildChapter(
       moment: "day",
       weather,
       previousIds: prev,
+      legalCombo: house ? (p) => houseLegalCombo(p, house, occasion) : undefined,
     });
     if (ids.length < 3) break;
     prev = ids;
@@ -653,6 +658,7 @@ export function buildChapter(
         moment: "day",
         weather,
         lockedIds: [g.id],
+        legalCombo: house ? (p) => houseLegalCombo(p, house, occasion) : undefined,
       });
       let pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
       if (!pieces.some((x) => x.id === g.id)) continue;
@@ -1137,6 +1143,40 @@ export function chapterVisible(
     if (season) return seasonRank(pb, season) - seasonRank(pa, season);
     return 0;
   });
+  if (house) {
+    const hard = ranked.filter((l) => lookFitsHouse(resolve(l), house, occasion, pool));
+    const minH = opts?.min ?? 0;
+    let outH = hard;
+    const keysH = new Set(outH.map((l) => comboKey(l.garmentIds)));
+    let guardH = 0;
+    while (outH.length < minH && minH > 0 && guardH < 12) {
+      guardH += 1;
+      const ids = pickLook(pool, {
+        occasion,
+        moment: "day",
+        weather: season ? weatherForSeason(season) : weatherForOcc(occasion),
+        previousIds: outH.flatMap((l) => l.garmentIds),
+        legalCombo: (p) => houseLegalCombo(p, house, occasion),
+      });
+      if (ids.length < 3) break;
+      const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+      if (pieces.length < 3 || lookClashes(pieces)) continue;
+      if (!lookFitsHouse(pieces, house, occasion, pool)) continue;
+      const key = comboKey(ids);
+      if (keysH.has(key)) continue;
+      keysH.add(key);
+      outH.push({
+        id: `lb2_house_${house}_${occasion}_${key.replace(/\|/g, "_")}`,
+        name: nameOf(pieces),
+        occasion,
+        garmentIds: ids,
+        source: "ai",
+        lookbook: true,
+        createdAt: `${todayISO()}T00:00:00.000Z`,
+      });
+    }
+    return outH;
+  }
 
   let out = enforcePieceCap(stripRepeatBlazers(ranked, garments), garments);
   if (out.length < min && min > 0) {
@@ -1288,7 +1328,7 @@ export function weekWeight(lookCount: number): number {
 export function buildWeek(
   garments: Garment[],
   today = todayISO(),
-  opts?: { excludeKeys?: string[]; usedCount?: Map<string, number> },
+  opts?: { excludeKeys?: string[]; usedCount?: Map<string, number>; house?: House },
 ): Look[] {
   const monday = mondayISO(today);
   const pool = lookbookPool(garments);
@@ -1321,6 +1361,9 @@ export function buildWeek(
       moment: "day",
       weather: weatherForOcc(occ),
       lockedIds: lockedOk,
+      legalCombo: opts?.house
+        ? (p) => houseLegalCombo(p, opts.house, occ)
+        : undefined,
     });
     let pieces = ids
       .map((id) => byId.get(id))
@@ -1336,6 +1379,7 @@ export function buildWeek(
     pieces = pieces.filter((p) => !weekUsed.has(p.id));
     if (pieces.length < 3 || lookClashes(pieces)) return false;
     if (!lookFitsOccasion(pieces, occ, avail) && lockedOk.length) return false;
+    if (opts?.house && !houseLegalCombo(pieces, opts.house, occ)) return false;
     const lookIds = pieces.map((p) => p.id);
     if (lookIds.some((id) => weekUsed.has(id))) return false;
     const key = comboKey(lookIds);

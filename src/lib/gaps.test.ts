@@ -78,7 +78,7 @@ describe("rackNotes", () => {
     assert.equal(first.title, "White oxford");
     assert.ok(first.body.includes("Cream trousers"), first.body);
     assert.ok(first.body.includes("Navy loafers"), first.body);
-    assert.ok(/ralph/i.test(first.body), first.body);
+    assert.ok(/polo/i.test(first.body), first.body);
     assert.deepEqual(first.finishes, ["Cream trousers + Navy loafers"]);
     assert.equal(
       rackLine(g),

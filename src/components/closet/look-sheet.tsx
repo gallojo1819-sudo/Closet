@@ -8,6 +8,7 @@ import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { colorLine } from "@/lib/color";
 import { nameLook, spreadTitle } from "@/lib/look";
 import { moreOutfitsForLook } from "@/lib/dress";
+import type { House } from "@/lib/houses";
 import { comboKey } from "@/lib/lookbook";
 import { mapOccasion } from "@/lib/types";
 import { slotOf } from "@/lib/style";
@@ -35,6 +36,7 @@ export function LookSheet({
   onOpenLook,
   getCard,
   initialLocked,
+  house,
 }: {
   look: Look;
   pieces: Garment[];
@@ -45,6 +47,7 @@ export function LookSheet({
   onOpenLook: (look: Look) => void;
   getCard?: () => HTMLElement | null;
   initialLocked?: string[];
+  house?: House | "all" | null;
 }) {
   void book;
   const [ids, setIds] = useState(look.garmentIds);
@@ -125,6 +128,7 @@ export function LookSheet({
         looks,
         occasion: mapOccasion(look.occasion),
         n: 3,
+        house,
       }).map((a, i) => ({
         id: `more_${look.id}_${i}_${a.garmentIds.join("_")}`,
         name: a.pieces[0]?.name ?? look.name,
