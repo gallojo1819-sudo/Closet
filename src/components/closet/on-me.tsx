@@ -6,16 +6,14 @@ import {
   blobToDataUrl,
   dataUrlToBlob,
   getImage,
-  imageKey,
   jpegDataUrl,
   lookOnMeKey,
   putImage,
-  resolveImage,
 } from "@/lib/images";
 import { useCloset } from "@/lib/store";
 import type { Garment, Occasion } from "@/lib/types";
 import { layersForOnMe } from "@/lib/look";
-import { fetchCloudBlob } from "@/lib/cloud/blobs";
+import { coverLoadError, loadLookCovers, liveCoverLoader } from "@/lib/cloud/cover";
 import { livePool } from "@/lib/rack";
 import { slotOf } from "@/lib/style";
 import { tuckDressingLines } from "@/lib/tuck";
@@ -38,20 +36,18 @@ export async function dressLook(
   const refImage = await jpegDataUrl(blob, 768, 0.8);
   const allowed = new Set(livePool(useCloset.getState().garments).map((g) => g.id));
   const worn = layersForOnMe(pieces.filter((g) => allowed.has(g.id)));
-  const layers: { name: string; category: string; url: string }[] = [];
-  for (const g of worn) {
-    await fetchCloudBlob(g.id, "c");
-    const cover =
-      g.cutoutSrc && g.cutoutSrc !== g.imageSrc ? g.cutoutSrc : imageKey(g.id, "c");
-    const raw = await asDataUrl(cover);
-    if (!raw) {
-      throw new Error("Missing a cover plate — keeping the kit.");
-    }
-    const url = await jpegDataUrl(raw, 512, 0.8);
-    layers.push({ name: g.name, category: g.category, url });
-  }
   if (worn.length < 3) {
     throw new Error("Incomplete look — keeping the kit.");
+  }
+  const loaded = await loadLookCovers(worn, liveCoverLoader());
+  if (!loaded.ok) {
+    throw new Error(coverLoadError(loaded.name));
+  }
+  const layers: { name: string; category: string; url: string }[] = [];
+  for (let i = 0; i < worn.length; i++) {
+    const g = worn[i]!;
+    const url = await jpegDataUrl(loaded.blobs[i]!, 512, 0.8);
+    layers.push({ name: g.name, category: g.category, url });
   }
   const cutouts = layers.map((l) => l.url);
   const list = layers
@@ -220,19 +216,6 @@ export function queueLookOnMe(
   );
   dressQueue = job.then(() => undefined);
   return job;
-}
-
-/** Stored src (idb key, path, or data URL) -> data URL for the edit request. */
-async function asDataUrl(src: string): Promise<string | null> {
-  try {
-    const url = await resolveImage(src);
-    if (!url) return null;
-    if (url.startsWith("data:")) return url;
-    const blob = await (await fetch(url)).blob();
-    return blobToDataUrl(blob);
-  } catch {
-    return null;
-  }
 }
 
 const NO_REF = "No reference photo yet. Tap Fit · 5′8 reg up top to add one.";
