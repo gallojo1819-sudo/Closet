@@ -5,13 +5,14 @@ import {
   putImage,
 } from "../images.ts";
 import type { Garment } from "../types.ts";
-import { getAccount, setLocalOnly } from "./account.ts";
-import { LOCAL_ONLY_CAPTION } from "./copy.ts";
+import { getAccount, setAccountProgress, setLocalOnly } from "./account.ts";
+import { cloudErrorCopy, LOCAL_ONLY_CAPTION } from "./copy.ts";
 import {
   closetImagesBucket,
   garmentObjectPath,
   getSupabase,
 } from "./client.ts";
+import { parseCloudSrc } from "./src.ts";
 import {
   OPEN_THUMB_CONCURRENCY,
   openDownloadPlan,
@@ -20,6 +21,36 @@ import {
 
 const inflight = new Map<string, Promise<boolean>>();
 const uploaded = new Set<string>();
+const signedCache = new Map<string, { url: string; exp: number }>();
+const reportedCloud = new Set<string>();
+
+function reportCloudError(error: unknown) {
+  const line = cloudErrorCopy(error);
+  if (reportedCloud.has(line)) return;
+  reportedCloud.add(line);
+  setAccountProgress(line);
+}
+
+/** 60-minute signed URL. Never return sb:. */
+export async function signedCloudUrl(path: string): Promise<string> {
+  if (!path) return "";
+  const now = Date.now();
+  const hit = signedCache.get(path);
+  if (hit && hit.exp > now + 60_000) return hit.url;
+  const sb = getSupabase();
+  if (!sb) return "";
+  const { data, error } = await sb.storage
+    .from(closetImagesBucket())
+    .createSignedUrl(path, 3600);
+  if (error || !data?.signedUrl) {
+    if (error && (isForbidden(error) || isBadRequest(error))) reportCloudError(error);
+    return "";
+  }
+  const url = data.signedUrl;
+  if (!url.startsWith("http://") && !url.startsWith("https://")) return "";
+  signedCache.set(path, { url, exp: now + 60 * 60 * 1000 });
+  return url;
+}
 
 export function markUploaded(id: string, kind: BlobKind) {
   uploaded.add(`${id}:${kind}`);
@@ -65,6 +96,7 @@ export async function fetchCloudBlob(
   id: string,
   kind: BlobKind,
   userId?: string,
+  srcHint?: string,
 ): Promise<boolean> {
   const mark = `${id}:${kind}`;
   const pending = inflight.get(mark);
@@ -74,18 +106,28 @@ export async function fetchCloudBlob(
       return true;
     }
     const uid = userId ?? getAccount().user?.id;
-    if (!uid) return false;
     const sb = getSupabase();
     if (!sb) return false;
-    const { data, error } = await sb.storage
-      .from(closetImagesBucket())
-      .download(garmentObjectPath(uid, id, kind));
-    if (error || !data) {
-      if (error && isForbidden(error)) return false;
-      return false;
+    const paths: string[] = [];
+    const hinted = parseCloudSrc(srcHint);
+    if (hinted) paths.push(hinted.path);
+    if (uid) paths.push(garmentObjectPath(uid, id, kind));
+    if (kind === "t" && uid) {
+      paths.push(garmentObjectPath(uid, id, "c"));
+      paths.push(garmentObjectPath(uid, id, "o"));
     }
-    await putImage(imageKey(id, kind), data);
-    return true;
+    const unique = [...new Set(paths)];
+    for (const path of unique) {
+      const { data, error } = await sb.storage.from(closetImagesBucket()).download(path);
+      if (error) {
+        if (isForbidden(error) || isBadRequest(error)) reportCloudError(error);
+        continue;
+      }
+      if (!data || data.size === 0) continue;
+      await putImage(imageKey(id, kind), data);
+      return true;
+    }
+    return false;
   })();
   inflight.set(mark, work);
   try {
@@ -187,7 +229,7 @@ export function countTjpgFromLists(
     }
     if (/\.[a-z0-9]+$/i.test(row.name) && row.name !== "t.jpg") continue;
     const files = nested[row.name] ?? [];
-    if (files.some((f) => f.name === "t.jpg")) n += 1;
+    if (files.some((f) => /^(t|c|o)\.jpg$/i.test(f.name))) n += 1;
   }
   return n;
 }
@@ -260,6 +302,11 @@ export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Pr
 export function isForbidden(error: { statusCode?: string; status?: number; message?: string }): boolean {
   if (error.status === 403 || error.statusCode === "403") return true;
   return /403|not allowed|row-level|unauthorized/i.test(error.message ?? "");
+}
+
+export function isBadRequest(error: { statusCode?: string; status?: number; message?: string }): boolean {
+  if (error.status === 400 || error.statusCode === "400") return true;
+  return /\b400\b/.test(error.message ?? "");
 }
 
 export function localOnlyCaption(): string {

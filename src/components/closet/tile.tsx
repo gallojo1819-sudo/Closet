@@ -9,11 +9,13 @@ export function GarmentTile({
   onClick,
   selected,
   selecting,
+  eager = false,
 }: {
   garment: Garment;
   onClick?: (e: MouseEvent<HTMLButtonElement>) => void;
   selected?: boolean;
   selecting?: boolean;
+  eager?: boolean;
 }) {
   return (
     <button
@@ -31,6 +33,7 @@ export function GarmentTile({
       >
         <GarmentImg
           garment={garment}
+          eager={eager}
           className="absolute inset-0 h-full w-full object-contain p-[4%]"
         />
         {selecting && (

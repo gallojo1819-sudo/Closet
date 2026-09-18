@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { fetchCloudBlob } from "./cloud/blobs";
-import { isCloudSrc, parseCloudSrc, parseIdbImageKey } from "./cloud/src";
+import { getAccount } from "./cloud/account";
+import { fetchCloudBlob, signedCloudUrl } from "./cloud/blobs";
+import { garmentObjectPath } from "./cloud/client";
+import { isCloudSrc, paintSrc, parseCloudSrc, parseIdbImageKey } from "./cloud/src";
 import { imageKey, isIdbKey, resolveImage, watchImage } from "./images";
 
 async function resolveDisplaySrc(src: string): Promise<string> {
@@ -9,21 +11,29 @@ async function resolveDisplaySrc(src: string): Promise<string> {
     if (!parsed) return "";
     const key = imageKey(parsed.id, parsed.kind);
     const hit = await resolveImage(key);
-    if (hit) return hit;
-    await fetchCloudBlob(parsed.id, parsed.kind, parsed.userId);
-    return resolveImage(key);
+    if (hit) return paintSrc(hit, "");
+    const signed = await signedCloudUrl(parsed.path);
+    void fetchCloudBlob(parsed.id, parsed.kind, parsed.userId, src);
+    return paintSrc("", signed);
   }
   if (isIdbKey(src)) {
     const hit = await resolveImage(src);
-    if (hit) return hit;
+    if (hit) return paintSrc(hit, "");
     const parsed = parseIdbImageKey(src);
-    if (parsed) {
-      await fetchCloudBlob(parsed.id, parsed.kind);
-      return resolveImage(src);
+    if (!parsed) return "";
+    await fetchCloudBlob(parsed.id, parsed.kind);
+    const after = await resolveImage(src);
+    if (after) return paintSrc(after, "");
+    const uid = getAccount().user?.id;
+    if (!uid) return "";
+    const kinds = parsed.kind === "t" ? (["t", "c", "o"] as const) : ([parsed.kind] as const);
+    for (const k of kinds) {
+      const signed = await signedCloudUrl(garmentObjectPath(uid, parsed.id, k));
+      if (signed) return paintSrc("", signed);
     }
     return "";
   }
-  return src;
+  return paintSrc(src, "");
 }
 
 function watchKey(src: string): string {
@@ -52,7 +62,7 @@ export function useImageSrc(src: string | undefined | null): string {
       return;
     }
     if (!isIdbKey(key) && !isCloudSrc(key)) {
-      setUrl(key);
+      setUrl(paintSrc(key, ""));
       return;
     }
     let live = true;

@@ -30,8 +30,7 @@ export function GarmentImg({
   const src = thumb ? thumbSrc : fullSrc || thumbSrc;
   const node = useRef<HTMLElement | null>(null);
   const phoneOnly = isIdbKey(garment.cutoutSrc) || isIdbKey(garment.imageSrc);
-  const unresolved = !src && (phoneOnly || isCloudSrc(fullKey) || isIdbKey(fullKey));
-  const showChip = nudge && (phoneOnly || unresolved);
+  const showChip = nudge && phoneOnly && !isCloudSrc(garment.cutoutSrc) && !isCloudSrc(garment.imageSrc);
 
   useEffect(() => {
     if (!thumb) {

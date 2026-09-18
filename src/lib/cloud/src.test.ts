@@ -6,6 +6,7 @@ import {
   cloudSrc,
   idbCount,
   isCloudSrc,
+  paintSrc,
   parseCloudSrc,
   rewriteCloudSrcs,
   shouldShowBackupBanner,
@@ -26,6 +27,7 @@ describe("rewriteCloudSrcs", () => {
     assert.equal(idbCount(next), 0);
     assert.equal(isCloudSrc(next[0]!.cutoutSrc), true);
     assert.equal(parseCloudSrc(next[0]!.cutoutSrc)?.kind, "t");
+    assert.equal(parseCloudSrc(next[0]!.cutoutSrc)?.path, `${user}/a/t.jpg`);
     assert.equal(cloudSrc(user, "a", "t"), next[0]!.cutoutSrc);
   });
 
@@ -67,16 +69,19 @@ describe("rewriteCloudSrcs", () => {
   });
 });
 
+describe("paintSrc", () => {
+  it("never returns sb: as an img src; signed URL must be http", () => {
+    assert.equal(paintSrc("sb:uid/gid/c.jpg", "https://signed.example/c.jpg"), "https://signed.example/c.jpg");
+    assert.equal(paintSrc("idb:gid:c", "https://signed.example/c.jpg"), "https://signed.example/c.jpg");
+    assert.equal(paintSrc("sb:uid/gid/o.jpg", "sb:uid/gid/o.jpg"), "");
+    assert.equal(paintSrc("blob:abc", ""), "blob:abc");
+    const signed = "https://proj.supabase.co/storage/v1/object/sign/closet-images/u/g/c.jpg";
+    assert.equal(paintSrc("", signed).startsWith("http"), true);
+  });
+});
+
 describe("shouldShowBackupBanner", () => {
-  it("hides only when remaining is 0 and listed thumbs cover the rack", () => {
-    assert.equal(
-      shouldShowBackupBanner({ signedIn: true, liveCount: 145, remaining: 145 }),
-      true,
-    );
-    assert.equal(
-      shouldShowBackupBanner({ signedIn: true, liveCount: 145, remaining: 0, localOnly: true }),
-      false,
-    );
+  it("hides when srcs are sb: even if listed thumbs are 0", () => {
     assert.equal(
       shouldShowBackupBanner({
         signedIn: true,
@@ -84,26 +89,41 @@ describe("shouldShowBackupBanner", () => {
         remaining: 0,
         listedThumbs: 0,
       }),
-      true,
+      false,
     );
+  });
+  it("hides when listed objects cover the rack even with leftover idb:", () => {
     assert.equal(
       shouldShowBackupBanner({
         signedIn: true,
         liveCount: 145,
-        remaining: 0,
+        remaining: 12,
         listedThumbs: 145,
       }),
       false,
     );
+  });
+  it("shows only when leftover idb: AND listed objects < N", () => {
     assert.equal(
-      shouldShowBackupBanner({ signedIn: false, liveCount: 145, remaining: 12 }),
+      shouldShowBackupBanner({
+        signedIn: true,
+        liveCount: 145,
+        remaining: 12,
+        listedThumbs: 0,
+      }),
+      true,
+    );
+    assert.equal(
+      shouldShowBackupBanner({ signedIn: true, liveCount: 145, remaining: 12 }),
       false,
     );
   });
+});
 
-  it("backupRemaining is 0 only when idb is 0 and listed thumbs cover N", () => {
-    assert.equal(backupRemaining({ idbRemaining: 145, listedThumbs: 0, liveCount: 145 }), 145);
-    assert.equal(backupRemaining({ idbRemaining: 0, listedThumbs: 0, liveCount: 145 }), 145);
-    assert.equal(backupRemaining({ idbRemaining: 0, listedThumbs: 145, liveCount: 145 }), 0);
+describe("backupRemaining", () => {
+  it("is 0 when idb is 0 or listed objects cover N", () => {
+    assert.equal(backupRemaining({ idbRemaining: 0, listedThumbs: 0, liveCount: 145 }), 0);
+    assert.equal(backupRemaining({ idbRemaining: 12, listedThumbs: 145, liveCount: 145 }), 0);
+    assert.equal(backupRemaining({ idbRemaining: 12, listedThumbs: 0, liveCount: 145 }), 12);
   });
 });

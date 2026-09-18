@@ -366,6 +366,7 @@ function ClosetPage() {
               >
               <GarmentTile
                 garment={g}
+                eager={i < 24}
                 selecting={selecting}
                 selected={selected.has(g.id) || openId === g.id}
                 onClick={() => {

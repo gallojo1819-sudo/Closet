@@ -35,7 +35,7 @@ describe("cloudErrorCopy", () => {
 });
 
 describe("countTjpgFromLists", () => {
-  it("counts t.jpg inside garment folders, not the me folder", () => {
+  it("counts t.jpg or c.jpg or o.jpg inside garment folders, not the me folder", () => {
     const n = countTjpgFromLists(
       [{ name: "g1" }, { name: "g2" }, { name: "me" }],
       {
@@ -44,6 +44,6 @@ describe("countTjpgFromLists", () => {
         me: [{ name: "ref.jpg" }],
       },
     );
-    assert.equal(n, 1);
+    assert.equal(n, 2);
   });
 });

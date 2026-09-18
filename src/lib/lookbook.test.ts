@@ -13,6 +13,7 @@ import {
   lookClashes,
   lookFitsHouse,
   lookFitsOccasion,
+  lookbookIsFrozen,
   looksForHero,
   mergeLookbook,
   mergeWeekLooks,
@@ -121,6 +122,22 @@ describe("buildWeek", () => {
     const unused = unusedFromLooks(g, looks);
     assert.equal(unused.some((x) => x.id === "t1"), false);
     assert.equal(unused.some((x) => x.id === "b1"), false);
+  });
+});
+
+describe("ensureLookbook freeze", () => {
+  it("twice on a 40-piece fixture does not increase looks.length", () => {
+    const g = closet(15, 15, 10);
+    const looks = buildLookbook(g, "2026-09-12");
+    const n = looks.length;
+    assert.ok(n >= 7);
+    assert.equal(lookbookIsFrozen(looks), true);
+    let next = looks;
+    for (let i = 0; i < 2; i++) {
+      if (lookbookIsFrozen(next)) continue;
+      next = mergeWeekLooks(next, buildWeek(g, "2026-09-14"));
+    }
+    assert.equal(next.length, n);
   });
 });
 

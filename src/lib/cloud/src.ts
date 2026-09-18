@@ -13,12 +13,26 @@ export function isCloudSrc(s: string | undefined | null): s is string {
 
 export function parseCloudSrc(
   s: string | undefined | null,
-): { userId: string; id: string; kind: BlobKind } | null {
+): { userId: string; id: string; kind: BlobKind; path: string } | null {
   if (!isCloudSrc(s)) return null;
   const path = s.slice(CLOUD_PREFIX.length);
   const m = /^([^/]+)\/([^/]+)\/([oct])\.jpg$/.exec(path);
   if (!m) return null;
-  return { userId: m[1]!, id: m[2]!, kind: m[3] as BlobKind };
+  return { userId: m[1]!, id: m[2]!, kind: m[3] as BlobKind, path };
+}
+
+/** Never paint sb: or idb: as <img src>. Signed URLs must be http(s). */
+export function paintSrc(idbOrBlob: string, signedUrl: string): string {
+  if (idbOrBlob.startsWith("sb:") || idbOrBlob.startsWith("idb:")) {
+    /* fall through */
+  } else if (idbOrBlob.startsWith("blob:") || idbOrBlob.startsWith("data:")) {
+    return idbOrBlob;
+  } else if (idbOrBlob.startsWith("http://") || idbOrBlob.startsWith("https://")) {
+    return idbOrBlob;
+  }
+  if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) return signedUrl;
+  if (signedUrl.startsWith("blob:") || signedUrl.startsWith("data:")) return signedUrl;
+  return "";
 }
 
 export function parseIdbImageKey(
@@ -76,7 +90,10 @@ export function applyBackupToStore<T extends SrcGarment>(
   return getGarments();
 }
 
-/** Sticky backup banner. Hide only when remaining is 0 and listed thumbs cover the rack. */
+/**
+ * Sticky Backup only when leftover idb: AND storage is missing objects.
+ * sb: srcs (remaining 0) or listed objects ≥ N → hide. Don't lie.
+ */
 export function shouldShowBackupBanner(input: {
   signedIn: boolean;
   liveCount: number;
@@ -85,11 +102,9 @@ export function shouldShowBackupBanner(input: {
   listedThumbs?: number | null;
 }): boolean {
   if (!input.signedIn || input.liveCount <= 0) return false;
-  if (input.remaining > 0) return true;
-  if (typeof input.listedThumbs === "number" && input.listedThumbs < input.liveCount) {
-    return true;
-  }
-  return false;
+  if (input.remaining <= 0) return false;
+  if (typeof input.listedThumbs !== "number") return false;
+  return input.listedThumbs < input.liveCount;
 }
 
 export function backupRemaining(input: {
@@ -97,5 +112,7 @@ export function backupRemaining(input: {
   listedThumbs: number;
   liveCount: number;
 }): number {
-  return Math.max(input.idbRemaining, Math.max(0, input.liveCount - input.listedThumbs));
+  if (input.idbRemaining <= 0) return 0;
+  if (input.listedThumbs >= input.liveCount) return 0;
+  return input.idbRemaining;
 }

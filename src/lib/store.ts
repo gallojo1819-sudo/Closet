@@ -21,6 +21,7 @@ import {
   comboKey,
   enforcePieceCap,
   fillOccasionLooks,
+  lookbookIsFrozen,
   lookCountMap,
   mergeWeekLooks,
   mondayISO,
@@ -508,6 +509,7 @@ export const useCloset = create<ClosetState>()(
         const s = get();
         if (!s.hydrated) return;
         if (s.garments.length === 0) return;
+        if (lookbookIsFrozen(s.looks)) return;
         const monday = mondayISO();
         const weekN = s.looks.filter((l) => l.id.startsWith(`week_${monday}_`)).length;
         if (weekN >= 7) return;

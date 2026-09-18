@@ -25,6 +25,14 @@ import { todayISO } from "./utils.ts";
 
 export const CHAPTER_CAP = 10;
 
+/** Hydrate / visibility must not drip more AI covers once the blob exists. */
+export function lookbookIsFrozen(
+  looks: { lookbook?: boolean; source?: string }[],
+): boolean {
+  const ai = looks.filter((l) => l.lookbook && l.source === "ai").length;
+  return ai >= 7;
+}
+
 export function lookbookPool(garments: Garment[]): Garment[] {
   return livePool(garments);
 }
