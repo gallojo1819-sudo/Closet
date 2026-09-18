@@ -260,6 +260,9 @@ export function clashes(pieces: Garment[]): boolean {
     tops.every((g) => isLinenCampPiece(g) || /linen/.test(blobOf(g)));
   if (linenOnly && (overcoat || fairIsle || flannel)) return true;
   if (hoodie && blazer) return true;
+  const trueOuters = pieces.filter(isTrueOuter);
+  const extraMid = pieces.filter((g) => isMidlayer(g) && !isHeavyCable(g) && !isHoodiePiece(g));
+  if (heavyCable && trueOuters.length > 0 && extraMid.length > 0) return true;
   if (westernN >= 2) return true;
   if (blazer && mule) return true;
   if (bottoms.some(isShortsPiece) && overcoat) return true;

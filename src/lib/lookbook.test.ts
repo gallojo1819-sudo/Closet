@@ -4,6 +4,7 @@ import {
   applyShuffle,
   buildChapter,
   buildLookbook,
+  buildReshuffleRow,
   buildWeek,
   CHAPTER_CAP,
   chapterVisible,
@@ -25,7 +26,8 @@ import {
 } from "./lookbook.ts";
 import { lookFitsSeason } from "./season.ts";
 import { isButtonDown, isCreamCable } from "./recipes.ts";
-import { isTrueOuter, isWeekendSoftJacket, pickLook } from "./style.ts";
+import { isTrueOuter, isWeekendSoftJacket, outerKind, pickLook } from "./style.ts";
+import { shoeFamily } from "./houses.ts";
 import type { Garment, Look } from "./types.ts";
 
 function piece(
@@ -1073,5 +1075,45 @@ describe("chapterVisible never empty", () => {
     const book = buildLookbook(g, "2026-09-18");
     const shown = chapterVisible(book, g, "weekday", { season: "fall", house: "all", min: 3 });
     assert.ok(shown.length >= 3, `all weekday ${shown.length}`);
+  });
+});
+
+describe("reshuffle row", () => {
+  function checkRow(looks: Look[], g: Garment[]) {
+    assert.ok(looks.length >= 3, `row ${looks.length}`);
+    const ids = looks.flatMap((l) => l.garmentIds);
+    assert.equal(new Set(ids).size, ids.length, "each id at most once");
+    const resolve = (l: Look) =>
+      l.garmentIds.map((id) => g.find((x) => x.id === id)!).filter(Boolean);
+    const outers = looks
+      .map((l) => resolve(l).find((x) => isTrueOuter(x)))
+      .filter((x): x is Garment => Boolean(x));
+    assert.equal(new Set(outers.map((o) => o.id)).size, outers.length, "unique outers");
+    const families = new Set(
+      looks
+        .map((l) => resolve(l).find((x) => x.category === "footwear" || /loafer|sneaker|boot|mule/.test(x.subtype)))
+        .filter(Boolean)
+        .map((x) => shoeFamily(x!)),
+    );
+    assert.ok(families.size >= 2, `shoe families ${[...families].join(",")}`);
+    const bd = looks.filter((l) => resolve(l).some(isButtonDown)).length;
+    assert.ok(bd >= 1, "weekday button-down");
+    const fieldN = looks.filter((l) =>
+      resolve(l).some((x) => isTrueOuter(x) && outerKind(x) === "field"),
+    ).length;
+    assert.ok(fieldN < looks.length, "field jacket on every card");
+  }
+
+  it("2× Reshuffle: unique outers, ≥2 shoe families, ≥1 button-down on weekday, no field-jacket-on-every-card", () => {
+    const g = dressRack();
+    const a = buildReshuffleRow(g, "weekday", { cap: 6, usedCount: new Map() });
+    checkRow(a, g);
+    const b = buildReshuffleRow(g, "weekday", {
+      cap: 6,
+      usedCount: new Map(),
+      excludeKeys: a.map((l) => comboKey(l.garmentIds)),
+      replacing: a,
+    });
+    checkRow(b, g);
   });
 });

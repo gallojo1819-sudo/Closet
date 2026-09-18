@@ -16,6 +16,7 @@ import {
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
 import {
   applyShuffle,
+  buildReshuffleRow,
   buildWeek,
   CHAPTER_CAP,
   comboKey,
@@ -106,7 +107,8 @@ type ClosetState = {
   markSeen: (occasion: Occasion, keys: string[], house?: House) => void;
   keepLook: (id: string, patch?: { garmentIds?: string[]; name?: string }) => void;
   outfitWith: (lockedIds: string[], occasion?: Occasion, house?: House) => Look | null;
-  newWeek: (house?: House) => number;
+  thisWeek: Look[];
+  reshuffleWeek: (house?: House, occasion?: Occasion, season?: Season) => number;
   loadSample: () => void;
   emptyCloset: (opts?: { sample?: boolean }) => void;
   importCloset: (payload: {
@@ -222,6 +224,7 @@ export const useCloset = create<ClosetState>()(
       refPhoto: null,
       refPhotoBackup: null,
       seenLooks: {},
+      thisWeek: [],
       addGarment: (input, opts) => {
         const id = input.id ?? uid("g");
         const garment: Garment = {
@@ -403,10 +406,8 @@ export const useCloset = create<ClosetState>()(
         const sameDay = prev?.date === todayISO();
         const lockedIds = sameDay ? (prev?.lockedIds ?? []) : [];
         const repeats = weekUniformKeys(get().journal, get().garments);
-        const monday = mondayISO();
         const weekKeys = get()
-          .looks.filter((l) => l.id.startsWith(`week_${monday}_`))
-          .slice(0, 3)
+          .thisWeek.slice(0, 6)
           .map((l) => comboKey(l.garmentIds));
         const wornKeys = get()
           .journal.filter((j) => j.verdict === "worn")
@@ -527,18 +528,20 @@ export const useCloset = create<ClosetState>()(
             { ...m, id: uid("m"), createdAt: new Date().toISOString() },
           ],
         })),
-      newWeek: (house) => {
+      reshuffleWeek: (house, occasion, season) => {
         const s = get();
         if (!s.hydrated || s.garments.length === 0) return 0;
-        const prevWeek = s.looks.filter((l) => l.id.startsWith("week_"));
-        const excludeKeys = prevWeek.map((l) => comboKey(l.garmentIds));
-        const week = buildWeek(s.garments, undefined, {
+        const occ = mapOccasion(occasion ?? s.drop?.occasion ?? "weekday");
+        const excludeKeys = s.thisWeek.map((l) => comboKey(l.garmentIds));
+        const row = buildReshuffleRow(s.garments, occ, {
+          house,
+          season,
           excludeKeys,
           usedCount: lookCountMap(s.looks),
-          house,
+          replacing: s.thisWeek,
         });
-        set({ looks: mergeWeekLooks(s.looks, week) });
-        return week.length;
+        set({ thisWeek: row });
+        return row.length;
       },
       ensureLookbook: () => {
         const s = get();
@@ -771,6 +774,7 @@ export const useCloset = create<ClosetState>()(
           journal: [],
           avoid: {},
           seenLooks: {},
+          thisWeek: [],
         });
         get().ensureLookbook();
       },
@@ -786,6 +790,7 @@ export const useCloset = create<ClosetState>()(
           journal: [],
           avoid: {},
           seenLooks: {},
+          thisWeek: [],
         });
         void clearClosetMeta().catch(() => {});
         // Joe's body photo stays. Only Fit → Remove deletes it.

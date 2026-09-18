@@ -15,7 +15,6 @@ import {
   emptyFilterCopy,
   lookbookPool,
   looksForHero,
-  mondayISO,
   unusedFromLooks,
   visibleHero,
 } from "@/lib/lookbook";
@@ -135,12 +134,14 @@ function LookbookPage() {
   const garmentsAll = useCloset((s) => s.garments);
   const looksAll = useCloset((s) => s.looks);
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
-  const newWeek = useCloset((s) => s.newWeek);
+  const reshuffleWeek = useCloset((s) => s.reshuffleWeek);
+  const thisWeek = useCloset((s) => s.thisWeek);
   const wearToday = useCloset((s) => s.wearToday);
   const outfitWith = useCloset((s) => s.outfitWith);
   const [play, setPlay] = useState(false);
   const [weekPulse, setWeekPulse] = useState(0);
   const [weekNote, setWeekNote] = useState<string | null>(null);
+  const [reshuffleKey, setReshuffleKey] = useState<string | null>(null);
   const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]["id"]>("weekday");
   const [seasonChip, setSeasonChip] = useState<"auto" | Season>("auto");
   const [houseChip, setHouseChip] = useState<"all" | House>("all");
@@ -179,25 +180,20 @@ function LookbookPage() {
     for (const g of garments) for (const c of g.colors) if (c) set.add(c.toLowerCase());
     return [...set].sort();
   }, [garments]);
-  const monday = mondayISO();
-
   const piecesFor = (look: Look) =>
     look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
-  const weekLooks = useMemo(
-    () => book.filter((l) => l.id.startsWith(`week_${monday}_`)),
-    [book, monday],
-  );
-  const shown = useMemo(
-    () =>
-      chapterVisible(weekLooks.length ? weekLooks : book, garments, occasion, {
-        season,
-        house: houseChip,
-        color,
-        min: canBuild ? 3 : 0,
-      }),
-    [weekLooks, book, garments, occasion, season, houseChip, color, canBuild],
-  );
+  const chipKey = `${occasion}:${houseChip}:${season}`;
+  const shown = useMemo(() => {
+    const row = thisWeek.filter((l) => l.occasion === occasion);
+    if (reshuffleKey === chipKey && row.length >= 3) return row;
+    return chapterVisible(book, garments, occasion, {
+      season,
+      house: houseChip,
+      color,
+      min: canBuild ? 3 : 0,
+    });
+  }, [thisWeek, reshuffleKey, chipKey, book, garments, occasion, season, houseChip, color, canBuild]);
   const houseNote =
     houseChip === "all" ? null : houseGapNote(houseChip, garments, occasion);
 
@@ -394,13 +390,18 @@ function LookbookPage() {
       <button
         type="button"
         onClick={() => {
-          const n = newWeek(houseChip === "all" ? undefined : houseChip);
-          setWeekNote(`New week · ${n} looks`);
+          const n = reshuffleWeek(
+            houseChip === "all" ? undefined : houseChip,
+            occasion,
+            season,
+          );
+          setReshuffleKey(`${occasion}:${houseChip}:${season}`);
+          setWeekNote(`Reshuffle · ${n} looks`);
           setWeekPulse((x) => x + 1);
         }}
         className="inline-flex h-11 items-center border border-hairline px-4 text-sm text-ink hover:border-hairline-strong"
       >
-        New week
+        Reshuffle
       </button>
       <button
         type="button"

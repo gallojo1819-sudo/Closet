@@ -17,18 +17,31 @@ import {
   HOUSE_CHIPS,
   leadHouse,
   lookHouses,
+  outerKind,
   pickLook,
   pickTrueOuter,
   slotOf,
   type House,
 } from "./style.ts";
-import { houseFingerprintOk, houseLegalCombo, mapHouse } from "./houses.ts";
+import {
+  bottomType,
+  houseFingerprintOk,
+  houseLegalCombo,
+  lookPrint,
+  mapHouse,
+  shoeFamily,
+  topType,
+} from "./houses.ts";
 import {
   emptyChapter,
+  isButtonDown,
+  isCreamCable,
   matchRecipe,
   noteChapterLook,
   pickRecipe,
+  recipesFor,
   type ChapterTrack,
+  type RecipeId,
 } from "./recipes.ts";
 import { lookFitsSeason, seasonRank, weatherForSeason, type Season } from "./season.ts";
 import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "./types.ts";
@@ -1536,6 +1549,224 @@ export function lookCountMap(looks: Look[]): Map<string, number> {
 /** Scarce pieces first. Hubs with 159 looks get 1/160. */
 export function weekWeight(lookCount: number): number {
   return 1 / (1 + lookCount);
+}
+
+export const RESHUFFLE_ROW = 6;
+
+function knitTop(g: Garment): boolean {
+  const t = topType(g);
+  return (
+    t === "cable" ||
+    t === "merino" ||
+    t === "cashmere_top" ||
+    t === "turtleneck" ||
+    t === "fair_isle"
+  );
+}
+
+function lookOuter(pieces: Garment[]): Garment | undefined {
+  return pieces.find((g) => isTrueOuter(g) && slotOf(g) === "outerwear");
+}
+
+function lookTop(pieces: Garment[]): Garment | undefined {
+  return pieces.find((g) => {
+    const s = slotOf(g);
+    return s === "top" || s === "dress";
+  });
+}
+
+function lookShoe(pieces: Garment[]): Garment | undefined {
+  return pieces.find((g) => slotOf(g) === "footwear");
+}
+
+function reshuffleAxes(
+  pieces: Garment[],
+  recipeId: string | undefined,
+): { top_type: string; bottom_type: string; shoe_family: string; outer_id: string; recipe_id: string } {
+  const print = lookPrint(pieces);
+  const bot = pieces.find((g) => slotOf(g) === "bottom");
+  return {
+    top_type: print.top_type,
+    bottom_type: bot ? bottomType(bot) : print.bottom_type,
+    shoe_family: print.shoe_family,
+    outer_id: lookOuter(pieces)?.id ?? "none",
+    recipe_id: recipeId ?? "",
+  };
+}
+
+function reshuffleAxesDiff(
+  a: ReturnType<typeof reshuffleAxes>,
+  b: ReturnType<typeof reshuffleAxes>,
+): number {
+  let n = 0;
+  if (a.top_type !== b.top_type) n += 1;
+  if (a.bottom_type !== b.bottom_type) n += 1;
+  if (a.shoe_family !== b.shoe_family) n += 1;
+  if (a.outer_id !== b.outer_id) n += 1;
+  if (a.recipe_id && b.recipe_id && a.recipe_id !== b.recipe_id) n += 1;
+  return n;
+}
+
+function knitColorTwin(a: Garment[], b: Garment[]): boolean {
+  const ta = lookTop(a);
+  const tb = lookTop(b);
+  if (!ta || !tb || !knitTop(ta) || !knitTop(tb)) return false;
+  const pa = lookPrint(a);
+  const pb = lookPrint(b);
+  return pa.bottom_type === pb.bottom_type && pa.shoe_family === pb.shoe_family;
+}
+
+/**
+ * This week row from livePool. Not Monday-keyed. Does not append lookbook AI covers.
+ */
+export function buildReshuffleRow(
+  garments: Garment[],
+  occasion: Occasion,
+  opts?: {
+    house?: House;
+    season?: Season;
+    excludeKeys?: string[];
+    usedCount?: Map<string, number>;
+    replacing?: Look[];
+    cap?: number;
+  },
+): Look[] {
+  const cap = opts?.cap ?? RESHUFFLE_ROW;
+  const pool = lookbookPool(garments);
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  const house = opts?.house;
+  const season = opts?.season;
+  const weather = season ? weatherForSeason(season) : weatherForOcc(occasion);
+  const keys = new Set(opts?.excludeKeys ?? []);
+  const usedIds = new Set<string>();
+  const replacingRecipes = new Set(
+    (opts?.replacing ?? []).map((l) => l.recipeId).filter((id): id is string => Boolean(id)),
+  );
+  const track = emptyChapter();
+  const out: Look[] = [];
+  const usedCount = opts?.usedCount ?? new Map<string, number>();
+
+  const tryDraw = (hardHouse: boolean): Garment[] | null => {
+    const avail = pool.filter((g) => !usedIds.has(g.id));
+    if (avail.length < 3) return null;
+    let recipe = pickRecipe(occasion, avail, { house, track });
+    const taken = new Set([...replacingRecipes, ...out.map((l) => l.recipeId).filter(Boolean)]);
+    if (taken.has(recipe.id)) {
+      const alts = recipesFor(occasion, house).filter((r) => !taken.has(r.id));
+      if (alts.length) recipe = alts[out.length % alts.length]!;
+    }
+    const ids = pickLook(avail, {
+      occasion,
+      moment: "day",
+      weather,
+      salt: Date.now() + out.length * 9973 + usedIds.size,
+      recipeId: recipe.id,
+      house: hardHouse ? house : undefined,
+      chapter: track,
+      usedCount,
+      excludeKeys: keys,
+      previousIds: out.at(-1)?.garmentIds,
+      minSlotChange: out.length ? 2 : 0,
+      legalCombo:
+        hardHouse && house
+          ? (p) => houseLegalCombo(p, house, occasion, undefined, pool)
+          : undefined,
+    });
+    const pieces = ids
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => g != null && !usedIds.has(g.id));
+    return pieces.length >= 3 ? pieces : null;
+  };
+
+  for (let attempt = 0; attempt < 160 && out.length < cap; attempt++) {
+    const pieces = tryDraw(true) ?? tryDraw(false);
+    if (!pieces) continue;
+    if (lookClashes(pieces)) continue;
+    if (season && !lookFitsSeason(pieces, season)) continue;
+    const top = lookTop(pieces);
+    if (
+      top &&
+      isCreamCable(top) &&
+      out.some((l) =>
+        l.garmentIds.some((id) => {
+          const g = byId.get(id);
+          return Boolean(g && isCreamCable(g));
+        }),
+      )
+    ) {
+      continue;
+    }
+    const recipeId = matchRecipe(pieces, occasion, house) as RecipeId | undefined;
+    if (out.length) {
+      const prev = out[out.length - 1]!;
+      const prevP = prev.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+      const a = reshuffleAxes(prevP, prev.recipeId);
+      const b = reshuffleAxes(pieces, recipeId);
+      if (reshuffleAxesDiff(a, b) < 3) continue;
+      if (knitColorTwin(prevP, pieces)) continue;
+      const prevShoe = lookShoe(prevP);
+      const shoe = lookShoe(pieces);
+      if (prevShoe && shoe && shoeFamily(prevShoe) === shoeFamily(shoe)) continue;
+      const prevOuter = lookOuter(prevP);
+      const outer = lookOuter(pieces);
+      if (prevOuter && outer && outerKind(prevOuter) === outerKind(outer)) continue;
+    }
+    const key = comboKey(pieces.map((p) => p.id));
+    if (keys.has(key)) continue;
+    keys.add(key);
+    for (const p of pieces) usedIds.add(p.id);
+    noteChapterLook(track, pieces, recipeId, occasion);
+    out.push({
+      id: `reshuffle_${occasion}_${out.length}_${key.replace(/\|/g, "_")}`,
+      name: nameOf(pieces),
+      occasion,
+      garmentIds: pieces.map((p) => p.id),
+      source: "ai",
+      lookbook: false,
+      recipeId,
+      createdAt: `${todayISO()}T00:00:00.000Z`,
+    });
+  }
+
+  if (occasion === "weekday" && out.length >= 3) {
+    const hasBd = out.some((l) =>
+      l.garmentIds.some((id) => {
+        const g = byId.get(id);
+        return g && isButtonDown(g);
+      }),
+    );
+    if (!hasBd) {
+      const avail = pool;
+      const ids = pickLook(avail, {
+        occasion,
+        moment: "day",
+        weather,
+        salt: Date.now() + 3,
+        recipeId: "WD_PREP_OCBD",
+        usedCount,
+      });
+      const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+      if (pieces.some(isButtonDown) && pieces.length >= 3 && !lookClashes(pieces)) {
+        const overlap = pieces.filter((p) =>
+          out.slice(0, -1).some((l) => l.garmentIds.includes(p.id)),
+        );
+        if (!overlap.length) {
+          const key = comboKey(pieces.map((p) => p.id));
+          out[out.length - 1] = {
+            id: `reshuffle_${occasion}_bd_${key.replace(/\|/g, "_")}`,
+            name: nameOf(pieces),
+            occasion,
+            garmentIds: pieces.map((p) => p.id),
+            source: "ai",
+            lookbook: false,
+            recipeId: "WD_PREP_OCBD",
+            createdAt: `${todayISO()}T00:00:00.000Z`,
+          };
+        }
+      }
+    }
+  }
+  return out;
 }
 
 /** 7 scarce-first spreads. Each id at most once in the week. Pool is livePool, not the book. */
