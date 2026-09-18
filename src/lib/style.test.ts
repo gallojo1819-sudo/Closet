@@ -1,6 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { avoidedUniformLine, houseMixPenalty, pairKey, pickLook, slotOf } from "./style.ts";
+import {
+  avoidedUniformLine,
+  coreComboKey,
+  houseMixPenalty,
+  pairKey,
+  pickLook,
+  slotOf,
+} from "./style.ts";
 import type { Garment, WearEntry } from "./types.ts";
 
 function piece(
@@ -91,7 +98,7 @@ describe("pickLook", () => {
     const seen = new Set<string>();
     let prev: string[] = [];
     for (let i = 0; i < 80; i++) {
-      const ids = pickLook(closet, { ...opts, previousIds: prev });
+      const ids = pickLook(closet, { ...opts, previousIds: prev, salt: 1_000 + i * 17 });
       assert.equal(ids.length, 3, `look ${i} should be top+bottom+footwear`);
       for (const id of ids) seen.add(id);
       prev = ids;
@@ -102,13 +109,22 @@ describe("pickLook", () => {
   it("skip 3 times yields three different triples, sharing at most one with the last", () => {
     const looks: string[][] = [];
     let prev: string[] = [];
+    const exclude: string[] = [];
     for (let i = 0; i < 3; i++) {
-      const ids = pickLook(closet, { ...opts, previousIds: prev });
+      const ids = pickLook(closet, {
+        ...opts,
+        previousIds: prev,
+        salt: 50_000 + i,
+        excludeKeys: exclude,
+        minSlotChange: prev.length ? 2 : 0,
+        requireSilhouetteChange: prev.length > 0,
+      });
       looks.push(ids);
       if (prev.length) {
         const share = ids.filter((id) => prev.includes(id)).length;
         assert.ok(share <= 1, `skip ${i} shared ${share}: ${ids} vs ${prev}`);
       }
+      exclude.push([...ids].sort().join("|"));
       prev = ids;
     }
     const keys = looks.map((ids) => [...ids].sort().join(","));
@@ -323,8 +339,64 @@ describe("pickLook", () => {
         verdict: "worn",
       },
     ];
-    const line = avoidedUniformLine(journal, ["polo", "tr", "lf2"], closet, "2026-09-13");
-    assert.equal(line, "Not the Cream chino + Navy loafers again.");
+    const reused = avoidedUniformLine(journal, ["polo", "ch", "lf"], closet, "2026-09-13");
+    assert.equal(reused, "Same Cream chino + Navy loafers as last wear.");
+    const fresh = avoidedUniformLine(journal, ["polo", "tr", "lf2"], closet, "2026-09-13");
+    assert.equal(fresh, null);
+  });
+
+  it("10× Skip on a 40-piece fixture → ≥8 distinct combos; no id in all 10", () => {
+    const g: Garment[] = [
+      ...Array.from({ length: 15 }, (_, i) =>
+        piece({
+          id: `t${i + 1}`,
+          name: i % 3 === 0 ? `Navy polo ${i}` : `Oxford ${i}`,
+          category: "top",
+          subtype: i % 3 === 0 ? "polo" : "oxford",
+        }),
+      ),
+      ...Array.from({ length: 15 }, (_, i) =>
+        piece({
+          id: `b${i + 1}`,
+          name: i % 2 ? `Jean ${i}` : `Chino ${i}`,
+          category: "bottom",
+          subtype: i % 2 ? "jean" : "chino",
+        }),
+      ),
+      ...Array.from({ length: 10 }, (_, i) =>
+        piece({
+          id: `s${i + 1}`,
+          name: i % 2 ? `Sneaker ${i}` : `Loafer ${i}`,
+          category: "footwear",
+          subtype: i % 2 ? "sneaker" : "loafer",
+        }),
+      ),
+    ];
+    const usedCount = new Map<string, number>();
+    const combos: string[] = [];
+    const hits = new Map<string, number>();
+    let prev: string[] = [];
+    const exclude: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const ids = pickLook(g, {
+        ...opts,
+        salt: Date.now() + i * 97_331,
+        previousIds: prev,
+        excludeKeys: exclude,
+        usedCount,
+        minSlotChange: prev.length ? 2 : 0,
+        requireSilhouetteChange: prev.length > 0,
+      });
+      const key = coreComboKey(ids, g);
+      combos.push(key);
+      exclude.push(key);
+      for (const id of ids) hits.set(id, (hits.get(id) ?? 0) + 1);
+      prev = ids;
+    }
+    assert.ok(new Set(combos).size >= 8, `combos ${combos.join(" / ")}`);
+    for (const [id, n] of hits) {
+      assert.ok(n < 10, `${id} in all 10`);
+    }
   });
 
   it("locked hoodie pairs with jean and sneaker, not pleat + loafer", () => {

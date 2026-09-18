@@ -41,6 +41,7 @@ import {
   type SeenLooks,
 } from "./store-persist";
 import {
+  coreComboKey,
   daysIdle,
   defaultOccasion,
   momentOfDay,
@@ -126,6 +127,12 @@ function pickDrop(
   previousIds?: string[],
   lockedIds?: string[],
   repeatPairs?: Set<string>,
+  extra?: {
+    salt?: number;
+    usedCount?: Map<string, number>;
+    excludeKeys?: string[];
+    skip?: boolean;
+  },
 ): string[] {
   return pickLook(garments, {
     weather,
@@ -136,6 +143,11 @@ function pickDrop(
     previousIds,
     lockedIds,
     repeatPairs,
+    salt: extra?.salt ?? Date.now(),
+    usedCount: extra?.usedCount,
+    excludeKeys: extra?.excludeKeys,
+    minSlotChange: extra?.skip ? 2 : 0,
+    requireSilhouetteChange: Boolean(extra?.skip),
   });
 }
 
@@ -308,11 +320,7 @@ export const useCloset = create<ClosetState>()(
           journal: [entry, ...get().journal.filter((j) => j.date !== todayISO())].slice(0, 60),
         });
         // previousIds is this reroll only — avoid stays capped, not an exile.
-        get().rerollDrop(
-          drop.weather,
-          drop.occasion,
-          skipped.filter((id) => !locked.has(id)),
-        );
+        get().rerollDrop(drop.weather, drop.occasion, skipped);
       },
       saveLook: (look) => {
         const id = uid("l");
@@ -395,6 +403,24 @@ export const useCloset = create<ClosetState>()(
         const sameDay = prev?.date === todayISO();
         const lockedIds = sameDay ? (prev?.lockedIds ?? []) : [];
         const repeats = weekUniformKeys(get().journal, get().garments);
+        const monday = mondayISO();
+        const weekKeys = get()
+          .looks.filter((l) => l.id.startsWith(`week_${monday}_`))
+          .slice(0, 3)
+          .map((l) => comboKey(l.garmentIds));
+        const wornKeys = get()
+          .journal.filter((j) => j.verdict === "worn")
+          .slice(0, 7)
+          .map((j) => comboKey(j.garmentIds));
+        const skipKeys = get()
+          .journal.filter((j) => j.verdict === "skipped")
+          .slice(0, 7)
+          .map((j) => comboKey(j.garmentIds));
+        const currentKey = prev?.garmentIds?.length ? comboKey(prev.garmentIds) : "";
+        const currentCore = prev?.garmentIds?.length
+          ? coreComboKey(prev.garmentIds, get().garments)
+          : "";
+        const skip = Boolean(previousIds?.length);
         const ids = pickDrop(
           get().garments,
           weather ?? prev?.weather,
@@ -404,6 +430,14 @@ export const useCloset = create<ClosetState>()(
           previousIds,
           lockedIds,
           repeats,
+          {
+            salt: Date.now(),
+            usedCount: lookCountMap(get().looks),
+            excludeKeys: [...weekKeys, ...wornKeys, ...skipKeys, currentKey, currentCore].filter(
+              Boolean,
+            ),
+            skip,
+          },
         );
         let lockNote: string | null = null;
         if (lockedIds.length && previousIds?.length) {

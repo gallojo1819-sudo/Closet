@@ -66,11 +66,21 @@ function Today() {
         }
         return;
       }
-      if (!current || current.date !== todayISO() || current.garmentIds.length === 0) {
-        useCloset.getState().rerollDrop(weather);
-      } else if (weather && current.weather?.f !== weather.f) {
-        setDrop({ ...current, weather });
+      const wornToday =
+        current &&
+        current.date === todayISO() &&
+        (current.worn || current.verdict === "worn");
+      if (wornToday) {
+        if (weather && current.weather?.f !== weather.f) {
+          setDrop({ ...current, weather });
+        }
+        return;
       }
+      useCloset.getState().rerollDrop(
+        weather,
+        current?.occasion,
+        current?.garmentIds?.length ? current.garmentIds : undefined,
+      );
     })();
     return () => {
       cancelled = true;

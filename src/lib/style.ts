@@ -439,10 +439,66 @@ export function avoidedUniformLine(
   const cur = of(currentIds);
   const last = of(worn[0]!.garmentIds);
   if (!cur.bottom || !cur.shoe || !last.bottom || !last.shoe) return null;
-  if (pairKey(cur.bottom.id, cur.shoe.id) === pairKey(last.bottom.id, last.shoe.id)) {
+  if (pairKey(cur.bottom.id, cur.shoe.id) !== pairKey(last.bottom.id, last.shoe.id)) {
     return null;
   }
-  return `Not the ${last.bottom.name} + ${last.shoe.name} again.`;
+  return `Same ${cur.bottom.name} + ${cur.shoe.name} as last wear.`;
+}
+
+function rngFromSalt(salt: number): () => number {
+  let a = salt >>> 0 || 1;
+  return () => {
+    a = (Math.imul(a, 1664525) + 1013904223) >>> 0;
+    return a / 4294967296;
+  };
+}
+
+function shuffle<T>(list: T[], rng: () => number): T[] {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const t = a[i]!;
+    a[i] = a[j]!;
+    a[j] = t;
+  }
+  return a;
+}
+
+export function coreSlotIds(
+  ids: string[],
+  garments: Garment[],
+): { top?: string; bottom?: string; shoe?: string } {
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+  const top = pieces.find((g) => {
+    const s = slotOf(g);
+    return s === "top" || s === "dress";
+  });
+  const bottom = pieces.find((g) => slotOf(g) === "bottom");
+  const shoe = pieces.find((g) => slotOf(g) === "footwear");
+  return { top: top?.id, bottom: bottom?.id, shoe: shoe?.id };
+}
+
+export function coreComboKey(ids: string[], garments: Garment[]): string {
+  const c = coreSlotIds(ids, garments);
+  return [c.top, c.bottom, c.shoe].filter(Boolean).sort().join("|");
+}
+
+export function slotsChanged(prev: string[], next: string[], garments: Garment[]): number {
+  const a = coreSlotIds(prev, garments);
+  const b = coreSlotIds(next, garments);
+  let n = 0;
+  if (a.top && b.top && a.top !== b.top) n += 1;
+  if (a.bottom && b.bottom && a.bottom !== b.bottom) n += 1;
+  if (a.shoe && b.shoe && a.shoe !== b.shoe) n += 1;
+  return n;
+}
+
+export function silhouetteKey(ids: string[], garments: Garment[], occasion?: Occasion): string {
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+  const p = lookPrint(pieces, occasion);
+  return `${p.top_type}|${p.bottom_type}|${p.shoe_family}`;
 }
 
 function daysSinceCreated(g: Garment, today = todayISO()): number {
@@ -567,10 +623,23 @@ export function pickLook(
     house?: House | "all" | null;
     recipeId?: RecipeId;
     chapter?: ChapterTrack;
+    /** Shuffle pool before scoring. Today / Skip pass Date.now() or skip count. */
+    salt?: number;
+    /** combo keys (sorted ids) already on screen or recently worn/skipped. */
+    excludeKeys?: Iterable<string>;
+    /** Consecutive Skip: ≥2 of top/bottom/shoe ids must change. */
+    minSlotChange?: number;
+    /** Consecutive Skip: same silhouette + recolor is illegal. */
+    requireSilhouetteChange?: boolean;
   },
 ): string[] {
   const pool = livePool(garments);
-  const by = (slot: Slot) => pool.filter((g) => slotOf(g) === slot);
+  const rng = rngFromSalt(opts.salt ?? 1);
+  const salted = opts.salt != null;
+  const by = (slot: Slot) => {
+    const list = pool.filter((g) => slotOf(g) === slot);
+    return salted ? shuffle(list, rng) : list;
+  };
   const f = opts.weather?.f ?? 68;
   const cool = f < 62;
   const warm = f > 78;
@@ -616,9 +685,11 @@ export function pickLook(
     if (season === "summer" && (g.warmth >= 4 || isOvercoatPiece(g))) s -= 4;
     if (season === "winter" && isLinenCampPiece(g)) s -= 6;
     if (season === "winter" && g.warmth <= 2) s -= 2;
-    if (opts.usedCount) s += 8 / (1 + (opts.usedCount.get(g.id) ?? 0));
-    const looks = opts.usedCount?.get(g.id) ?? 0;
-    if (looks === 0) s += 8;
+    if (opts.usedCount) {
+      const n = opts.usedCount.get(g.id) ?? 0;
+      s += 8 / (1 + n);
+      if (n === 0) s += 8;
+    }
     if (daysSinceCreated(g) <= 14) s += 8;
     if (chapter) {
       const sl = slotOf(g);
@@ -633,7 +704,7 @@ export function pickLook(
     if (recipe.top(g) && (slotOf(g) === "top" || slotOf(g) === "dress")) s += 4;
     if (recipe.bottom(g) && slotOf(g) === "bottom") s += 3;
     if (recipe.shoe(g) && slotOf(g) === "footwear") s += 3;
-    return s + Math.random() * 0.25;
+    return s + rng() * (salted ? 2.5 : 0.25);
   };
 
   const rank = (slot: Slot) => [...by(slot)].sort((a, b) => score(b) - score(a));
@@ -642,19 +713,19 @@ export function pickLook(
   const rankTops = rank("top");
   const unusedTops = rankTops.filter((g) => !chapter?.usedTops.has(g.id));
   const recipeTops = (unusedTops.length ? unusedTops : rankTops).filter((g) => recipe.top(g));
-  const exclusiveRecipe = !opts.legalCombo && !house;
+  const exclusiveRecipe = !opts.legalCombo && !house && !salted;
   let topsSrc = exclusiveRecipe && recipeTops.length ? recipeTops : unusedTops.length ? unusedTops : rankTops;
   if (chapter?.creamCableUsed) {
     const withoutCable = topsSrc.filter((g) => !isCreamCable(g));
     if (withoutCable.length) topsSrc = withoutCable;
   }
-  const tops = pinnedTop ? [pinnedTop] : topsSrc.slice(0, 10);
+  const tops = pinnedTop ? [pinnedTop] : topsSrc.slice(0, salted ? 14 : 10);
   const topList = tops.length ? tops : pinnedTop ? [pinnedTop] : rank("dress").slice(0, 4);
   const rankBots = rank("bottom");
   const recipeBots = rankBots.filter((g) => recipe.bottom(g));
   const bottoms = pin.get("bottom")
     ? [pin.get("bottom")!]
-    : (exclusiveRecipe && recipeBots.length ? recipeBots : rankBots).slice(0, 8);
+    : (exclusiveRecipe && recipeBots.length ? recipeBots : rankBots).slice(0, salted ? 12 : 8);
   const rankShoes = rank("footwear");
   let shoesSrc = exclusiveRecipe ? rankShoes.filter((g) => recipe.shoe(g)) : rankShoes;
   if (!shoesSrc.length) shoesSrc = rankShoes;
@@ -668,7 +739,7 @@ export function pickLook(
     shoesSrc = rotated.length ? rotated : famChange.length ? famChange : shoesSrc.filter((g) => !last3ids.has(g.id));
     if (!shoesSrc.length) shoesSrc = rankShoes;
   }
-  const shoeList = pin.get("footwear") ? [pin.get("footwear")!] : shoesSrc.slice(0, 8);
+  const shoeList = pin.get("footwear") ? [pin.get("footwear")!] : shoesSrc.slice(0, salted ? 12 : 8);
 
   type Combo = { ids: string[]; s: number; h: number; pieces: Garment[] };
   const combos: Combo[] = [];
@@ -756,7 +827,23 @@ export function pickLook(
   const ok = (legal.length ? legal : opts.legalCombo ? legal : combos.filter((c) => !clashes(c.pieces))).filter(
     (c) => c.h >= 0,
   );
-  const poolC = (ok.length ? ok : legal).sort((a, b) => b.s - a.s);
+  const banned = new Set(opts.excludeKeys ?? []);
+  let poolC = (ok.length ? ok : legal).sort((a, b) => b.s - a.s);
+  if (banned.size) {
+    const fresh = poolC.filter((c) => !banned.has(coreComboKey(c.ids, pool)));
+    if (fresh.length) poolC = fresh;
+  }
+  if (opts.minSlotChange && opts.minSlotChange > 0 && (opts.previousIds?.length ?? 0) >= 3) {
+    const moved = poolC.filter(
+      (c) => slotsChanged(opts.previousIds!, c.ids, pool) >= (opts.minSlotChange ?? 0),
+    );
+    if (moved.length) poolC = moved;
+  }
+  if (opts.requireSilhouetteChange && (opts.previousIds?.length ?? 0) >= 3) {
+    const prevSilh = silhouetteKey(opts.previousIds!, pool, opts.occasion);
+    const changed = poolC.filter((c) => silhouetteKey(c.ids, pool, opts.occasion) !== prevSilh);
+    if (changed.length) poolC = changed;
+  }
   const win = poolC[0];
   const ids: string[] = win ? [...win.ids] : lockedGs.map((g) => g.id);
   const corePieces = ids
@@ -802,9 +889,12 @@ export function pickLook(
   }
 
   const used = new Set(ids);
-  const idle = [...pool]
-    .filter((g) => !used.has(g.id) && !previous.has(g.id) && daysIdle(g) >= 21)
-    .sort((a, b) => daysIdle(b) - daysIdle(a));
+  const idle =
+    salted || (opts.previousIds?.length ?? 0) > 0
+      ? []
+      : [...pool]
+        .filter((g) => !used.has(g.id) && !previous.has(g.id) && daysIdle(g) >= 21)
+        .sort((a, b) => daysIdle(b) - daysIdle(a));
   const candidate = idle[0];
   if (candidate) {
     const candSlot = slotOf(candidate);
