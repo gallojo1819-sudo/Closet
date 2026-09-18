@@ -10,8 +10,19 @@ import {
   housesOf,
   leadHouse,
   lookHouses,
+  lookPrint,
+  shoeFamily,
   type House,
 } from "./houses.ts";
+import {
+  isCreamCable,
+  pickRecipe,
+  recipeAxesDiffer,
+  recipeById,
+  type ChapterTrack,
+  type Recipe,
+  type RecipeId,
+} from "./recipes.ts";
 
 export type { Moment, Occasion, House };
 export { HOUSE_CHIPS, HOUSE_LABEL, housesOf, leadHouse, lookHouses };
@@ -113,6 +124,44 @@ export function isWesternPiece(g: Garment): boolean {
 
 export function isBlazerPiece(g: Garment): boolean {
   return /blazer|sport\s*coats?/.test(blobOf(g));
+}
+
+/** Cardigan / fleece / zip-sweater / hoodie — mid layer, never a coat. */
+export function isMidlayer(g: Garment): boolean {
+  const b = blobOf(g);
+  if (isHoodiePiece(g)) return true;
+  return /cardigan|fleece|quarter[- ]?zip|zip[- ]?(up)?\s*(sweater|knit)/.test(b);
+}
+
+/**
+ * True outer: blazer, chore, field, denim trucker, suede/shearling/bomber/toggle/plaid jacket.
+ * Not hoodie, cardigan, fleece, zip sweater.
+ */
+export function isTrueOuter(g: Garment): boolean {
+  if (isMidlayer(g) || isHoodiePiece(g)) return false;
+  const b = blobOf(g);
+  if (/blazer|sport\s*coats?|chore|field|trucker|denim jacket|shearling|suede|bomber|toggle|plaid jacket|overshirt|parkas?|trench|anorak/.test(b)) {
+    return true;
+  }
+  if (g.category === "outerwear" && /jacket|coat/.test(b)) return true;
+  return g.category === "outerwear" && !isMidlayer(g) && !/hoodie|cardigan|fleece/.test(b);
+}
+
+export type OuterKind = "blazer" | "chore" | "field" | "denim" | "suede" | "other";
+
+export function outerKind(g: Garment): OuterKind {
+  const b = blobOf(g);
+  if (isBlazerPiece(g)) return "blazer";
+  if (/chore/.test(b)) return "chore";
+  if (/field/.test(b)) return "field";
+  if (/trucker|denim jacket/.test(b) || (/denim/.test(b) && /jacket/.test(b))) return "denim";
+  if (/shearling|suede/.test(b)) return "suede";
+  return "other";
+}
+
+export function isWeekendSoftJacket(g: Garment): boolean {
+  const k = outerKind(g);
+  return k === "chore" || k === "field" || k === "denim" || k === "suede";
 }
 
 export function isCordBlazer(g: Garment): boolean {
@@ -296,7 +345,7 @@ export function slotOf(g: Garment): Slot | null {
   const hoodieTop = /\b(hoodies?|sweatshirts?|graphic\s*knits?)\b/.test(blob);
   const top =
     hoodieTop ||
-    /\b(t-shirts?|tees?|shirts?|oxfords?|polos?|knits?|sweaters?|rugbys?|cardigans?|jumpers?|pullovers?|crewnecks?|henleys?|cable[- ]?knits?|zip[- ]?(up)?\s*(sweater|knit)?)\b/.test(
+    /\b(t-shirts?|tees?|shirts?|oxfords?|polos?|knits?|sweaters?|rugbys?|cardigans?|jumpers?|pullovers?|crewnecks?|henleys?|cable[- ]?knits?|fleece|quarter[- ]?zips?|zip[- ]?(up)?\s*(sweater|knit)?)\b/.test(
       blob,
     );
   const outer =
@@ -396,6 +445,107 @@ export function avoidedUniformLine(
   return `Not the ${last.bottom.name} + ${last.shoe.name} again.`;
 }
 
+function daysSinceCreated(g: Garment, today = todayISO()): number {
+  const d = Date.parse((g.createdAt ?? "").slice(0, 10));
+  const t = Date.parse(today);
+  if (!Number.isFinite(d) || !Number.isFinite(t)) return 99;
+  return Math.max(0, Math.round((t - d) / 86_400_000));
+}
+
+function outerRequired(
+  occasion: Occasion,
+  f: number,
+  recipe: Recipe | undefined,
+  house?: House | "all" | null,
+): boolean {
+  if (recipe?.outerRequired) return true;
+  if (recipe?.outer === "none") return false;
+  if (house === "faloni" && f > 72) return false;
+  if (house === "purple" || house === "italianWinter") return true;
+  const cool = f < 62;
+  const season = seasonFromWeather(f);
+  const fallWinter = season === "fall" || season === "winter";
+  if (fallWinter && cool && (occasion === "weekday" || occasion === "out" || occasion === "travel")) {
+    return true;
+  }
+  return false;
+}
+
+function scoreOuterForRecipe(
+  g: Garment,
+  recipe: Recipe | undefined,
+  house: House | "all" | null | undefined,
+  occasion: Occasion,
+): number {
+  const k = outerKind(g);
+  const b = blobOf(g);
+  let s = 0;
+  if (/camel/.test(b) && /overcoat|topcoat/.test(b)) s -= 24;
+  if (recipe?.outer === "blazer" && k === "blazer") s += 8;
+  if (recipe?.outer === "optional_blazer" && k === "blazer") s += 6;
+  if (recipe?.outer === "chore" && (k === "chore" || k === "field" || k === "denim")) s += 8;
+  if (recipe?.outer === "field" && k === "field") s += 8;
+  if (recipe?.outer === "denim" && k === "denim") s += 8;
+  if (recipe?.outer === "suede" && k === "suede") s += 8;
+  if (recipe?.outer === "soft" && (k === "blazer" || k === "chore" || k === "field")) s += 6;
+  if (recipe?.outer === "cold" && (k === "suede" || k === "blazer" || isOvercoatPiece(g))) s += 8;
+  if (house === "ald") {
+    if (k === "chore" || k === "denim" || k === "field") s += 8;
+    if (k === "blazer" && /navy/.test(b)) s -= 20;
+  }
+  if (house === "rrl") {
+    if (k === "chore" || k === "denim" || k === "suede") s += 8;
+    if (k === "blazer" && /navy/.test(b)) s -= 20;
+  }
+  if (house === "purple" && k === "blazer" && /taupe|ivory|cord|beige/.test(b)) s += 8;
+  if (house === "polo" && occasion === "weekday" && k === "blazer") s += 5;
+  if (house === "polo" && occasion === "weekend" && k === "field") s += 6;
+  if (house === "italianSummer" && k === "blazer" && /taupe|ivory/.test(b)) s += 6;
+  if (house === "italianWinter" && (k === "suede" || k === "blazer")) s += 6;
+  if (house === "faloni") s -= 12;
+  if (occasion === "weekend" && isWeekendSoftJacket(g)) s += 4;
+  if (occasion === "weekend" && k === "blazer" && /navy/.test(b)) s -= 6;
+  return s;
+}
+
+export function pickTrueOuter(
+  outers: Garment[],
+  core: Garment[],
+  recipe: Recipe | undefined,
+  opts: {
+    occasion: Occasion;
+    house?: House | "all" | null;
+    f: number;
+    legalCombo?: (pieces: Garment[]) => boolean;
+    usedOuters?: Set<string>;
+  },
+): Garment | undefined {
+  const ranked = [...outers]
+    .filter(isTrueOuter)
+    .filter((g) => !core.some((c) => c.id === g.id))
+    .sort(
+      (a, b) =>
+        scoreOuterForRecipe(b, recipe, opts.house, opts.occasion) -
+        scoreOuterForRecipe(a, recipe, opts.house, opts.occasion),
+    );
+  const unused = ranked.filter((g) => !opts.usedOuters?.has(g.id));
+  const list = unused.length ? unused : ranked;
+  for (const o of list) {
+    const next = [...core, o];
+    if (clashes(next)) continue;
+    if (isBlazerPiece(o)) {
+      const shoe = core.find((g) => slotOf(g) === "footwear");
+      if (shoe && /mule|sneaker|trainer|\b990\b/.test(blobOf(shoe))) continue;
+      if (core.some(isRugbyPiece) || core.some(isHoodiePiece) || core.some(isHeavyCable)) continue;
+    }
+    if (opts.legalCombo && !opts.legalCombo(next)) continue;
+    if (opts.f > 78 && (o.warmth >= 5 || isOvercoatPiece(o))) continue;
+    if (scoreOuterForRecipe(o, recipe, opts.house, opts.occasion) < -8) continue;
+    return o;
+  }
+  return undefined;
+}
+
 export function pickLook(
   garments: Garment[],
   opts: {
@@ -414,6 +564,9 @@ export function pickLook(
     usedCount?: Map<string, number>;
     /** House HARD filter. Empty rather than PoloDefault. */
     legalCombo?: (pieces: Garment[]) => boolean;
+    house?: House | "all" | null;
+    recipeId?: RecipeId;
+    chapter?: ChapterTrack;
   },
 ): string[] {
   const pool = livePool(garments);
@@ -422,6 +575,11 @@ export function pickLook(
   const cool = f < 62;
   const warm = f > 78;
   const target = formalityTarget(opts.occasion, opts.moment);
+  const house = opts.house && opts.house !== "all" ? opts.house : undefined;
+  const chapter = opts.chapter;
+  const recipe =
+    recipeById(opts.recipeId) ??
+    pickRecipe(opts.occasion, pool, { house: opts.house, track: chapter });
 
   const avoid = opts.avoid ?? {};
   const recent = new Set(opts.recentWorn ?? []);
@@ -459,20 +617,58 @@ export function pickLook(
     if (season === "winter" && isLinenCampPiece(g)) s -= 6;
     if (season === "winter" && g.warmth <= 2) s -= 2;
     if (opts.usedCount) s += 8 / (1 + (opts.usedCount.get(g.id) ?? 0));
+    const looks = opts.usedCount?.get(g.id) ?? 0;
+    if (looks === 0) s += 8;
+    if (daysSinceCreated(g) <= 14) s += 8;
+    if (chapter) {
+      const sl = slotOf(g);
+      if (sl === "top" || sl === "dress") {
+        if (chapter.usedTops.has(g.id)) s -= 18;
+        if (isCreamCable(g) && chapter.creamCableUsed) s -= 20;
+      }
+      if (sl === "bottom" && chapter.usedBottoms.has(g.id)) s -= 8;
+      if (sl === "footwear" && chapter.usedShoes.has(g.id)) s -= 16;
+      if (sl === "outerwear" && chapter.usedOuters.has(g.id)) s -= 10;
+    }
+    if (recipe.top(g) && (slotOf(g) === "top" || slotOf(g) === "dress")) s += 4;
+    if (recipe.bottom(g) && slotOf(g) === "bottom") s += 3;
+    if (recipe.shoe(g) && slotOf(g) === "footwear") s += 3;
     return s + Math.random() * 0.25;
   };
 
-  const best = (list: Garment[]) =>
-    [...list].sort((a, b) => score(b) - score(a))[0];
   const rank = (slot: Slot) => [...by(slot)].sort((a, b) => score(b) - score(a));
 
   const pinnedTop = pin.get("top") ?? pin.get("dress" as Slot);
-  const tops = pinnedTop ? [pinnedTop] : rank("top").slice(0, 7);
+  const rankTops = rank("top");
+  const unusedTops = rankTops.filter((g) => !chapter?.usedTops.has(g.id));
+  const recipeTops = (unusedTops.length ? unusedTops : rankTops).filter((g) => recipe.top(g));
+  const exclusiveRecipe = !opts.legalCombo && !house;
+  let topsSrc = exclusiveRecipe && recipeTops.length ? recipeTops : unusedTops.length ? unusedTops : rankTops;
+  if (chapter?.creamCableUsed) {
+    const withoutCable = topsSrc.filter((g) => !isCreamCable(g));
+    if (withoutCable.length) topsSrc = withoutCable;
+  }
+  const tops = pinnedTop ? [pinnedTop] : topsSrc.slice(0, 10);
   const topList = tops.length ? tops : pinnedTop ? [pinnedTop] : rank("dress").slice(0, 4);
-  const bottoms = pin.get("bottom") ? [pin.get("bottom")!] : rank("bottom").slice(0, 7);
-  const shoeList = pin.get("footwear")
-    ? [pin.get("footwear")!]
-    : rank("footwear").slice(0, 7);
+  const rankBots = rank("bottom");
+  const recipeBots = rankBots.filter((g) => recipe.bottom(g));
+  const bottoms = pin.get("bottom")
+    ? [pin.get("bottom")!]
+    : (exclusiveRecipe && recipeBots.length ? recipeBots : rankBots).slice(0, 8);
+  const rankShoes = rank("footwear");
+  let shoesSrc = exclusiveRecipe ? rankShoes.filter((g) => recipe.shoe(g)) : rankShoes;
+  if (!shoesSrc.length) shoesSrc = rankShoes;
+  if (chapter) {
+    const last3ids = new Set(chapter.recentShoeIds);
+    const last3fam = new Set(chapter.recentShoeFamilies);
+    const rotated = shoesSrc.filter(
+      (g) => !last3ids.has(g.id) && !last3fam.has(shoeFamily(g)),
+    );
+    const famChange = shoesSrc.filter((g) => !last3fam.has(shoeFamily(g)));
+    shoesSrc = rotated.length ? rotated : famChange.length ? famChange : shoesSrc.filter((g) => !last3ids.has(g.id));
+    if (!shoesSrc.length) shoesSrc = rankShoes;
+  }
+  const shoeList = pin.get("footwear") ? [pin.get("footwear")!] : shoesSrc.slice(0, 8);
 
   type Combo = { ids: string[]; s: number; h: number; pieces: Garment[] };
   const combos: Combo[] = [];
@@ -530,6 +726,25 @@ export function pickLook(
         ) {
           s += 0.6;
         }
+        if (recipe.top(t)) s += 2;
+        if (b && recipe.bottom(b)) s += 1.5;
+        if (sh && recipe.shoe(sh)) s += 1.5;
+        if (chapter?.lastPrint && topG && botG && shoeG) {
+          const print = lookPrint(pieces, opts.occasion);
+          const last = chapter.lastPrint;
+          if (
+            print.top_type === last.top_type &&
+            print.shoe_family === last.shoe_family &&
+            print.bottom_type === last.bottom_type
+          ) {
+            s -= 10;
+          }
+          if (recipeAxesDiffer(last, print, chapter.lastRecipe, recipe.id) < 3) s -= 14;
+        }
+        if (chapter && topG && chapter.usedTops.has(topG.id)) {
+          const leftover = topList.filter((x) => !chapter.usedTops.has(x.id));
+          if (leftover.length) continue;
+        }
         combos.push({ ids: pieces.map((g) => g.id), s, h, pieces });
       }
     }
@@ -544,17 +759,36 @@ export function pickLook(
   const poolC = (ok.length ? ok : legal).sort((a, b) => b.s - a.s);
   const win = poolC[0];
   const ids: string[] = win ? [...win.ids] : lockedGs.map((g) => g.id);
-  // Weekday look is top + bottom + footwear. Empty slots omitted, never invented.
+  const corePieces = ids
+    .map((id) => pool.find((g) => g.id === id))
+    .filter((g): g is Garment => Boolean(g));
+  const hasCore =
+    corePieces.some((g) => {
+      const s = slotOf(g);
+      return s === "top" || s === "dress";
+    }) &&
+    corePieces.some((g) => slotOf(g) === "bottom") &&
+    corePieces.some((g) => slotOf(g) === "footwear");
   if (pin.get("outerwear")) {
     const o = pin.get("outerwear")!;
-    if (!ids.includes(o.id)) ids.push(o.id);
-  } else if (cool && !warm) {
-    const coats = by("outerwear").filter((g) => {
-      if (isHoodiePiece(g)) return false;
-      return !/blazer|sport\s*coats?/.test(`${g.subtype} ${g.name}`.toLowerCase());
-    });
-    const outer = best(coats);
-    if (outer && !(warm && outer.warmth >= 5)) ids.push(outer.id);
+    if (hasCore && !ids.includes(o.id) && isTrueOuter(o) && !clashes([...corePieces, o])) ids.push(o.id);
+  } else if (hasCore) {
+    const want =
+      outerRequired(opts.occasion, f, recipe, house) ||
+      (cool && !warm && recipe.outer !== "none") ||
+      recipe.outer === "blazer" ||
+      recipe.outer === "optional_blazer" ||
+      recipe.outer === "cold";
+    if (want) {
+      const outer = pickTrueOuter(by("outerwear"), corePieces, recipe, {
+        occasion: opts.occasion,
+        house: opts.house,
+        f,
+        legalCombo: opts.legalCombo,
+        usedOuters: chapter?.usedOuters,
+      });
+      if (outer && !ids.includes(outer.id)) ids.push(outer.id);
+    }
   }
   const acc = by("accessory");
   const belt = acc.find((a) => a.subtype === "belt");

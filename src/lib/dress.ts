@@ -140,8 +140,9 @@ export function dressThisPiece(opts: {
     previousIds: opts.previousIds,
     repeatPairs: repeats,
     usedCount,
+    house,
     legalCombo: house
-      ? (p) => houseLegalCombo(p, house, occasion)
+      ? (p) => houseLegalCombo(p, house, occasion, undefined, pool)
       : undefined,
   });
   const ordered = [...lockedIds.filter((id) => !ids.includes(id)), ...ids];

@@ -12,13 +12,23 @@ import {
   isHoodiePiece,
   isRugbyPiece,
   isShortsPiece,
+  isTrueOuter,
+  isWeekendSoftJacket,
   leadHouse,
   lookHouses,
   pickLook,
+  pickTrueOuter,
   slotOf,
   type House,
 } from "./style.ts";
 import { houseFingerprintOk, houseLegalCombo, mapHouse } from "./houses.ts";
+import {
+  emptyChapter,
+  matchRecipe,
+  noteChapterLook,
+  pickRecipe,
+  type ChapterTrack,
+} from "./recipes.ts";
 import { lookFitsSeason, seasonRank, weatherForSeason, type Season } from "./season.ts";
 import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "./types.ts";
 import { todayISO } from "./utils.ts";
@@ -147,10 +157,12 @@ function shouldOuter(outer: Garment, core: Garment[]): boolean {
 }
 
 function maxBlazerLooks(occasion?: Occasion): number {
-  if (occasion === "weekend") return 1;
   if (occasion === "comfy") return 0;
-  if (occasion === "weekday" || occasion === "out") return 2;
-  return 0;
+  if (occasion === "weekend") return 2;
+  if (occasion === "weekday") return 6;
+  if (occasion === "out") return 6;
+  if (occasion === "travel") return 4;
+  return 2;
 }
 
 function maybeAttachBlazer(
@@ -164,14 +176,14 @@ function maybeAttachBlazer(
   atCap: (g: Garment) => boolean,
 ): Garment[] {
   if (core.some(isGraphic) || core.some(isHoodiePiece)) return core;
-  if (core.some((g) => slotOf(g) === "outerwear")) return core;
+  if (core.some((g) => isTrueOuter(g) || (slotOf(g) === "outerwear" && !isHoodiePiece(g)))) return core;
   const max = maxBlazerLooks(occasion);
-  if (blazerLooks >= max) return core;
-  if (occasion === "weekend" && blazerLooks >= 1) return core;
+  if (occasion === "comfy") return core;
   const tryOn = (o: Garment): Garment[] | null => {
     if (core.some((g) => g.id === o.id)) return null;
     if (usedBlazers.has(o.id)) return null;
     if (atCap(o)) return null;
+    if (blazerLooks >= max) return null;
     if (!lookAllowsBlazer(core, o, occasion)) return null;
     if (season === "summer" && o.warmth >= 4) return null;
     const next = [...core, o];
@@ -181,9 +193,19 @@ function maybeAttachBlazer(
     if (harmony(next, { occasion, f: season ? undefined : 64 }) < 0) return null;
     return next;
   };
+  if (occasion === "weekend") {
+    for (const o of rank(outers.filter((x) => isWeekendSoftJacket(x) && !atCap(x)), today)) {
+      if (core.some((g) => g.id === o.id) || usedBlazers.has(o.id)) continue;
+      const next = [...core, o];
+      if (lookClashes(next)) continue;
+      if (season && !lookFitsSeason(next, season)) continue;
+      if (harmony(next, { occasion, f: season ? undefined : 64 }) < 0) continue;
+      return next;
+    }
+  }
   if (occasion === "travel") {
     for (const o of rank(
-      outers.filter((x) => x.warmth <= 3 && !isHoodiePiece(x) && !isBlazer(x)),
+      outers.filter((x) => x.warmth <= 3 && isTrueOuter(x)),
       today,
     )) {
       if (core.some((g) => g.id === o.id) || atCap(o)) continue;
@@ -200,7 +222,85 @@ function maybeAttachBlazer(
     const next = tryOn(o);
     if (next) return next;
   }
+  const rest = outers.filter((x) => isTrueOuter(x) && !isBlazer(x));
+  for (const o of rank(rest, today)) {
+    if (core.some((g) => g.id === o.id) || atCap(o) || usedBlazers.has(o.id)) continue;
+    const next = [...core, o];
+    if (lookClashes(next)) continue;
+    if (season && !lookFitsSeason(next, season)) continue;
+    if (harmony(next, { occasion, f: season ? undefined : 58 }) < 0) continue;
+    return next;
+  }
   return core;
+}
+
+function repairJacketQuotas(
+  looks: Look[],
+  pool: Garment[],
+  occasion: Occasion,
+  house: House | undefined,
+  season: Season | undefined,
+  usedBlazers: Set<string>,
+  atCap: (g: Garment) => boolean,
+): Look[] {
+  if (occasion === "comfy") return looks;
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  const outers = pool.filter(isTrueOuter);
+  const piecesOf = (l: Look) =>
+    l.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+  const hasOuter = (l: Look) => piecesOf(l).some(isTrueOuter);
+  const hasBlazer = (l: Look) => piecesOf(l).some(isBlazerPiece);
+  const hasSoft = (l: Look) => piecesOf(l).some(isWeekendSoftJacket);
+  const hasCold = (l: Look) =>
+    piecesOf(l).some((g) => isTrueOuter(g) && (isBlazerPiece(g) || g.warmth >= 4 || /shearling|coat/.test(`${g.name} ${g.subtype}`.toLowerCase())));
+  const attach = (l: Look, prefer: (g: Garment) => boolean): Look => {
+    const core = piecesOf(l);
+    if (core.some(isTrueOuter)) return l;
+    const o = pickTrueOuter(
+      outers.filter((x) => prefer(x) && !atCap(x)),
+      core,
+      undefined,
+      {
+        occasion,
+        house,
+        f: season === "summer" ? 78 : 58,
+        legalCombo: house ? (p) => houseLegalCombo(p, house, occasion, undefined, pool) : undefined,
+        usedOuters: usedBlazers,
+      },
+    );
+    if (!o) return l;
+    const next = [...core, o];
+    if (lookClashes(next)) return l;
+    if (season && !lookFitsSeason(next, season)) return l;
+    usedBlazers.add(o.id);
+    return {
+      ...l,
+      garmentIds: next.map((g) => g.id),
+      name: nameOf(next),
+      recipeId: l.recipeId ?? matchRecipe(next, occasion, house),
+    };
+  };
+  let next = looks.map((l) => ({ ...l }));
+  const pass = (prefer: (g: Garment) => boolean, stillNeed: () => boolean) => {
+    for (let i = 0; i < next.length && stillNeed(); i++) {
+      if (hasOuter(next[i]!)) continue;
+      next[i] = attach(next[i]!, prefer);
+    }
+  };
+  if (occasion === "weekday") {
+    pass(isBlazerPiece, () => next.filter(hasBlazer).length < 2);
+    pass(isTrueOuter, () => next.filter(hasOuter).length < 4);
+  } else if (occasion === "out") {
+    pass(
+      (g) => isBlazerPiece(g) || g.warmth >= 4,
+      () => next.filter(hasCold).length < Math.ceil(next.length * 0.4),
+    );
+  } else if (occasion === "weekend") {
+    pass(isWeekendSoftJacket, () => next.filter(hasSoft).length < 3);
+  } else if (occasion === "travel") {
+    pass((g) => isTrueOuter(g) && g.warmth <= 3, () => next.filter(hasOuter).length < 2);
+  }
+  return next;
 }
 
 /**
@@ -341,10 +441,10 @@ export function lookFitsOccasion(
       );
     }
     if (hoodie || graphic) return false;
-    if (!(oxford || polo || cable)) return false;
+    if (!(oxford || polo || cable || knit)) return false;
     if (!legalBottom) return false;
-    if (loafer) return true;
-    if (cleanSneaker && pool && !rackHas(pool, "footwear", /loafer/)) return true;
+    if (loafer || boot) return true;
+    if (cleanSneaker) return true;
     return false;
   }
 
@@ -417,7 +517,7 @@ export function lookFitsHouse(
 ): boolean {
   const h = mapHouse(house);
   if (h === "all") return true;
-  if (!houseFingerprintOk(pieces, h, occasion)) return false;
+  if (!houseFingerprintOk(pieces, h, occasion, pool)) return false;
   return lookFitsOccasion(pieces, occasion, pool, h);
 }
 
@@ -568,18 +668,12 @@ export function buildChapter(
   const out: Look[] = [];
   const used = new Set(exclude);
   let prev: string[] = [];
-  const weather = season
-    ? weatherForSeason(season)
-    : occasion === "out"
-      ? { f: 64, label: "Mild", code: 2 }
-      : occasion === "weekend" || occasion === "travel" || occasion === "comfy"
-        ? { f: 72, label: "Fair", code: 2 }
-        : { f: 68, label: "Fair", code: 2 };
+  const weather = season ? weatherForSeason(season) : weatherForOcc(occasion, season);
 
   const tryPush = (pieces: Garment[], force = false): boolean => {
     if (pieces.length < 3) return false;
-    if (!lookFitsOccasion(pieces, occasion, pool)) return false;
-    if (house && !houseLegalCombo(pieces, house, occasion)) return false;
+    if (!lookFitsOccasion(pieces, occasion, pool, house)) return false;
+    if (house && !houseLegalCombo(pieces, house, occasion, undefined, pool)) return false;
     if (season && !lookFitsSeason(pieces, season)) return false;
     if (beigePlateCount(pieces) >= 3) return false;
     if (!force) {
@@ -597,6 +691,7 @@ export function buildChapter(
     if (used.has(key)) return false;
     used.add(key);
     bump(pieces.map((p) => p.id));
+    const recipeId = matchRecipe(pieces, occasion, house);
     out.push({
       id: `lb2_${occasion}_${key.replace(/\|/g, "_")}`,
       name: nameOf(pieces),
@@ -604,49 +699,62 @@ export function buildChapter(
       garmentIds: pieces.map((p) => p.id),
       source: "ai",
       lookbook: true,
+      recipeId,
       createdAt: `${today}T00:00:00.000Z`,
     });
     return true;
   };
 
-  for (let i = 0; i < 160 && out.length < cap; i++) {
+  const track = emptyChapter();
+  const weatherUse = season ? weatherForSeason(season) : weather;
+
+  for (let i = 0; i < 220 && out.length < cap; i++) {
     const available = pool.filter((g) => !atCap(g));
     if (available.length < 3) break;
+    const recipe = pickRecipe(occasion, available, { house, track });
     const ids = pickLook(available, {
       occasion,
       moment: "day",
-      weather,
+      weather: weatherUse,
       previousIds: prev,
-      legalCombo: house ? (p) => houseLegalCombo(p, house, occasion) : undefined,
+      usedCount,
+      house,
+      recipeId: recipe.id,
+      chapter: track,
+      legalCombo: house ? (p) => houseLegalCombo(p, house, occasion, undefined, pool) : undefined,
     });
-    if (ids.length < 3) break;
+    if (ids.length < 3) continue;
     prev = ids;
     let pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
     if (pieces.length < 3) continue;
-    pieces = pieces.filter((g) => !isBlazer(g));
-    const tryJacket =
-      ((occasion === "weekday" || occasion === "out") &&
-        ((blazerLooks === 0 && out.length >= 2) ||
-          (blazerLooks === 1 && out.length >= 6))) ||
-      (occasion === "weekend" && blazerLooks === 0 && out.length >= 5) ||
-      occasion === "travel";
-    if (tryJacket) {
-      const next = maybeAttachBlazer(
-        pieces,
-        outers,
-        today,
-        occasion,
-        season,
-        blazerLooks,
-        usedBlazers,
-        atCap,
-      );
-      pieces = next;
+    if (!pieces.some(isTrueOuter)) {
+      const tryJacket =
+        occasion === "weekday" ||
+        occasion === "out" ||
+        occasion === "travel" ||
+        occasion === "weekend";
+      if (tryJacket) {
+        pieces = maybeAttachBlazer(
+          pieces,
+          outers,
+          today,
+          occasion,
+          season,
+          blazerLooks,
+          usedBlazers,
+          atCap,
+        );
+      }
     }
     if (tryPush(pieces)) {
-      for (const g of pieces) {
-        if (isBlazer(g)) {
-          blazerLooks += 1;
+      const last = out[out.length - 1]!;
+      const lastPieces = last.garmentIds
+        .map((id) => byId.get(id))
+        .filter((g): g is Garment => Boolean(g));
+      noteChapterLook(track, lastPieces, (last.recipeId as ChapterTrack["lastRecipe"]) ?? recipe.id, occasion);
+      for (const g of lastPieces) {
+        if (isBlazer(g) || isTrueOuter(g)) {
+          if (isBlazer(g)) blazerLooks += 1;
           usedBlazers.add(g.id);
         }
       }
@@ -666,16 +774,23 @@ export function buildChapter(
         moment: "day",
         weather,
         lockedIds: [g.id],
-        legalCombo: house ? (p) => houseLegalCombo(p, house, occasion) : undefined,
+        house,
+        chapter: track,
+        legalCombo: house ? (p) => houseLegalCombo(p, house, occasion, undefined, pool) : undefined,
       });
       let pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
       if (!pieces.some((x) => x.id === g.id)) continue;
-      pieces = pieces.filter((x) => !isBlazer(x));
-      tryPush(pieces, true);
+      if (tryPush(pieces, true)) {
+        const last = out[out.length - 1]!;
+        const lastPieces = last.garmentIds
+          .map((id) => byId.get(id))
+          .filter((x): x is Garment => Boolean(x));
+        noteChapterLook(track, lastPieces, last.recipeId as ChapterTrack["lastRecipe"], occasion);
+      }
     }
   }
   void salt;
-  return out;
+  return repairJacketQuotas(out, pool, occasion, house, season, usedBlazers, atCap);
 }
 
 /**
@@ -987,12 +1102,12 @@ function heroHonest(g: Garment, occ: Occasion, pieces: Garment[]): boolean {
   return false;
 }
 
-function weatherForOcc(occasion: Occasion) {
-  if (occasion === "out") return { f: 64, label: "Mild", code: 2 };
-  if (occasion === "weekend" || occasion === "travel" || occasion === "comfy") {
-    return { f: 72, label: "Fair", code: 2 };
-  }
-  return { f: 68, label: "Fair", code: 2 };
+function weatherForOcc(occasion: Occasion, season?: Season) {
+  if (season === "summer") return { f: 78, label: "Warm", code: 2 };
+  if (season === "winter") return { f: 42, label: "Cold", code: 2 };
+  if (occasion === "comfy") return { f: 72, label: "Fair", code: 2 };
+  if (occasion === "weekend") return { f: 64, label: "Mild", code: 2 };
+  return { f: 58, label: "Cool", code: 2 };
 }
 
 function starLook(
@@ -1164,7 +1279,7 @@ export function chapterVisible(
         moment: "day",
         weather: season ? weatherForSeason(season) : weatherForOcc(occasion),
         previousIds: outH.flatMap((l) => l.garmentIds),
-        legalCombo: (p) => houseLegalCombo(p, house, occasion),
+        legalCombo: (p) => houseLegalCombo(p, house, occasion, undefined, pool),
       });
       if (ids.length < 3) break;
       const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
@@ -1361,16 +1476,22 @@ export function buildWeek(
           a.id.localeCompare(b.id),
       );
 
+  const track = emptyChapter();
   const pushLook = (occ: Occasion, locked: string[], i: number): boolean => {
     const avail = available();
     const lockedOk = locked.filter((id) => !weekUsed.has(id) && byId.has(id));
+    const recipe = pickRecipe(occ, avail, { house: opts?.house, track });
     const ids = pickLook(avail, {
       occasion: occ,
       moment: "day",
       weather: weatherForOcc(occ),
       lockedIds: lockedOk,
+      usedCount,
+      house: opts?.house,
+      recipeId: recipe.id,
+      chapter: track,
       legalCombo: opts?.house
-        ? (p) => houseLegalCombo(p, opts.house, occ)
+        ? (p) => houseLegalCombo(p, opts.house, occ, undefined, pool)
         : undefined,
     });
     let pieces = ids
@@ -1387,13 +1508,15 @@ export function buildWeek(
     pieces = pieces.filter((p) => !weekUsed.has(p.id));
     if (pieces.length < 3 || lookClashes(pieces)) return false;
     if (!lookFitsOccasion(pieces, occ, avail) && lockedOk.length) return false;
-    if (opts?.house && !houseLegalCombo(pieces, opts.house, occ)) return false;
+    if (opts?.house && !houseLegalCombo(pieces, opts.house, occ, undefined, pool)) return false;
     const lookIds = pieces.map((p) => p.id);
     if (lookIds.some((id) => weekUsed.has(id))) return false;
     const key = comboKey(lookIds);
     if (keys.has(key)) return false;
     keys.add(key);
     for (const id of lookIds) weekUsed.add(id);
+    const recipeId = matchRecipe(pieces, occ, opts?.house) ?? recipe.id;
+    noteChapterLook(track, pieces, recipeId, occ);
     out.push({
       id: `week_${monday}_${i}`,
       name: nameOf(pieces),
@@ -1401,6 +1524,7 @@ export function buildWeek(
       garmentIds: lookIds,
       source: "ai",
       lookbook: true,
+      recipeId,
       createdAt: `${today}T00:00:00.000Z`,
     });
     return true;

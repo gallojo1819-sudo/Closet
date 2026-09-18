@@ -145,6 +145,7 @@ function LookCard({
       <p className="mt-3">{spreadTitle(pieces, look.occasion as Occasion)}</p>
       <p className="micro text-ink-soft">
         {houseLabel} · {look.occasion} · {season}
+        {look.recipeId ? ` · ${look.recipeId}` : ""}
       </p>
       {note && <p className="micro mt-1 text-ink-soft">{note}</p>}
     </li>
@@ -421,7 +422,7 @@ function LookbookPage() {
       <button
         type="button"
         onClick={() => {
-          const n = newWeek();
+          const n = newWeek(houseChip === "all" ? undefined : houseChip);
           setWeekNote(`New week · ${n} looks`);
           setWeekPulse((x) => x + 1);
         }}

@@ -22,6 +22,8 @@ import {
   unusedFromLooks,
 } from "./lookbook.ts";
 import { lookFitsSeason } from "./season.ts";
+import { isButtonDown, isCreamCable } from "./recipes.ts";
+import { isTrueOuter, isWeekendSoftJacket, pickLook } from "./style.ts";
 import type { Garment, Look } from "./types.ts";
 
 function piece(
@@ -182,7 +184,7 @@ describe("buildLookbook", () => {
     assert.equal(buildLookbook(closet(5, 5, 0)).length, 0);
   });
 
-  it("out is mostly 3 pieces; at most two different blazers", () => {
+  it("out jackets are unique plates — quota can exceed two", () => {
     const g = [
       ...closet(8, 8, 8),
       piece({
@@ -215,15 +217,12 @@ describe("buildLookbook", () => {
     const withJacket = looks.filter((l) =>
       l.garmentIds.some((id) => id === "j1" || id === "j2" || id === "cord"),
     );
-    assert.ok(withJacket.length <= 2, `blazers on ${withJacket.length} looks`);
     const jacketIds = new Set(
       withJacket.flatMap((l) =>
         l.garmentIds.filter((id) => id === "j1" || id === "j2" || id === "cord"),
       ),
     );
     assert.equal(jacketIds.size, withJacket.length, "each blazered look a different jacket");
-    const three = looks.filter((l) => l.garmentIds.filter((id) => !id.startsWith("j") && id !== "cord").length >= 3 && !l.garmentIds.some((id) => id === "j1" || id === "j2" || id === "cord"));
-    assert.ok(three.length >= looks.length - 2, "most cards are 3 pieces");
   });
 
   it("cream cable does not wear a beige cord blazer; white mules get no blazer", () => {
@@ -890,5 +889,162 @@ describe("2026-09 stylist pack", () => {
       assert.equal(lookFitsHouse(pieces, "polo", "travel", g), true);
       assert.equal(lookFitsSeason(pieces, "fall"), true);
     }
+  });
+});
+
+/** Fixture shaped like Joe's rack — invented ids, never his live SKUs. No camel overcoat. */
+function dressRack(): Garment[] {
+  const oxfords = Array.from({ length: 8 }, (_, i) =>
+    piece({ id: `ox${i}`, name: `Navy oxford ${i}`, category: "top", subtype: "oxford", colors: ["navy"] }),
+  );
+  const polos = Array.from({ length: 3 }, (_, i) =>
+    piece({ id: `po${i}`, name: `Navy polo ${i}`, category: "top", subtype: "polo" }),
+  );
+  const knits = [
+    piece({ id: "cable", name: "Cream cable-knit", category: "top", subtype: "cable", colors: ["cream"], warmth: 3 }),
+    ...Array.from({ length: 4 }, (_, i) =>
+      piece({ id: `mer${i}`, name: `Grey merino ${i}`, category: "top", subtype: "merino", colors: ["grey"] }),
+    ),
+  ];
+  const rugby = piece({ id: "rugby", name: "Navy rugby", category: "top", subtype: "rugby", formality: 2 });
+  const bottoms = [
+    piece({ id: "chino1", name: "Khaki chino", category: "bottom", subtype: "chino", colors: ["khaki"] }),
+    ...Array.from({ length: 8 }, (_, i) =>
+      piece({
+        id: `tr${i}`,
+        name: `Navy trousers ${i}`,
+        category: "bottom",
+        subtype: "trouser",
+        colors: ["navy"],
+        formality: 4,
+      }),
+    ),
+    ...Array.from({ length: 4 }, (_, i) =>
+      piece({ id: `jn${i}`, name: `Indigo jeans ${i}`, category: "bottom", subtype: "jean", formality: 2 }),
+    ),
+  ];
+  const shoes = [
+    ...Array.from({ length: 4 }, (_, i) =>
+      piece({ id: `lf${i}`, name: `Brown loafer ${i}`, category: "footwear", subtype: "loafer", colors: ["brown"] }),
+    ),
+    ...Array.from({ length: 5 }, (_, i) =>
+      piece({
+        id: `sn${i}`,
+        name: `Leather sneaker ${i}`,
+        category: "footwear",
+        subtype: "sneaker",
+        colors: ["white"],
+        formality: 2,
+      }),
+    ),
+    piece({ id: "nb", name: "Grey 990", category: "footwear", subtype: "sneaker", colors: ["grey"], formality: 2 }),
+    piece({ id: "boot", name: "Brown boot", category: "footwear", subtype: "boot", colors: ["brown"] }),
+    piece({ id: "mule", name: "Tan mule", category: "footwear", subtype: "mule", colors: ["tan"] }),
+  ];
+  const outers = [
+    piece({ id: "navyblz", name: "Navy blazer", category: "outerwear", subtype: "blazer", colors: ["navy"], formality: 4, warmth: 3 }),
+    piece({ id: "taupeblz", name: "Taupe Todd Snyder blazer", category: "outerwear", subtype: "blazer", colors: ["taupe"], formality: 4, warmth: 3 }),
+    piece({ id: "ivoryblz", name: "Ivory double breasted blazer", category: "outerwear", subtype: "blazer", colors: ["ivory"], formality: 4, warmth: 3 }),
+    piece({ id: "cordblz", name: "Beige cord The Row blazer", category: "outerwear", subtype: "blazer", colors: ["beige"], formality: 4, warmth: 3 }),
+    piece({ id: "chore", name: "Brown chore coat", category: "outerwear", subtype: "chore", colors: ["brown"], warmth: 3 }),
+    piece({ id: "field", name: "Olive field jacket", category: "outerwear", subtype: "field jacket", colors: ["olive"], warmth: 3 }),
+    piece({ id: "denimj", name: "Denim trucker", category: "outerwear", subtype: "denim jacket", colors: ["navy"], warmth: 2 }),
+    piece({ id: "suede", name: "Brown suede jacket", category: "outerwear", subtype: "suede jacket", colors: ["brown"], warmth: 4 }),
+  ];
+  return [...oxfords, ...polos, ...knits, rugby, ...bottoms, ...shoes, ...outers];
+}
+
+describe("jacket quotas + recipes", () => {
+  it("pickLook weekday cool can return navy/taupe blazer", () => {
+    const g = dressRack();
+    let hit = false;
+    for (let i = 0; i < 16; i++) {
+      const ids = pickLook(g, {
+        occasion: "weekday",
+        moment: "day",
+        weather: { f: 55, label: "Cool", code: 2 },
+        recipeId: "WD_PREP_OCBD",
+        house: "polo",
+      });
+      const pieces = ids.map((id) => g.find((x) => x.id === id)!).filter(Boolean);
+      if (pieces.some((x) => /navy blazer|taupe/i.test(x.name) && isTrueOuter(x))) {
+        hit = true;
+        break;
+      }
+    }
+    assert.ok(hit, "cool weekday pickLook never attached a navy/taupe blazer");
+  });
+
+  it("10 weekday looks: ≥3 button-down, ≥4 true outers, ≥2 blazers, no shoe plate >2, cream cable ≤1", () => {
+    const g = dressRack();
+    const looks = buildChapter(g, "weekday", { cap: 10, today: "2026-09-18", house: "polo" });
+    assert.ok(looks.length >= 8, `weekday looks ${looks.length}`);
+    const resolve = (l: Look) => l.garmentIds.map((id) => g.find((x) => x.id === id)!).filter(Boolean);
+    const buttonDowns = looks.filter((l) => resolve(l).some(isButtonDown)).length;
+    const trueOuters = looks.filter((l) => resolve(l).some(isTrueOuter)).length;
+    const blazers = looks.filter((l) =>
+      resolve(l).some((x) => /blazer|sport coat/i.test(`${x.name} ${x.subtype}`)),
+    ).length;
+    const cables = looks.filter((l) => resolve(l).some(isCreamCable)).length;
+    const shoeCount = new Map<string, number>();
+    for (const l of looks) {
+      for (const x of resolve(l)) {
+        if (x.category === "footwear" || /loafer|sneaker|boot|mule/.test(x.subtype)) {
+          shoeCount.set(x.id, (shoeCount.get(x.id) ?? 0) + 1);
+        }
+      }
+    }
+    const maxShoe = Math.max(0, ...shoeCount.values());
+    assert.ok(buttonDowns >= 3, `button-down tops ${buttonDowns}`);
+    assert.ok(trueOuters >= 4, `true outers ${trueOuters}`);
+    assert.ok(blazers >= 2, `blazers ${blazers}`);
+    assert.ok(maxShoe <= 2, `shoe plate max ${maxShoe}`);
+    assert.ok(cables <= 1, `cream cable ${cables}`);
+  });
+
+  it("Weekend: ≥3 chore/field/denim/suede; 0 navy-blazer+rugby", () => {
+    const g = dressRack();
+    const looks = buildChapter(g, "weekend", { cap: 10, today: "2026-09-18" });
+    assert.ok(looks.length >= 6, `weekend looks ${looks.length}`);
+    const resolve = (l: Look) => l.garmentIds.map((id) => g.find((x) => x.id === id)!).filter(Boolean);
+    const soft = looks.filter((l) => resolve(l).some(isWeekendSoftJacket)).length;
+    assert.ok(soft >= 3, `soft jackets ${soft}`);
+    for (const l of looks) {
+      const p = resolve(l);
+      const rugby = p.some((x) => /rugby/i.test(`${x.name} ${x.subtype}`));
+      const navyBlazer = p.some((x) => /navy/i.test(x.name) && /blazer/i.test(`${x.name} ${x.subtype}`));
+      assert.equal(rugby && navyBlazer, false, `navy-blazer+rugby ${l.garmentIds.join(",")}`);
+    }
+  });
+
+  it("4× New week Polo: recipe_id changes; not the same loafer three times", () => {
+    const g = dressRack();
+    const recipes = new Set<string>();
+    const loaferRuns: string[] = [];
+    let looks: Look[] = [];
+    for (let i = 0; i < 4; i++) {
+      const prevWeek = looks.filter((l) => l.id.startsWith("week_"));
+      const week = buildWeek(g, "2026-09-14", {
+        excludeKeys: prevWeek.map((l) => comboKey(l.garmentIds)),
+        usedCount: new Map(),
+        house: "polo",
+      });
+      looks = week;
+      for (const l of week) {
+        if (l.recipeId) recipes.add(l.recipeId);
+        const shoe = l.garmentIds
+          .map((id) => g.find((x) => x.id === id)!)
+          .find((x) => x && /loafer/.test(x.subtype));
+        loaferRuns.push(shoe?.id ?? "");
+      }
+    }
+    assert.ok(recipes.size >= 2, `recipes ${[...recipes].join(",")}`);
+    let same3 = false;
+    for (let i = 2; i < loaferRuns.length; i++) {
+      if (loaferRuns[i] && loaferRuns[i] === loaferRuns[i - 1] && loaferRuns[i] === loaferRuns[i - 2]) {
+        same3 = true;
+      }
+    }
+    assert.equal(same3, false, `loafer run ${loaferRuns.join(",")}`);
   });
 });

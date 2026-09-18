@@ -6,6 +6,7 @@ import {
   isCampCollar,
   isFairIsle,
   isHoodiePiece,
+  isTrueOuter,
   lookHouses,
   slotOf,
 } from "./style.ts";
@@ -40,12 +41,6 @@ export function sortLook(pieces: Garment[]): Garment[] {
 
 function blobOf(g: Garment): string {
   return `${g.subtype} ${g.name}`.toLowerCase();
-}
-
-function isTrueOuter(g: Garment): boolean {
-  const b = blobOf(g);
-  if (isHoodiePiece(g)) return false;
-  return /\b(coats?|bombers?|jackets?|blazers?|parkas?|trench|shearlings?|overshirts?)\b/.test(b);
 }
 
 function isLayerTop(g: Garment): boolean {

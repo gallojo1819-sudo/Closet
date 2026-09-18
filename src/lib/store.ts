@@ -105,7 +105,7 @@ type ClosetState = {
   markSeen: (occasion: Occasion, keys: string[], house?: House) => void;
   keepLook: (id: string, patch?: { garmentIds?: string[]; name?: string }) => void;
   outfitWith: (lockedIds: string[], occasion?: Occasion, house?: House) => Look | null;
-  newWeek: () => number;
+  newWeek: (house?: House) => number;
   loadSample: () => void;
   emptyCloset: (opts?: { sample?: boolean }) => void;
   importCloset: (payload: {
@@ -493,7 +493,7 @@ export const useCloset = create<ClosetState>()(
             { ...m, id: uid("m"), createdAt: new Date().toISOString() },
           ],
         })),
-      newWeek: () => {
+      newWeek: (house) => {
         const s = get();
         if (!s.hydrated || s.garments.length === 0) return 0;
         const prevWeek = s.looks.filter((l) => l.id.startsWith("week_"));
@@ -501,6 +501,7 @@ export const useCloset = create<ClosetState>()(
         const week = buildWeek(s.garments, undefined, {
           excludeKeys,
           usedCount: lookCountMap(s.looks),
+          house,
         });
         set({ looks: mergeWeekLooks(s.looks, week) });
         return week.length;

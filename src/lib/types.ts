@@ -58,6 +58,8 @@ export type Look = {
   source: "ai" | "manual";
   /** Auto Lookbook entry. Rebuilds may replace these; never wipe source "manual". */
   lookbook?: boolean;
+  /** Quiet recipe stamp. Manual looks may omit. */
+  recipeId?: string;
   createdAt: string;
 };
 

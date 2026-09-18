@@ -121,6 +121,9 @@ export type OuterAttitude =
   | "unconstructed"
   | "overcoat"
   | "chore"
+  | "field"
+  | "denim"
+  | "suede"
   | "camel_jacket"
   | "none";
 
@@ -223,12 +226,17 @@ function outerAttitude(pieces: Garment[]): OuterAttitude {
   const outers = pieces.filter((g) => slotOf(g) === "outerwear");
   if (!outers.length) return "none";
   const b = outers.map(garmentBlob).join(" ");
-  if (/overcoat|topcoat/.test(b)) return "overcoat";
+  if (/overcoat|topcoat/.test(b) && !/blazer|sport\s*coats?/.test(b)) return "overcoat";
+  if (/shearling|suede/.test(b) && /jacket|coat|bomber/.test(b)) return "suede";
   if (/chore/.test(b)) return "chore";
-  if (/camel/.test(b) && /jacket|coat/.test(b)) return "camel_jacket";
-  if (/navy/.test(b) && /blazer/.test(b)) return "navy_blazer";
+  if (/field/.test(b)) return "field";
+  if (/trucker|denim jacket|\bdenim\b/.test(b) && /jacket|trucker/.test(b)) return "denim";
+  if (/camel/.test(b) && /overcoat|topcoat/.test(b)) return "camel_jacket";
+  if (/navy/.test(b) && /blazer|sport\s*coats?/.test(b)) return "navy_blazer";
   if (/unconstructed|unlined|shirt-jacket|overshirt/.test(b)) return "unconstructed";
-  if (/blazer/.test(b)) return "navy_blazer";
+  if (/blazer|sport\s*coats?/.test(b) && /taupe|ivory|cord|beige|cream/.test(b)) return "unconstructed";
+  if (/blazer|sport\s*coats?/.test(b) && !/navy/.test(b)) return "unconstructed";
+  if (/blazer|sport\s*coats?/.test(b)) return "navy_blazer";
   return "unconstructed";
 }
 
@@ -293,7 +301,7 @@ export function axesDiffer(a: LookPrint, b: LookPrint): number {
 const POLO_TOP: TopType[] = ["oxford", "pique_polo", "cable"];
 const POLO_SHOE: ShoeFamily[] = ["penny_loafer", "leather_sneaker", "boat"];
 
-function hits(print: LookPrint, house: House): { required: number; forbidden: number } {
+function hits(print: LookPrint, house: House, pool?: Garment[]): { required: number; forbidden: number } {
   let required = 0;
   let forbidden = 0;
   if (house === "polo") {
@@ -304,9 +312,13 @@ function hits(print: LookPrint, house: House): { required: number; forbidden: nu
     if (print.top_type === "sangallo" || print.top_type === "fair_isle") forbidden += 1;
   }
   if (house === "purple") {
-    if (print.top_type === "cashmere_top" || print.outer_attitude === "camel_jacket") required += 1;
+    if (print.top_type === "cashmere_top" || print.outer_attitude === "camel_jacket" || print.outer_attitude === "unconstructed") {
+      required += 1;
+    }
     if (print.shoe_family === "suede_loafer" || print.shoe_family === "chelsea") required += 1;
-    if (print.palette_lane === "camel_charcoal_loden") required += 1;
+    if (print.palette_lane === "camel_charcoal_loden" || print.palette_lane === "beige_ivory_tobacco") {
+      required += 1;
+    }
     if (print.top_type === "rugby" || print.top_type === "fair_isle" || print.top_type === "sangallo") {
       forbidden += 1;
     }
@@ -318,6 +330,8 @@ function hits(print: LookPrint, house: House): { required: number; forbidden: nu
       print.top_type === "work_shirt" ||
       print.bottom_type === "jean" ||
       print.outer_attitude === "chore" ||
+      print.outer_attitude === "denim" ||
+      print.outer_attitude === "suede" ||
       print.shoe_family === "boot"
     ) {
       required += 1;
@@ -332,9 +346,15 @@ function hits(print: LookPrint, house: House): { required: number; forbidden: nu
     if (print.shoe_family === "nb990") required += 1;
     if (print.tuck === "out") required += 1;
     if (print.bottom_type === "jean") required += 1;
-    if (print.top_type === "rugby" && print.outer_attitude === "navy_blazer") forbidden += 1;
+    if (print.outer_attitude === "navy_blazer") forbidden += 1;
     if (print.top_type === "rugby" && print.shoe_family === "penny_loafer") forbidden += 1;
-    if (print.shoe_family !== "nb990") forbidden += 1;
+    if (print.shoe_family === "penny_loafer") forbidden += 1;
+    if (print.shoe_family !== "nb990") {
+      const has990 = (pool ?? []).some((g) => shoeFamily(g) === "nb990");
+      const dad =
+        print.shoe_family === "leather_sneaker" || print.shoe_family === "suede_sneaker";
+      if (has990 || !pool?.length || !dad) forbidden += 1;
+    }
   }
   if (house === "faloni") {
     if (
@@ -412,7 +432,14 @@ function hits(print: LookPrint, house: House): { required: number; forbidden: nu
     ) {
       required += 1;
     }
-    if (print.outer_attitude === "overcoat") required += 1;
+    if (
+      print.outer_attitude === "overcoat" ||
+      print.outer_attitude === "suede" ||
+      print.outer_attitude === "navy_blazer" ||
+      print.outer_attitude === "unconstructed"
+    ) {
+      required += 1;
+    }
     if (print.top_type === "camp" || print.bottom_type === "linen") forbidden += 1;
     if (print.shoe_family === "driving_mule" || print.shoe_family === "nb990" || print.shoe_family === "white_court") {
       forbidden += 1;
@@ -427,7 +454,7 @@ function westernCount(pieces: Garment[]): number {
 }
 
 /** Kill rules 1–10. */
-export function houseKill(pieces: Garment[], house: House, occasion: Occasion): string | null {
+export function houseKill(pieces: Garment[], house: House, occasion: Occasion, pool?: Garment[]): string | null {
   const print = lookPrint(pieces, occasion);
   const top = topsOf(pieces)[0];
   const shoe = shoesOf(pieces)[0];
@@ -445,7 +472,12 @@ export function houseKill(pieces: Garment[], house: House, occasion: Occasion): 
   if (house !== "polo" && ocbdKhakiPenny) return "Non-Polo cannot be OCBD + khaki + penny";
   if (house === "ald") {
     const rugbyOrOver = print.top_type === "rugby" || print.top_type === "oversized_oxford";
-    if (!(print.shoe_family === "nb990" && rugbyOrOver && print.tuck === "out")) {
+    const has990 = (pool ?? []).some((g) => shoeFamily(g) === "nb990");
+    const dad =
+      print.shoe_family === "leather_sneaker" || print.shoe_family === "suede_sneaker";
+    const shoeOk =
+      print.shoe_family === "nb990" || ((!has990 && (pool?.length ?? 0) > 0) && dad);
+    if (!(shoeOk && rugbyOrOver && print.tuck === "out")) {
       return "ALD needs 990 and rugby/oversized untuck";
     }
   }
@@ -505,13 +537,14 @@ export function houseFingerprintOk(
   pieces: Garment[],
   house: House,
   occasion: Occasion,
+  pool?: Garment[],
 ): boolean {
   if (house === "sweetStable" && occasion === "weekday") return false;
   const print = lookPrint(pieces, occasion);
-  const { required, forbidden } = hits(print, house);
+  const { required, forbidden } = hits(print, house, pool);
   if (forbidden > 0) return false;
   if (required < 2) return false;
-  if (houseKill(pieces, house, occasion)) return false;
+  if (houseKill(pieces, house, occasion, pool)) return false;
   return true;
 }
 
@@ -523,7 +556,7 @@ export function leadHouse(pieces: Garment[], occasion: Occasion = "weekday"): Ho
   for (const h of HOUSES) {
     if (h === "polo") continue;
     if (houseKill(pieces, h, occasion)) continue;
-    const { required, forbidden } = hits(print, h);
+    const { required, forbidden } = hits(print, h, pieces);
     if (forbidden > 0 || required < 2) continue;
     if (required > bestN) {
       best = h;
@@ -568,8 +601,9 @@ export function houseFromPrompt(prompt: string): House | null {
 export function houseGapNote(house: House, garments: Garment[]): string | null {
   const shoes = garments.filter((g) => slotOf(g) === "footwear");
   const tops = garments.filter((g) => slotOf(g) === "top" || slotOf(g) === "dress");
+  const outers = garments.filter((g) => slotOf(g) === "outerwear");
   if (house === "ald") {
-    if (!shoes.some((g) => shoeFamily(g) === "nb990")) return "No 990s for ALD";
+    if (!shoes.some((g) => shoeFamily(g) === "nb990")) return "No 990s for ALD — dad sneaker";
     if (!tops.some((g) => topType(g) === "rugby" || topType(g) === "oversized_oxford")) {
       return "No rugby for ALD";
     }
@@ -602,6 +636,10 @@ export function houseGapNote(house: House, garments: Garment[]): string | null {
       return "No work shirt/boot for RRL";
     }
   }
+  if (house === "italianWinter") {
+    const coat = outers.some((g) => /overcoat|topcoat/.test(garmentBlob(g)));
+    if (!coat) return "No overcoat — shearling or blazer over merino";
+  }
   return null;
 }
 
@@ -610,15 +648,16 @@ export function houseLegalCombo(
   house: House | "all" | undefined,
   occasion: Occasion,
   previous?: Garment[],
+  pool?: Garment[],
 ): boolean {
   if (!house || house === "all") {
     const h = leadHouse(pieces, occasion);
-    if (h !== "polo" && !houseFingerprintOk(pieces, h, occasion)) {
-      return houseFingerprintOk(pieces, "polo", occasion);
+    if (h !== "polo" && !houseFingerprintOk(pieces, h, occasion, pool)) {
+      return houseFingerprintOk(pieces, "polo", occasion, pool);
     }
     return true;
   }
-  if (!houseFingerprintOk(pieces, house, occasion)) return false;
+  if (!houseFingerprintOk(pieces, house, occasion, pool)) return false;
   if (previous && previous.length >= 3) {
     const a = lookPrint(previous, occasion);
     const b = lookPrint(pieces, occasion);

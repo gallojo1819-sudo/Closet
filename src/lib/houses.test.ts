@@ -62,7 +62,8 @@ function pick(house: House, occasion: "weekday" | "weekend" | "out") {
     occasion,
     moment: "day",
     weather: { f: 68, label: "Fair", code: 2 },
-    legalCombo: (p) => houseLegalCombo(p, house, occasion),
+    house,
+    legalCombo: (p) => houseLegalCombo(p, house, occasion, undefined, FIX),
   });
 }
 
