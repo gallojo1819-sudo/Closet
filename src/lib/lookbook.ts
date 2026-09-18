@@ -14,6 +14,7 @@ import {
   isShortsPiece,
   isTrueOuter,
   isWeekendSoftJacket,
+  HOUSE_CHIPS,
   leadHouse,
   lookHouses,
   pickLook,
@@ -1227,6 +1228,65 @@ export function visibleHero(
   return rows.filter((l) => l.garmentIds.includes(g.id)).slice(0, 5);
 }
 
+export function rackCanDress(garments: Garment[]): boolean {
+  const pool = lookbookPool(garments);
+  const top = pool.some((g) => {
+    const s = slotOf(g);
+    return s === "top" || s === "dress";
+  });
+  const bottom = pool.some((g) => slotOf(g) === "bottom");
+  const shoe = pool.some((g) => slotOf(g) === "footwear");
+  return top && bottom && shoe;
+}
+
+/** Empty-chapter copy. Null when the rack can dress — never the only content. */
+export function emptyFilterCopy(
+  chapter: string,
+  seasonLabel: string,
+  seasonChip: "auto" | Season,
+  houseChip: House | "all",
+  color: string | null,
+  canDress: boolean,
+): string | null {
+  if (canDress) return null;
+  const named = [chapter];
+  const seasonName = seasonLabel.replace(/^Auto · /, "");
+  if (seasonChip !== "auto") named.push(seasonName);
+  if (houseChip !== "all") {
+    named.push(HOUSE_CHIPS.find((h) => h.id === houseChip)?.label ?? houseChip);
+  }
+  if (color) named.push(color);
+  let hint = "Switch Weekend.";
+  if (seasonChip !== "auto") hint = `Clear ${seasonName} or switch Weekend.`;
+  else if (houseChip !== "all") {
+    hint = `Clear ${HOUSE_CHIPS.find((h) => h.id === houseChip)?.label ?? "house"} or switch Weekend.`;
+  } else if (color) hint = `Clear ${color} or switch Weekend.`;
+  return `None in ${named.join(" · ")}. ${hint}`;
+}
+
+function pushLookRow(
+  out: Look[],
+  keys: Set<string>,
+  pieces: Garment[],
+  occasion: Occasion,
+  prefix: string,
+): boolean {
+  if (pieces.length < 3 || lookClashes(pieces)) return false;
+  const key = comboKey(pieces.map((p) => p.id));
+  if (keys.has(key)) return false;
+  keys.add(key);
+  out.push({
+    id: `${prefix}_${key.replace(/\|/g, "_")}`,
+    name: nameOf(pieces),
+    occasion,
+    garmentIds: pieces.map((p) => p.id),
+    source: "ai",
+    lookbook: true,
+    createdAt: `${todayISO()}T00:00:00.000Z`,
+  });
+  return true;
+}
+
 /**
  * Shown-equivalent for one chapter.
  * Occasion is the chapter key. House and season rank; they must not zero the grid.
@@ -1268,35 +1328,66 @@ export function chapterVisible(
   });
   if (house) {
     const hard = ranked.filter((l) => lookFitsHouse(resolve(l), house, occasion, pool));
-    const minH = opts?.min ?? 0;
-    let outH = hard;
+    const minH = Math.max(min, 0);
+    let outH = [...hard];
     const keysH = new Set(outH.map((l) => comboKey(l.garmentIds)));
+    const weather = season ? weatherForSeason(season) : weatherForOcc(occasion);
     let guardH = 0;
     while (outH.length < minH && minH > 0 && guardH < 12) {
       guardH += 1;
       const ids = pickLook(pool, {
         occasion,
         moment: "day",
-        weather: season ? weatherForSeason(season) : weatherForOcc(occasion),
+        weather,
         previousIds: outH.flatMap((l) => l.garmentIds),
+        house,
         legalCombo: (p) => houseLegalCombo(p, house, occasion, undefined, pool),
       });
       if (ids.length < 3) break;
       const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
-      if (pieces.length < 3 || lookClashes(pieces)) continue;
       if (!lookFitsHouse(pieces, house, occasion, pool)) continue;
-      const key = comboKey(ids);
-      if (keysH.has(key)) continue;
-      keysH.add(key);
-      outH.push({
-        id: `lb2_house_${house}_${occasion}_${key.replace(/\|/g, "_")}`,
-        name: nameOf(pieces),
+      if (season && !lookFitsSeason(pieces, season)) continue;
+      pushLookRow(outH, keysH, pieces, occasion, `lb2_house_${house}_${occasion}`);
+    }
+    if (outH.length >= minH) return outH;
+    for (const l of ranked) {
+      if (outH.length >= minH) break;
+      const k = comboKey(l.garmentIds);
+      if (keysH.has(k)) continue;
+      keysH.add(k);
+      outH.push(l);
+    }
+    let guardF = 0;
+    while (outH.length < minH && minH > 0 && guardF < 16) {
+      guardF += 1;
+      const ids = pickLook(pool, {
         occasion,
-        garmentIds: ids,
-        source: "ai",
-        lookbook: true,
-        createdAt: `${todayISO()}T00:00:00.000Z`,
+        moment: "day",
+        weather,
+        previousIds: outH.flatMap((l) => l.garmentIds),
       });
+      if (ids.length < 3) break;
+      const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+      if (season && !lookFitsSeason(pieces, season)) continue;
+      pushLookRow(outH, keysH, pieces, occasion, `lb2_fill_${house}_${occasion}`);
+    }
+    if (outH.length < minH && minH > 0) {
+      const extra = fillOccasionLooks(
+        garments,
+        outH,
+        occasion,
+        minH,
+        keysH,
+        season,
+        undefined,
+      );
+      for (const l of extra) {
+        if (outH.length >= minH) break;
+        const k = comboKey(l.garmentIds);
+        if (keysH.has(k)) continue;
+        keysH.add(k);
+        outH.push(l);
+      }
     }
     return outH;
   }

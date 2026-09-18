@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { dressThisPiece } from "./dress.ts";
 import {
   houseFingerprintOk,
+  houseGapNote,
   houseKill,
   isPoloDefaultSilhouette,
   lookPrint,
@@ -120,6 +121,17 @@ describe("house fingerprints HARD", () => {
       assert.equal(isPoloDefaultSilhouette(print), false, house);
       assert.ok(!(print.top_type === "oxford" && print.shoe_family === "penny_loafer" && (print.bottom_type === "chino" || print.bottom_type === "khaki")), house);
     }
+  });
+
+  it("545 weekday note is thin-on-Weekday, not the only content", () => {
+    assert.equal(
+      houseGapNote("fiveFourFive", FIX, "weekday"),
+      "545 is thin on Weekday — closest plates",
+    );
+    assert.equal(
+      houseGapNote("sweetStable", FIX, "weekday"),
+      "Sweet Stable is a Weekend house.",
+    );
   });
 
   it("Outfit with this on cream cable includes that id", () => {

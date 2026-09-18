@@ -12,8 +12,7 @@ import { useImageSrc } from "@/lib/use-image";
 import {
   chapterVisible,
   comboKey,
-  buildWeek,
-  lookCountMap,
+  emptyFilterCopy,
   lookbookPool,
   looksForHero,
   mondayISO,
@@ -29,30 +28,8 @@ import { livePool } from "@/lib/rack";
 import { houseGapNote, HOUSE_LABEL, leadHouse } from "@/lib/houses";
 import { daysIdle, HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import { mapOccasion, OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
+import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-function emptyFilterCopy(
-  chapter: string,
-  seasonLabel: string,
-  seasonChip: "auto" | Season,
-  houseChip: "all" | House,
-  color: string | null,
-): string {
-  const named = [chapter];
-  const seasonName = seasonLabel.replace(/^Auto · /, "");
-  if (seasonChip !== "auto") named.push(seasonName);
-  if (houseChip !== "all") {
-    named.push(HOUSE_CHIPS.find((h) => h.id === houseChip)?.label ?? houseChip);
-  }
-  if (color) named.push(color);
-  let hint = "Switch Weekend.";
-  if (seasonChip !== "auto") hint = `Clear ${seasonName} or switch Weekend.`;
-  else if (houseChip !== "all") {
-    hint = `Clear ${HOUSE_CHIPS.find((h) => h.id === houseChip)?.label ?? "house"} or switch Weekend.`;
-  } else if (color) hint = `Clear ${color} or switch Weekend.`;
-  return `None in ${named.join(" · ")}. ${hint}`;
-}
 
 export const Route = createFileRoute("/lookbook")({
   component: LookbookPage,
@@ -211,23 +188,18 @@ function LookbookPage() {
     () => book.filter((l) => l.id.startsWith(`week_${monday}_`)),
     [book, monday],
   );
-  const shown = useMemo(() => {
-    if (houseChip !== "all") {
-      const week = buildWeek(garments, undefined, {
-        usedCount: lookCountMap(looksAll),
+  const shown = useMemo(
+    () =>
+      chapterVisible(weekLooks.length ? weekLooks : book, garments, occasion, {
+        season,
         house: houseChip,
-      });
-      return week.filter((l) => mapOccasion(l.occasion) === occasion);
-    }
-    return chapterVisible(weekLooks.length ? weekLooks : book, garments, occasion, {
-      season,
-      house: "all",
-      color,
-      min: canBuild ? 3 : 0,
-    });
-  }, [weekLooks, book, garments, occasion, season, houseChip, color, canBuild, looksAll]);
+        color,
+        min: canBuild ? 3 : 0,
+      }),
+    [weekLooks, book, garments, occasion, season, houseChip, color, canBuild],
+  );
   const houseNote =
-    houseChip === "all" ? null : houseGapNote(houseChip, garments);
+    houseChip === "all" ? null : houseGapNote(houseChip, garments, occasion);
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const usedN = garments.length - unused.length;
@@ -477,9 +449,14 @@ function LookbookPage() {
         {weekNote && <p className="mt-1 micro text-ink-soft">{weekNote}</p>}
         {shown.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">
-            {houseNote
-              ? houseNote
-              : emptyFilterCopy(chapterLabel, seasonLabel, seasonChip, houseChip, color)}
+            {emptyFilterCopy(
+              chapterLabel,
+              seasonLabel,
+              seasonChip,
+              houseChip,
+              color,
+              canBuild,
+            ) ?? houseNote ?? "Building looks…"}
           </p>
         ) : (
           <ul

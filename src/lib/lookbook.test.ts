@@ -6,7 +6,9 @@ import {
   buildLookbook,
   buildWeek,
   CHAPTER_CAP,
+  chapterVisible,
   comboKey,
+  emptyFilterCopy,
   enforcePieceCap,
   fillOccasionLooks,
   lookAllowsBlazer,
@@ -72,9 +74,8 @@ describe("buildWeek", () => {
     const g = closet(15, 15, 10);
     let looks: Look[] = [];
     const weekdayKeys: string[] = [];
+    const excludeKeys: string[] = [];
     for (let i = 0; i < 4; i++) {
-      const prevWeek = looks.filter((l) => l.id.startsWith("week_"));
-      const excludeKeys = prevWeek.map((l) => comboKey(l.garmentIds));
       const usedCount = new Map<string, number>();
       for (const l of looks) {
         for (const id of l.garmentIds) usedCount.set(id, (usedCount.get(id) ?? 0) + 1);
@@ -100,6 +101,7 @@ describe("buildWeek", () => {
         assert.ok(hubHits <= 1, `top-frequency ${topId} in ${hubHits} of 7`);
       }
       looks = mergeWeekLooks(looks, week);
+      for (const l of week) excludeKeys.push(comboKey(l.garmentIds));
       for (const l of week.filter((x) => x.occasion === "weekday")) {
         weekdayKeys.push(comboKey(l.garmentIds));
       }
@@ -1046,5 +1048,30 @@ describe("jacket quotas + recipes", () => {
       }
     }
     assert.equal(same3, false, `loafer run ${loaferRuns.join(",")}`);
+  });
+});
+
+describe("chapterVisible never empty", () => {
+  it("Weekday × 545 / Purple / SweetStable / ItalianSummer / ItalianWinter each ≥3", () => {
+    const g = dressRack();
+    const book = buildLookbook(g, "2026-09-18");
+    for (const house of ["fiveFourFive", "purple", "sweetStable", "italianSummer", "italianWinter"] as const) {
+      const shown = chapterVisible(book, g, "weekday", { season: "fall", house, min: 3 });
+      assert.ok(shown.length >= 3, `Weekday × ${house} = ${shown.length}`);
+    }
+  });
+
+  it("None in … copy never appears if the rack can dress", () => {
+    const msg = emptyFilterCopy("Weekday", "Fall", "auto", "fiveFourFive", null, true);
+    assert.equal(msg, null);
+    const empty = emptyFilterCopy("Weekday", "Fall", "auto", "fiveFourFive", null, false);
+    assert.ok(empty && empty.includes("None in Weekday · 545"));
+  });
+
+  it("houseChip=all still uses chapterVisible and fills ≥3", () => {
+    const g = dressRack();
+    const book = buildLookbook(g, "2026-09-18");
+    const shown = chapterVisible(book, g, "weekday", { season: "fall", house: "all", min: 3 });
+    assert.ok(shown.length >= 3, `all weekday ${shown.length}`);
   });
 });

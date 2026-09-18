@@ -363,6 +363,7 @@ async function firstLink(userId: string) {
     }
     const pool = livePool(useCloset.getState().garments);
     if (pool.length > 0) {
+      void prefetchEagerThumbs(pool.map((g) => g.id));
       const thumbs = await countAccountThumbs(userId);
       if (thumbs < pool.length) {
         clearUploaded();

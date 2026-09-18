@@ -33,9 +33,15 @@ function BackupBanner({ night }: { night: boolean }) {
     listedThumbs: account.listedThumbs,
   });
   if (!show) return null;
-  const label =
-    account.progress && !account.progress.startsWith("Saved")
-      ? account.progress
+  const objectsExist =
+    typeof account.listedThumbs === "number" && account.listedThumbs >= liveCount;
+  const progress = account.progress;
+  const label = objectsExist
+    ? progress && !/still on this phone/i.test(progress)
+      ? progress
+      : ""
+    : progress && !progress.startsWith("Saved")
+      ? progress
       : stillOnPhoneCopy(remaining);
   return (
     <div

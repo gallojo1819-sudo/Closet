@@ -598,10 +598,22 @@ export function houseFromPrompt(prompt: string): House | null {
   return null;
 }
 
-export function houseGapNote(house: House, garments: Garment[]): string | null {
+export function houseGapNote(house: House, garments: Garment[], occasion?: Occasion): string | null {
   const shoes = garments.filter((g) => slotOf(g) === "footwear");
   const tops = garments.filter((g) => slotOf(g) === "top" || slotOf(g) === "dress");
   const outers = garments.filter((g) => slotOf(g) === "outerwear");
+  if (house === "sweetStable" && occasion === "weekday") {
+    return "Sweet Stable is a Weekend house.";
+  }
+  if (house === "fiveFourFive" && occasion === "weekday") {
+    return "545 is thin on Weekday — closest plates";
+  }
+  if (house === "purple" && occasion === "weekday") {
+    return "Purple is thin on Weekday — closest plates";
+  }
+  if (house === "italianSummer" && occasion === "weekday") {
+    return "Italian summer is thin on Weekday — closest plates";
+  }
   if (house === "ald") {
     if (!shoes.some((g) => shoeFamily(g) === "nb990")) return "No 990s for ALD — dad sneaker";
     if (!tops.some((g) => topType(g) === "rugby" || topType(g) === "oversized_oxford")) {

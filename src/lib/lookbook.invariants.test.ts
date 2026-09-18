@@ -153,35 +153,15 @@ describe("lookbook invariants", () => {
     for (const occ of OCCASIONS) {
       for (const season of SEASONS) {
         for (const house of houses) {
-          if (house === "sweetStable" && occ.id === "weekday") {
-            const shown = chapterVisible(book, FIXTURE, occ.id, {
-              season: season.id,
-              house,
-              min: 0,
-            });
-            assert.equal(
-              shown.length,
-              0,
-              `Sweet Stable weekday must be 0, got ${shown.length}`,
-            );
-            continue;
-          }
-          const min =
-            house === "all" ||
-            (house === "polo" && occ.id !== "comfy" && occ.id !== "travel")
-              ? 3
-              : 0;
           const shown = chapterVisible(book, FIXTURE, occ.id, {
             season: season.id,
             house,
-            min,
+            min: 3,
           });
-          if (min > 0) {
-            assert.ok(
-              shown.length >= 3,
-              `${occ.id} × ${season.id} × ${house} = ${shown.length}`,
-            );
-          }
+          assert.ok(
+            shown.length >= 3,
+            `${occ.id} × ${season.id} × ${house} = ${shown.length}`,
+          );
         }
       }
     }
@@ -200,9 +180,15 @@ describe("lookbook invariants", () => {
     const weekdaySs = chapterVisible(book, FIXTURE, "weekday", {
       season: "fall",
       house: "sweetStable",
-      min: 0,
+      min: 3,
     });
-    assert.equal(weekdaySs.length, 0, `Weekday+SweetStable ${weekdaySs.length}`);
+    assert.ok(weekdaySs.length >= 3, `Weekday+SweetStable ${weekdaySs.length}`);
+    const weekday545 = chapterVisible(book, FIXTURE, "weekday", {
+      season: "fall",
+      house: "fiveFourFive",
+      min: 3,
+    });
+    assert.ok(weekday545.length >= 3, `Weekday+545 ${weekday545.length}`);
   });
 
   it("INVARIANT 2 — house is a rank; dropping lookFitsHouse must not go below 3", () => {

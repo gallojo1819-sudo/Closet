@@ -24,7 +24,12 @@ export function GarmentImg({
   nudge?: boolean;
 }) {
   const fullKey = garment.cutoutSrc || garment.imageSrc;
-  const thumbKey = imageKey(garment.id, "t");
+  const cloudSrc = isCloudSrc(garment.cutoutSrc)
+    ? garment.cutoutSrc
+    : isCloudSrc(garment.imageSrc)
+      ? garment.imageSrc
+      : "";
+  const thumbKey = cloudSrc || imageKey(garment.id, "t");
   const thumbSrc = useImageSrc(thumbKey);
   const fullSrc = useImageSrc(thumb ? "" : fullKey);
   const src = thumb ? thumbSrc : fullSrc || thumbSrc;
