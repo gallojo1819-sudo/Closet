@@ -390,14 +390,22 @@ function LookbookPage() {
       <button
         type="button"
         onClick={() => {
-          const n = reshuffleWeek(
-            houseChip === "all" ? undefined : houseChip,
-            occasion,
-            season,
-          );
-          setReshuffleKey(`${occasion}:${houseChip}:${season}`);
-          setWeekNote(`Reshuffle · ${n} looks`);
-          setWeekPulse((x) => x + 1);
+          try {
+            const n = reshuffleWeek(
+              houseChip === "all" ? undefined : houseChip,
+              occasion,
+              season,
+            );
+            if (n < 3) {
+              setWeekNote("Couldn't reshuffle — try again.");
+              return;
+            }
+            setReshuffleKey(`${occasion}:${houseChip}:${season}`);
+            setWeekNote(`Reshuffle · ${n} looks`);
+            setWeekPulse((x) => x + 1);
+          } catch {
+            setWeekNote("Couldn't reshuffle — try again.");
+          }
         }}
         className="inline-flex h-11 items-center border border-hairline px-4 text-sm text-ink hover:border-hairline-strong"
       >

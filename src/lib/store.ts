@@ -108,6 +108,8 @@ type ClosetState = {
   keepLook: (id: string, patch?: { garmentIds?: string[]; name?: string }) => void;
   outfitWith: (lockedIds: string[], occasion?: Occasion, house?: House) => Look | null;
   thisWeek: Look[];
+  skipCount: number;
+  reshuffleCount: number;
   reshuffleWeek: (house?: House, occasion?: Occasion, season?: Season) => number;
   loadSample: () => void;
   emptyCloset: (opts?: { sample?: boolean }) => void;
@@ -145,7 +147,7 @@ function pickDrop(
     previousIds,
     lockedIds,
     repeatPairs,
-    salt: extra?.salt ?? Date.now(),
+    salt: extra?.salt ?? 1,
     usedCount: extra?.usedCount,
     excludeKeys: extra?.excludeKeys,
     minSlotChange: extra?.skip ? 2 : 0,
@@ -225,6 +227,8 @@ export const useCloset = create<ClosetState>()(
       refPhotoBackup: null,
       seenLooks: {},
       thisWeek: [],
+      skipCount: 0,
+      reshuffleCount: 0,
       addGarment: (input, opts) => {
         const id = input.id ?? uid("g");
         const garment: Garment = {
@@ -306,24 +310,33 @@ export const useCloset = create<ClosetState>()(
       skipDrop: () => {
         const drop = get().drop;
         if (!drop || drop.worn) return;
-        const skipped = drop.garmentIds;
-        const avoid = { ...get().avoid };
-        const locked = new Set(drop.lockedIds ?? []);
-        for (const id of skipped) {
-          if (!locked.has(id)) avoid[id] = (avoid[id] ?? 0) + 1;
+        try {
+          const skipped = drop.garmentIds;
+          const avoid = { ...get().avoid };
+          const locked = new Set(drop.lockedIds ?? []);
+          for (const id of skipped) {
+            if (!locked.has(id)) avoid[id] = (avoid[id] ?? 0) + 1;
+          }
+          const entry: WearEntry = {
+            date: todayISO(),
+            garmentIds: skipped,
+            verdict: "skipped",
+            occasion: drop.occasion,
+          };
+          set({
+            avoid,
+            journal: [entry, ...get().journal.filter((j) => j.date !== todayISO())].slice(0, 60),
+            skipCount: get().skipCount + 1,
+          });
+          get().rerollDrop(drop.weather, drop.occasion, skipped);
+        } catch {
+          set({
+            drop: {
+              ...get().drop!,
+              lockNote: "Couldn't reshuffle — try again.",
+            },
+          });
         }
-        const entry: WearEntry = {
-          date: todayISO(),
-          garmentIds: skipped,
-          verdict: "skipped",
-          occasion: drop.occasion,
-        };
-        set({
-          avoid,
-          journal: [entry, ...get().journal.filter((j) => j.date !== todayISO())].slice(0, 60),
-        });
-        // previousIds is this reroll only — avoid stays capped, not an exile.
-        get().rerollDrop(drop.weather, drop.occasion, skipped);
       },
       saveLook: (look) => {
         const id = uid("l");
@@ -422,6 +435,7 @@ export const useCloset = create<ClosetState>()(
           ? coreComboKey(prev.garmentIds, get().garments)
           : "";
         const skip = Boolean(previousIds?.length);
+        const salt = skip ? get().skipCount || 1 : get().reshuffleCount || 1;
         const ids = pickDrop(
           get().garments,
           weather ?? prev?.weather,
@@ -432,7 +446,7 @@ export const useCloset = create<ClosetState>()(
           lockedIds,
           repeats,
           {
-            salt: Date.now(),
+            salt,
             usedCount: lookCountMap(get().looks),
             excludeKeys: [...weekKeys, ...wornKeys, ...skipKeys, currentKey, currentCore].filter(
               Boolean,
@@ -531,17 +545,23 @@ export const useCloset = create<ClosetState>()(
       reshuffleWeek: (house, occasion, season) => {
         const s = get();
         if (!s.hydrated || s.garments.length === 0) return 0;
-        const occ = mapOccasion(occasion ?? s.drop?.occasion ?? "weekday");
-        const excludeKeys = s.thisWeek.map((l) => comboKey(l.garmentIds));
-        const row = buildReshuffleRow(s.garments, occ, {
-          house,
-          season,
-          excludeKeys,
-          usedCount: lookCountMap(s.looks),
-          replacing: s.thisWeek,
-        });
-        set({ thisWeek: row });
-        return row.length;
+        try {
+          const n = s.reshuffleCount + 1;
+          const occ = mapOccasion(occasion ?? s.drop?.occasion ?? "weekday");
+          const excludeKeys = s.thisWeek.map((l) => comboKey(l.garmentIds));
+          const row = buildReshuffleRow(s.garments, occ, {
+            house,
+            season,
+            excludeKeys,
+            usedCount: lookCountMap(s.looks),
+            replacing: s.thisWeek,
+            salt: n,
+          });
+          set({ thisWeek: row, reshuffleCount: n });
+          return row.length;
+        } catch {
+          return 0;
+        }
       },
       ensureLookbook: () => {
         const s = get();
@@ -775,6 +795,8 @@ export const useCloset = create<ClosetState>()(
           avoid: {},
           seenLooks: {},
           thisWeek: [],
+          skipCount: 0,
+          reshuffleCount: 0,
         });
         get().ensureLookbook();
       },
@@ -791,6 +813,8 @@ export const useCloset = create<ClosetState>()(
           avoid: {},
           seenLooks: {},
           thisWeek: [],
+          skipCount: 0,
+          reshuffleCount: 0,
         });
         void clearClosetMeta().catch(() => {});
         // Joe's body photo stays. Only Fit → Remove deletes it.

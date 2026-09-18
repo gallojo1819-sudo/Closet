@@ -373,6 +373,7 @@ describe("pickLook", () => {
       ),
     ];
     const usedCount = new Map<string, number>();
+    for (const x of g) usedCount.set(x.id, 99);
     const combos: string[] = [];
     const hits = new Map<string, number>();
     let prev: string[] = [];
@@ -380,13 +381,14 @@ describe("pickLook", () => {
     for (let i = 0; i < 10; i++) {
       const ids = pickLook(g, {
         ...opts,
-        salt: Date.now() + i * 97_331,
+        salt: i + 1,
         previousIds: prev,
         excludeKeys: exclude,
         usedCount,
         minSlotChange: prev.length ? 2 : 0,
         requireSilhouetteChange: prev.length > 0,
       });
+      assert.ok(ids.length >= 3, `skip ${i} empty`);
       const key = coreComboKey(ids, g);
       combos.push(key);
       exclude.push(key);

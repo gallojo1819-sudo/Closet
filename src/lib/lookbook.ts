@@ -41,7 +41,6 @@ import {
   pickRecipe,
   recipesFor,
   type ChapterTrack,
-  type RecipeId,
 } from "./recipes.ts";
 import { lookFitsSeason, seasonRank, weatherForSeason, type Season } from "./season.ts";
 import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "./types.ts";
@@ -1308,7 +1307,12 @@ export function chapterVisible(
   looks: Look[],
   garments: Garment[],
   occasion: Occasion,
-  opts?: { season?: Season; house?: House | "all"; color?: string | null; min?: number },
+  opts?: {
+    season?: Season;
+    house?: House | "all";
+    color?: string | null;
+    min?: number;
+  },
 ): Look[] {
   const pool = lookbookPool(garments);
   const byId = new Map(pool.map((g) => [g.id, g]));
@@ -1342,27 +1346,9 @@ export function chapterVisible(
   if (house) {
     const hard = ranked.filter((l) => lookFitsHouse(resolve(l), house, occasion, pool));
     const minH = Math.max(min, 0);
-    let outH = [...hard];
+    if (hard.length >= minH) return hard;
+    const outH = [...hard];
     const keysH = new Set(outH.map((l) => comboKey(l.garmentIds)));
-    const weather = season ? weatherForSeason(season) : weatherForOcc(occasion);
-    let guardH = 0;
-    while (outH.length < minH && minH > 0 && guardH < 12) {
-      guardH += 1;
-      const ids = pickLook(pool, {
-        occasion,
-        moment: "day",
-        weather,
-        previousIds: outH.flatMap((l) => l.garmentIds),
-        house,
-        legalCombo: (p) => houseLegalCombo(p, house, occasion, undefined, pool),
-      });
-      if (ids.length < 3) break;
-      const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
-      if (!lookFitsHouse(pieces, house, occasion, pool)) continue;
-      if (season && !lookFitsSeason(pieces, season)) continue;
-      pushLookRow(outH, keysH, pieces, occasion, `lb2_house_${house}_${occasion}`);
-    }
-    if (outH.length >= minH) return outH;
     for (const l of ranked) {
       if (outH.length >= minH) break;
       const k = comboKey(l.garmentIds);
@@ -1370,84 +1356,27 @@ export function chapterVisible(
       keysH.add(k);
       outH.push(l);
     }
-    let guardF = 0;
-    while (outH.length < minH && minH > 0 && guardF < 16) {
-      guardF += 1;
-      const ids = pickLook(pool, {
-        occasion,
-        moment: "day",
-        weather,
-        previousIds: outH.flatMap((l) => l.garmentIds),
-      });
-      if (ids.length < 3) break;
-      const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
-      if (season && !lookFitsSeason(pieces, season)) continue;
-      pushLookRow(outH, keysH, pieces, occasion, `lb2_fill_${house}_${occasion}`);
-    }
-    if (outH.length < minH && minH > 0) {
-      const extra = fillOccasionLooks(
-        garments,
-        outH,
-        occasion,
-        minH,
-        keysH,
-        season,
-        undefined,
-      );
-      for (const l of extra) {
-        if (outH.length >= minH) break;
-        const k = comboKey(l.garmentIds);
-        if (keysH.has(k)) continue;
-        keysH.add(k);
-        outH.push(l);
+    if (outH.length < minH && looks.length < 16) {
+      const weather = season ? weatherForSeason(season) : weatherForOcc(occasion);
+      let g = 0;
+      while (outH.length < minH && g < 4) {
+        g += 1;
+        const ids = pickLook(pool, {
+          occasion,
+          moment: "day",
+          weather,
+          salt: g,
+          previousIds: outH.flatMap((l) => l.garmentIds),
+        });
+        const pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
+        if (pieces.length < 3 || lookClashes(pieces)) continue;
+        pushLookRow(outH, keysH, pieces, occasion, `lb2_fill_${house}_${occasion}`);
       }
     }
     return outH;
   }
 
-  let out = enforcePieceCap(stripRepeatBlazers(ranked, garments), garments);
-  if (out.length < min && min > 0) {
-    const extra = fillOccasionLooks(
-      garments,
-      out,
-      occasion,
-      min,
-      new Set(out.map((l) => comboKey(l.garmentIds))),
-      undefined,
-      undefined,
-    );
-    const merged = stripRepeatBlazers([...out, ...extra], garments);
-    const capped = enforcePieceCap(merged, garments);
-    out = capped.length >= min ? capped : merged;
-  }
-  const keys = new Set(out.map((l) => comboKey(l.garmentIds)));
-  let guard = 0;
-  while (out.length < min && min > 0 && guard < 16) {
-    guard += 1;
-    const ids = pickLook(pool, {
-      occasion,
-      moment: "day",
-      weather: season ? weatherForSeason(season) : weatherForOcc(occasion),
-      previousIds: out.flatMap((l) => l.garmentIds),
-    });
-    if (ids.length < 3) break;
-    const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
-    if (pieces.length < 3 || lookClashes(pieces)) continue;
-    if (season && !lookFitsSeason(pieces, season)) continue;
-    const key = comboKey(ids);
-    if (keys.has(key)) continue;
-    keys.add(key);
-    out.push({
-      id: `lb2_fill_${occasion}_${key.replace(/\|/g, "_")}`,
-      name: nameOf(pieces),
-      occasion,
-      garmentIds: ids,
-      source: "ai",
-      lookbook: true,
-      createdAt: `${todayISO()}T00:00:00.000Z`,
-    });
-  }
-  return out;
+  return enforcePieceCap(stripRepeatBlazers(ranked, garments), garments);
 }
 
 /** Exhausted only after a full chapter was shown and shuffle-after-reset added nothing. */
@@ -1552,6 +1481,8 @@ export function weekWeight(lookCount: number): number {
 }
 
 export const RESHUFFLE_ROW = 6;
+export const RESHUFFLE_MAX_PICKS = 4;
+export const SKIP_MAX_PICKS = 8;
 
 function knitTop(g: Garment): boolean {
   const t = topType(g);
@@ -1629,144 +1560,148 @@ export function buildReshuffleRow(
     usedCount?: Map<string, number>;
     replacing?: Look[];
     cap?: number;
+    salt?: number;
   },
 ): Look[] {
   const cap = opts?.cap ?? RESHUFFLE_ROW;
   const pool = lookbookPool(garments);
+  if (pool.length < 3) return [];
   const byId = new Map(pool.map((g) => [g.id, g]));
   const house = opts?.house;
   const season = opts?.season;
   const weather = season ? weatherForSeason(season) : weatherForOcc(occasion);
-  const keys = new Set(opts?.excludeKeys ?? []);
-  const usedIds = new Set<string>();
+  const banned = new Set(opts?.excludeKeys ?? []);
   const replacingRecipes = new Set(
     (opts?.replacing ?? []).map((l) => l.recipeId).filter((id): id is string => Boolean(id)),
   );
   const track = emptyChapter();
-  const out: Look[] = [];
   const usedCount = opts?.usedCount ?? new Map<string, number>();
-
-  const tryDraw = (hardHouse: boolean): Garment[] | null => {
-    const avail = pool.filter((g) => !usedIds.has(g.id));
-    if (avail.length < 3) return null;
-    let recipe = pickRecipe(occasion, avail, { house, track });
-    const taken = new Set([...replacingRecipes, ...out.map((l) => l.recipeId).filter(Boolean)]);
-    if (taken.has(recipe.id)) {
-      const alts = recipesFor(occasion, house).filter((r) => !taken.has(r.id));
-      if (alts.length) recipe = alts[out.length % alts.length]!;
+  const salt0 = opts?.salt ?? 1;
+  let a = (salt0 >>> 0) || 1;
+  const rng = () => {
+    a = (Math.imul(a, 1664525) + 1013904223) >>> 0;
+    return a / 4294967296;
+  };
+  const shuffle = <T,>(list: T[]): T[] => {
+    const x = [...list];
+    for (let i = x.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const t = x[i]!;
+      x[i] = x[j]!;
+      x[j] = t;
     }
-    const ids = pickLook(avail, {
+    return x;
+  };
+  const tops = shuffle(pool.filter((g) => {
+    const s = slotOf(g);
+    return s === "top" || s === "dress";
+  }));
+  const bottoms = shuffle(pool.filter((g) => slotOf(g) === "bottom"));
+  const shoes = shuffle(pool.filter((g) => slotOf(g) === "footwear"));
+  const jackets = shuffle(pool.filter((g) => isTrueOuter(g)));
+  const draws: Garment[][] = [];
+  const n = Math.max(tops.length, bottoms.length, shoes.length, cap * 3);
+  for (let i = 0; i < n && draws.length < cap * 3; i++) {
+    const top = tops[i % tops.length];
+    const bot = bottoms[i % bottoms.length];
+    const shoe = shoes[i % shoes.length];
+    if (!top || !bot || !shoe) continue;
+    if (top.id === bot.id || bot.id === shoe.id || top.id === shoe.id) continue;
+    const pieces = [top, bot, shoe];
+    const jacket = jackets[i % Math.max(jackets.length, 1)];
+    if (jacket && jacket.id !== top.id && i % 2 === 1) pieces.push(jacket);
+    if (lookClashes(pieces)) continue;
+    if (season && !lookFitsSeason(pieces, season)) continue;
+    const key = comboKey(pieces.map((p) => p.id));
+    if (banned.has(key) && draws.length >= 3) continue;
+    draws.push(pieces);
+  }
+  void weather;
+  void usedCount;
+  void replacingRecipes;
+  let picks = 0;
+  while (picks < RESHUFFLE_MAX_PICKS && draws.length < 3) {
+    picks += 1;
+    const ids = pickLook(pool, {
       occasion,
       moment: "day",
       weather,
-      salt: Date.now() + out.length * 9973 + usedIds.size,
-      recipeId: recipe.id,
-      house: hardHouse ? house : undefined,
-      chapter: track,
-      usedCount,
-      excludeKeys: keys,
-      previousIds: out.at(-1)?.garmentIds,
-      minSlotChange: out.length ? 2 : 0,
-      legalCombo:
-        hardHouse && house
-          ? (p) => houseLegalCombo(p, house, occasion, undefined, pool)
-          : undefined,
+      salt: salt0 + picks,
     });
-    const pieces = ids
-      .map((id) => byId.get(id))
-      .filter((g): g is Garment => g != null && !usedIds.has(g.id));
-    return pieces.length >= 3 ? pieces : null;
+    const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    if (pieces.length >= 3 && !lookClashes(pieces)) draws.push(pieces);
+  }
+
+  type Strict = {
+    uniqueIds: boolean;
+    uniqueOuter: boolean;
+    uniqueShoe: boolean;
+    axes3: boolean;
   };
 
-  for (let attempt = 0; attempt < 160 && out.length < cap; attempt++) {
-    const pieces = tryDraw(true) ?? tryDraw(false);
-    if (!pieces) continue;
-    if (lookClashes(pieces)) continue;
-    if (season && !lookFitsSeason(pieces, season)) continue;
-    const top = lookTop(pieces);
-    if (
-      top &&
-      isCreamCable(top) &&
-      out.some((l) =>
-        l.garmentIds.some((id) => {
-          const g = byId.get(id);
-          return Boolean(g && isCreamCable(g));
-        }),
-      )
-    ) {
-      continue;
-    }
-    const recipeId = matchRecipe(pieces, occasion, house) as RecipeId | undefined;
-    if (out.length) {
-      const prev = out[out.length - 1]!;
-      const prevP = prev.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
-      const a = reshuffleAxes(prevP, prev.recipeId);
-      const b = reshuffleAxes(pieces, recipeId);
-      if (reshuffleAxesDiff(a, b) < 3) continue;
-      if (knitColorTwin(prevP, pieces)) continue;
-      const prevShoe = lookShoe(prevP);
-      const shoe = lookShoe(pieces);
-      if (prevShoe && shoe && shoeFamily(prevShoe) === shoeFamily(shoe)) continue;
-      const prevOuter = lookOuter(prevP);
-      const outer = lookOuter(pieces);
-      if (prevOuter && outer && outerKind(prevOuter) === outerKind(outer)) continue;
-    }
-    const key = comboKey(pieces.map((p) => p.id));
-    if (keys.has(key)) continue;
-    keys.add(key);
-    for (const p of pieces) usedIds.add(p.id);
-    noteChapterLook(track, pieces, recipeId, occasion);
-    out.push({
-      id: `reshuffle_${occasion}_${out.length}_${key.replace(/\|/g, "_")}`,
-      name: nameOf(pieces),
-      occasion,
-      garmentIds: pieces.map((p) => p.id),
-      source: "ai",
-      lookbook: false,
-      recipeId,
-      createdAt: `${todayISO()}T00:00:00.000Z`,
-    });
-  }
-
-  if (occasion === "weekday" && out.length >= 3) {
-    const hasBd = out.some((l) =>
-      l.garmentIds.some((id) => {
-        const g = byId.get(id);
-        return g && isButtonDown(g);
-      }),
-    );
-    if (!hasBd) {
-      const avail = pool;
-      const ids = pickLook(avail, {
-        occasion,
-        moment: "day",
-        weather,
-        salt: Date.now() + 3,
-        recipeId: "WD_PREP_OCBD",
-        usedCount,
-      });
-      const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
-      if (pieces.some(isButtonDown) && pieces.length >= 3 && !lookClashes(pieces)) {
-        const overlap = pieces.filter((p) =>
-          out.slice(0, -1).some((l) => l.garmentIds.includes(p.id)),
-        );
-        if (!overlap.length) {
-          const key = comboKey(pieces.map((p) => p.id));
-          out[out.length - 1] = {
-            id: `reshuffle_${occasion}_bd_${key.replace(/\|/g, "_")}`,
-            name: nameOf(pieces),
-            occasion,
-            garmentIds: pieces.map((p) => p.id),
-            source: "ai",
-            lookbook: false,
-            recipeId: "WD_PREP_OCBD",
-            createdAt: `${todayISO()}T00:00:00.000Z`,
-          };
+  const pack = (strict: Strict): Look[] => {
+    const row: Look[] = [];
+    const used = new Set<string>();
+    const keys = new Set<string>();
+    let cable = false;
+    for (const pieces of draws) {
+      if (row.length >= cap) break;
+      if (strict.uniqueIds && pieces.some((p) => used.has(p.id))) continue;
+      const top = lookTop(pieces);
+      if (top && isCreamCable(top) && cable) continue;
+      const recipeId = matchRecipe(pieces, occasion, house);
+      if (row.length) {
+        const prev = row[row.length - 1]!;
+        const prevP = prev.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+        const a = reshuffleAxes(prevP, prev.recipeId);
+        const b = reshuffleAxes(pieces, recipeId);
+        if (strict.axes3 && reshuffleAxesDiff(a, b) < 3) continue;
+        if (knitColorTwin(prevP, pieces)) continue;
+        if (strict.uniqueShoe) {
+          const prevShoe = lookShoe(prevP);
+          const shoe = lookShoe(pieces);
+          if (prevShoe && shoe && shoeFamily(prevShoe) === shoeFamily(shoe)) continue;
+        }
+        if (strict.uniqueOuter) {
+          const prevOuter = lookOuter(prevP);
+          const outer = lookOuter(pieces);
+          if (prevOuter && outer && outerKind(prevOuter) === outerKind(outer)) continue;
         }
       }
+      const key = comboKey(pieces.map((p) => p.id));
+      if (keys.has(key) || banned.has(key)) continue;
+      keys.add(key);
+      if (strict.uniqueIds) for (const p of pieces) used.add(p.id);
+      if (top && isCreamCable(top)) cable = true;
+      noteChapterLook(track, pieces, recipeId, occasion);
+      row.push({
+        id: `reshuffle_${occasion}_${row.length}_${key.replace(/\|/g, "_")}`,
+        name: nameOf(pieces),
+        occasion,
+        garmentIds: pieces.map((p) => p.id),
+        source: "ai",
+        lookbook: false,
+        recipeId,
+        createdAt: `${todayISO()}T00:00:00.000Z`,
+      });
     }
+    return row;
+  };
+
+  const phases: Strict[] = [
+    { uniqueIds: true, uniqueOuter: true, uniqueShoe: true, axes3: true },
+    { uniqueIds: true, uniqueOuter: false, uniqueShoe: true, axes3: true },
+    { uniqueIds: true, uniqueOuter: false, uniqueShoe: false, axes3: true },
+    { uniqueIds: true, uniqueOuter: false, uniqueShoe: false, axes3: false },
+    { uniqueIds: false, uniqueOuter: false, uniqueShoe: false, axes3: false },
+  ];
+  let best: Look[] = [];
+  for (const strict of phases) {
+    const row = pack(strict);
+    if (row.length > best.length) best = row;
+    if (row.length >= 3) return row;
   }
-  return out;
+  return best;
 }
 
 /** 7 scarce-first spreads. Each id at most once in the week. Pool is livePool, not the book. */

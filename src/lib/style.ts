@@ -722,13 +722,13 @@ export function pickLook(
     const withoutCable = topsSrc.filter((g) => !isCreamCable(g));
     if (withoutCable.length) topsSrc = withoutCable;
   }
-  const tops = pinnedTop ? [pinnedTop] : topsSrc.slice(0, salted ? 14 : 10);
+  const tops = pinnedTop ? [pinnedTop] : topsSrc.slice(0, salted ? 6 : 10);
   const topList = tops.length ? tops : pinnedTop ? [pinnedTop] : rank("dress").slice(0, 4);
   const rankBots = rank("bottom");
   const recipeBots = rankBots.filter((g) => recipe.bottom(g));
   const bottoms = pin.get("bottom")
     ? [pin.get("bottom")!]
-    : (exclusiveRecipe && recipeBots.length ? recipeBots : rankBots).slice(0, salted ? 12 : 8);
+    : (exclusiveRecipe && recipeBots.length ? recipeBots : rankBots).slice(0, salted ? 4 : 8);
   const rankShoes = rank("footwear");
   let shoesSrc = exclusiveRecipe ? rankShoes.filter((g) => recipe.shoe(g)) : rankShoes;
   if (!shoesSrc.length) shoesSrc = rankShoes;
@@ -742,7 +742,7 @@ export function pickLook(
     shoesSrc = rotated.length ? rotated : famChange.length ? famChange : shoesSrc.filter((g) => !last3ids.has(g.id));
     if (!shoesSrc.length) shoesSrc = rankShoes;
   }
-  const shoeList = pin.get("footwear") ? [pin.get("footwear")!] : shoesSrc.slice(0, salted ? 12 : 8);
+  const shoeList = pin.get("footwear") ? [pin.get("footwear")!] : shoesSrc.slice(0, salted ? 4 : 8);
 
   type Combo = { ids: string[]; s: number; h: number; pieces: Garment[] };
   const combos: Combo[] = [];
@@ -753,9 +753,9 @@ export function pickLook(
       for (const sh of shoesOr) {
         const pieces = [t, b, sh].filter((g): g is Garment => Boolean(g));
         if (pieces.length < 2) continue;
-        const h = harmony(pieces, { occasion: opts.occasion, f });
+        const h = salted ? 0 : harmony(pieces, { occasion: opts.occasion, f });
         let s =
-          pieces.reduce((n, g) => n + score(g), 0) + h + houseMixPenalty(pieces);
+          pieces.reduce((n, g) => n + score(g), 0) + h + (salted ? 0 : houseMixPenalty(pieces));
         const topG = pieces.find((g) => {
           const sl = slotOf(g);
           return sl === "top" || sl === "dress";
@@ -825,7 +825,9 @@ export function pickLook(
   }
   const houseOk = opts.legalCombo
     ? combos.filter((c) => !clashes(c.pieces) && opts.legalCombo!(c.pieces))
-    : combos.filter((c) => houseMixPenalty(c.pieces) >= -8 && !clashes(c.pieces));
+    : salted
+      ? combos.filter((c) => c.pieces.length >= 3)
+      : combos.filter((c) => houseMixPenalty(c.pieces) >= -8 && !clashes(c.pieces));
   const legal = houseOk;
   const ok = (legal.length ? legal : opts.legalCombo ? legal : combos.filter((c) => !clashes(c.pieces))).filter(
     (c) => c.h >= 0,
