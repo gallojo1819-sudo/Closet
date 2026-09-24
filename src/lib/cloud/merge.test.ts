@@ -114,6 +114,18 @@ describe("mergeGarments", () => {
     assert.equal(next[0]?.cutoutSrc, "sb:u/a/c.jpg");
   });
 
+  it("tombstone blocks g_x even when lastCloudIds is null", () => {
+    const local = [g("keep"), g("new-on-phone")];
+    const cloud = [g("keep"), g("g_x")];
+    const next = mergeGarments({
+      local,
+      cloud,
+      lastCloudIds: null,
+      tombstones: ["g_x"],
+    });
+    assert.deepEqual(next.map((x) => x.id).sort(), ["keep", "new-on-phone"]);
+  });
+
   it("after first link, a cloud delete drops that id; unpushed local adds stay", () => {
     const local = [g("keep"), g("gone"), g("new-on-phone")];
     const cloud = [g("keep")];
@@ -172,5 +184,33 @@ describe("mergeAccount", () => {
     assert.equal(result.next.garments.length, 2);
     assert.ok(result.next.looks.some((l) => l.id === "look-b"));
     assert.ok(!result.next.looks.some((l) => l.id === "look-a"));
+  });
+
+  it("tombstone drops g_x and a look that falls under 2 pieces; looks do not grow", () => {
+    const local = meta(["keep", "other"], {
+      looks: [
+        { id: "stay", garmentIds: ["keep", "other"] },
+        { id: "die", garmentIds: ["g_x", "keep"] },
+      ],
+    });
+    const cloud = meta(["keep", "other", "g_x"], {
+      looks: [
+        { id: "stay", garmentIds: ["keep", "other"] },
+        { id: "die", garmentIds: ["g_x"] },
+        { id: "cloud-extra", garmentIds: ["g_x", "other"] },
+      ],
+    });
+    const before = local.looks.length;
+    const result = mergeAccount({
+      local,
+      cloud,
+      lastCloudIds: null,
+      tombstones: ["g_x"],
+    });
+    assert.ok(!result.next.garments.some((g) => g.id === "g_x"));
+    assert.ok(result.next.looks.some((l) => l.id === "stay"));
+    assert.ok(!result.next.looks.some((l) => l.garmentIds.includes("g_x")));
+    assert.ok(result.next.looks.length <= before + 1);
+    assert.ok(!result.next.looks.some((l) => l.id === "die"));
   });
 });

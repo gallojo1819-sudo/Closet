@@ -19,6 +19,7 @@ import {
 } from "./blobs.ts";
 import { isHomeEmail, WRONG_ACCOUNT } from "./home.ts";
 import { applyBackupToStore, backupRemaining, idbCount } from "./src.ts";
+import { clearTombstones, readTombstones } from "./tombstone.ts";
 import {
   closetImagesBucket,
   getSupabase,
@@ -48,6 +49,7 @@ type LastSnap = { userId: string; ids: string[] };
 
 let linking = false;
 let pushing = false;
+let pushAgain = false;
 let holdPush = false;
 let pushTimer: number | undefined;
 let started = false;
@@ -141,7 +143,10 @@ async function upsertMeta(userId: string) {
     return;
   }
   setLocalOnly(false);
-  writeLast(userId, garments.map((g) => g.id));
+  const ids = garments.map((g) => g.id);
+  writeLast(userId, ids);
+  const live = new Set(ids);
+  clearTombstones(readTombstones().filter((id) => !live.has(id)));
 }
 
 async function uploadRef(userId: string, refPhoto: string | null): Promise<void> {
@@ -233,7 +238,10 @@ async function pushNow(withProgress: boolean) {
     setAccountProgress(LOCAL_ONLY_CAPTION);
     return;
   }
-  if (pushing) return;
+  if (pushing) {
+    pushAgain = true;
+    return;
+  }
   pushing = true;
   try {
     const garments = accountPool(useCloset.getState().garments) as Garment[];
@@ -309,6 +317,10 @@ async function pushNow(withProgress: boolean) {
     }
   } finally {
     pushing = false;
+    if (pushAgain) {
+      pushAgain = false;
+      void pushNow(false);
+    }
   }
 }
 
@@ -342,7 +354,12 @@ async function firstLink(userId: string) {
       return;
     }
     patchAccount({ wrongAccount: false });
-    const result = mergeAccount({ local, cloud, lastCloudIds: last });
+    const result = mergeAccount({
+      local,
+      cloud,
+      lastCloudIds: last,
+      tombstones: readTombstones(),
+    });
     if (result.appliedCloud) {
       applyLocal(result.next);
       const n = accountPool(result.next.garments).length;
@@ -395,7 +412,12 @@ async function pullOnVisible() {
     const cloud = await fetchMeta(user.id);
     const local = snapshot();
     const last = readLast(user.id);
-    const result = mergeAccount({ local, cloud, lastCloudIds: last });
+    const result = mergeAccount({
+      local,
+      cloud,
+      lastCloudIds: last,
+      tombstones: readTombstones(),
+    });
     const intent = visibleCloudIntent({
       action: result.action,
       appliedCloud: result.appliedCloud,
@@ -480,12 +502,13 @@ export function startCloudSync(): () => void {
   const unsubStore = useCloset.subscribe((s, prev) => {
     if (s.refPhoto !== prev.refPhoto) uploadedRef.delete("me:ref");
     if (s.garments !== prev.garments) {
+      const ids = new Set(s.garments.map((g) => g.id));
+      const removed = prev.garments.filter((g) => !ids.has(g.id));
       if (s.garments.length === 0 && prev.garments.length > 0) clearUploaded();
-      else {
-        const ids = new Set(s.garments.map((g) => g.id));
-        for (const g of prev.garments) {
-          if (!ids.has(g.id)) forgetUploaded(g.id);
-        }
+      for (const g of removed) forgetUploaded(g.id);
+      if (removed.length) {
+        void pushNow(false);
+        return;
       }
     }
     if (

@@ -78,9 +78,12 @@ export function mergeGarments<T extends CloudGarment>(opts: {
   local: T[];
   cloud: T[];
   lastCloudIds: string[] | null;
+  /** Deleted on this phone. Cloud must not bring them back, even on first link. */
+  tombstones?: string[];
 }): T[] {
-  const localReal = accountPool(opts.local);
-  const cloudReal = accountPool(opts.cloud);
+  const dead = new Set(opts.tombstones ?? []);
+  const localReal = accountPool(opts.local).filter((g) => !dead.has(g.id));
+  const cloudReal = accountPool(opts.cloud).filter((g) => !dead.has(g.id));
   if (cloudReal.length === 0) return localReal;
   const cloudMap = new Map(cloudReal.map((g) => [g.id, g]));
   if (opts.lastCloudIds === null) {
@@ -158,6 +161,7 @@ export function mergeAccount<T extends CloudMeta>(opts: {
   local: T;
   cloud: T | null;
   lastCloudIds: string[] | null;
+  tombstones?: string[];
 }): MergeResult<T> {
   const localCount = accountPool(opts.local.garments).length;
   const cloudCount = opts.cloud ? accountPool(opts.cloud.garments).length : 0;
@@ -171,6 +175,7 @@ export function mergeAccount<T extends CloudMeta>(opts: {
     local: opts.local.garments,
     cloud: opts.cloud.garments,
     lastCloudIds: opts.lastCloudIds,
+    tombstones: opts.tombstones,
   });
   const allowed = new Set(garments.filter((g) => !g.archived).map((g) => g.id));
   const looks = mergeLooks(opts.local.looks, opts.cloud.looks, allowed);

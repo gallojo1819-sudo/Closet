@@ -54,6 +54,7 @@ import {
 } from "./style";
 import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
+import { addTombstone } from "./cloud/tombstone";
 import { allowSampleRack } from "./cloud/home";
 import { EMPTY_ACCOUNT_CONFIRM } from "./cloud/copy";
 import { dressThisPiece } from "./dress";
@@ -271,20 +272,29 @@ export const useCloset = create<ClosetState>()(
         for (const src of [g?.imageSrc, g?.cutoutSrc, g ? imageKey(g.id, "t") : ""]) {
           if (isIdbKey(src)) void deleteImage(src).catch(() => {});
         }
+        addTombstone(id);
+        const strip = (ids: string[]) => ids.filter((gid) => gid !== id);
         set((s) => ({
           garments: s.garments.filter((g) => g.id !== id),
-          looks: s.looks.map((l) => ({
-            ...l,
-            garmentIds: l.garmentIds.filter((gid) => gid !== id),
-          })),
+          looks: s.looks
+            .map((l) => ({ ...l, garmentIds: strip(l.garmentIds) }))
+            .filter((l) => l.garmentIds.length >= 2),
+          thisWeek: s.thisWeek
+            .map((l) => ({ ...l, garmentIds: strip(l.garmentIds) }))
+            .filter((l) => l.garmentIds.length >= 2),
+          journal: s.journal
+            .map((j) => ({ ...j, garmentIds: strip(j.garmentIds) }))
+            .filter((j) => j.garmentIds.length > 0),
+          avoid: Object.fromEntries(Object.entries(s.avoid).filter(([gid]) => gid !== id)),
           drop: s.drop
-            ? {
-                ...s.drop,
-                garmentIds: s.drop.garmentIds.filter((gid) => gid !== id),
-              }
+            ? (() => {
+                const garmentIds = strip(s.drop.garmentIds);
+                const lockedIds = strip(s.drop.lockedIds ?? []);
+                if (garmentIds.length < 2) return null;
+                return { ...s.drop, garmentIds, lockedIds };
+              })()
             : s.drop,
         }));
-        get().ensureLookbook();
       },
       wearToday: (ids) => {
         const day = todayISO();
