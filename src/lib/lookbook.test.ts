@@ -6,6 +6,7 @@ import {
   buildLookbook,
   buildReshuffleRow,
   buildWeek,
+  todayStripLooks,
   CHAPTER_CAP,
   chapterVisible,
   comboKey,
@@ -1134,6 +1135,27 @@ describe("reshuffle row", () => {
     const ms = Date.now() - t0;
     assert.ok(ms < 50, `took ${ms}ms`);
     assert.ok(row.length >= 3, `length ${row.length}`);
+  });
+
+  it("today strip uses his plates and skips a look with <2 pieces", () => {
+    const g = dressRack();
+    const row = buildReshuffleRow(g, "weekday", { salt: 4, cap: 7 });
+    const thin: Look = {
+      id: "thin",
+      name: "Thin",
+      occasion: "weekday",
+      garmentIds: ["ox0"],
+      source: "ai",
+      lookbook: false,
+      createdAt: "2026-09-24T00:00:00.000Z",
+    };
+    const strip = todayStripLooks([thin, ...row], [], g, 7);
+    assert.ok(strip.length >= 3, `strip ${strip.length}`);
+    assert.ok(!strip.some((l) => l.id === "thin"));
+    for (const l of strip) {
+      const n = l.garmentIds.filter((id) => g.some((x) => x.id === id)).length;
+      assert.ok(n >= 2, l.id);
+    }
   });
 
   it("20× Reshuffle does not grow looks.length", () => {

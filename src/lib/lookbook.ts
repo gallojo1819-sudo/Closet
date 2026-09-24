@@ -1240,6 +1240,35 @@ export function visibleHero(
   return rows.filter((l) => l.garmentIds.includes(g.id)).slice(0, 5);
 }
 
+/** Today’s 7 cells: thisWeek first, then ranked weekday looks. Skip a look with <2 real plates. */
+export function todayStripLooks(
+  thisWeek: Look[],
+  book: Look[],
+  garments: Garment[],
+  n = 7,
+): Look[] {
+  const pool = lookbookPool(garments);
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  const resolve = (l: Look) =>
+    l.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+  const ok = (l: Look) => mapOccasion(l.occasion) === "weekday" && resolve(l).length >= 2;
+  const ranked =
+    book.length > 0
+      ? chapterVisible(book, garments, "weekday", { min: n })
+      : [];
+  const out: Look[] = [];
+  const seen = new Set<string>();
+  for (const l of [...thisWeek, ...ranked]) {
+    if (out.length >= n) break;
+    if (!ok(l)) continue;
+    const key = comboKey(l.garmentIds);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(l);
+  }
+  return out;
+}
+
 export function rackCanDress(garments: Garment[]): boolean {
   const pool = lookbookPool(garments);
   const top = pool.some((g) => {

@@ -6,7 +6,9 @@ import { LookBuilder } from "@/components/closet/look-builder";
 import { LookSheet } from "@/components/closet/look-sheet";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
-import { alternatives, dropNote, nameLook, neglectedPiece, sortLook } from "@/lib/look";
+import { alternatives, dropNote, kitCells, nameLook, neglectedPiece, sortLook } from "@/lib/look";
+import { rackCanDress, todayStripLooks } from "@/lib/lookbook";
+import { seasonFromWeather } from "@/lib/season";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
@@ -33,6 +35,7 @@ function Today() {
   const saveLook = useCloset((s) => s.saveLook);
   const outfitWith = useCloset((s) => s.outfitWith);
   const looksAll = useCloset((s) => s.looks);
+  const thisWeek = useCloset((s) => s.thisWeek);
   const hydrated = useCloset((s) => s.hydrated);
   const account = useAccount();
   const [view, setView] = useState<"paper" | "me">("paper");
@@ -88,6 +91,30 @@ function Today() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, ownedCount]);
 
+  useEffect(() => {
+    if (!hydrated || ownedCount === 0) return;
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      const s = useCloset.getState();
+      if (s.thisWeek.length >= 3 || !rackCanDress(s.garments)) return;
+      const season = seasonFromWeather(s.drop?.weather?.f ?? 68);
+      s.fillThisWeek(season);
+    };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(run, { timeout: 1500 });
+      return () => {
+        cancelled = true;
+        cancelIdleCallback(id);
+      };
+    }
+    const t = window.setTimeout(run, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [hydrated, ownedCount]);
+
   const pieces = useMemo(
     () => sortLook(garments.filter((g) => drop?.garmentIds.includes(g.id))),
     [garments, drop],
@@ -113,6 +140,10 @@ function Today() {
   );
   const houses = lookHouses(pieces);
   const week = lastDays(7);
+  const strip = useMemo(
+    () => todayStripLooks(thisWeek, looksAll.filter((l) => l.lookbook), garments, 7),
+    [thisWeek, looksAll, garments],
+  );
   const done = drop?.worn || drop?.verdict === "worn";
 
   const setOccasion = (occasion: Occasion) => {
@@ -201,11 +232,15 @@ function Today() {
       </div>
 
       <ol className="mt-8 grid grid-cols-7 gap-1">
-        {week.map((iso) => {
-          const entry = journal.find((j) => j.date === iso && j.verdict === "worn");
-          const first = entry
-            ? garments.find((g) => g.id === entry.garmentIds[0])
-            : undefined;
+        {week.map((iso, i) => {
+          const look = strip[i];
+          const plates = look
+            ? kitCells(
+                look.garmentIds
+                  .map((id) => garments.find((g) => g.id === id))
+                  .filter((g): g is Garment => Boolean(g)),
+              )
+            : [];
           const isToday = iso === todayISO();
           return (
             <li
@@ -216,11 +251,20 @@ function Today() {
               )}
             >
               <span className="micro text-ink-soft">{weekdayLetter(iso)}</span>
-              {first ? (
-                <GarmentImg garment={first} alt="" nudge={false} className="size-8 object-contain" />
-              ) : (
-                <span className="size-8 border border-dashed border-hairline" />
-              )}
+              {plates.length >= 2 ? (
+                <div className="grid grid-cols-2 size-10">
+                  {plates.map((g) => (
+                    <GarmentImg
+                      key={g.id}
+                      garment={g}
+                      alt=""
+                      nudge={false}
+                      eager
+                      className="size-5 object-contain"
+                    />
+                  ))}
+                </div>
+              ) : null}
             </li>
           );
         })}

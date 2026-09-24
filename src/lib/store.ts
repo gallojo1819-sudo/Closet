@@ -20,6 +20,7 @@ import {
   buildWeek,
   CHAPTER_CAP,
   comboKey,
+  rackCanDress,
   enforcePieceCap,
   fillOccasionLooks,
   lookbookIsFrozen,
@@ -111,6 +112,8 @@ type ClosetState = {
   skipCount: number;
   reshuffleCount: number;
   reshuffleWeek: (house?: House, occasion?: Occasion, season?: Season) => number;
+  /** Memory-only weekday row for the Today strip. Does not touch looks or closet.v6. */
+  fillThisWeek: (season?: Season) => number;
   loadSample: () => void;
   emptyCloset: (opts?: { sample?: boolean }) => void;
   importCloset: (payload: {
@@ -542,6 +545,24 @@ export const useCloset = create<ClosetState>()(
             { ...m, id: uid("m"), createdAt: new Date().toISOString() },
           ],
         })),
+      fillThisWeek: (season) => {
+        const s = get();
+        if (s.thisWeek.length >= 3) return s.thisWeek.length;
+        if (!rackCanDress(s.garments)) return 0;
+        try {
+          const before = s.looks.length;
+          const row = buildReshuffleRow(s.garments, "weekday", {
+            season,
+            salt: s.reshuffleCount,
+            cap: 7,
+          });
+          if (get().looks.length !== before) return s.thisWeek.length;
+          set({ thisWeek: row });
+          return row.length;
+        } catch {
+          return 0;
+        }
+      },
       reshuffleWeek: (house, occasion, season) => {
         const s = get();
         if (!s.hydrated || s.garments.length === 0) return 0;
