@@ -105,11 +105,8 @@ describe("house fingerprints HARD", () => {
     assert.ok(!isPoloDefaultSilhouette(lookPrint(combo(faloni), "weekend")));
   });
 
-  it("Sweet Stable weekday = 0 looks", () => {
-    const ids = pick("sweetStable", "weekday");
-    const pieces = combo(ids);
-    assert.equal(houseFingerprintOk(pieces, "sweetStable", "weekday"), false);
-    assert.equal(lookFitsHouse(combo(["fair", "cord", "boot"]), "sweetStable", "weekday", FIX), false);
+  it("Sweet Stable may be weekday when the plates match", () => {
+    assert.equal(lookFitsHouse(combo(["fair", "cord", "boot"]), "sweetStable", "weekday", FIX), true);
     assert.equal(lookFitsHouse(combo(["fair", "cord", "boot"]), "sweetStable", "weekend", FIX), true);
   });
 

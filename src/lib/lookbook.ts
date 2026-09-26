@@ -4,6 +4,7 @@ import {
   clashes as styleClashes,
   daysIdle,
   isBlazerPiece,
+  isBrownSuedeOuter,
   isCampCollar,
   isDistressedJean,
   isFairIsle,
@@ -313,7 +314,37 @@ function repairJacketQuotas(
   } else if (occasion === "travel") {
     pass((g) => isTrueOuter(g) && g.warmth <= 3, () => next.filter(hasOuter).length < 2);
   }
-  return next;
+  return preferSingleBrownSuede(next, pool);
+}
+
+/** Second brown-suede outer loses when another real outer exists. Never drops the chapter to 0. */
+function preferSingleBrownSuede(looks: Look[], pool: Garment[]): Look[] {
+  const others = pool.filter((g) => isTrueOuter(g) && !isBrownSuedeOuter(g));
+  if (!others.length) return looks;
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  let seen = false;
+  return looks.map((look) => {
+    const pieces = look.garmentIds
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => Boolean(g));
+    const suede = pieces.find(isBrownSuedeOuter);
+    if (!suede) return look;
+    if (!seen) {
+      seen = true;
+      return look;
+    }
+    for (const outer of others) {
+      if (pieces.some((p) => p.id === outer.id)) continue;
+      const next = pieces.filter((p) => p.id !== suede.id).concat(outer);
+      if (next.length < 3 || lookClashes(next)) continue;
+      return {
+        ...look,
+        garmentIds: next.map((g) => g.id),
+        name: nameOf(next),
+      };
+    }
+    return look;
+  });
 }
 
 /**
@@ -1302,7 +1333,7 @@ export function emptyFilterCopy(
   else if (houseChip !== "all") {
     hint = `Clear ${HOUSE_CHIPS.find((h) => h.id === houseChip)?.label ?? "house"} or switch Weekend.`;
   } else if (color) hint = `Clear ${color} or switch Weekend.`;
-  return `None in ${named.join(" · ")}. ${hint}`;
+  return `Add a top, a bottom, and shoes before this chapter can dress. ${hint}`;
 }
 
 function pushLookRow(

@@ -14,6 +14,7 @@ import {
   comboKey,
   emptyFilterCopy,
   lookbookPool,
+  lookFitsHouse,
   looksForHero,
   unusedFromLooks,
   visibleHero,
@@ -25,6 +26,7 @@ import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
 import { houseGapNote, HOUSE_LABEL, leadHouse } from "@/lib/houses";
+import { plateGapNote } from "@/lib/recipes";
 import { daysIdle, HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
@@ -196,6 +198,10 @@ function LookbookPage() {
   }, [thisWeek, reshuffleKey, chipKey, book, garments, occasion, season, houseChip, color, canBuild]);
   const houseNote =
     houseChip === "all" ? null : houseGapNote(houseChip, garments, occasion);
+  const plateNote = useMemo(
+    () => plateGapNote(garments, occasion, houseChip),
+    [garments, occasion, houseChip],
+  );
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const usedN = garments.length - unused.length;
@@ -478,6 +484,12 @@ function LookbookPage() {
             {shown.map((look, i) => {
               const pieces = piecesFor(look);
               if (pieces.length < 3) return null;
+              const thinHouse =
+                houseChip !== "all" &&
+                !lookFitsHouse(pieces, houseChip, occasion, garments);
+              const cardNote = thinHouse
+                ? `closest to ${HOUSE_LABEL[houseChip]}`
+                : (houseNote ?? plateNote);
               return (
                 <LookCard
                   key={look.id}
@@ -490,7 +502,7 @@ function LookbookPage() {
                       ? HOUSE_LABEL[leadHouse(pieces, occasion)]
                       : HOUSE_LABEL[houseChip]
                   }
-                  note={houseNote}
+                  note={cardNote}
                   highlight={highlightId === look.id}
                   onOpen={() => {
                     lastAnchor.current = cardEls.current.get(look.id) ?? null;

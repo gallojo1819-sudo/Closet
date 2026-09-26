@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isButtonDown, matchRecipe, pickRecipe, recipesFor } from "./recipes.ts";
+import { isButtonDown, matchRecipe, pickRecipe, plateGapNote, recipeFitsPool, recipesFor, scaledButtonDownQuota } from "./recipes.ts";
 import type { Garment } from "./types.ts";
 
 function g(
@@ -55,5 +55,24 @@ describe("recipes", () => {
       g({ id: "lf", name: "Brown loafer", category: "footwear", subtype: "loafer" }),
     ];
     assert.equal(matchRecipe(pieces, "weekday", "polo"), "WD_PREP_OCBD");
+  });
+
+  it("a recipe whose plate is missing is skipped", () => {
+    const pool = [
+      g({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      g({ id: "tr", name: "Navy trousers", category: "bottom", subtype: "trouser" }),
+      g({ id: "lf", name: "Brown loafer", category: "footwear", subtype: "loafer" }),
+    ];
+    const turtleneck = recipesFor("out", "italianWinter").find((r) => r.id === "OUT_IVORY_DB_DENIM");
+    assert.ok(turtleneck);
+    assert.equal(recipeFitsPool(turtleneck!, pool), false);
+    const picked = pickRecipe("weekday", pool, { house: "polo" });
+    assert.notEqual(picked.id, "OUT_IVORY_DB_DENIM");
+    assert.equal(scaledButtonDownQuota(pool, 4), 1);
+    const note = plateGapNote(pool, "out", "italianWinter");
+    assert.ok(note);
+    assert.equal(note!.includes("None in"), false);
+    assert.equal(/shop|buy/i.test(note!), false);
+    assert.match(note!, /closest plates/);
   });
 });

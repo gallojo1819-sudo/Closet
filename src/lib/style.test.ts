@@ -6,6 +6,7 @@ import {
   houseMixPenalty,
   pairKey,
   pickLook,
+  sameScaleChecks,
   slotOf,
 } from "./style.ts";
 import type { Garment, WearEntry } from "./types.ts";
@@ -70,6 +71,32 @@ describe("slotOf", () => {
       slotOf(piece({ id: "x", name: "Navy bomber", category: "outerwear", subtype: "bomber" })),
       "outerwear",
     );
+    assert.equal(
+      slotOf(piece({ id: "x", name: "Brown jacket", category: "top", subtype: "" })),
+      "outerwear",
+    );
+    assert.equal(
+      slotOf(piece({ id: "x", name: "Grey hoodie", category: "top", subtype: "hoodie" })),
+      "top",
+    );
+    assert.equal(
+      slotOf(piece({ id: "x", name: "Brown fleece jacket", category: "outerwear", subtype: "fleece" })),
+      "top",
+    );
+    assert.equal(
+      slotOf(piece({ id: "x", name: "Navy vest", category: "outerwear", subtype: "vest" })),
+      "top",
+    );
+  });
+
+  it("two checks of the same scale are flagged; gingham plus fair isle is not", () => {
+    const small = piece({ id: "g", name: "Blue gingham", category: "top", subtype: "gingham" });
+    const small2 = piece({ id: "g2", name: "Red gingham", category: "bottom", subtype: "trouser" });
+    const fair = piece({ id: "f", name: "Fair isle knit", category: "top", subtype: "fair isle" });
+    const window = piece({ id: "w", name: "Windowpane jacket", category: "outerwear", subtype: "blazer" });
+    assert.equal(sameScaleChecks([small, small2]), true);
+    assert.equal(sameScaleChecks([small, fair]), false);
+    assert.equal(sameScaleChecks([small, window]), false);
   });
 });
 

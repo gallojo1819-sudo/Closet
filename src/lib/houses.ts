@@ -148,6 +148,14 @@ function slotOf(g: Garment): string {
     }
     if (g.category === "footwear" || /loafer|mule|sneaker|boot|990/.test(b)) return "footwear";
   }
+  if (/\b(hoodies?|sweatshirts?)\b/.test(b)) return "top";
+  if (
+    /\b(cardigans?|fleece|vests?)\b/.test(b) ||
+    /zip[- ]?(up)?\s*(sweater|knit)/.test(b)
+  ) {
+    return "top";
+  }
+  if (/\b(jackets?|blazers?|coats?|bombers?|chore|field|trucker|trench)\b/.test(b)) return "outerwear";
   if (g.category === "dress") return "dress";
   if (g.category === "outerwear") return "outerwear";
   if (g.category === "bottom") return "bottom";
@@ -506,7 +514,6 @@ export function houseKill(pieces: Garment[], house: House, occasion: Occasion, p
       return "Italian summer is not structured navy blazer + chino + penny";
     }
   }
-  if (house === "sweetStable" && occasion === "weekday") return "Sweet Stable is weekend only";
   if (house === "purple") {
     if (print.top_type === "cable" && print.bottom_type === "jean" && /sneaker/.test(shoe ? garmentBlob(shoe) : "")) {
       return "Purple is not cable + jean + sneaker";
@@ -539,7 +546,6 @@ export function houseFingerprintOk(
   occasion: Occasion,
   pool?: Garment[],
 ): boolean {
-  if (house === "sweetStable" && occasion === "weekday") return false;
   const print = lookPrint(pieces, occasion);
   const { required, forbidden } = hits(print, house, pool);
   if (forbidden > 0) return false;

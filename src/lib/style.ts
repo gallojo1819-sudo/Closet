@@ -15,10 +15,12 @@ import {
   type House,
 } from "./houses.ts";
 import {
+  isButtonDown,
   isCreamCable,
   pickRecipe,
   recipeAxesDiffer,
   recipeById,
+  scaledButtonDownQuota,
   type ChapterTrack,
   type Recipe,
   type RecipeId,
@@ -140,6 +142,7 @@ export function isMidlayer(g: Garment): boolean {
 export function isTrueOuter(g: Garment): boolean {
   if (isMidlayer(g) || isHoodiePiece(g)) return false;
   const b = blobOf(g);
+  if (/\bvests?\b/.test(b) && !/\b(jacket|blazer|coat)\b/.test(b)) return false;
   if (/blazer|sport\s*coats?|chore|field|trucker|denim jacket|shearling|suede|bomber|toggle|plaid jacket|overshirt|parkas?|trench|anorak/.test(b)) {
     return true;
   }
@@ -218,6 +221,25 @@ function isLayerTop(g: Garment): boolean {
   return s === "top" || s === "dress";
 }
 
+const CHECK_WORD = /\b(gingham|tattersall|windowpane|houndstooth|checks?|plaids?|graph)\b/;
+
+/** Small gingham is not the same scale as windowpane or plaid. Fair isle is not a check. */
+export function checkScale(g: Garment): string | null {
+  const b = blobOf(g);
+  if (!CHECK_WORD.test(b)) return null;
+  if (/gingham|tattersall|micro|mini/.test(b)) return "small";
+  if (/windowpane/.test(b)) return "window";
+  if (/houndstooth/.test(b)) return "hound";
+  if (/plaid|buffalo|large|oversized/.test(b)) return "large";
+  return "check";
+}
+
+/** Two checks of one scale. Not a reject when it is the only legal combo. */
+export function sameScaleChecks(pieces: Garment[]): boolean {
+  const scales = pieces.map(checkScale).filter((s): s is string => Boolean(s));
+  return new Set(scales).size < scales.length;
+}
+
 /**
  * Hard invalid looks. Do not soften. Rugby + loafer is legal; rugby + blazer is not.
  */
@@ -265,6 +287,14 @@ export function clashes(pieces: Garment[]): boolean {
   if (heavyCable && trueOuters.length > 0 && extraMid.length > 0) return true;
   if (westernN >= 2) return true;
   if (blazer && mule) return true;
+  const mids = pieces.filter((g) => isMidlayer(g));
+  if (mids.length > 1) return true;
+  const denimShirt = pieces.some(
+    (g) => slotOf(g) === "top" && /denim/.test(blobOf(g)) && /shirt/.test(blobOf(g)),
+  );
+  const denimTrucker = pieces.some((g) => /trucker|denim jacket/.test(blobOf(g)));
+  const jeanBottom = bottoms.some((g) => /\bjeans?\b|denim/.test(blobOf(g)));
+  if (denimShirt && denimTrucker && jeanBottom) return true;
   if (bottoms.some(isShortsPiece) && overcoat) return true;
   if (graphic) {
     const rest = pieces.filter((g) => g.id !== pieces.find(isGraphic)!.id);
@@ -341,25 +371,118 @@ type Slot = (typeof KNOWN_SLOTS)[number];
  * (a loafer tagged "bottom" is still footwear). True unknowns stay out
  * so they are never parked on the legs.
  */
+const JACKET_WORD = /\b(jackets?|blazers?|coats?|bombers?|chore|field|trucker|trench)\b/;
+
+/** Brown / tan suede or shearling outer. Hoodie and fleece are not this. */
+export function isBrownSuedeOuter(g: Garment): boolean {
+  if (isHoodiePiece(g) || (isMidlayer(g) && !isTrueOuter(g))) return false;
+  const b = blobOf(g);
+  const outerish = isTrueOuter(g) || JACKET_WORD.test(b);
+  return outerish && /suede|shearling/.test(b) && /brown|tan|camel|chocolate/.test(b);
+}
+
+/**
+ * Sep 26 preferences. Scores only — they do not reject a look.
+ * T17 is −40 on a second brown-suede outer when another outer exists.
+ */
+export function trendScore(
+  pieces: Garment[],
+  opts?: { f?: number; house?: House | null; usedBrownSuede?: boolean; pool?: Garment[] },
+): number {
+  let s = 0;
+  const f = opts?.f ?? 68;
+  const blazer = pieces.some(isBlazerPiece);
+  const casual = pieces.filter(
+    (g) =>
+      isHoodiePiece(g) ||
+      isCampCollar(g) ||
+      /\b(tee|t-shirt|jeans?|sneaker)\b/.test(blobOf(g)),
+  );
+  if (blazer && casual.length === 1) s += 4;
+  if (blazer && casual.length >= 2) s -= 6;
+  const greyTrouser = pieces.some(
+    (g) => slotOf(g) === "bottom" && /grey|gray/.test(blobOf(g)) && /trouser|chino|pleat/.test(blobOf(g)),
+  );
+  const brownSuede = pieces.some((g) => /suede/.test(blobOf(g)) && /brown|tan/.test(blobOf(g)));
+  if (greyTrouser && brownSuede) s += 6;
+  const brownOuter = pieces.some((g) => isTrueOuter(g) && /brown|tan|camel/.test(blobOf(g)));
+  const navyBase = pieces.some(
+    (g) => slotOf(g) === "top" && /navy|grey|gray|denim/.test(blobOf(g)),
+  );
+  if (brownOuter && navyBase) s += 5;
+  const others = (opts?.pool ?? []).filter((g) => isTrueOuter(g) && !isBrownSuedeOuter(g));
+  if (opts?.usedBrownSuede && pieces.some(isBrownSuedeOuter) && others.length > 0) s -= 40;
+  const darkTop = pieces.some(
+    (g) => slotOf(g) === "top" && /navy|grey|gray|charcoal|black|brown|olive|burgundy/.test(blobOf(g)),
+  );
+  const lightTrouser = pieces.some(
+    (g) => slotOf(g) === "bottom" && /white|ivory|cream|light|stone|beige/.test(blobOf(g)),
+  );
+  if (darkTop && lightTrouser) {
+    const season = seasonFromWeather(f);
+    const inSeason = pieces
+      .filter((g) => {
+        const sl = slotOf(g);
+        return sl === "top" || sl === "dress" || sl === "bottom";
+      })
+      .every((g) => !g.seasons?.length || g.seasons.includes(season));
+    s += inSeason ? 5 : -10;
+  }
+  const shirtOrKnitPolo = pieces.some(
+    (g) =>
+      /oxford|button[- ]?down|knit polo|pique/.test(blobOf(g)) &&
+      !isCampCollar(g) &&
+      !/chambray/.test(blobOf(g)),
+  );
+  const trousers = pieces.some((g) => slotOf(g) === "bottom" && /trouser|chino|pleat/.test(blobOf(g)));
+  if (
+    shirtOrKnitPolo &&
+    trousers &&
+    opts?.house !== "ald" &&
+    !pieces.some(isCampCollar) &&
+    !pieces.some((g) => /chambray/.test(blobOf(g)))
+  ) {
+    s += 3;
+  }
+  const heat = f > 75;
+  if (
+    heat &&
+    (opts?.house === "faloni" || opts?.house === "fiveFourFive") &&
+    pieces.some((g) => isMidlayer(g) && !isHoodiePiece(g))
+  ) {
+    s -= 12;
+  }
+  return s;
+}
+
 export function slotOf(g: Garment): Slot | null {
-  const blob = `${g.subtype} ${g.name}`.toLowerCase();
+  const blob = `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
   const footwear = /\b(shoes?|loafers?|mules?|sneakers?|boots?|booties)\b/.test(blob);
   const bottom = /\b(pants?|chinos?|jeans?|trousers?|shorts?)\b/.test(blob);
-  const hoodieTop = /\b(hoodies?|sweatshirts?|graphic\s*knits?)\b/.test(blob);
+  const hoodieTop = /\b(hoodies?|sweatshirts?)\b/.test(blob);
+  const jacketWord = JACKET_WORD.test(blob);
   const top =
     hoodieTop ||
     /\b(t-shirts?|tees?|shirts?|oxfords?|polos?|knits?|sweaters?|rugbys?|cardigans?|jumpers?|pullovers?|crewnecks?|henleys?|cable[- ]?knits?|fleece|quarter[- ]?zips?|zip[- ]?(up)?\s*(sweater|knit)?)\b/.test(
       blob,
     );
   const outer =
-    /\b(jackets?|coats?|overshirts?|blazers?|bombers?|parkas?|trench|puffers?|windbreakers?|anoraks?|shearlings?)\b/.test(
-      blob,
-    );
+    jacketWord ||
+    /\b(overshirts?|parkas?|puffers?|windbreakers?|anoraks?|shearlings?)\b/.test(blob);
   // "boot cut jeans" is bottom; a lone "loafer" is never pants.
-  if (footwear && !bottom) return "footwear";
-  if (bottom) return "bottom";
-  // Hoodie / sweatshirt / graphic knit is a top, never a coat.
+  if (footwear && !bottom && !jacketWord) return "footwear";
+  if (bottom && !jacketWord) return "bottom";
+  // Hoodie / sweatshirt stays a top, even if the category says outerwear.
   if (hoodieTop) return "top";
+  // Cardigan, fleece, zip-sweater, and vest are never the outer.
+  if (
+    /\b(cardigans?|fleece|vests?)\b/.test(blob) ||
+    /zip[- ]?(up)?\s*(sweater|knit)/.test(blob)
+  ) {
+    return "top";
+  }
+  // A jacket filed as a top is still outerwear. Stored category is not rewritten.
+  if (jacketWord) return "outerwear";
   if (top) return "top";
   if (outer) return "outerwear";
   if (g.category === "other") return null;
@@ -652,6 +775,8 @@ export function pickLook(
   const recipe =
     recipeById(opts.recipeId) ??
     pickRecipe(opts.occasion, pool, { house: opts.house, track: chapter });
+  const realOuters = pool.filter(isTrueOuter);
+  const bdWant = opts.occasion === "weekday" ? scaledButtonDownQuota(pool, 3) : 0;
 
   const avoid = opts.avoid ?? {};
   const recent = new Set(opts.recentWorn ?? []);
@@ -703,6 +828,15 @@ export function pickLook(
       if (sl === "bottom" && chapter.usedBottoms.has(g.id)) s -= 8;
       if (sl === "footwear" && chapter.usedShoes.has(g.id)) s -= 16;
       if (sl === "outerwear" && chapter.usedOuters.has(g.id)) s -= 10;
+      if (sl === "outerwear" && chapter.usedOuters.size && realOuters.length >= 4) {
+        const kind = outerKind(g);
+        const repeatKind = [...chapter.usedOuters].some((id) => {
+          const prev = pool.find((x) => x.id === id);
+          return Boolean(prev && outerKind(prev) === kind && kind !== "other");
+        });
+        if (repeatKind) s -= 6;
+      }
+      if (bdWant > 0 && chapter.buttonDowns < bdWant && isButtonDown(g)) s += 5;
     }
     if (recipe.top(g) && (slotOf(g) === "top" || slotOf(g) === "dress")) s += 4;
     if (recipe.bottom(g) && slotOf(g) === "bottom") s += 3;
@@ -803,6 +937,17 @@ export function pickLook(
         if (recipe.top(t)) s += 2;
         if (b && recipe.bottom(b)) s += 1.5;
         if (sh && recipe.shoe(sh)) s += 1.5;
+        if (chapter && !chapter.usedRecipes.has(recipe.id)) s += 6;
+        const usedBrown = [...(chapter?.usedOuters ?? [])].some((id) => {
+          const prev = pool.find((g) => g.id === id);
+          return Boolean(prev && isBrownSuedeOuter(prev));
+        });
+        s += trendScore(pieces, {
+          f,
+          house,
+          usedBrownSuede: usedBrown,
+          pool,
+        });
         if (chapter?.lastPrint && topG && botG && shoeG) {
           const print = lookPrint(pieces, opts.occasion);
           const last = chapter.lastPrint;
@@ -834,6 +979,14 @@ export function pickLook(
   );
   const banned = new Set(opts.excludeKeys ?? []);
   let poolC = (ok.length ? ok : legal).sort((a, b) => b.s - a.s);
+  const scaleOk = poolC.filter((c) => !sameScaleChecks(c.pieces));
+  if (scaleOk.length) poolC = scaleOk;
+  if ((house === "faloni" || house === "fiveFourFive") && f > 75) {
+    const noMid = poolC.filter(
+      (c) => !c.pieces.some((g) => isMidlayer(g) && !isHoodiePiece(g)),
+    );
+    if (noMid.length) poolC = noMid;
+  }
   if (banned.size) {
     const fresh = poolC.filter((c) => !banned.has(coreComboKey(c.ids, pool)));
     if (fresh.length) poolC = fresh;

@@ -27,7 +27,7 @@ import {
 } from "./lookbook.ts";
 import { lookFitsSeason } from "./season.ts";
 import { isButtonDown, isCreamCable } from "./recipes.ts";
-import { isTrueOuter, isWeekendSoftJacket, pickLook } from "./style.ts";
+import { isBrownSuedeOuter, isTrueOuter, isWeekendSoftJacket, pickLook, slotOf, trendScore } from "./style.ts";
 import type { Garment, Look } from "./types.ts";
 
 function piece(
@@ -801,7 +801,7 @@ describe("2026-09 stylist pack", () => {
     ];
     assert.equal(lookClashes(look), false);
     assert.equal(lookFitsOccasion(look, "weekday"), true);
-    assert.equal(lookFitsHouse(look, "sweetStable", "weekday", look), false);
+    assert.equal(lookFitsHouse(look, "sweetStable", "weekday", look), true);
   });
 
   it("oxford+dark jean+loafer weekday → VALID", () => {
@@ -1067,7 +1067,67 @@ describe("chapterVisible never empty", () => {
     const msg = emptyFilterCopy("Weekday", "Fall", "auto", "fiveFourFive", null, true);
     assert.equal(msg, null);
     const empty = emptyFilterCopy("Weekday", "Fall", "auto", "fiveFourFive", null, false);
-    assert.ok(empty && empty.includes("None in Weekday · 545"));
+    assert.ok(empty);
+    assert.equal(empty!.includes("None in"), false);
+  });
+
+  it("Weekend × ALD × fall is at least 3 and rugby+blazer stays invalid", () => {
+    const g = dressRack();
+    const book = buildLookbook(g, "2026-09-26");
+    const shown = chapterVisible(book, g, "weekend", { season: "fall", house: "ald", min: 3 });
+    assert.ok(shown.length >= 3, `Weekend × ALD × fall = ${shown.length}`);
+    const rugbyBlazer = [
+      piece({ id: "rg", name: "Navy rugby", category: "top", subtype: "rugby" }),
+      piece({ id: "jn", name: "Indigo jean", category: "bottom", subtype: "jean" }),
+      piece({ id: "lf", name: "Brown loafer", category: "footwear", subtype: "loafer" }),
+      piece({ id: "bz", name: "Navy blazer", category: "outerwear", subtype: "blazer" }),
+    ];
+    assert.equal(lookClashes(rugbyBlazer), true);
+  });
+
+  it("jean + loafer is legal on weekday", () => {
+    const pieces = [
+      piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "jn", name: "Indigo jean", category: "bottom", subtype: "jean" }),
+      piece({ id: "lf", name: "Brown loafer", category: "footwear", subtype: "loafer" }),
+    ];
+    assert.equal(lookFitsOccasion(pieces, "weekday"), true);
+    assert.equal(lookClashes(pieces), false);
+  });
+
+  it("no turtleneck is emitted when the pool has none, and the chapter still has 3", () => {
+    const g = dressRack().filter((item) => !/turtleneck|rollneck/.test(`${item.name} ${item.subtype}`));
+    const book = buildLookbook(g, "2026-09-26");
+    const shown = chapterVisible(book, g, "weekday", { season: "fall", min: 3 });
+    assert.ok(shown.length >= 3, `weekday ${shown.length}`);
+    const names = shown.flatMap((look) =>
+      look.garmentIds.map((id) => g.find((item) => item.id === id)?.name ?? ""),
+    );
+    assert.equal(names.some((name) => /turtleneck/i.test(name)), false);
+  });
+
+  it("a second brown suede outer is scored down when another outer exists", () => {
+    const suede = piece({
+      id: "sj",
+      name: "Brown suede jacket",
+      category: "outerwear",
+      subtype: "suede jacket",
+    });
+    const other = piece({
+      id: "nj",
+      name: "Navy chore coat",
+      category: "outerwear",
+      subtype: "chore",
+    });
+    const top = piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" });
+    const jean = piece({ id: "jn", name: "Indigo jean", category: "bottom", subtype: "jean" });
+    const shoe = piece({ id: "lf", name: "Brown loafer", category: "footwear", subtype: "loafer" });
+    assert.equal(isBrownSuedeOuter(suede), true);
+    assert.equal(slotOf(piece({ id: "bj", name: "Brown jacket", category: "top", subtype: "" })), "outerwear");
+    const pool = [suede, other, top, jean, shoe];
+    const second = trendScore([top, jean, shoe, suede], { f: 60, usedBrownSuede: true, pool });
+    const first = trendScore([top, jean, shoe, suede], { f: 60, usedBrownSuede: false, pool });
+    assert.ok(first - second >= 40, `first ${first} second ${second}`);
   });
 
   it("houseChip=all still uses chapterVisible and fills ≥3", () => {
