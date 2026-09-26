@@ -1,3 +1,4 @@
+import { readTombstones } from "./cloud/tombstone.ts";
 import { scrubRack } from "./rack.ts";
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry } from "./types.ts";
 
@@ -47,6 +48,15 @@ export function persistHasGarments(raw: string | null): boolean {
   return Boolean(state && state.garments.length > 0);
 }
 
+/** Synchronous closet.v6 read for the first paint. Does not fetch. */
+export function readClosetSeed(raw: string | null, dead: readonly string[] = []): PersistedCloset | null {
+  const state = unpackPersist(raw);
+  if (!state || state.garments.length === 0) return null;
+  if (dead.length === 0) return state;
+  const drop = new Set(dead);
+  return { ...state, garments: state.garments.filter((g) => !drop.has(g.id)) };
+}
+
 export function mergeClosetPersist<T extends ClosetSnapshot>(
   persisted: unknown,
   current: T,
@@ -56,16 +66,21 @@ export function mergeClosetPersist<T extends ClosetSnapshot>(
   const refPhoto = "refPhoto" in p ? (p.refPhoto ?? null) : current.refPhoto;
   const refPhotoBackup =
     "refPhotoBackup" in p ? (p.refPhotoBackup ?? null) : current.refPhotoBackup;
+  const dead = new Set(readTombstones());
+  const keptStored = stored.filter((g) => !dead.has(g.id));
+  const keptCurrent = current.garments.filter((g) => !dead.has(g.id));
   // Never replace a non-empty closet with []. Always keep Joe's photo.
-  if (current.garments.length > 0 && stored.length === 0) {
+  if (keptCurrent.length > 0 && keptStored.length === 0) {
+    return { ...current, garments: keptCurrent, refPhoto, refPhotoBackup };
+  }
+  if (keptStored.length === 0) {
     return { ...current, refPhoto, refPhotoBackup };
   }
-  if (stored.length === 0) {
-    return { ...current, refPhoto, refPhotoBackup };
-  }
+  const storedIds = new Set(keptStored.map((g) => g.id));
+  const added = keptCurrent.filter((g) => !storedIds.has(g.id));
   const mixed = {
     ...current,
-    garments: stored,
+    garments: added.length > 0 ? [...keptStored, ...added] : keptStored,
     looks: Array.isArray(p.looks) ? p.looks : current.looks,
     journal: Array.isArray(p.journal) ? p.journal : current.journal,
     avoid: p.avoid && typeof p.avoid === "object" ? p.avoid : current.avoid,

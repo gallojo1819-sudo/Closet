@@ -18,6 +18,7 @@ import { rackNotes } from "@/lib/gaps";
 import { daysIdle } from "@/lib/style";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
+import { closetFirstRows } from "@/lib/cloud/open-plan";
 import { WRONG_ACCOUNT } from "@/lib/cloud/home";
 import { useCloset } from "@/lib/store";
 import { CATEGORIES, type Category, type Garment, type Look } from "@/lib/types";
@@ -120,10 +121,7 @@ function ClosetPage() {
     }
   };
 
-  const garments = useMemo(
-    () => garmentsAll.filter((g) => !g.archived),
-    [garmentsAll],
-  );
+  const garments = useMemo(() => closetFirstRows(garmentsAll), [garmentsAll]);
   const waiting = useMemo(
     () => garments.filter((g) => daysIdle(g) >= 21),
     [garments],
@@ -203,7 +201,7 @@ function ClosetPage() {
             {garments.length} pieces
             <span className="italic text-accent"> on paper.</span>
           </h1>
-          {garments.length === 0 && (
+          {hydrated && garments.length === 0 && (
             <p className="mt-3 text-sm text-ink-soft">
               Nothing in here yet. The grid is yours once you photograph a piece.
             </p>
@@ -337,11 +335,13 @@ function ClosetPage() {
         ))}
       </div>
       {list.length === 0 ? (
-        <p className="mt-16 text-ink-soft">
-          {filter === "waiting"
-            ? "Everything has been out recently."
-            : "Nothing in this drawer. Photograph a piece on a plain surface."}
-        </p>
+        hydrated ? (
+          <p className="mt-16 text-ink-soft">
+            {filter === "waiting"
+              ? "Everything has been out recently."
+              : "Nothing in this drawer. Photograph a piece on a plain surface."}
+          </p>
+        ) : null
       ) : (
         <ul className="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">
           {list.map((g, i) => (
@@ -356,7 +356,7 @@ function ClosetPage() {
             >
               <IdleMount
                 index={i}
-                always={24}
+                always={12}
                 placeholder={
                   <div>
                     <div className="aspect-page border border-hairline paper-shimmer" />
@@ -366,7 +366,7 @@ function ClosetPage() {
               >
               <GarmentTile
                 garment={g}
-                eager={i < 24}
+                eager={i < 12}
                 selecting={selecting}
                 selected={selected.has(g.id) || openId === g.id}
                 onClick={() => {

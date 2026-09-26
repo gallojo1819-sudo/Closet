@@ -26,7 +26,7 @@ async function resolveDisplaySrc(src: string): Promise<string> {
     if (after) return paintSrc(after, "");
     const uid = getAccount().user?.id;
     if (!uid) return "";
-    const kinds = parsed.kind === "t" ? (["t", "c", "o"] as const) : ([parsed.kind] as const);
+    const kinds = parsed.kind === "t" ? (["t", "c"] as const) : ([parsed.kind] as const);
     for (const k of kinds) {
       const signed = await signedCloudUrl(garmentObjectPath(uid, parsed.id, k));
       if (signed) return paintSrc("", signed);

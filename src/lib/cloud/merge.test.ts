@@ -57,6 +57,7 @@ describe("decideLink", () => {
 describe("shouldApplyCloud", () => {
   it("never applies an empty cloud over a non-empty local rack", () => {
     assert.equal(shouldApplyCloud(145, 0), false);
+    assert.equal(shouldApplyCloud(143, 0), false);
     assert.equal(shouldApplyCloud(1, 0), false);
   });
   it("applies a cloud that has garments", () => {

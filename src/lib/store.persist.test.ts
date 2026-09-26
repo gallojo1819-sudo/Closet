@@ -6,6 +6,7 @@ import {
   packPersist,
   persistGate,
   persistHasGarments,
+  readClosetSeed,
   type PersistedCloset,
 } from "./store-persist.ts";
 import type { Garment } from "./types.ts";
@@ -125,6 +126,46 @@ describe("mergeClosetPersist", () => {
     const next = mergeClosetPersist(persisted, empty);
     assert.equal(next.garments[0]?.id, "a");
     assert.deepEqual(next.seenLooks, { out: ["a"] });
+  });
+});
+
+describe("readClosetSeed", () => {
+  it("143 packed garments are the first paint and do not fetch", () => {
+    const garments = Array.from({ length: 143 }, (_, i) => g(`g${i}`));
+    const raw = packPersist({
+      garments,
+      looks: [],
+      journal: [],
+      avoid: {},
+      drop: null,
+      refPhoto: null,
+      refPhotoBackup: null,
+      messages: [],
+    });
+    const seed = readClosetSeed(raw);
+    assert.equal(seed?.garments.length, 143);
+    assert.equal(seed?.garments[10]?.id, "g10");
+    assert.equal(seed?.garments[10]?.name, "Navy oxford");
+  });
+
+  it("keeps a piece added in memory when closet.v6 rehydrates", () => {
+    const current = { ...empty, garments: [g("live"), g("shot")] };
+    const next = mergeClosetPersist(
+      {
+        garments: [g("live")],
+        looks: [],
+        journal: [],
+        avoid: {},
+        drop: null,
+        refPhoto: null,
+        refPhotoBackup: null,
+        messages: [],
+      },
+      current,
+    );
+    const ids = next.garments.map((x) => x.id);
+    assert.ok(ids.includes("live"));
+    assert.ok(ids.includes("shot"));
   });
 });
 

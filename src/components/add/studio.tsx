@@ -11,6 +11,7 @@ import {
   HEIC_ERROR,
   imageFilesFromList,
   libraryInputProps,
+  resumeCameraAction,
   PENDING_CAMERA_FLAG,
   PENDING_CAMERA_KEY,
   SHOT_MISS,
@@ -458,13 +459,21 @@ export function Studio() {
   const takeCameraShot = useCallback(
     async (file: File) => {
       setError(null);
-      setBusy(true);
-      setProgress("Saving the shot…");
       const id = uid("g");
+      const writeOne = async (kind: "o" | "c" | "t", blob: Blob) => {
+        const once = () =>
+          withTimeout(putImage(imageKey(id, kind), blob), 3000).catch(() => null);
+        if ((await once()) === null) await once();
+      };
+      const writeJpeg = async (blob: Blob) => {
+        await writeOne("o", blob);
+        await writeOne("c", blob);
+        await writeOne("t", blob);
+      };
       try {
         await ingestCameraShot(file, {
           putPending: async (blob) => {
-            await putImage(PENDING_CAMERA_KEY, blob);
+            await withTimeout(putImage(PENDING_CAMERA_KEY, blob), 3000);
           },
           markPending: () => {
             try {
@@ -481,10 +490,14 @@ export function Studio() {
               /* */
             }
           },
-          shrink: (f) => shrinkFile(f, CAMERA_EDGE, CAMERA_JPEG),
+          shrink: (f) => shrinkFile(f, CAMERA_EDGE, CAMERA_JPEG, false),
           matte: async (dataUrl) => {
             const matte = await matteToPaper(dataUrl);
             return { cutoutSrc: matte.cutoutSrc };
+          },
+          guess: async (dataUrl) => {
+            const guess = await guessGarment(dataUrl);
+            return guess?.name ? { name: guess.name } : null;
           },
           hash: cameraBytesHash,
           knownHashes: collectKnownHashes(
@@ -492,68 +505,62 @@ export function Studio() {
           ),
           onPreview: (src) => {
             setSaved((cur) => [
-              { id, name: ADDING_NAME, category: "other", cutout: src },
+              { id, name: NEW_PIECE_NAME, category: "other", cutout: src },
               ...cur.filter((s) => s.id !== id),
             ]);
           },
-          revoke: (url) => URL.revokeObjectURL(url),
-          save: async ({ original, cover, hash, fellBack }) => {
-            await putImage(imageKey(id, "o"), dataUrlToBlob(original));
-            await putImage(imageKey(id, "c"), dataUrlToBlob(cover));
-            await putThumb(id, cover).catch(() => {});
-            let name = NEW_PIECE_NAME;
-            let category: Category = "other";
-            let subtype = "";
-            let colors: string[] = [];
-            if (!fellBack) {
-              try {
-                const guess = await guessGarment(cover);
-                if (guess.name && !isFakeName(guess.name)) {
-                  name = guess.name;
-                  category = guess.category;
-                  subtype = guess.subtype;
-                  colors = guess.colors;
-                }
-              } catch {
-                /* New piece */
-              }
+          onShown: () => {
+            setProgress("");
+            setBusy(false);
+          },
+          onCover: (cover) => {
+            if (cover.startsWith("data:")) {
+              void withTimeout(putImage(imageKey(id, "c"), dataUrlToBlob(cover)), 3000).catch(() => {});
             }
+            setSaved((cur) => cur.map((s) => (s.id === id ? { ...s, cutout: cover } : s)));
+          },
+          onName: (name) => {
+            if (!name || isFakeName(name)) return;
+            useCloset.getState().updateGarment(id, { name });
+            setSaved((cur) => cur.map((s) => (s.id === id ? { ...s, name } : s)));
+          },
+          save: async ({ original, cover, hash, blob }) => {
+            const jpeg = blob ?? (original.startsWith("data:") ? dataUrlToBlob(original) : null);
             addGarment(
               {
                 id,
-                name,
-                category,
-                subtype,
-                colors,
+                name: NEW_PIECE_NAME,
+                category: "other",
+                subtype: "",
+                colors: [],
                 material: "",
                 brand: "",
-                notes: fellBack ? "camera · cover is the photo" : "camera",
+                notes: "camera",
                 formality: 3,
                 warmth: 3,
                 seasons: [],
                 imageSrc: imageKey(id, "o"),
                 cutoutSrc: imageKey(id, "c"),
                 imageSource: "photo",
-                matteQuality: fellBack ? "ok" : "clean",
+                matteQuality: "ok",
                 fileHash: hash,
-                tuck: guessTuck({ name, subtype, notes: "" }),
+                tuck: guessTuck({ name: NEW_PIECE_NAME, subtype: "", notes: "" }),
               },
               { quiet: true },
             );
             setSaved((cur) => [
-              { id, name, category, cutout: cover },
+              { id, name: NEW_PIECE_NAME, category: "other", cutout: cover },
               ...cur.filter((s) => s.id !== id),
             ]);
-            setProgress(addProgress(1, 1, name));
+            setProgress("");
+            setBusy(false);
+            if (jpeg) void writeJpeg(jpeg).catch(() => {});
           },
         });
-        setProgress("");
       } catch (e) {
         const message = e instanceof Error ? e.message : HEIC_ERROR;
         setError(message);
-        setProgress(message);
-        setSaved((cur) => cur.filter((s) => s.id !== id));
-      } finally {
+        setProgress("");
         setBusy(false);
       }
     },
@@ -566,9 +573,23 @@ export function Studio() {
       if (cameraResumeStarted) return;
       cameraResumeStarted = true;
       try {
-        const blob = await getImage(PENDING_CAMERA_KEY);
-        if (!blob || !live) return;
-        const file = new File([blob], "camera", {
+        const blob = await withTimeout(getImage(PENDING_CAMERA_KEY), 3000);
+        if (!live) return;
+        const hash = blob ? await cameraBytesHash(blob) : "";
+        const known = collectKnownHashes(
+          useCloset.getState().garments.map((g) => g.fileHash),
+        );
+        if (resumeCameraAction(Boolean(blob), Boolean(blob && hash && known.has(hash))) === "stop") {
+          if (blob) await deleteImage(PENDING_CAMERA_KEY).catch(() => {});
+          try {
+            sessionStorage.removeItem(PENDING_CAMERA_FLAG);
+          } catch {
+            /* */
+          }
+          return;
+        }
+        if (!blob) return;
+        const file = new File([blob], "camera.jpg", {
           type: blob.type || "image/jpeg",
           lastModified: 0,
         });
@@ -576,8 +597,6 @@ export function Studio() {
       } catch (e) {
         if (!live) return;
         setError(e instanceof Error ? e.message : HEIC_ERROR);
-      } finally {
-        cameraResumeStarted = false;
       }
     })();
     return () => {

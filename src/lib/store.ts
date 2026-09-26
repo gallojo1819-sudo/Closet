@@ -38,6 +38,7 @@ import {
   packPersist,
   persistGate,
   persistHasGarments,
+  readClosetSeed,
   unpackPersist,
   type PersistedCloset,
   type SeenLooks,
@@ -54,7 +55,7 @@ import {
 } from "./style";
 import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
-import { addTombstone } from "./cloud/tombstone";
+import { addTombstone, readTombstones } from "./cloud/tombstone";
 import { allowSampleRack } from "./cloud/home";
 import { EMPTY_ACCOUNT_CONFIRM } from "./cloud/copy";
 import { dressThisPiece } from "./dress";
@@ -217,19 +218,30 @@ const guardedStorage: StateStorage = {
   },
 };
 
+function bootCloset(): PersistedCloset | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    return readClosetSeed(localStorage.getItem("closet.v6"), readTombstones());
+  } catch {
+    return null;
+  }
+}
+
 export const useCloset = create<ClosetState>()(
   persist(
-    (set, get) => ({
-      garments: [],
-      looks: [],
-      messages: [],
-      drop: null,
-      journal: [],
-      avoid: {},
+    (set, get) => {
+      const seed = bootCloset();
+      return {
+      garments: seed?.garments ?? [],
+      looks: seed?.looks ?? [],
+      messages: seed?.messages ?? [],
+      drop: seed?.drop ?? null,
+      journal: seed?.journal ?? [],
+      avoid: seed?.avoid ?? {},
       hydrated: false,
-      refPhoto: null,
-      refPhotoBackup: null,
-      seenLooks: {},
+      refPhoto: seed?.refPhoto ?? null,
+      refPhotoBackup: seed?.refPhotoBackup ?? null,
+      seenLooks: seed?.seenLooks ?? {},
       thisWeek: [],
       skipCount: 0,
       reshuffleCount: 0,
@@ -868,7 +880,8 @@ export const useCloset = create<ClosetState>()(
         });
         get().ensureLookbook();
       },
-    }),
+    };
+    },
     {
       name: "closet.v6",
       skipHydration: true,

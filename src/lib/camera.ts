@@ -4,7 +4,7 @@ export const HEIC_ERROR = "Couldn't read that photo — try JPEG";
 
 export const SHOT_MISS = "Shot didn’t stick — tap Take photo again.";
 
-/** Raw camera bytes. Written before shrink, matte, or classify. */
+/** Small JPEG after shrink. Never the raw camera file. */
 export const PENDING_CAMERA_KEY = "idb:pending:camera";
 
 export const PENDING_CAMERA_FLAG = "closet.pending.camera";
@@ -68,7 +68,16 @@ export function imageFilesFromList(list: ArrayLike<File> | null | undefined): Fi
   return Array.from(list ?? []).filter(isImageFile);
 }
 
-/** Stable hash of the raw shot. Name and lastModified are not part of it, so a resume matches. */
+/**
+ * Resume must not call takeCameraShot again when the pending JPEG is missing
+ * or that hash is already a garment.
+ */
+export function resumeCameraAction(hasBlob: boolean, alreadySaved: boolean): "stop" | "ingest" {
+  if (!hasBlob || alreadySaved) return "stop";
+  return "ingest";
+}
+
+/** Stable hash of the small JPEG. Name and lastModified are not part of it. */
 export async function cameraBytesHash(file: Blob): Promise<string> {
   const head = await file.slice(0, 64 * 1024).arrayBuffer();
   const meta = new TextEncoder().encode(`camera\0${file.size}\0`);

@@ -1,8 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { shouldApplyCloud } from "./merge.ts";
 import {
   OPEN_THUMB_BATCH,
   OPEN_THUMB_CONCURRENCY,
+  closetFirstRows,
   loadingPhotosCopy,
   openBlobRequests,
   openDownloadPlan,
@@ -12,7 +14,7 @@ import {
 const FAKE_USER = "fake-user-joe";
 
 describe("openDownloadPlan", () => {
-  it(`fake user ${FAKE_USER}: 145 meta, 0 blobs — only first 24 thumbs, never :o/:c`, () => {
+  it(`fake user ${FAKE_USER}: 145 meta, 0 blobs — only first 12 thumbs, never :o`, () => {
     const ids = Array.from({ length: 145 }, (_, i) => `g${i}`);
     const plan = openDownloadPlan(ids);
     assert.equal(plan.eager.length, OPEN_THUMB_BATCH);
@@ -29,6 +31,26 @@ describe("openDownloadPlan", () => {
     const ids = Array.from({ length: 145 }, (_, i) => `g${i}`);
     const plan = openDownloadPlan(ids);
     assert.equal(plan.eager.length + plan.deferred.length, 145);
+  });
+});
+
+describe("closet first paint", () => {
+  it("143 local garments paint without waiting on the network", () => {
+    const garments = Array.from({ length: 143 }, (_, i) => ({
+      id: `g${i}`,
+      name: `Piece ${i}`,
+      archived: false,
+    }));
+    const rows = closetFirstRows(garments);
+    assert.equal(rows.length, 143);
+    assert.equal(rows[0]?.name, "Piece 0");
+    assert.equal(rows[142]?.name, "Piece 142");
+    assert.equal(shouldApplyCloud(rows.length, 0), false);
+    const plan = openDownloadPlan(rows.map((g) => g.id));
+    assert.equal(plan.eager.length, 12);
+    assert.deepEqual(plan.kinds, ["t"]);
+    assert.equal(plan.deferred.length, 131);
+    assert.ok(openBlobRequests(plan).every((r) => r.kind !== "o"));
   });
 });
 

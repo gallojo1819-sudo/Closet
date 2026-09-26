@@ -114,7 +114,6 @@ export async function fetchCloudBlob(
     if (uid) paths.push(garmentObjectPath(uid, id, kind));
     if (kind === "t" && uid) {
       paths.push(garmentObjectPath(uid, id, "c"));
-      paths.push(garmentObjectPath(uid, id, "o"));
     }
     const unique = [...new Set(paths)];
     for (const path of unique) {

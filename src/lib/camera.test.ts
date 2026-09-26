@@ -7,9 +7,18 @@ import {
   isHeicFile,
   isImageFile,
   libraryInputProps,
+  resumeCameraAction,
   SHOT_MISS,
 } from "./camera.ts";
-import { addQueueConcurrency, ingestCameraShot, NEW_PIECE_NAME, runIngestPiece } from "./ingest.ts";
+import {
+  addQueueConcurrency,
+  cameraBitmapOptions,
+  ingestCameraShot,
+  jpegOrientedSize,
+  longEdgeBox,
+  NEW_PIECE_NAME,
+  runIngestPiece,
+} from "./ingest.ts";
 
 /** Fake user — tests never read or write closet.v6. */
 void "fake-user-joe";
@@ -77,53 +86,89 @@ describe("Take photo onChange", () => {
 });
 
 describe("camera shot survives", () => {
-  it("writes pending IDB before matte; a matte throw still adds a visible cover", async () => {
+  it("12MP fake: tile and addGarment run before matte; progress is not stuck", async () => {
     const order: string[] = [];
-    const saved: { cover: string; name: string; fellBack: boolean } = {
-      cover: "",
-      name: "",
-      fellBack: false,
-    };
+    const saved: { cover: string; name: string } = { cover: "", name: "" };
+    let progress = "Saving the shot…";
     let ensured = false;
-    const file = new File([new Uint8Array([9, 8, 7, 6])], "IMG_0001.jpg", {
-      type: "image/jpeg",
-    });
+    const file = new File([new Uint8Array(64)], "IMG_12MP.jpg", { type: "image/jpeg" });
     await ingestCameraShot(file, {
-      putPending: async () => {
-        order.push("pending");
-      },
-      clearPending: async () => {
-        order.push("clear");
-      },
       shrink: async () => {
         order.push("shrink");
-        return { dataUrl: "data:image/jpeg;base64,abc", objectUrl: "blob:preview" };
+        return {
+          dataUrl: "data:image/jpeg;base64,abc",
+          objectUrl: "blob:preview",
+          blob: new Blob(["jpeg"], { type: "image/jpeg" }),
+        };
       },
       matte: async () => {
         order.push("matte");
-        throw new Error("oom");
+        return new Promise(() => {});
       },
       save: async (input) => {
         order.push("save");
         saved.cover = input.cover;
         saved.name = input.name;
-        saved.fellBack = input.fellBack;
       },
       onPreview: () => {
         order.push("preview");
+      },
+      onShown: () => {
+        order.push("shown");
+        progress = "";
       },
       hash: async () => "shot-hash",
       ensureLookbook: () => {
         ensured = true;
       },
     });
-    assert.equal(order[0], "pending");
-    assert.ok(order.indexOf("pending") < order.indexOf("matte"));
-    assert.equal(saved.fellBack, true);
+    assert.ok(order.indexOf("preview") < order.indexOf("save"));
+    assert.ok(order.indexOf("shown") < order.indexOf("save"));
+    assert.ok(order.indexOf("save") < order.indexOf("matte"));
+    assert.equal(progress, "");
     assert.equal(saved.name, NEW_PIECE_NAME);
-    assert.ok(saved.cover.startsWith("data:image/jpeg"));
+    assert.equal(saved.cover, "blob:preview");
     assert.equal(ensured, false);
-    assert.equal(order.at(-1), "clear");
+  });
+
+  it("a stuck pending write still leaves the shrunk tile and one garment", async () => {
+    let progress = "Saving the shot…";
+    let saved = false;
+    const raw = new Uint8Array(64);
+    const file = new File([raw], "IMG_12MP.jpg", { type: "image/jpeg" });
+    const small = new Blob(["jpeg"], { type: "image/jpeg" });
+    let pending: Blob | null = null;
+    await ingestCameraShot(file, {
+      shrink: async () => ({
+        dataUrl: "data:image/jpeg;base64,abc",
+        objectUrl: "blob:shrunk",
+        blob: small,
+      }),
+      putPending: (blob) => {
+        pending = blob;
+        return new Promise(() => {});
+      },
+      matte: () => new Promise(() => {}),
+      save: async (input) => {
+        saved = true;
+        assert.equal(input.cover, "blob:shrunk");
+        assert.equal(input.name, NEW_PIECE_NAME);
+        assert.equal(input.blob, small);
+      },
+      onPreview: () => {
+        progress = "";
+      },
+      onShown: () => {
+        progress = "";
+      },
+      ensureLookbook: () => {
+        throw new Error("ensureLookbook");
+      },
+    });
+    assert.equal(saved, true);
+    assert.equal(progress, "");
+    assert.equal(pending, small);
+    assert.ok(small.size < file.size);
   });
 
   it("empty FileList does not clear saved tiles", () => {
@@ -142,6 +187,85 @@ describe("camera shot survives", () => {
     assert.equal(ingested, false);
     assert.equal(tiles.length, 1);
     assert.equal(SHOT_MISS.includes("Take photo"), true);
+  });
+});
+
+describe("camera resize", () => {
+  it("12MP portrait and landscape long edge is 1280", () => {
+    const land = cameraBitmapOptions(4032, 3024, 1280);
+    const port = cameraBitmapOptions(3024, 4032, 1280);
+    assert.equal(Math.max(land.resizeWidth, land.resizeHeight), 1280);
+    assert.equal(Math.max(port.resizeWidth, port.resizeHeight), 1280);
+    assert.ok(land.resizeWidth > land.resizeHeight);
+    assert.ok(port.resizeHeight > port.resizeWidth);
+    assert.equal(land.resizeQuality, "medium");
+    assert.equal(longEdgeBox(4032, 3024, 1280).resizeWidth, 1280);
+  });
+
+  it("reads JPEG size from the header, including orientation 6", () => {
+    const plain = new Uint8Array(20);
+    plain[0] = 0xff;
+    plain[1] = 0xd8;
+    plain[2] = 0xff;
+    plain[3] = 0xc0;
+    plain[4] = 0x00;
+    plain[5] = 0x0b;
+    plain[6] = 0x08;
+    plain[7] = 0x0f;
+    plain[8] = 0xc0;
+    plain[9] = 0x0b;
+    plain[10] = 0xd0;
+    assert.deepEqual(jpegOrientedSize(plain), { width: 3024, height: 4032 });
+
+    const app = exifOrientation6(4032, 3024);
+    const turned = jpegOrientedSize(app);
+    assert.equal(turned?.width, 3024);
+    assert.equal(turned?.height, 4032);
+    const box = longEdgeBox(turned?.width ?? 0, turned?.height ?? 0, 1280);
+    assert.equal(Math.max(box.resizeWidth, box.resizeHeight), 1280);
+  });
+});
+
+function exifOrientation6(width: number, height: number): Uint8Array {
+  const payload = new Uint8Array(32);
+  payload.set([0x45, 0x78, 0x69, 0x66, 0x00, 0x00], 0);
+  payload[6] = 0x49;
+  payload[7] = 0x49;
+  payload[8] = 0x2a;
+  payload[10] = 0x08;
+  payload[14] = 0x01;
+  payload[16] = 0x12;
+  payload[17] = 0x01;
+  payload[18] = 0x03;
+  payload[20] = 0x01;
+  payload[24] = 0x06;
+  const sof = new Uint8Array(11);
+  sof[0] = 0xff;
+  sof[1] = 0xc0;
+  sof[2] = 0x00;
+  sof[3] = 0x09;
+  sof[4] = 0x08;
+  sof[5] = (height >> 8) & 0xff;
+  sof[6] = height & 0xff;
+  sof[7] = (width >> 8) & 0xff;
+  sof[8] = width & 0xff;
+  const out = new Uint8Array(2 + 4 + payload.length + sof.length);
+  out[0] = 0xff;
+  out[1] = 0xd8;
+  out[2] = 0xff;
+  out[3] = 0xe1;
+  out[4] = 0x00;
+  out[5] = 34;
+  out.set(payload, 6);
+  out.set(sof, 6 + payload.length);
+  return out;
+}
+
+describe("resume camera", () => {
+  it("missing blob or a saved hash does not ingest again", () => {
+    assert.equal(resumeCameraAction(false, false), "stop");
+    assert.equal(resumeCameraAction(true, true), "stop");
+    assert.equal(resumeCameraAction(true, false), "ingest");
   });
 });
 

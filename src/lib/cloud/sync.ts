@@ -37,10 +37,11 @@ import { supabaseConfigured } from "./env.ts";
 import {
   accountPool,
   mergeAccount,
+  shouldApplyCloud,
   type CloudMeta,
 } from "./merge.ts";
 import { onOnlineIntent, visibleCloudIntent } from "./online.ts";
-import { loadingPhotosCopy } from "./open-plan.ts";
+
 
 const LAST_KEY = "closet.cloud.last";
 const PUSH_MS = 1000;
@@ -194,6 +195,9 @@ function applyLocal(next: CloudMeta) {
     seenLooks: mixed.seenLooks,
   });
   void purgedIds;
+  const incoming = accountPool(clean.garments).length;
+  const have = accountPool(current.garments).length;
+  if (have > 0 && !shouldApplyCloud(have, incoming)) return;
   useCloset.setState({
     garments: clean.garments,
     looks: clean.looks,
@@ -219,11 +223,7 @@ async function pullThumbs(garments: CloudMeta["garments"]) {
   const pool = accountPool(garments);
   const n = pool.length;
   if (n === 0) return;
-  setAccountProgress(pulledCopy(n));
-  await prefetchEagerThumbs(
-    pool.map((g) => g.id),
-    (done, total) => setAccountProgress(loadingPhotosCopy(done, total)),
-  );
+  await prefetchEagerThumbs(pool.map((g) => g.id));
   setAccountProgress(pulledCopy(n));
   window.setTimeout(() => {
     if (getAccount().progress === pulledCopy(n)) setAccountProgress(null);

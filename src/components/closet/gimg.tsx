@@ -29,7 +29,8 @@ export function GarmentImg({
     : isCloudSrc(garment.imageSrc)
       ? garment.imageSrc
       : "";
-  const thumbKey = cloudSrc || imageKey(garment.id, "t");
+  const thumbKey =
+    cloudSrc && !cloudSrc.endsWith("/o.jpg") ? cloudSrc : imageKey(garment.id, "t");
   const thumbSrc = useImageSrc(thumbKey);
   const fullSrc = useImageSrc(thumb ? "" : fullKey);
   const src = thumb ? thumbSrc : fullSrc || thumbSrc;
