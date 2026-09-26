@@ -3,7 +3,7 @@
  * addGarment happens before printGarment. Tests must not touch closet.v6.
  */
 
-import { HEIC_ERROR } from "./camera.ts";
+import { CAMERA_EDGE, CAMERA_JPEG, HEIC_ERROR, PENDING_CAMERA_FLAG, PENDING_CAMERA_KEY } from "./camera.ts";
 
 export const ADD_SHRINK_EDGE = 1280;
 export const ADD_SHRINK_QUALITY = 0.82;
@@ -122,6 +122,73 @@ export async function runIngestPiece(
 
   return { previewMs, steps };
 }
+
+export type CameraShotDeps = {
+  putPending: (blob: Blob) => Promise<void>;
+  markPending?: () => void;
+  clearPending: () => Promise<void>;
+  shrink: (file: File) => Promise<IngestShrink>;
+  matte: (dataUrl: string) => Promise<{ cutoutSrc?: string }>;
+  save: (input: {
+    original: string;
+    cover: string;
+    name: string;
+    hash: string;
+    fellBack: boolean;
+  }) => Promise<void>;
+  onPreview: (src: string) => void;
+  revoke?: (url: string) => void;
+  hash?: (file: File) => Promise<string>;
+  knownHashes?: Set<string>;
+  /** Must stay unused. Camera ingest does not rebuild the lookbook. */
+  ensureLookbook?: () => void;
+};
+
+/**
+ * Take photo. Raw bytes hit IDB before shrink or matte.
+ * A matte throw still saves the shrunk JPEG as the cover.
+ * Does not call ensureLookbook.
+ */
+export async function ingestCameraShot(file: File, deps: CameraShotDeps): Promise<void> {
+  const raw = file.slice(0, file.size, file.type || "image/jpeg");
+  await deps.putPending(raw);
+  deps.markPending?.();
+  const hash = deps.hash ? await deps.hash(file) : "";
+  if (hash && deps.knownHashes?.has(hash)) {
+    await deps.clearPending();
+    return;
+  }
+  let shrunk: IngestShrink;
+  try {
+    shrunk = await deps.shrink(file);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === HEIC_ERROR || /heic/i.test(msg)) throw new Error(HEIC_ERROR);
+    throw new Error(HEIC_ERROR);
+  }
+  deps.onPreview(shrunk.objectUrl || shrunk.dataUrl);
+  let cover = "";
+  try {
+    const matte = await deps.matte(shrunk.dataUrl);
+    cover = (matte.cutoutSrc ?? "").trim();
+  } catch {
+    cover = "";
+  }
+  const fellBack = !cover;
+  if (fellBack) cover = shrunk.dataUrl;
+  await deps.save({
+    original: shrunk.dataUrl,
+    cover,
+    name: NEW_PIECE_NAME,
+    hash,
+    fellBack,
+  });
+  await deps.clearPending();
+  if (shrunk.objectUrl) deps.revoke?.(shrunk.objectUrl);
+  void deps.ensureLookbook;
+}
+
+export { PENDING_CAMERA_KEY, PENDING_CAMERA_FLAG, CAMERA_EDGE, CAMERA_JPEG };
 
 export async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;

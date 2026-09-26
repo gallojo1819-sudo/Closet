@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, ClipboardPaste, Images, Link2, Loader2, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { imageKey, putImage, putThumb, dataUrlToBlob, fileFingerprint } from "@/lib/images";
+import { imageKey, putImage, putThumb, dataUrlToBlob, deleteImage, fileFingerprint, getImage } from "@/lib/images";
 import {
+  CAMERA_EDGE,
+  CAMERA_JPEG,
+  cameraBytesHash,
   cameraInputProps,
   handleCameraChange,
   HEIC_ERROR,
   imageFilesFromList,
   libraryInputProps,
+  PENDING_CAMERA_FLAG,
+  PENDING_CAMERA_KEY,
+  SHOT_MISS,
 } from "@/lib/camera";
 import {
   ADDING_NAME,
   addProgress,
+  ingestCameraShot,
   NEW_PIECE_NAME,
   readAddConcurrency,
   shrinkFile,
@@ -43,6 +50,8 @@ import { useCloset } from "@/lib/store";
 import type { Category, ImageSource, Tuck } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { guessTuck } from "@/lib/tuck";
+
+let cameraResumeStarted = false;
 
 const CHECKS = [
   "One item",
@@ -428,11 +437,13 @@ export function Studio() {
       };
       const n = Math.min(readAddConcurrency(), total);
       await Promise.all(Array.from({ length: n }, () => worker()));
-      const idle = () => useCloset.getState().ensureLookbook();
-      if (typeof requestIdleCallback === "function") {
-        requestIdleCallback(idle, { timeout: 2500 });
-      } else {
-        window.setTimeout(idle, 0);
+      if (!opts?.camera) {
+        const idle = () => useCloset.getState().ensureLookbook();
+        if (typeof requestIdleCallback === "function") {
+          requestIdleCallback(idle, { timeout: 2500 });
+        } else {
+          window.setTimeout(idle, 0);
+        }
       }
       setBusy(false);
       setProgress("");
@@ -443,6 +454,136 @@ export function Studio() {
     },
     [processScanFile],
   );
+
+  const takeCameraShot = useCallback(
+    async (file: File) => {
+      setError(null);
+      setBusy(true);
+      setProgress("Saving the shot…");
+      const id = uid("g");
+      try {
+        await ingestCameraShot(file, {
+          putPending: async (blob) => {
+            await putImage(PENDING_CAMERA_KEY, blob);
+          },
+          markPending: () => {
+            try {
+              sessionStorage.setItem(PENDING_CAMERA_FLAG, "1");
+            } catch {
+              /* private mode */
+            }
+          },
+          clearPending: async () => {
+            await deleteImage(PENDING_CAMERA_KEY).catch(() => {});
+            try {
+              sessionStorage.removeItem(PENDING_CAMERA_FLAG);
+            } catch {
+              /* */
+            }
+          },
+          shrink: (f) => shrinkFile(f, CAMERA_EDGE, CAMERA_JPEG),
+          matte: async (dataUrl) => {
+            const matte = await matteToPaper(dataUrl);
+            return { cutoutSrc: matte.cutoutSrc };
+          },
+          hash: cameraBytesHash,
+          knownHashes: collectKnownHashes(
+            useCloset.getState().garments.map((g) => g.fileHash),
+          ),
+          onPreview: (src) => {
+            setSaved((cur) => [
+              { id, name: ADDING_NAME, category: "other", cutout: src },
+              ...cur.filter((s) => s.id !== id),
+            ]);
+          },
+          revoke: (url) => URL.revokeObjectURL(url),
+          save: async ({ original, cover, hash, fellBack }) => {
+            await putImage(imageKey(id, "o"), dataUrlToBlob(original));
+            await putImage(imageKey(id, "c"), dataUrlToBlob(cover));
+            await putThumb(id, cover).catch(() => {});
+            let name = NEW_PIECE_NAME;
+            let category: Category = "other";
+            let subtype = "";
+            let colors: string[] = [];
+            if (!fellBack) {
+              try {
+                const guess = await guessGarment(cover);
+                if (guess.name && !isFakeName(guess.name)) {
+                  name = guess.name;
+                  category = guess.category;
+                  subtype = guess.subtype;
+                  colors = guess.colors;
+                }
+              } catch {
+                /* New piece */
+              }
+            }
+            addGarment(
+              {
+                id,
+                name,
+                category,
+                subtype,
+                colors,
+                material: "",
+                brand: "",
+                notes: fellBack ? "camera · cover is the photo" : "camera",
+                formality: 3,
+                warmth: 3,
+                seasons: [],
+                imageSrc: imageKey(id, "o"),
+                cutoutSrc: imageKey(id, "c"),
+                imageSource: "photo",
+                matteQuality: fellBack ? "ok" : "clean",
+                fileHash: hash,
+                tuck: guessTuck({ name, subtype, notes: "" }),
+              },
+              { quiet: true },
+            );
+            setSaved((cur) => [
+              { id, name, category, cutout: cover },
+              ...cur.filter((s) => s.id !== id),
+            ]);
+            setProgress(addProgress(1, 1, name));
+          },
+        });
+        setProgress("");
+      } catch (e) {
+        const message = e instanceof Error ? e.message : HEIC_ERROR;
+        setError(message);
+        setProgress(message);
+        setSaved((cur) => cur.filter((s) => s.id !== id));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [addGarment],
+  );
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      if (cameraResumeStarted) return;
+      cameraResumeStarted = true;
+      try {
+        const blob = await getImage(PENDING_CAMERA_KEY);
+        if (!blob || !live) return;
+        const file = new File([blob], "camera", {
+          type: blob.type || "image/jpeg",
+          lastModified: 0,
+        });
+        await takeCameraShot(file);
+      } catch (e) {
+        if (!live) return;
+        setError(e instanceof Error ? e.message : HEIC_ERROR);
+      } finally {
+        cameraResumeStarted = false;
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [takeCameraShot]);
 
   const dismissPiece = (id: string) => {
     removeGarment(id);
@@ -691,13 +832,21 @@ export function Studio() {
             {...cameraInputProps()}
             className="sr-only"
             onChange={(e) => {
-              handleCameraChange(
-                e.target.files,
-                (files) => void scanFiles(files, { camera: true }),
-                () => {
-                  e.target.value = "";
-                },
-              );
+              try {
+                handleCameraChange(
+                  e.target.files,
+                  (files) => {
+                    const file = files[0];
+                    if (file) void takeCameraShot(file);
+                  },
+                  () => {
+                    e.target.value = "";
+                  },
+                  () => setError(SHOT_MISS),
+                );
+              } catch (err) {
+                setError(err instanceof Error ? err.message : SHOT_MISS);
+              }
             }}
           />
         </label>

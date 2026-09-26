@@ -2,6 +2,17 @@
 
 export const HEIC_ERROR = "Couldn't read that photo — try JPEG";
 
+export const SHOT_MISS = "Shot didn’t stick — tap Take photo again.";
+
+/** Raw camera bytes. Written before shrink, matte, or classify. */
+export const PENDING_CAMERA_KEY = "idb:pending:camera";
+
+export const PENDING_CAMERA_FLAG = "closet.pending.camera";
+
+export const CAMERA_EDGE = 1280;
+
+export const CAMERA_JPEG = 0.72;
+
 export const CAMERA_ACCEPT = "image/*,.heic,.heif,image/heic,image/heif";
 
 export function cameraInputProps() {
@@ -33,19 +44,37 @@ export function isHeicFile(file: { type: string; name: string }): boolean {
   return type.includes("heic") || type.includes("heif") || /\.(heic|heif)$/i.test(file.name);
 }
 
-/** Reset the input, then ingest the first image. Returns whether onChange produced a file. */
+/**
+ * Reset the file input so another shot can fire.
+ * An empty list does not ingest and must not clear tiles already on the page.
+ */
 export function handleCameraChange(
   files: ArrayLike<File> | null | undefined,
   ingest: (files: File[]) => void,
   reset: () => void,
+  onMiss?: () => void,
 ): boolean {
-  reset();
   const file = files && files.length > 0 ? files[0] : undefined;
-  if (!file || !isImageFile(file)) return false;
+  reset();
+  if (!file || !isImageFile(file)) {
+    onMiss?.();
+    return false;
+  }
   ingest([file]);
   return true;
 }
 
 export function imageFilesFromList(list: ArrayLike<File> | null | undefined): File[] {
   return Array.from(list ?? []).filter(isImageFile);
+}
+
+/** Stable hash of the raw shot. Name and lastModified are not part of it, so a resume matches. */
+export async function cameraBytesHash(file: Blob): Promise<string> {
+  const head = await file.slice(0, 64 * 1024).arrayBuffer();
+  const meta = new TextEncoder().encode(`camera\0${file.size}\0`);
+  const bytes = new Uint8Array(meta.byteLength + head.byteLength);
+  bytes.set(meta, 0);
+  bytes.set(new Uint8Array(head), meta.byteLength);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }

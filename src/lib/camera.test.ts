@@ -7,8 +7,9 @@ import {
   isHeicFile,
   isImageFile,
   libraryInputProps,
+  SHOT_MISS,
 } from "./camera.ts";
-import { addQueueConcurrency, NEW_PIECE_NAME, runIngestPiece } from "./ingest.ts";
+import { addQueueConcurrency, ingestCameraShot, NEW_PIECE_NAME, runIngestPiece } from "./ingest.ts";
 
 /** Fake user — tests never read or write closet.v6. */
 void "fake-user-joe";
@@ -72,6 +73,75 @@ describe("Take photo onChange", () => {
     assert.equal(pool.length, 1);
     assert.equal(printResolved, false);
     assert.ok(pool[0]?.name === NEW_PIECE_NAME || pool[0]?.name === "Navy chino");
+  });
+});
+
+describe("camera shot survives", () => {
+  it("writes pending IDB before matte; a matte throw still adds a visible cover", async () => {
+    const order: string[] = [];
+    const saved: { cover: string; name: string; fellBack: boolean } = {
+      cover: "",
+      name: "",
+      fellBack: false,
+    };
+    let ensured = false;
+    const file = new File([new Uint8Array([9, 8, 7, 6])], "IMG_0001.jpg", {
+      type: "image/jpeg",
+    });
+    await ingestCameraShot(file, {
+      putPending: async () => {
+        order.push("pending");
+      },
+      clearPending: async () => {
+        order.push("clear");
+      },
+      shrink: async () => {
+        order.push("shrink");
+        return { dataUrl: "data:image/jpeg;base64,abc", objectUrl: "blob:preview" };
+      },
+      matte: async () => {
+        order.push("matte");
+        throw new Error("oom");
+      },
+      save: async (input) => {
+        order.push("save");
+        saved.cover = input.cover;
+        saved.name = input.name;
+        saved.fellBack = input.fellBack;
+      },
+      onPreview: () => {
+        order.push("preview");
+      },
+      hash: async () => "shot-hash",
+      ensureLookbook: () => {
+        ensured = true;
+      },
+    });
+    assert.equal(order[0], "pending");
+    assert.ok(order.indexOf("pending") < order.indexOf("matte"));
+    assert.equal(saved.fellBack, true);
+    assert.equal(saved.name, NEW_PIECE_NAME);
+    assert.ok(saved.cover.startsWith("data:image/jpeg"));
+    assert.equal(ensured, false);
+    assert.equal(order.at(-1), "clear");
+  });
+
+  it("empty FileList does not clear saved tiles", () => {
+    const tiles = [{ id: "kept" }];
+    let ingested = false;
+    const ok = handleCameraChange(
+      [],
+      () => {
+        ingested = true;
+        tiles.pop();
+      },
+      () => {},
+      () => {},
+    );
+    assert.equal(ok, false);
+    assert.equal(ingested, false);
+    assert.equal(tiles.length, 1);
+    assert.equal(SHOT_MISS.includes("Take photo"), true);
   });
 });
 
