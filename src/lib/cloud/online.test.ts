@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isRetryableCloudError, onOnlineIntent, visibleCloudIntent } from "./online.ts";
+import { isRetryableCloudError, onOnlineIntent, shouldPushClosetMeta, visibleCloudIntent } from "./online.ts";
 
 /** Fake user — tests never read or write closet.v6. */
 void "fake-user-joe";
@@ -26,6 +26,15 @@ describe("onOnlineIntent", () => {
       onOnlineIntent({ online: true, signedIn: false, localCount: 12 }),
       "idle",
     );
+  });
+});
+
+describe("shouldPushClosetMeta", () => {
+  it("a Today reroll that only changes drop does not upsert the blob", () => {
+    const prev = { garments: [], looks: [], journal: [], avoid: {}, refPhoto: null, drop: null };
+    const next = { ...prev, drop: { date: "2026-09-26", garmentIds: ["g1"] } };
+    assert.equal(shouldPushClosetMeta(prev, next), false);
+    assert.equal(shouldPushClosetMeta(prev, { ...prev, journal: [{}] }), true);
   });
 });
 

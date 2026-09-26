@@ -27,6 +27,23 @@ export function visibleCloudIntent(input: {
   return "idle";
 }
 
+/**
+ * closet_meta is one blob. A Today reroll that only changes `drop` must not
+ * upsert it. Wear and Save change journal, garments, or looks, and those still push.
+ */
+export function shouldPushClosetMeta(
+  prev: { garments: unknown; looks: unknown; journal: unknown; avoid: unknown; refPhoto: unknown },
+  next: { garments: unknown; looks: unknown; journal: unknown; avoid: unknown; refPhoto: unknown },
+): boolean {
+  return (
+    next.garments !== prev.garments ||
+    next.looks !== prev.looks ||
+    next.journal !== prev.journal ||
+    next.avoid !== prev.avoid ||
+    next.refPhoto !== prev.refPhoto
+  );
+}
+
 export function isRetryableCloudError(error: {
   message?: string;
   status?: number;

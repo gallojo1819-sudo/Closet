@@ -40,7 +40,7 @@ import {
   shouldApplyCloud,
   type CloudMeta,
 } from "./merge.ts";
-import { onOnlineIntent, visibleCloudIntent } from "./online.ts";
+import { onOnlineIntent, shouldPushClosetMeta, visibleCloudIntent } from "./online.ts";
 
 
 const LAST_KEY = "closet.cloud.last";
@@ -511,16 +511,7 @@ export function startCloudSync(): () => void {
         return;
       }
     }
-    if (
-      s.garments === prev.garments &&
-      s.looks === prev.looks &&
-      s.journal === prev.journal &&
-      s.avoid === prev.avoid &&
-      s.drop === prev.drop &&
-      s.refPhoto === prev.refPhoto
-    ) {
-      return;
-    }
+    if (!shouldPushClosetMeta(prev, s)) return;
     schedulePush();
   });
 

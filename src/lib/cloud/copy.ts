@@ -2,7 +2,7 @@ import { isAccountSignedIn } from "./account.ts";
 
 /** Logged out on a new device (empty local cache). */
 export const EMPTY_DEVICE_COPY =
-  "This phone is empty until you sign in. Your 145 are on the computer you uploaded from.";
+  "This phone is empty until you sign in. Your closet is on the computer you uploaded from.";
 
 export const SIGN_IN_PROMPT = "Sign in so this closet is on your phone";
 

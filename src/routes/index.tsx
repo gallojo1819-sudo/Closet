@@ -10,6 +10,7 @@ import { alternatives, dropNote, kitCells, nameLook, neglectedPiece, sortLook } 
 import { rackCanDress, todayStripLooks } from "@/lib/lookbook";
 import { seasonFromWeather } from "@/lib/season";
 import { useAccount } from "@/lib/cloud/account";
+import { persistGate } from "@/lib/store-persist";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
 import { HOUSE_LABEL, avoidedUniformLine, daysIdle, lookHouses } from "@/lib/style";
@@ -57,15 +58,26 @@ function Today() {
       if (cancelled) return;
       const owned = useCloset.getState().garments.filter((g) => !g.archived);
       const current = useCloset.getState().drop;
+      const wasOpen = persistGate.open;
+      const inMemory = (run: () => void) => {
+        persistGate.open = false;
+        try {
+          run();
+        } finally {
+          persistGate.open = wasOpen;
+        }
+      };
       if (!owned.length) {
         if (weather && current?.weather?.f !== weather.f) {
-          setDrop({
-            date: todayISO(),
-            garmentIds: [],
-            worn: false,
-            verdict: "pending",
-            weather,
-          });
+          inMemory(() =>
+            setDrop({
+              date: todayISO(),
+              garmentIds: [],
+              worn: false,
+              verdict: "pending",
+              weather,
+            }),
+          );
         }
         return;
       }
@@ -75,14 +87,16 @@ function Today() {
         (current.worn || current.verdict === "worn");
       if (wornToday) {
         if (weather && current.weather?.f !== weather.f) {
-          setDrop({ ...current, weather });
+          inMemory(() => setDrop({ ...current, weather }));
         }
         return;
       }
-      useCloset.getState().rerollDrop(
-        weather,
-        current?.occasion,
-        current?.garmentIds?.length ? current.garmentIds : undefined,
+      inMemory(() =>
+        useCloset.getState().rerollDrop(
+          weather,
+          current?.occasion,
+          current?.garmentIds?.length ? current.garmentIds : undefined,
+        ),
       );
     })();
     return () => {

@@ -9,5 +9,6 @@ describe("home email", () => {
     assert.equal(allowSampleRack(true), false);
     assert.equal(allowSampleRack(false), true);
     assert.ok(WRONG_ACCOUNT.includes("joe@prereal.com"));
+    assert.equal(WRONG_ACCOUNT.includes("145"), false);
   });
 });
