@@ -11,6 +11,7 @@ import {
   SHOT_MISS,
 } from "./camera.ts";
 import { CAMERA_TAG_MS, CAMERA_TAG_RULES, decideCameraTag } from "./camera-tag.ts";
+import { garmentV2Fields, mirrorGarmentFields, type GarmentV2Writer } from "./data/mirror.ts";
 import {
   addQueueConcurrency,
   cameraBitmapOptions,
@@ -293,6 +294,8 @@ describe("camera tag", () => {
       category: "top",
       subtype: "jacket",
       colors: ["brown"],
+      material: "cotton",
+      brand: "RRL",
       count: 1,
     });
     assert.equal(decision.action, "update");
@@ -303,6 +306,8 @@ describe("camera tag", () => {
     assert.equal(shot?.name, "Brown jacket");
     assert.equal(shot?.category, "outerwear");
     assert.deepEqual(shot?.colors, ["brown"]);
+    assert.equal(decision.patch.material, "cotton");
+    assert.equal(decision.patch.brand, "RRL");
     assert.equal(keep?.name, "Navy oxford");
     assert.equal(keep?.category, "top");
     assert.equal(rack[0]?.name, "New piece");
@@ -346,6 +351,58 @@ describe("camera tag", () => {
     const next = apply(decision);
     assert.equal(next.find((g) => g.id === "shot")?.name, "New piece");
     assert.equal(next.find((g) => g.id === "shot")?.category, "other");
+  });
+
+  it("a person is not saved as one top; one jacket still is that jacket", () => {
+    const person = decideCameraTag({
+      ok: true,
+      name: "Brown top",
+      category: "top",
+      person: true,
+      count: 1,
+    });
+    assert.equal(person.action, "worn");
+    if (person.action === "worn") assert.equal(person.fallback, null);
+    const jacket = decideCameraTag({
+      ok: true,
+      name: "Brown jacket",
+      category: "top",
+      subtype: "jacket",
+      person: true,
+      count: 1,
+    });
+    assert.equal(jacket.action, "update");
+    if (jacket.action === "update") assert.equal(jacket.patch.category, "outerwear");
+  });
+
+  it("mirrors this legacy id only, and a failed mirror does not throw", async () => {
+    const fields = garmentV2Fields({
+      id: "shot",
+      name: "Brown jacket",
+      category: "outerwear",
+      subtype: "jacket",
+      colors: ["brown"],
+      material: "cotton",
+      brand: "RRL",
+    });
+    const seen: string[] = [];
+    const writer: GarmentV2Writer = {
+      updateOne: async (userId, legacyId, row) => {
+        seen.push(`${userId}:${legacyId}:${row.category}`);
+        return { error: null, updated: 1 };
+      },
+      insertOne: async () => {
+        throw new Error("must not insert when the row exists");
+      },
+    };
+    assert.equal(await mirrorGarmentFields(writer, "5d458205-b3ca-433a-8b75-4c0a2bbfa1ee", fields), true);
+    assert.deepEqual(seen, ["5d458205-b3ca-433a-8b75-4c0a2bbfa1ee:shot:outerwear"]);
+    const broken: GarmentV2Writer = {
+      updateOne: async () => {
+        throw new Error("rls");
+      },
+    };
+    assert.equal(await mirrorGarmentFields(broken, "5d458205-b3ca-433a-8b75-4c0a2bbfa1ee", fields), false);
   });
 });
 

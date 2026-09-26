@@ -30,6 +30,9 @@ import { enqueuePrint, enqueueTag } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
 import { classifyScan, readAiStatus, tagGarment } from "@/lib/ai";
 import { CAMERA_TAG_MS, decideCameraTag } from "@/lib/camera-tag";
+import { getAccount } from "@/lib/cloud/account";
+import { getSupabase } from "@/lib/cloud/client";
+import { garmentV2Fields, garmentWriter, mirrorGarmentFields } from "@/lib/data/mirror";
 import { guessGarment } from "@/lib/guess";
 import { isFakeName } from "@/lib/rack";
 import {
@@ -212,21 +215,10 @@ export function Studio() {
       await putImage(imageKey(opts.id, "o"), dataUrlToBlob(opts.original));
       await putThumb(opts.id, opts.cover).catch(() => {});
       await putImage(imageKey(opts.id, "c"), dataUrlToBlob(opts.cover)).catch(() => {});
-      let name = NEW_PIECE_NAME;
-      let category: Category = "other";
-      let subtype = "";
-      let colors: string[] = [];
-      try {
-        const guess = await guessGarment(opts.cover);
-        if (guess.name && !isFakeName(guess.name)) {
-          name = guess.name;
-          category = guess.category;
-          subtype = guess.subtype;
-          colors = guess.colors;
-        }
-      } catch {
-        /* New piece */
-      }
+      const name = NEW_PIECE_NAME;
+      const category: Category = "other";
+      const subtype = "";
+      const colors: string[] = [];
       addGarment(
         {
           id: opts.id,
@@ -481,7 +473,27 @@ export function Studio() {
           }
           const fallback = decision.fallback;
           if (!fallback) return;
-          useCloset.getState().updateGarment(pieceId, fallback);
+          useCloset.getState().updateGarment(pieceId, {
+            name: fallback.name,
+            category: fallback.category,
+            subtype: fallback.subtype,
+            colors: fallback.colors,
+            material: fallback.material,
+            ...(fallback.brand ? { brand: fallback.brand } : {}),
+          });
+          void mirrorGarmentFields(
+            garmentWriter(getSupabase()),
+            getAccount().user?.id ?? null,
+            garmentV2Fields({
+              id: pieceId,
+              name: fallback.name,
+              category: fallback.category,
+              subtype: fallback.subtype,
+              colors: fallback.colors,
+              material: fallback.material,
+              brand: fallback.brand,
+            }),
+          ).catch(() => false);
           setSaved((cur) =>
             cur.map((s) =>
               s.id === pieceId ? { ...s, name: fallback.name, category: fallback.category } : s,
@@ -496,12 +508,27 @@ export function Studio() {
           category: patch.category,
           subtype: patch.subtype,
           colors: patch.colors,
+          material: patch.material,
+          ...(patch.brand ? { brand: patch.brand } : {}),
         });
         setSaved((cur) =>
           cur.map((s) =>
             s.id === pieceId ? { ...s, name: patch.name, category: patch.category } : s,
           ),
         );
+        void mirrorGarmentFields(
+          garmentWriter(getSupabase()),
+          getAccount().user?.id ?? null,
+          garmentV2Fields({
+            id: pieceId,
+            name: patch.name,
+            category: patch.category,
+            subtype: patch.subtype,
+            colors: patch.colors,
+            material: patch.material,
+            brand: patch.brand,
+          }),
+        ).catch(() => false);
       } catch {
         /* New piece */
       }

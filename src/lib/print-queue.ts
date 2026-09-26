@@ -1,7 +1,10 @@
 import { printGarment, tagGarment } from "./ai.ts";
+import { CAMERA_TAG_MS, decideCameraTag } from "./camera-tag.ts";
+import { getAccount } from "./cloud/account.ts";
+import { getSupabase } from "./cloud/client.ts";
+import { garmentV2Fields, garmentWriter, mirrorGarmentFields } from "./data/mirror.ts";
 import { dataUrlToBlob, imageKey, putImage, putThumb } from "./images.ts";
 import { PRINT_TIMEOUT_MS, withTimeout } from "./ingest.ts";
-import { isFakeName } from "./rack.ts";
 import { useCloset } from "./store.ts";
 import { guessTuck } from "./tuck.ts";
 
@@ -54,22 +57,34 @@ export function enqueueTag(id: string, cover: string): void {
     try {
       const tag = await withTimeout(
         tagGarment({ data: { image: await shrinkForAi(cover) } }),
-        PRINT_TIMEOUT_MS,
+        CAMERA_TAG_MS,
       );
-      if (!tag?.ok || !tag.name || isFakeName(tag.name)) return;
       if (!useCloset.getState().garments.some((g) => g.id === id)) return;
+      const decision = decideCameraTag(tag);
+      if (decision.action !== "update") return;
+      const patch = decision.patch;
+      const tagged = tag && tag.ok ? tag : null;
       useCloset.getState().updateGarment(id, {
-        name: tag.name,
-        category: tag.category,
-        subtype: tag.subtype,
-        colors: tag.colors,
-        material: tag.material,
-        brand: tag.brand,
-        fit: tag.fit,
-        formality: tag.formality,
-        warmth: tag.warmth,
-        tuck: tag.tuck ?? guessTuck({ name: tag.name, subtype: tag.subtype ?? "", notes: "" }),
+        name: patch.name,
+        category: patch.category,
+        subtype: patch.subtype,
+        colors: patch.colors,
+        material: patch.material,
+        ...(patch.brand ? { brand: patch.brand } : {}),
+        ...(tagged
+          ? {
+              fit: tagged.fit,
+              formality: tagged.formality,
+              warmth: tagged.warmth,
+              tuck: tagged.tuck ?? guessTuck({ name: patch.name, subtype: patch.subtype, notes: "" }),
+            }
+          : {}),
       });
+      void mirrorGarmentFields(
+        garmentWriter(getSupabase()),
+        getAccount().user?.id ?? null,
+        garmentV2Fields({ id, ...patch, subtype: patch.subtype }),
+      ).catch(() => false);
     } catch {
       /* keep guess / New piece */
     }

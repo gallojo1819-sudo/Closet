@@ -25,6 +25,8 @@ export type TagResult = {
   tuck?: "in" | "out" | "either";
   /** More than 1 means several garments — do not save the frame as one top. */
   count?: number;
+  /** A person wearing clothes is not one garment. */
+  person?: boolean;
 } | { ok: false; error: string };
 
 type XaiResult = {
@@ -106,7 +108,7 @@ export const tagGarment = createServerFn({ method: "POST" })
     userContent.push({
       type: "text",
       text:
-        'Return ONLY JSON: {"name":"Brown suede mules","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"mules","colors":["brown"],"material":"suede","brand":"Giuseppe Zanotti","fit":"slim|regular|relaxed","formality":3,"warmth":2,"tuck":"in|out|either","count":1}. Name the FIRST image like a closet label: color + garment (Navy oxford, Grey merino, Brown suede mules, Brown jacket). A pair of shoes is footwear. Two trouser legs joined at a crotch is bottom. Fit from how it lies. If unsure, regular. tuck: oxford/shirttail/point collar = in; camp collar/straight hem/resort = out; polo/rugby/overshirt = either; omit if not a shirt. Name the GARMENT fabric color as worn, not the background. Navy is navy, not olive, not black, not charcoal. Maroon/burgundy is not brown. Light blue denim is light blue, not white. Loafers: the leather, not the sole. Return colors[] from this list only: navy, light blue, cream, white, ivory, khaki, beige, tan, camel, brown, chocolate, olive, forest, maroon, burgundy, wine, pink, blush, grey, charcoal, black, rust, gold. ' +
+        'Return ONLY JSON: {"name":"Brown suede mules","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"mules","colors":["brown"],"material":"suede","brand":"Giuseppe Zanotti","fit":"slim|regular|relaxed","formality":3,"warmth":2,"tuck":"in|out|either","count":1,"person":false}. Name the FIRST image like a closet label: color + garment (Navy oxford, Grey merino, Brown suede mules, Brown jacket). A pair of shoes is footwear. Two trouser legs joined at a crotch is bottom. Fit from how it lies. If unsure, regular. tuck: oxford/shirttail/point collar = in; camp collar/straight hem/resort = out; polo/rugby/overshirt = either; omit if not a shirt. Name the GARMENT fabric color as worn, not the background. Navy is navy, not olive, not black, not charcoal. Maroon/burgundy is not brown. Light blue denim is light blue, not white. Loafers: the leather, not the sole. Brand only when a label is legible, else "". Return colors[] from this list only: navy, light blue, cream, white, ivory, khaki, beige, tan, camel, brown, chocolate, olive, forest, maroon, burgundy, wine, pink, blush, grey, charcoal, black, rust, gold. ' +
         CAMERA_TAG_RULES +
         " " +
         (data.context
@@ -149,6 +151,7 @@ export const tagGarment = createServerFn({ method: "POST" })
       const countRaw = Number(parsed.count);
       const count =
         Number.isFinite(countRaw) && countRaw > 1 ? Math.min(6, Math.round(countRaw)) : 1;
+      const person = parsed.person === true;
       const formality = Number(parsed.formality);
       const warmth = Number(parsed.warmth);
       const fitRaw = String(parsed.fit ?? "regular");
@@ -174,6 +177,7 @@ export const tagGarment = createServerFn({ method: "POST" })
         formality: (formality >= 1 && formality <= 5 ? formality : 3) as 1 | 2 | 3 | 4 | 5,
         warmth: (warmth >= 1 && warmth <= 5 ? warmth : 3) as 1 | 2 | 3 | 4 | 5,
         tuck,
+        person,
       };
     } catch {
       return { ok: false, error: "Could not parse tag." };
