@@ -20,12 +20,16 @@ import {
 import { composeChapter } from "@/lib/ai";
 import {
   allIdsInvented,
+  chapterPaint,
   COMPOSE_TIMEOUT_MS,
   composeCacheKey,
   composeMessage,
   composeOnce,
   composeRack,
+  keepCardsOnFail,
   NOT_ON_RACK,
+  peekCompose,
+  rememberCompose,
   settleCompose,
   STYLIST_HOLDS,
   STYLIST_SILENT,
@@ -102,6 +106,7 @@ function LookCard({
   cardRef,
   season,
   houseLabel,
+  chip,
   note,
 }: {
   look: Look;
@@ -112,6 +117,7 @@ function LookCard({
   cardRef: (el: HTMLElement | null) => void;
   season: string;
   houseLabel: string;
+  chip: string;
   note?: string | null;
 }) {
   return (
@@ -136,7 +142,7 @@ function LookCard({
       </IdleMount>
       <p className="mt-3">{spreadTitle(pieces, look.occasion as Occasion)}</p>
       <p className="micro text-ink-soft">
-        {houseLabel} · {look.occasion} · {season}
+        {houseLabel} · {chip} · {season}
       </p>
       {note && <p className="micro mt-1 text-ink-soft">{note}</p>}
     </li>
@@ -197,7 +203,6 @@ function LookbookPage() {
 
   const chapterKey = `${occasion}:${houseChip}:${season}:${color ?? ""}`;
   const [skip, setSkip] = useState<{ chapter: string; ids: string[][] } | null>(null);
-  const notThese = skip?.chapter === chapterKey ? skip.ids : [];
   const wearRack = useMemo(() => {
     const rows = composeRack(garments, season);
     if (!color) return rows;
@@ -208,33 +213,69 @@ function LookbookPage() {
     return matched.length ? matched : rows;
   }, [garments, season, color]);
   const [attempt, setAttempt] = useState(0);
-  const [miss, setMiss] = useState<"silent" | "holds" | null>(null);
-  const composeKey = `${composeCacheKey(
+  const [reshuffleGen, setReshuffleGen] = useState(0);
+  const stableKey = composeCacheKey(
     occasion,
     season,
     houseChip,
     wearRack.map((g) => g.id),
-    notThese,
-  )}|try|${attempt}`;
-  const [cards, setCards] = useState<{ look: Look; why: string }[]>([]);
-  const [waiting, setWaiting] = useState(false);
+  );
+  const blockedRef = useRef(new Map<string, string[][]>());
+  const forceRef = useRef(false);
+  const [screen, setScreen] = useState<{
+    key: string;
+    cards: { look: Look; why: string }[];
+    waiting: boolean;
+    miss: "silent" | "holds" | null;
+  }>({ key: "", cards: [], waiting: false, miss: null });
+  if (screen.key !== stableKey) {
+    if (screen.cards.length) {
+      blockedRef.current.set(
+        stableKey,
+        screen.cards.map((card) => card.look.garmentIds),
+      );
+    }
+    forceRef.current = false;
+    const paint = chapterPaint(peekCompose(stableKey));
+    const hit = paint.showCards ? peekCompose(stableKey) : undefined;
+    setScreen({
+      key: stableKey,
+      cards: hit
+        ? hit.map((look) => ({ look: toShownLook(look, occasion), why: look.why }))
+        : [],
+      waiting: paint.building && wearRack.length > 0,
+      miss: null,
+    });
+    if (attempt !== 0) setAttempt(0);
+  }
   const rackRef = useRef(wearRack);
-  const notTheseRef = useRef(notThese);
+  const blockedNow = blockedRef.current.get(stableKey) ?? [];
+  const notTheseNow = skip?.chapter === chapterKey ? skip.ids : blockedNow;
   rackRef.current = wearRack;
-  notTheseRef.current = notThese;
+  const notTheseRef = useRef(notTheseNow);
+  const reshuffleRef = useRef(false);
+  notTheseRef.current = notTheseNow;
+  reshuffleRef.current = skip?.chapter === chapterKey;
   useEffect(() => {
-    const key = composeKey;
     const askRack = rackRef.current;
-    if (!askRack.length) return;
+    const paint = chapterPaint(peekCompose(stableKey));
+    if (!paint.call && !forceRef.current) return;
+    forceRef.current = false;
+    if (!askRack.length) {
+      setScreen((s) => (s.key === stableKey ? { ...s, waiting: false } : s));
+      return;
+    }
     let live = true;
-    setWaiting(true);
-    setMiss(null);
-    void composeOnce(key, async () => {
+    const blocked = notTheseRef.current;
+    setScreen((s) =>
+      s.key === stableKey ? { ...s, waiting: true, miss: null, cards: paint.showCards ? s.cards : [] } : s,
+    );
+    void composeOnce(`${stableKey}|try|${attempt}|gen|${reshuffleGen}`, async () => {
       const ask = async (extra?: string) => {
         const message = composeMessage(
           askRack,
           { occasion, season, house: houseChip },
-          notTheseRef.current,
+          blocked,
         );
         const composed = await withTimeout(
           composeChapter({ data: { message: extra ? `${message}\n\n${extra}` : message } }),
@@ -250,7 +291,7 @@ function LookbookPage() {
           turned = await ask(NOT_ON_RACK);
         }
         if (!turned.ok) return turned;
-        const looks = settleCompose(turned.looks, askRack, notTheseRef.current);
+        const looks = settleCompose(turned.looks, askRack, blocked);
         const survived = criticRejectOnly(
           looks.map((look) => toShownLook(look, occasion)),
           askRack,
@@ -265,29 +306,35 @@ function LookbookPage() {
       }
     }).then((result) => {
       if (!live) return;
-      setWaiting(false);
       if (!result.ok) {
         const kind = stylistMiss(result.error);
-        setMiss(kind);
-        if (kind === "holds") setCards([]);
-        if (notTheseRef.current.length && kind === "silent") {
-          setWeekNote("Couldn't reshuffle — try again.");
-        }
+        setScreen((s) => {
+          if (s.key !== stableKey) return s;
+          const keep = keepCardsOnFail(s.cards.length > 0, kind);
+          return { ...s, waiting: false, miss: kind, cards: keep ? s.cards : [] };
+        });
+        if (reshuffleRef.current && kind === "silent") setWeekNote("Couldn't reshuffle — try again.");
         return;
       }
-      setMiss(null);
-      setCards(
-        result.looks.map((look) => ({
+      rememberCompose(stableKey, result.looks);
+      setScreen({
+        key: stableKey,
+        waiting: false,
+        miss: null,
+        cards: result.looks.map((look) => ({
           look: toShownLook(look, occasion),
           why: look.why,
         })),
-      );
-      if (notTheseRef.current.length) setWeekNote(`Reshuffle · ${result.looks.length} looks`);
+      });
+      if (reshuffleRef.current) setWeekNote(`Reshuffle · ${result.looks.length} looks`);
     });
     return () => {
       live = false;
     };
-  }, [composeKey, occasion, houseChip, season]);
+  }, [stableKey, attempt, reshuffleGen, occasion, houseChip, season]);
+  const cards = screen.cards;
+  const waiting = screen.waiting;
+  const miss = screen.miss;
   const visible = cards;
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
@@ -485,7 +532,17 @@ function LookbookPage() {
         onClick={() => {
           const current = cards.map((c) => c.look.garmentIds).filter((ids) => ids.length >= 3);
           if (!current.length) return;
-          setSkip({ chapter: chapterKey, ids: current });
+          const prior = blockedRef.current.get(stableKey) ?? [];
+          const seen = new Set(prior.map((ids) => [...ids].sort().join(",")));
+          const next = [...prior];
+          for (const ids of current) {
+            const mark = [...ids].sort().join(",");
+            if (!seen.has(mark)) next.push(ids);
+          }
+          blockedRef.current.set(stableKey, next);
+          setSkip({ chapter: chapterKey, ids: next });
+          forceRef.current = true;
+          setReshuffleGen((n) => n + 1);
           setWeekPulse((x) => x + 1);
         }}
         className="inline-flex h-11 items-center border border-hairline px-4 text-sm text-ink hover:border-hairline-strong"
@@ -540,7 +597,14 @@ function LookbookPage() {
         {miss === "silent" && visible.length > 0 && (
           <p className="mt-3 text-sm text-ink-soft">
             {STYLIST_SILENT}
-            <button type="button" className="ml-3 underline" onClick={() => setAttempt((n) => n + 1)}>
+            <button
+              type="button"
+              className="ml-3 underline"
+              onClick={() => {
+                forceRef.current = true;
+                setAttempt((n) => n + 1);
+              }}
+            >
               Try again
             </button>
           </p>
@@ -559,7 +623,14 @@ function LookbookPage() {
             ) ??
               (miss === "silent" ? STYLIST_SILENT : miss === "holds" ? STYLIST_HOLDS : "Building looks…")}
             {miss && (
-              <button type="button" className="ml-3 underline" onClick={() => setAttempt((n) => n + 1)}>
+              <button
+                type="button"
+                className="ml-3 underline"
+                onClick={() => {
+                  forceRef.current = true;
+                  setAttempt((n) => n + 1);
+                }}
+              >
                 Try again
               </button>
             )}
@@ -583,6 +654,7 @@ function LookbookPage() {
                   pieces={pieces}
                   index={i}
                   season={season}
+                  chip={occasion}
                   houseLabel={
                     houseChip === "all"
                       ? HOUSE_LABEL[leadHouse(pieces, occasion)]

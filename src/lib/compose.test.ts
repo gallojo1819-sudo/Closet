@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   allIdsInvented,
+  chapterPaint,
   COMPOSE_MAX_TOKENS,
   COMPOSE_MODEL,
   COMPOSE_SYSTEM,
@@ -12,7 +13,10 @@ import {
   composeMessage,
   composeOnce,
   composeRack,
+  keepCardsOnFail,
   parseCompose,
+  peekCompose,
+  rememberCompose,
   settleCompose,
   STYLIST_HOLDS,
   STYLIST_SILENT,
@@ -182,6 +186,34 @@ describe("stylist compose", () => {
       rack,
     );
     assert.equal(onlyHoodie.length, 0);
+  });
+
+  it("a chip change clears unless that chapter is already cached", async () => {
+    clearComposeCache();
+    const key = composeCacheKey("weekend", "fall", "polo", ["g_ox", "g_tr", "g_lf"]);
+    assert.deepEqual(chapterPaint(peekCompose(key)), { showCards: false, building: true, call: true });
+    assert.equal(keepCardsOnFail(false, "silent"), false);
+    assert.equal(keepCardsOnFail(true, "silent"), true);
+    assert.equal(keepCardsOnFail(true, "holds"), false);
+    const weekday = ["g_ox", "g_tr", "g_lf"];
+    const weekend = validateCompose(
+      [
+        { ids: weekday, name: "Same", why: "Weekday again." },
+        { ids: ["g_po", "g_jn", "g_sn"], name: "Weekend", why: "Jean and a sneaker." },
+      ],
+      rack,
+      [weekday],
+    );
+    assert.deepEqual(weekend[0]!.ids, ["g_po", "g_jn", "g_sn"]);
+    rememberCompose(key, weekend);
+    let calls = 0;
+    const again = await composeOnce(key, () => {
+      calls += 1;
+      return Promise.resolve({ ok: true as const, looks: weekend });
+    });
+    assert.equal(calls, 0);
+    assert.equal(again.called, false);
+    assert.equal(chapterPaint(peekCompose(key)).call, false);
   });
 
   it("a failed call does not invent a regex trio", () => {

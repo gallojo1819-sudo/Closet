@@ -234,6 +234,29 @@ export function toShownLook(look: ComposedLook, occasion: Occasion): Look {
 
 export type ComposeCall = { ok: true; looks: ComposedLook[] } | { ok: false; error: string };
 
+export function peekCompose(key: string): ComposedLook[] | undefined {
+  return cache.get(key);
+}
+
+export function rememberCompose(key: string, looks: ComposedLook[]): void {
+  if (looks.length) cache.set(key, looks);
+}
+
+/** Cached chapter paints now. A miss clears and waits. No engine trio. */
+export function chapterPaint(cached: ComposedLook[] | undefined): {
+  showCards: boolean;
+  building: boolean;
+  call: boolean;
+} {
+  if (cached && cached.length) return { showCards: true, building: false, call: false };
+  return { showCards: false, building: true, call: true };
+}
+
+/** Try again on this chip keeps the cards. A different chip does not. */
+export function keepCardsOnFail(hadCards: boolean, kind: "silent" | "holds"): boolean {
+  return hadCards && kind === "silent";
+}
+
 /** One key, one call. A new chip or a reshuffle exclusion is a new key. */
 export async function composeOnce(
   key: string,
