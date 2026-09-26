@@ -2,6 +2,7 @@
  * One critic call per chapter. It does not invent pieces and it does not
  * write closet.v6. A rejected row never renders.
  */
+import { lookClashes } from "./lookbook.ts";
 import type { Garment, Look, Occasion } from "./types.ts";
 
 export const CRITIC_SYSTEM = `You dress Joe, 5′8, NYC. Ralph on a weekday, Italian when the pieces are knit / camp / suede, ALD only when it is a jean and a sneaker. Refuse a costume. One top, one bottom, one shoe, one jacket or none. A hoodie is not a coat and does not go with loafers or pleated trousers. A blazer does not go with a hoodie or a rugby. Do not invent a piece that is not in the row. If the names are "New piece" or "Brown top", do not invent a story — reject that row.
@@ -133,6 +134,35 @@ export function applyCritic(looks: Look[], garments: Garment[], verdict: CriticV
     seen.add(key);
     out.push(look);
     if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/**
+ * 1a71a35 backstop. A verdict may drop a composed look.
+ * A keep id that was not composed is ignored — never an engine trio.
+ * A missing verdict drops only a costume or an unnamed piece.
+ */
+export function criticRejectOnly(
+  looks: Look[],
+  garments: Garment[],
+  verdict: CriticVerdict | null,
+): Look[] {
+  const byId = new Map(garments.map((g) => [g.id, g]));
+  const reject = new Set((verdict?.reject ?? []).map((key) => criticKey(key.split(","))));
+  const out: Look[] = [];
+  const seen = new Set<string>();
+  for (const look of looks) {
+    const pieces = look.garmentIds
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => Boolean(g));
+    if (pieces.length < 3) continue;
+    if (pieces.some((g) => badCriticName(g.name))) continue;
+    if (lookClashes(pieces)) continue;
+    const key = criticKey(look.garmentIds);
+    if (reject.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(look);
   }
   return out;
 }

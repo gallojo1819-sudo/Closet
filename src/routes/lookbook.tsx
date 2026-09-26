@@ -26,6 +26,7 @@ import {
   toShownLook,
   validateCompose,
 } from "@/lib/compose";
+import { criticKey, criticRejectOnly } from "@/lib/critic";
 import { withTimeout } from "@/lib/ingest";
 import { seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
@@ -228,7 +229,14 @@ function LookbookPage() {
         );
         const composed = await withTimeout(composeChapter({ data: { message } }), 12_000);
         if (!composed?.ok) return { ok: false as const, error: "compose" };
-        const looks = validateCompose(composed.looks, askRack, notTheseRef.current);
+        const drafted = validateCompose(composed.looks, askRack, notTheseRef.current);
+        const survived = criticRejectOnly(
+          drafted.map((look) => toShownLook(look, occasion)),
+          askRack,
+          null,
+        );
+        const allowed = new Set(survived.map((look) => criticKey(look.garmentIds)));
+        const looks = drafted.filter((look) => allowed.has(criticKey(look.ids)));
         if (!looks.length) return { ok: false as const, error: "compose" };
         return { ok: true as const, looks };
       } catch {

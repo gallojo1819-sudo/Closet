@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   applyCritic,
+  criticRejectOnly,
   badCriticName,
   clearCriticCache,
   criticCacheKey,
@@ -142,6 +143,26 @@ describe("chapter critic", () => {
     assert.equal(CRITIC_SYSTEM.includes("Do not invent a piece"), true);
     assert.equal(badCriticName("Brown top"), true);
     assert.equal(badCriticName("New piece"), true);
+  });
+
+  it("the critic may reject a composed look and may not add an engine trio", () => {
+    const composed = [
+      look("office", ["ox", "tr", "lf"], "weekday"),
+      look("costume", ["hd", "tr", "lf"], "weekday"),
+    ];
+    const pool = [shirt, trouser, loafer, hoodie];
+    const engine = look("engine", ["hd", "jn", "sn"], "weekday");
+    const shown = criticRejectOnly(composed, pool, {
+      keep: ["hd,jn,sn", "ox,tr,lf"],
+      reject: ["hd,lf,tr"],
+      why: "Hoodie with loafers.",
+    });
+    assert.deepEqual(
+      shown.map((l) => l.id),
+      ["office"],
+    );
+    assert.equal(shown.some((l) => l.id === engine.id), false);
+    assert.equal(shown.some((l) => l.garmentIds.includes("hd")), false);
   });
 
   it("a 403 does not pad, and a rejected name never renders", () => {
