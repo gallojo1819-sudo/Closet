@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, ClipboardPaste, Images, Link2, Loader2, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { imageKey, putImage, putThumb, dataUrlToBlob, deleteImage, fileFingerprint, getImage } from "@/lib/images";
+import { imageKey, putImage, putThumb, blobToDataUrl, dataUrlToBlob, deleteImage, fileFingerprint, getImage } from "@/lib/images";
 import {
   CAMERA_EDGE,
   CAMERA_JPEG,
@@ -29,6 +29,7 @@ import { matteToPaper, readAsImageSrc } from "@/lib/matte";
 import { enqueuePrint, enqueueTag } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
 import { classifyScan, readAiStatus, tagGarment } from "@/lib/ai";
+import { CAMERA_TAG_MS, decideCameraTag } from "@/lib/camera-tag";
 import { guessGarment } from "@/lib/guess";
 import { isFakeName } from "@/lib/rack";
 import {
@@ -456,6 +457,58 @@ export function Studio() {
     [processScanFile],
   );
 
+  const nameCameraPiece = useCallback(
+    async (pieceId: string, jpeg: Blob, hash: string) => {
+      try {
+        const image = await blobToDataUrl(jpeg);
+        const tag = await withTimeout(tagGarment({ data: { image } }), CAMERA_TAG_MS);
+        if (!useCloset.getState().garments.some((g) => g.id === pieceId)) return;
+        const decision = decideCameraTag(tag);
+        if (decision.action === "worn") {
+          const scan = await withTimeout(classifyScan({ data: { image } }), CAMERA_TAG_MS);
+          const boxes =
+            scan && "ok" in scan && scan.ok
+              ? scan.boxes.filter((b) => !looksLikeFace(b.name, b.category, b.box))
+              : [];
+          if (boxes.length >= 2) {
+            removeGarment(pieceId);
+            setSaved((cur) => cur.filter((s) => s.id !== pieceId));
+            setWornQueue((q) => [
+              ...q,
+              { id: uid("w"), original: image, hash, boxes, done: [] },
+            ]);
+            return;
+          }
+          const fallback = decision.fallback;
+          if (!fallback) return;
+          useCloset.getState().updateGarment(pieceId, fallback);
+          setSaved((cur) =>
+            cur.map((s) =>
+              s.id === pieceId ? { ...s, name: fallback.name, category: fallback.category } : s,
+            ),
+          );
+          return;
+        }
+        if (decision.action !== "update") return;
+        const patch = decision.patch;
+        useCloset.getState().updateGarment(pieceId, {
+          name: patch.name,
+          category: patch.category,
+          subtype: patch.subtype,
+          colors: patch.colors,
+        });
+        setSaved((cur) =>
+          cur.map((s) =>
+            s.id === pieceId ? { ...s, name: patch.name, category: patch.category } : s,
+          ),
+        );
+      } catch {
+        /* New piece */
+      }
+    },
+    [removeGarment],
+  );
+
   const takeCameraShot = useCallback(
     async (file: File) => {
       setError(null);
@@ -495,10 +548,6 @@ export function Studio() {
             const matte = await matteToPaper(dataUrl);
             return { cutoutSrc: matte.cutoutSrc };
           },
-          guess: async (dataUrl) => {
-            const guess = await guessGarment(dataUrl);
-            return guess?.name ? { name: guess.name } : null;
-          },
           hash: cameraBytesHash,
           knownHashes: collectKnownHashes(
             useCloset.getState().garments.map((g) => g.fileHash),
@@ -518,11 +567,6 @@ export function Studio() {
               void withTimeout(putImage(imageKey(id, "c"), dataUrlToBlob(cover)), 3000).catch(() => {});
             }
             setSaved((cur) => cur.map((s) => (s.id === id ? { ...s, cutout: cover } : s)));
-          },
-          onName: (name) => {
-            if (!name || isFakeName(name)) return;
-            useCloset.getState().updateGarment(id, { name });
-            setSaved((cur) => cur.map((s) => (s.id === id ? { ...s, name } : s)));
           },
           save: async ({ original, cover, hash, blob }) => {
             const jpeg = blob ?? (original.startsWith("data:") ? dataUrlToBlob(original) : null);
@@ -554,7 +598,10 @@ export function Studio() {
             ]);
             setProgress("");
             setBusy(false);
-            if (jpeg) void writeJpeg(jpeg).catch(() => {});
+            if (jpeg) {
+              void writeJpeg(jpeg).catch(() => {});
+              void nameCameraPiece(id, jpeg, hash).catch(() => {});
+            }
           },
         });
       } catch (e) {
@@ -564,7 +611,7 @@ export function Studio() {
         setBusy(false);
       }
     },
-    [addGarment],
+    [addGarment, nameCameraPiece],
   );
 
   useEffect(() => {

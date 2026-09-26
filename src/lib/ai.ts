@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { CAMERA_TAG_RULES, cameraPieceCategory } from "./camera-tag";
 import { livePool } from "./rack";
 import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
 import {
@@ -22,6 +23,8 @@ export type TagResult = {
   formality: 1 | 2 | 3 | 4 | 5;
   warmth: 1 | 2 | 3 | 4 | 5;
   tuck?: "in" | "out" | "either";
+  /** More than 1 means several garments — do not save the frame as one top. */
+  count?: number;
 } | { ok: false; error: string };
 
 type XaiResult = {
@@ -103,7 +106,9 @@ export const tagGarment = createServerFn({ method: "POST" })
     userContent.push({
       type: "text",
       text:
-        'Return ONLY JSON: {"name":"Brown suede mules","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"mules","colors":["brown"],"material":"suede","brand":"Giuseppe Zanotti","fit":"slim|regular|relaxed","formality":3,"warmth":2,"tuck":"in|out|either"}. Name the FIRST image like a closet label: color + garment (Navy oxford, Grey merino, Brown suede mules). A pair of shoes is footwear. Two trouser legs joined at a crotch is bottom. Fit from how it lies. If unsure, regular. tuck: oxford/shirttail/point collar = in; camp collar/straight hem/resort = out; polo/rugby/overshirt = either; omit if not a shirt. Name the GARMENT fabric color as worn, not the background. Navy is navy, not olive, not black, not charcoal. Maroon/burgundy is not brown. Light blue denim is light blue, not white. Loafers: the leather, not the sole. Return colors[] from this list only: navy, light blue, cream, white, ivory, khaki, beige, tan, camel, brown, chocolate, olive, forest, maroon, burgundy, wine, pink, blush, grey, charcoal, black, rust, gold.' +
+        'Return ONLY JSON: {"name":"Brown suede mules","category":"top|bottom|outerwear|dress|footwear|accessory|other","subtype":"mules","colors":["brown"],"material":"suede","brand":"Giuseppe Zanotti","fit":"slim|regular|relaxed","formality":3,"warmth":2,"tuck":"in|out|either","count":1}. Name the FIRST image like a closet label: color + garment (Navy oxford, Grey merino, Brown suede mules, Brown jacket). A pair of shoes is footwear. Two trouser legs joined at a crotch is bottom. Fit from how it lies. If unsure, regular. tuck: oxford/shirttail/point collar = in; camp collar/straight hem/resort = out; polo/rugby/overshirt = either; omit if not a shirt. Name the GARMENT fabric color as worn, not the background. Navy is navy, not olive, not black, not charcoal. Maroon/burgundy is not brown. Light blue denim is light blue, not white. Loafers: the leather, not the sole. Return colors[] from this list only: navy, light blue, cream, white, ivory, khaki, beige, tan, camel, brown, chocolate, olive, forest, maroon, burgundy, wine, pink, blush, grey, charcoal, black, rust, gold. ' +
+        CAMERA_TAG_RULES +
+        " " +
         (data.context
           ? " The second image is only the page the garment came from — you may read a brand name from it (Axel Arigato, AMI), nothing else. Never name the garment after the shop or a page ID."
           : " Brand only if a label or logo is legible on the garment itself, else empty."),
@@ -117,7 +122,8 @@ export const tagGarment = createServerFn({ method: "POST" })
         {
           role: "system",
           content:
-            "You tag ONE garment (or one pair of shoes) in the photo. Catalog voice. A pair of mules, loafers, or sneakers photographed from above is footwear — never pants. Read the insole/label brand if it is printed (Giuseppe Zanotti, Golden Goose, AMI). Never a filename. Never a shop name or page ID. Never invent a brand that is not visible. JSON only.",
+            "You tag ONE garment (or one pair of shoes) in the photo. Catalog voice. A pair of mules, loafers, or sneakers photographed from above is footwear — never pants. Read the insole/label brand if it is printed (Giuseppe Zanotti, Golden Goose, AMI). Never a filename. Never a shop name or page ID. Never invent a brand that is not visible. JSON only. " +
+              CAMERA_TAG_RULES,
         },
         { role: "user", content: userContent },
       ],
@@ -132,7 +138,17 @@ export const tagGarment = createServerFn({ method: "POST" })
     if (start < 0 || end < start) return { ok: false, error: "Could not read tag." };
     try {
       const parsed = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
-      const category = String(parsed.category ?? "other");
+      const rawCategory = String(parsed.category ?? "other");
+      const name = String(parsed.name ?? "Garment").slice(0, 48);
+      const subtype = String(parsed.subtype ?? "").slice(0, 40);
+      const category = cameraPieceCategory(
+        name,
+        subtype,
+        CATEGORY_SET.has(rawCategory) ? rawCategory : "other",
+      );
+      const countRaw = Number(parsed.count);
+      const count =
+        Number.isFinite(countRaw) && countRaw > 1 ? Math.min(6, Math.round(countRaw)) : 1;
       const formality = Number(parsed.formality);
       const warmth = Number(parsed.warmth);
       const fitRaw = String(parsed.fit ?? "regular");
@@ -145,9 +161,10 @@ export const tagGarment = createServerFn({ method: "POST" })
           : undefined;
       return {
         ok: true,
-        name: String(parsed.name ?? "Garment").slice(0, 48),
-        category: (CATEGORY_SET.has(category) ? category : "other") as Category,
-        subtype: String(parsed.subtype ?? "").slice(0, 40),
+        name,
+        category,
+        subtype,
+        count,
         colors: Array.isArray(parsed.colors)
           ? parsed.colors.filter((c) => typeof c === "string").slice(0, 4)
           : [],

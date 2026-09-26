@@ -153,11 +153,13 @@ export type CameraShotDeps = {
 
 /**
  * Take photo. Shrink first, show the tile, then save.
- * Matte and guess run after addGarment and must not block the tile.
- * Does not call ensureLookbook. Does not write the raw file.
+ * Matte may run after addGarment and must not block the tile.
+ * Does not call ensureLookbook. Does not name the shot from guessGarment.
+ * Does not write the raw file.
  */
 export async function ingestCameraShot(file: File, deps: CameraShotDeps): Promise<void> {
   void deps.ensureLookbook;
+  void deps.guess;
   let shrunk: IngestShrink;
   try {
     shrunk = await deps.shrink(file);
@@ -197,10 +199,6 @@ export async function ingestCameraShot(file: File, deps: CameraShotDeps): Promis
         cover = next;
         deps.onCover?.(next);
       }
-    }
-    if (deps.guess) {
-      const guess = await withTimeout(deps.guess(cover), 4000);
-      if (guess?.name) deps.onName?.(guess.name);
     }
   })();
 }

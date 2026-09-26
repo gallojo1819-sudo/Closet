@@ -10,6 +10,7 @@ import {
   resumeCameraAction,
   SHOT_MISS,
 } from "./camera.ts";
+import { CAMERA_TAG_MS, CAMERA_TAG_RULES, decideCameraTag } from "./camera-tag.ts";
 import {
   addQueueConcurrency,
   cameraBitmapOptions,
@@ -91,6 +92,7 @@ describe("camera shot survives", () => {
     const saved: { cover: string; name: string } = { cover: "", name: "" };
     let progress = "Saving the shot…";
     let ensured = false;
+    let guessed = false;
     const file = new File([new Uint8Array(64)], "IMG_12MP.jpg", { type: "image/jpeg" });
     await ingestCameraShot(file, {
       shrink: async () => {
@@ -121,6 +123,10 @@ describe("camera shot survives", () => {
       ensureLookbook: () => {
         ensured = true;
       },
+      guess: async () => {
+        guessed = true;
+        return { name: "Brown top" };
+      },
     });
     assert.ok(order.indexOf("preview") < order.indexOf("save"));
     assert.ok(order.indexOf("shown") < order.indexOf("save"));
@@ -129,6 +135,7 @@ describe("camera shot survives", () => {
     assert.equal(saved.name, NEW_PIECE_NAME);
     assert.equal(saved.cover, "blob:preview");
     assert.equal(ensured, false);
+    assert.equal(guessed, false);
   });
 
   it("a stuck pending write still leaves the shrunk tile and one garment", async () => {
@@ -260,6 +267,87 @@ function exifOrientation6(width: number, height: number): Uint8Array {
   out.set(sof, 6 + payload.length);
   return out;
 }
+
+describe("camera tag", () => {
+  const rack = [
+    { id: "shot", name: "New piece", category: "other" as const, subtype: "", colors: [] as string[] },
+    { id: "keep", name: "Navy oxford", category: "top" as const, subtype: "oxford", colors: ["navy"] },
+  ];
+
+  function apply(
+    decision: ReturnType<typeof decideCameraTag>,
+    id = "shot",
+  ) {
+    if (decision.action !== "update") return rack.map((g) => ({ ...g }));
+    return rack.map((g) => (g.id === id ? { ...g, ...decision.patch } : { ...g }));
+  }
+
+  it("a brown jacket is outerwear on the same id; the tile name was already New piece", () => {
+    assert.equal(CAMERA_TAG_MS, 12_000);
+    assert.equal(CAMERA_TAG_RULES.includes("outerwear, never a top"), true);
+    assert.equal(CAMERA_TAG_RULES.includes("hoodie"), true);
+    assert.equal(CAMERA_TAG_RULES.includes("not the room"), true);
+    const decision = decideCameraTag({
+      ok: true,
+      name: "Brown jacket",
+      category: "top",
+      subtype: "jacket",
+      colors: ["brown"],
+      count: 1,
+    });
+    assert.equal(decision.action, "update");
+    if (decision.action !== "update") return;
+    const next = apply(decision);
+    const shot = next.find((g) => g.id === "shot");
+    const keep = next.find((g) => g.id === "keep");
+    assert.equal(shot?.name, "Brown jacket");
+    assert.equal(shot?.category, "outerwear");
+    assert.deepEqual(shot?.colors, ["brown"]);
+    assert.equal(keep?.name, "Navy oxford");
+    assert.equal(keep?.category, "top");
+    assert.equal(rack[0]?.name, "New piece");
+  });
+
+  it("a hoodie stays a top", () => {
+    const decision = decideCameraTag({
+      ok: true,
+      name: "Grey hoodie",
+      category: "outerwear",
+      subtype: "hoodie",
+      colors: ["grey"],
+    });
+    assert.equal(decision.action, "update");
+    if (decision.action !== "update") return;
+    assert.equal(decision.patch.category, "top");
+    assert.equal(decision.patch.name, "Grey hoodie");
+  });
+
+  it("a tag timeout leaves New piece, not Brown top", () => {
+    assert.equal(decideCameraTag(null).action, "keep");
+    assert.equal(decideCameraTag({ ok: false, name: "Brown top", category: "top" }).action, "keep");
+    const next = apply(decideCameraTag(null));
+    assert.equal(next.find((g) => g.id === "shot")?.name, "New piece");
+    assert.equal(next.find((g) => g.id === "shot")?.category, "other");
+    assert.equal(next.find((g) => g.id === "keep")?.name, "Navy oxford");
+  });
+
+  it("several garments are not saved as one top", () => {
+    const decision = decideCameraTag({
+      ok: true,
+      name: "Brown top",
+      category: "top",
+      subtype: "",
+      colors: ["brown"],
+      count: 3,
+    });
+    assert.equal(decision.action, "worn");
+    if (decision.action !== "worn") return;
+    assert.equal(decision.fallback, null);
+    const next = apply(decision);
+    assert.equal(next.find((g) => g.id === "shot")?.name, "New piece");
+    assert.equal(next.find((g) => g.id === "shot")?.category, "other");
+  });
+});
 
 describe("resume camera", () => {
   it("missing blob or a saved hash does not ingest again", () => {
