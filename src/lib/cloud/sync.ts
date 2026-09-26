@@ -22,6 +22,7 @@ import {
   pushIfDirty,
   rememberPull,
   rowToCloud,
+  rpcFailurePlan,
   shouldSchedulePush,
   freshMemory,
   markDirty,
@@ -108,8 +109,7 @@ function isMissingColumn(error: { code?: string; message?: string }): boolean {
 }
 
 function isMissingRpc(error: { code?: string; message?: string; status?: number }): boolean {
-  if (error.code === "PGRST202" || error.code === "42883" || error.status === 404) return true;
-  return /closet_meta_push|could not find the function|schema cache/i.test(error.message ?? "");
+  return rpcFailurePlan(error) === "fallback";
 }
 
 async function fetchCloud(userId: string): Promise<FetchCloud> {
@@ -153,7 +153,13 @@ async function casWrite(
       p_deleted_garments: packed.deletedGarments ?? [],
       p_deleted_looks: packed.deletedLooks ?? [],
     });
-    if (!error && data && typeof data === "object") {
+    if (error) {
+      if (!isMissingRpc(error)) {
+        if (!isForbidden(error)) setAccountProgress("Could not save to your account.");
+        return { ok: false, conflict: false };
+      }
+      rpcOk = false;
+    } else if (data && typeof data === "object") {
       rpcOk = true;
       const body = data as { ok?: boolean; conflict?: boolean; rev?: number; updated_at?: string };
       if (body.conflict) return { ok: false, conflict: true };
@@ -164,10 +170,8 @@ async function casWrite(
           updatedAt: typeof body.updated_at === "string" ? body.updated_at : new Date().toISOString(),
         };
       }
-    } else if (error && isMissingRpc(error)) {
-      rpcOk = false;
-    } else if (error) {
-      if (!isForbidden(error)) setAccountProgress("Could not save to your account.");
+      return { ok: false, conflict: false };
+    } else {
       return { ok: false, conflict: false };
     }
   }

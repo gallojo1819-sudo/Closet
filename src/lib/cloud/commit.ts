@@ -29,6 +29,28 @@ export type WriteResult =
   | { ok: true; rev: number; updatedAt: string }
   | { ok: false; conflict: boolean };
 
+/**
+ * Only a missing closet_meta_push may use the table compare-and-swap.
+ * Permission denied and every other RPC error abort. They do not write.
+ */
+export function rpcFailurePlan(error: {
+  code?: string;
+  message?: string;
+  status?: number;
+}): "fallback" | "abort" {
+  if (error.code === "42501") return "abort";
+  if (error.status === 401 || error.status === 403) return "abort";
+  const message = error.message ?? "";
+  if (/permission denied|insufficient privilege/i.test(message)) return "abort";
+  if (error.code === "PGRST202" || error.code === "42883") return "fallback";
+  if (/could not find the function/i.test(message)) return "fallback";
+  if (/schema cache/i.test(message) && /function/i.test(message) && /not find|does not exist/i.test(message)) {
+    return "fallback";
+  }
+  if (/function .+ does not exist/i.test(message)) return "fallback";
+  return "abort";
+}
+
 export function freshMemory(): SyncMemory {
   return {
     pulled: false,

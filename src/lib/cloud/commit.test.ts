@@ -8,6 +8,7 @@ import {
   pushIfDirty,
   rememberPull,
   rowToCloud,
+  rpcFailurePlan,
   shouldSchedulePush,
   type FetchCloud,
   type SyncMemory,
@@ -376,6 +377,40 @@ describe("conflict retry", () => {
     assert.equal(writes, 2);
     assert.equal(server.garments.find((g) => g.id === "g1")?.name, "Alpha");
     assert.equal(server.garments.find((g) => g.id === "g2")?.name, "Beta");
+  });
+});
+
+describe("rpc errors", () => {
+  it("falls back only when closet_meta_push is missing", () => {
+    assert.equal(
+      rpcFailurePlan({
+        code: "PGRST202",
+        status: 404,
+        message: "Could not find the function public.closet_meta_push in the schema cache",
+      }),
+      "fallback",
+    );
+    assert.equal(
+      rpcFailurePlan({ code: "42883", message: "function public.closet_meta_push(bigint) does not exist" }),
+      "fallback",
+    );
+  });
+
+  it("permission denied aborts and does not fall back to a write", () => {
+    assert.equal(
+      rpcFailurePlan({
+        code: "42501",
+        status: 403,
+        message: "permission denied for function closet_meta_push",
+      }),
+      "abort",
+    );
+    assert.equal(
+      rpcFailurePlan({ status: 401, message: "permission denied for function closet_meta_push" }),
+      "abort",
+    );
+    assert.equal(rpcFailurePlan({ message: "JWT expired" }), "abort");
+    assert.equal(rpcFailurePlan({ status: 404, message: "not found" }), "abort");
   });
 });
 

@@ -107,4 +107,4 @@ end;
 $$;
 
 revoke all on function public.closet_meta_push(bigint, jsonb, jsonb, jsonb, jsonb, jsonb, boolean, jsonb, jsonb) from public;
-grant execute on function public.closet_meta_push(bigint, jsonb, jsonb, jsonb, jsonb, boolean, jsonb, jsonb) to authenticated;
+grant execute on function public.closet_meta_push(bigint, jsonb, jsonb, jsonb, jsonb, jsonb, boolean, jsonb, jsonb) to authenticated;
