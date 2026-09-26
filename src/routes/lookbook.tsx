@@ -14,11 +14,23 @@ import {
   comboKey,
   emptyFilterCopy,
   lookbookPool,
+  lookClashes,
   lookFitsHouse,
   looksForHero,
   unusedFromLooks,
   visibleHero,
 } from "@/lib/lookbook";
+import { judgeChapter } from "@/lib/ai";
+import {
+  applyCritic,
+  criticCacheKey,
+  criticRows,
+  dropSharedTrios,
+  fallbackChapter,
+  holdsLine,
+  judgeOnce,
+} from "@/lib/critic";
+import { withTimeout } from "@/lib/ingest";
 import { seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { spreadTitle } from "@/lib/look";
@@ -194,8 +206,68 @@ function LookbookPage() {
       house: houseChip,
       color,
       min: canBuild ? 3 : 0,
+      pad: false,
     });
   }, [thisWeek, reshuffleKey, chipKey, book, garments, occasion, season, houseChip, color, canBuild]);
+  const counterpart = useMemo(() => {
+    if (occasion !== "weekday" && occasion !== "weekend") return [];
+    const other = occasion === "weekday" ? "weekend" : "weekday";
+    return chapterVisible(book, garments, other, {
+      season,
+      house: houseChip,
+      color,
+      min: 0,
+    });
+  }, [book, garments, occasion, season, houseChip, color]);
+  const candidates = useMemo(
+    () => dropSharedTrios(shown, counterpart),
+    [shown, counterpart],
+  );
+  const rows = useMemo(() => criticRows(candidates, garments), [candidates, garments]);
+  const verdictKey = criticCacheKey(occasion, season, houseChip, rows);
+  const [held, setHeld] = useState<Look[] | null>(null);
+  const [heldKey, setHeldKey] = useState("");
+  const rowsRef = useRef(rows);
+  const candidatesRef = useRef(candidates);
+  rowsRef.current = rows;
+  candidatesRef.current = candidates;
+  useEffect(() => {
+    const key = verdictKey;
+    if (!rowsRef.current.length) {
+      setHeld([]);
+      setHeldKey(key);
+      return;
+    }
+    let live = true;
+    void judgeOnce(key, async () => {
+      try {
+        const judged = await withTimeout(
+          judgeChapter({ data: { rows: rowsRef.current } }),
+          12_000,
+        );
+        if (!judged?.ok) return { ok: false as const, error: "critic" };
+        return {
+          ok: true as const,
+          verdict: { keep: judged.keep, reject: judged.reject, why: judged.why },
+        };
+      } catch {
+        return { ok: false as const, error: "critic" };
+      }
+    }).then((result) => {
+      if (!live) return;
+      const next = result.ok
+        ? applyCritic(candidatesRef.current, garments, result.verdict)
+        : fallbackChapter(candidatesRef.current, garments, lookClashes);
+      setHeld(next);
+      setHeldKey(key);
+    });
+    return () => {
+      live = false;
+    };
+  }, [verdictKey, garments]);
+  const ready = heldKey === verdictKey && held !== null;
+  const visible = ready && held ? held : [];
+  const oneHolds = ready ? holdsLine(visible.length) : null;
   const houseNote =
     houseChip === "all" ? null : houseGapNote(houseChip, garments, occasion);
   const plateNote = useMemo(
@@ -462,7 +534,10 @@ function LookbookPage() {
       <section className="mt-10">
         <p className="micro text-ink-soft">This week</p>
         {weekNote && <p className="mt-1 micro text-ink-soft">{weekNote}</p>}
-        {shown.length === 0 ? (
+        {oneHolds && <p className="mt-1 micro text-ink-soft">{oneHolds}</p>}
+        {!ready ? (
+          <p className="mt-3 text-sm text-ink-soft">Building looks…</p>
+        ) : visible.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">
             {emptyFilterCopy(
               chapterLabel,
@@ -471,7 +546,7 @@ function LookbookPage() {
               houseChip,
               color,
               canBuild,
-            ) ?? houseNote ?? "Building looks…"}
+            ) ?? houseNote ?? "Nothing in this chapter holds."}
           </p>
         ) : (
           <ul
@@ -481,7 +556,7 @@ function LookbookPage() {
               weekPulse > 0 && "week-crossfade",
             )}
           >
-            {shown.map((look, i) => {
+            {visible.map((look, i) => {
               const pieces = piecesFor(look);
               if (pieces.length < 3) return null;
               const thinHouse =

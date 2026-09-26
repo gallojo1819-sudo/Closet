@@ -1372,6 +1372,8 @@ export function chapterVisible(
     house?: House | "all";
     color?: string | null;
     min?: number;
+    /** False: do not invent extra trios to reach min. The critic decides. */
+    pad?: boolean;
   },
 ): Look[] {
   const pool = lookbookPool(garments);
@@ -1406,6 +1408,7 @@ export function chapterVisible(
   if (house) {
     const hard = ranked.filter((l) => lookFitsHouse(resolve(l), house, occasion, pool));
     const minH = Math.max(min, 0);
+    if (opts?.pad === false) return hard.length ? hard : ranked;
     if (hard.length >= minH) return hard;
     const outH = [...hard];
     const keysH = new Set(outH.map((l) => comboKey(l.garmentIds)));

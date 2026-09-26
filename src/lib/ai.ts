@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { CAMERA_TAG_RULES, cameraPieceCategory } from "./camera-tag";
+import { CRITIC_MAX, CRITIC_SYSTEM, parseCriticVerdict, type CriticRow } from "./critic";
 import { livePool } from "./rack";
 import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
 import {
@@ -495,6 +496,44 @@ Last line MUST be exactly:
 LOOK: g_xxx,g_yyy,g_zzz
 IDs from the closet list only, in order top, bottom, footwear (outer optional). Never invent an id.
 Voice: quiet, sure, no emoji, no lecture. Pixels beat names. No invented layers.`;
+
+/** One chapter, one call. grok-4.5 only. No images. */
+export const judgeChapter = createServerFn({ method: "POST" })
+  .validator((input: { rows: CriticRow[] }) => input)
+  .handler(async ({ data }): Promise<
+    { ok: true; keep: string[]; reject: string[]; why: string } | { ok: false; error: string }
+  > => {
+    const rows = (data.rows ?? []).slice(0, CRITIC_MAX).map((row) => ({
+      pieces: (row.pieces ?? []).map((piece) => ({
+        id: piece.id,
+        name: piece.name,
+        category: piece.category,
+        subtype: piece.subtype,
+        colors: piece.colors ?? [],
+      })),
+    }));
+    if (!rows.length) return { ok: false, error: "empty" };
+    const judged = await xaiFetch("https://api.x.ai/v1/chat/completions", {
+      model: "grok-4.5",
+      max_tokens: 400,
+      temperature: 0,
+      messages: [
+        { role: "system", content: CRITIC_SYSTEM },
+        {
+          role: "user",
+          content: JSON.stringify({ rows }),
+        },
+      ],
+    });
+    if (judged.status === 403 || !judged.ok) {
+      return { ok: false, error: judged.status === 403 ? "403" : judged.error || "critic" };
+    }
+    const body = judged.json as { choices?: { message?: { content?: string } }[] };
+    const text = body.choices?.[0]?.message?.content ?? "";
+    const verdict = parseCriticVerdict(text);
+    if (!verdict) return { ok: false, error: "critic" };
+    return { ok: true, ...verdict };
+  });
 
 export const askStylist = createServerFn({ method: "POST" })
   .validator(
