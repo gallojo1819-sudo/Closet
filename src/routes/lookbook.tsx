@@ -10,26 +10,22 @@ import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import {
-  chapterVisible,
   comboKey,
   emptyFilterCopy,
   lookbookPool,
-  lookClashes,
-  lookFitsHouse,
   looksForHero,
   unusedFromLooks,
   visibleHero,
 } from "@/lib/lookbook";
-import { judgeChapter } from "@/lib/ai";
+import { composeChapter } from "@/lib/ai";
 import {
-  applyCritic,
-  criticCacheKey,
-  criticRows,
-  dropSharedTrios,
-  fallbackChapter,
-  holdsLine,
-  judgeOnce,
-} from "@/lib/critic";
+  composeCacheKey,
+  composeMessage,
+  composeOnce,
+  composeRack,
+  toShownLook,
+  validateCompose,
+} from "@/lib/compose";
 import { withTimeout } from "@/lib/ingest";
 import { seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
@@ -37,8 +33,7 @@ import { spreadTitle } from "@/lib/look";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
-import { houseGapNote, HOUSE_LABEL, leadHouse } from "@/lib/houses";
-import { plateGapNote } from "@/lib/recipes";
+import { HOUSE_LABEL, leadHouse } from "@/lib/houses";
 import { daysIdle, HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
@@ -135,7 +130,6 @@ function LookCard({
       <p className="mt-3">{spreadTitle(pieces, look.occasion as Occasion)}</p>
       <p className="micro text-ink-soft">
         {houseLabel} · {look.occasion} · {season}
-        {look.recipeId ? ` · ${look.recipeId}` : ""}
       </p>
       {note && <p className="micro mt-1 text-ink-soft">{note}</p>}
     </li>
@@ -148,14 +142,11 @@ function LookbookPage() {
   const garmentsAll = useCloset((s) => s.garments);
   const looksAll = useCloset((s) => s.looks);
   const ensureLookbook = useCloset((s) => s.ensureLookbook);
-  const reshuffleWeek = useCloset((s) => s.reshuffleWeek);
-  const thisWeek = useCloset((s) => s.thisWeek);
   const wearToday = useCloset((s) => s.wearToday);
   const outfitWith = useCloset((s) => s.outfitWith);
   const [play, setPlay] = useState(false);
   const [weekPulse, setWeekPulse] = useState(0);
   const [weekNote, setWeekNote] = useState<string | null>(null);
-  const [reshuffleKey, setReshuffleKey] = useState<string | null>(null);
   const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]["id"]>("weekday");
   const [seasonChip, setSeasonChip] = useState<"auto" | Season>("auto");
   const [houseChip, setHouseChip] = useState<"all" | House>("all");
@@ -197,83 +188,72 @@ function LookbookPage() {
   const piecesFor = (look: Look) =>
     look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
-  const chipKey = `${occasion}:${houseChip}:${season}`;
-  const shown = useMemo(() => {
-    const row = thisWeek.filter((l) => l.occasion === occasion);
-    if (reshuffleKey === chipKey && row.length >= 3) return row;
-    return chapterVisible(book, garments, occasion, {
-      season,
-      house: houseChip,
-      color,
-      min: canBuild ? 3 : 0,
-      pad: false,
-    });
-  }, [thisWeek, reshuffleKey, chipKey, book, garments, occasion, season, houseChip, color, canBuild]);
-  const counterpart = useMemo(() => {
-    if (occasion !== "weekday" && occasion !== "weekend") return [];
-    const other = occasion === "weekday" ? "weekend" : "weekday";
-    return chapterVisible(book, garments, other, {
-      season,
-      house: houseChip,
-      color,
-      min: 0,
-    });
-  }, [book, garments, occasion, season, houseChip, color]);
-  const candidates = useMemo(
-    () => dropSharedTrios(shown, counterpart),
-    [shown, counterpart],
+  const chapterKey = `${occasion}:${houseChip}:${season}:${color ?? ""}`;
+  const [skip, setSkip] = useState<{ chapter: string; ids: string[][] } | null>(null);
+  const notThese = skip?.chapter === chapterKey ? skip.ids : [];
+  const wearRack = useMemo(() => {
+    const rows = composeRack(garments, season);
+    if (!color) return rows;
+    const chip = color.toLowerCase();
+    const matched = rows.filter((g) =>
+      g.colors.some((c) => c.toLowerCase() === chip) || g.name.toLowerCase().includes(chip),
+    );
+    return matched.length ? matched : rows;
+  }, [garments, season, color]);
+  const composeKey = composeCacheKey(
+    occasion,
+    season,
+    houseChip,
+    wearRack.map((g) => g.id),
+    notThese,
   );
-  const rows = useMemo(() => criticRows(candidates, garments), [candidates, garments]);
-  const verdictKey = criticCacheKey(occasion, season, houseChip, rows);
-  const [held, setHeld] = useState<Look[] | null>(null);
-  const [heldKey, setHeldKey] = useState("");
-  const rowsRef = useRef(rows);
-  const candidatesRef = useRef(candidates);
-  rowsRef.current = rows;
-  candidatesRef.current = candidates;
+  const [cards, setCards] = useState<{ look: Look; why: string }[]>([]);
+  const [waiting, setWaiting] = useState(false);
+  const rackRef = useRef(wearRack);
+  const notTheseRef = useRef(notThese);
+  rackRef.current = wearRack;
+  notTheseRef.current = notThese;
   useEffect(() => {
-    const key = verdictKey;
-    if (!rowsRef.current.length) {
-      setHeld([]);
-      setHeldKey(key);
-      return;
-    }
+    const key = composeKey;
+    const askRack = rackRef.current;
+    if (!askRack.length) return;
     let live = true;
-    void judgeOnce(key, async () => {
+    setWaiting(true);
+    void composeOnce(key, async () => {
       try {
-        const judged = await withTimeout(
-          judgeChapter({ data: { rows: rowsRef.current } }),
-          12_000,
+        const message = composeMessage(
+          askRack,
+          { occasion, season, house: houseChip },
+          notTheseRef.current,
         );
-        if (!judged?.ok) return { ok: false as const, error: "critic" };
-        return {
-          ok: true as const,
-          verdict: { keep: judged.keep, reject: judged.reject, why: judged.why },
-        };
+        const composed = await withTimeout(composeChapter({ data: { message } }), 12_000);
+        if (!composed?.ok) return { ok: false as const, error: "compose" };
+        const looks = validateCompose(composed.looks, askRack, notTheseRef.current);
+        if (!looks.length) return { ok: false as const, error: "compose" };
+        return { ok: true as const, looks };
       } catch {
-        return { ok: false as const, error: "critic" };
+        return { ok: false as const, error: "compose" };
       }
     }).then((result) => {
       if (!live) return;
-      const next = result.ok
-        ? applyCritic(candidatesRef.current, garments, result.verdict)
-        : fallbackChapter(candidatesRef.current, garments, lookClashes);
-      setHeld(next);
-      setHeldKey(key);
+      setWaiting(false);
+      if (!result.ok) {
+        if (notTheseRef.current.length) setWeekNote("Couldn't reshuffle — try again.");
+        return;
+      }
+      setCards(
+        result.looks.map((look) => ({
+          look: toShownLook(look, occasion),
+          why: look.why,
+        })),
+      );
+      if (notTheseRef.current.length) setWeekNote(`Reshuffle · ${result.looks.length} looks`);
     });
     return () => {
       live = false;
     };
-  }, [verdictKey, garments]);
-  const ready = heldKey === verdictKey && held !== null;
-  const visible = ready && held ? held : [];
-  const oneHolds = ready ? holdsLine(visible.length) : null;
-  const houseNote =
-    houseChip === "all" ? null : houseGapNote(houseChip, garments, occasion);
-  const plateNote = useMemo(
-    () => plateGapNote(garments, occasion, houseChip),
-    [garments, occasion, houseChip],
-  );
+  }, [composeKey, occasion, houseChip, season]);
+  const visible = cards;
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const usedN = garments.length - unused.length;
@@ -323,7 +303,7 @@ function LookbookPage() {
     return openId ? cardEls.current.get(openId) ?? null : null;
   }, [openId]);
 
-  const allOpenLooks = [...shown, ...heroShown, ...book, ...looksAll];
+  const allOpenLooks = [...cards.map((c) => c.look), ...heroShown, ...book, ...looksAll];
   const openLook =
     (dressed && dressed.id === openId ? dressed : null) ??
     looksAll.find((l) => l.id === openId) ??
@@ -468,22 +448,10 @@ function LookbookPage() {
       <button
         type="button"
         onClick={() => {
-          try {
-            const n = reshuffleWeek(
-              houseChip === "all" ? undefined : houseChip,
-              occasion,
-              season,
-            );
-            if (n < 3) {
-              setWeekNote("Couldn't reshuffle — try again.");
-              return;
-            }
-            setReshuffleKey(`${occasion}:${houseChip}:${season}`);
-            setWeekNote(`Reshuffle · ${n} looks`);
-            setWeekPulse((x) => x + 1);
-          } catch {
-            setWeekNote("Couldn't reshuffle — try again.");
-          }
+          const current = cards.map((c) => c.look.garmentIds).filter((ids) => ids.length >= 3);
+          if (!current.length) return;
+          setSkip({ chapter: chapterKey, ids: current });
+          setWeekPulse((x) => x + 1);
         }}
         className="inline-flex h-11 items-center border border-hairline px-4 text-sm text-ink hover:border-hairline-strong"
       >
@@ -534,8 +502,7 @@ function LookbookPage() {
       <section className="mt-10">
         <p className="micro text-ink-soft">This week</p>
         {weekNote && <p className="mt-1 micro text-ink-soft">{weekNote}</p>}
-        {oneHolds && <p className="mt-1 micro text-ink-soft">{oneHolds}</p>}
-        {!ready ? (
+        {waiting && visible.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">Building looks…</p>
         ) : visible.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">
@@ -546,7 +513,7 @@ function LookbookPage() {
               houseChip,
               color,
               canBuild,
-            ) ?? houseNote ?? "Nothing in this chapter holds."}
+            ) ?? "Nothing in this chapter holds."}
           </p>
         ) : (
           <ul
@@ -556,15 +523,10 @@ function LookbookPage() {
               weekPulse > 0 && "week-crossfade",
             )}
           >
-            {visible.map((look, i) => {
+            {cards.map((card, i) => {
+              const look = card.look;
               const pieces = piecesFor(look);
               if (pieces.length < 3) return null;
-              const thinHouse =
-                houseChip !== "all" &&
-                !lookFitsHouse(pieces, houseChip, occasion, garments);
-              const cardNote = thinHouse
-                ? `closest to ${HOUSE_LABEL[houseChip]}`
-                : (houseNote ?? plateNote);
               return (
                 <LookCard
                   key={look.id}
@@ -577,7 +539,7 @@ function LookbookPage() {
                       ? HOUSE_LABEL[leadHouse(pieces, occasion)]
                       : HOUSE_LABEL[houseChip]
                   }
-                  note={cardNote}
+                  note={card.why}
                   highlight={highlightId === look.id}
                   onOpen={() => {
                     lastAnchor.current = cardEls.current.get(look.id) ?? null;

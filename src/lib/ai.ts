@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { CAMERA_TAG_RULES, cameraPieceCategory } from "./camera-tag";
 import { CRITIC_MAX, CRITIC_SYSTEM, parseCriticVerdict, type CriticRow } from "./critic";
+import { COMPOSE_MODEL, COMPOSE_SYSTEM, COMPOSE_TEMPERATURE, parseCompose } from "./compose";
 import { livePool } from "./rack";
 import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
 import {
@@ -496,6 +497,33 @@ Last line MUST be exactly:
 LOOK: g_xxx,g_yyy,g_zzz
 IDs from the closet list only, in order top, bottom, footwear (outer optional). Never invent an id.
 Voice: quiet, sure, no emoji, no lecture. Pixels beat names. No invented layers.`;
+
+/** The stylist composes the chapter. grok-4.5, no images, no second model. */
+export const composeChapter = createServerFn({ method: "POST" })
+  .validator((input: { message: string }) => input)
+  .handler(async ({ data }): Promise<
+    { ok: true; looks: { ids: string[]; name: string; why: string }[] } | { ok: false; error: string }
+  > => {
+    const message = (data.message ?? "").trim();
+    if (!message) return { ok: false, error: "empty" };
+    const composed = await xaiFetch("https://api.x.ai/v1/chat/completions", {
+      model: COMPOSE_MODEL,
+      max_tokens: 500,
+      temperature: COMPOSE_TEMPERATURE,
+      messages: [
+        { role: "system", content: COMPOSE_SYSTEM },
+        { role: "user", content: message },
+      ],
+    });
+    if (!composed.ok) {
+      return { ok: false, error: composed.status === 403 ? "403" : composed.error || "compose" };
+    }
+    const body = composed.json as { choices?: { message?: { content?: string } }[] };
+    const text = body.choices?.[0]?.message?.content ?? "";
+    const looks = parseCompose(text);
+    if (!looks) return { ok: false, error: "compose" };
+    return { ok: true, looks };
+  });
 
 /** One chapter, one call. grok-4.5 only. No images. */
 export const judgeChapter = createServerFn({ method: "POST" })
