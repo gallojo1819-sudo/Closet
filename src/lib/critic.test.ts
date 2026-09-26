@@ -14,6 +14,7 @@ import {
   holdsLine,
   judgeOnce,
   parseCriticVerdict,
+  savedLooksAfterCritic,
 } from "./critic.ts";
 import { lookClashes, lookFitsOccasion } from "./lookbook.ts";
 import type { Garment, Look } from "./types.ts";
@@ -143,6 +144,22 @@ describe("chapter critic", () => {
     assert.equal(CRITIC_SYSTEM.includes("Do not invent a piece"), true);
     assert.equal(badCriticName("Brown top"), true);
     assert.equal(badCriticName("New piece"), true);
+  });
+
+  it("a rejected look stays in the saved array", () => {
+    const saved = [
+      look("office", ["ox", "tr", "lf"], "weekday"),
+      look("costume", ["hd", "tr", "lf"], "weekday"),
+    ];
+    const marked = savedLooksAfterCritic(saved, {
+      keep: ["ox,tr,lf"],
+      reject: ["hd,lf,tr"],
+      why: "Hoodie with loafers.",
+    });
+    assert.deepEqual(marked.map((l) => l.id), ["office", "costume"]);
+    assert.equal(marked[1]?.rejected, true);
+    assert.equal(marked[0]?.rejected, undefined);
+    assert.equal(saved[1]?.rejected, undefined);
   });
 
   it("the critic may reject a composed look and may not add an engine trio", () => {

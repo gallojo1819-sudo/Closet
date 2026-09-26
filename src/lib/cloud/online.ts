@@ -8,22 +8,32 @@ export type LinkAction = "push" | "pull" | "union" | "keep";
 export function onOnlineIntent(input: {
   online: boolean;
   signedIn: boolean;
-  localCount: number;
+  /** A user edit that has not been saved yet. A full rack is not an edit. */
+  pendingEdit?: boolean;
+  /** False until this client has pulled and merged. */
+  pulled?: boolean;
+  localCount?: number;
   localOnly?: boolean;
 }): "push" | "idle" {
+  void input.localCount;
+  void input.localOnly;
   if (!input.online || !input.signedIn) return "idle";
-  if (input.localOnly) return "push";
-  if (input.localCount > 0) return "push";
-  return "idle";
+  if (!input.pulled || !input.pendingEdit) return "idle";
+  return "push";
 }
 
-/** Visible/focus after a dead network: push local, never pull [] over 145. */
+/**
+ * Focus and visibility pull and merge. They do not write.
+ * A pending user edit may push only after that pull.
+ */
 export function visibleCloudIntent(input: {
   action: LinkAction;
   appliedCloud: boolean;
+  pendingEdit?: boolean;
 }): "apply" | "push" | "idle" {
+  void input.action;
   if (input.appliedCloud) return "apply";
-  if (input.action === "push" || input.action === "union") return "push";
+  if (input.pendingEdit) return "push";
   return "idle";
 }
 

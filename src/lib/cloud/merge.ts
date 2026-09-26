@@ -12,9 +12,17 @@ export type CloudGarment = {
   demo?: boolean;
   imageSrc?: string;
   cutoutSrc?: string;
+  /** Durable delete. Not a live piece. */
+  tombstone?: boolean;
+  name?: string;
 };
 
-export type CloudLook = { id: string; garmentIds: string[] };
+export type CloudLook = {
+  id: string;
+  garmentIds: string[];
+  tombstone?: boolean;
+  name?: string;
+};
 
 export type CloudJournal = { date: string; garmentIds: string[] };
 
@@ -27,7 +35,14 @@ export type CloudMeta = {
   avoid: Record<string, number>;
   drop: CloudDrop;
   refPhoto: boolean;
+  /** Schema generation. Stays 6. Conflict checks use `rev`, not this. */
   v: number;
+  /** Monotonic row revision. Absent until the closet_meta_push migration. */
+  rev?: number;
+  updatedAt?: string;
+  /** Ids removed on purpose. Absence from the live array is not a delete. */
+  deletedGarments?: string[];
+  deletedLooks?: string[];
 };
 
 export type LinkAction = "push" | "pull" | "union" | "keep";
@@ -69,48 +84,106 @@ export function preferAccountSrcs<T extends CloudGarment>(local: T, cloud: T | u
   return { ...cloud, ...local, imageSrc, cutoutSrc };
 }
 
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 /**
- * First link (lastCloudIds === null): union by id.
- * Later: cloud is the account; local-only ids that were in lastCloudIds were
- * removed on another device; local-only ids that were not are unpushed adds.
+ * Three-way field merge. A side that still matches `base` did not edit that
+ * field, so the other side's edit wins. Image srcs still prefer closet_meta sb:.
+ */
+export function mergeGarmentFields<T extends CloudGarment>(base: T | undefined, local: T, cloud: T): T {
+  const srcs = preferAccountSrcs(local, cloud);
+  if (!base) return srcs;
+  const out: Record<string, unknown> = { ...cloud };
+  const keys = new Set([
+    ...Object.keys(base),
+    ...Object.keys(local),
+    ...Object.keys(cloud),
+  ]);
+  for (const key of keys) {
+    if (key === "imageSrc" || key === "cutoutSrc") continue;
+    const b = (base as Record<string, unknown>)[key];
+    const l = (local as Record<string, unknown>)[key];
+    const c = (cloud as Record<string, unknown>)[key];
+    if (!sameJson(l, b) && sameJson(c, b)) out[key] = l;
+    else out[key] = c;
+  }
+  out.imageSrc = srcs.imageSrc;
+  out.cutoutSrc = srcs.cutoutSrc;
+  return out as T;
+}
+
+/**
+ * Union by id. A missing id is not a delete — only tombstones remove a piece.
+ * `lastCloudIds` used to treat "was synced, now absent" as a remote delete.
+ * That let a shrunk upsert erase sneakers on every other phone. It is ignored.
  */
 export function mergeGarments<T extends CloudGarment>(opts: {
   local: T[];
   cloud: T[];
   lastCloudIds: string[] | null;
-  /** Deleted on this phone. Cloud must not bring them back, even on first link. */
+  /** Deleted on purpose. Cloud must not bring them back, even on first link. */
   tombstones?: string[];
+  /** Last pulled records, for concurrent edits to different pieces. */
+  base?: T[] | null;
 }): T[] {
+  void opts.lastCloudIds;
   const dead = new Set(opts.tombstones ?? []);
-  const localReal = accountPool(opts.local).filter((g) => !dead.has(g.id));
-  const cloudReal = accountPool(opts.cloud).filter((g) => !dead.has(g.id));
-  if (cloudReal.length === 0) return localReal;
+  const live = (rows: T[]) =>
+    accountPool(rows).filter((g) => g.tombstone !== true && !dead.has(g.id));
+  const localReal = live(opts.local);
+  const cloudReal = live(opts.cloud);
+  const baseReal = live(opts.base ?? []);
+  if (cloudReal.length === 0 && localReal.length === 0 && baseReal.length === 0) return [];
+  const localMap = new Map(localReal.map((g) => [g.id, g]));
   const cloudMap = new Map(cloudReal.map((g) => [g.id, g]));
-  if (opts.lastCloudIds === null) {
-    return unionById(localReal, cloudReal).map((g) => preferAccountSrcs(g, cloudMap.get(g.id)));
+  const baseMap = new Map(baseReal.map((g) => [g.id, g]));
+  const ids = new Set<string>([...localMap.keys(), ...cloudMap.keys(), ...baseMap.keys()]);
+  const next: T[] = [];
+  for (const id of ids) {
+    if (dead.has(id)) continue;
+    const local = localMap.get(id);
+    const cloud = cloudMap.get(id);
+    const base = baseMap.get(id);
+    if (local && cloud) next.push(mergeGarmentFields(base, local, cloud));
+    else if (local) next.push(local);
+    else if (cloud) next.push(cloud);
+    else if (base) next.push(base);
   }
-
-  const last = new Set(opts.lastCloudIds);
-  const cloudIds = new Set(cloudReal.map((g) => g.id));
-  const next = new Map<string, T>();
-  for (const g of cloudReal) next.set(g.id, g);
-  for (const g of localReal) {
-    if (cloudIds.has(g.id)) {
-      next.set(g.id, preferAccountSrcs(g, cloudMap.get(g.id)));
-      continue;
-    }
-    if (!last.has(g.id)) next.set(g.id, g);
-  }
-  return [...next.values()];
+  return next;
 }
 
-export function mergeLooks<T extends CloudLook>(local: T[], cloud: T[], allowed: Set<string>): T[] {
-  const merged = unionById(local, cloud);
+export function mergeLooks<T extends CloudLook>(
+  local: T[],
+  cloud: T[],
+  allowed: Set<string>,
+  deleted?: Set<string>,
+  base?: T[] | null,
+): T[] {
+  const dead = deleted ?? new Set<string>();
+  const keep = (rows: T[]) => rows.filter((l) => l.tombstone !== true && !dead.has(l.id));
+  const localMap = new Map(keep(local).map((l) => [l.id, l]));
+  const cloudMap = new Map(keep(cloud).map((l) => [l.id, l]));
+  const baseMap = new Map(keep(base ?? []).map((l) => [l.id, l]));
+  const ids = new Set<string>([...cloudMap.keys(), ...localMap.keys(), ...baseMap.keys()]);
   const out: T[] = [];
-  for (const look of merged) {
-    const ids = look.garmentIds.filter((id) => allowed.has(id));
-    if (ids.length < 2) continue;
-    out.push(ids.length === look.garmentIds.length ? look : { ...look, garmentIds: ids });
+  for (const id of ids) {
+    const localLook = localMap.get(id);
+    const cloudLook = cloudMap.get(id);
+    const baseLook = baseMap.get(id);
+    let pick: T | undefined;
+    if (localLook && cloudLook) {
+      if (baseLook && sameJson(localLook, baseLook)) pick = cloudLook;
+      else if (baseLook && sameJson(cloudLook, baseLook)) pick = localLook;
+      else pick = { ...cloudLook, ...localLook, id };
+    } else {
+      pick = localLook ?? cloudLook ?? baseLook;
+    }
+    if (!pick) continue;
+    const garmentIds = pick.garmentIds.filter((gid) => allowed.has(gid));
+    if (garmentIds.length < 2) continue;
+    out.push(garmentIds.length === pick.garmentIds.length ? pick : { ...pick, garmentIds });
   }
   return out;
 }
@@ -157,28 +230,63 @@ export type MergeResult<T extends CloudMeta> = {
   appliedCloud: boolean;
 };
 
+function uniqIds(ids: Array<string | undefined>): string[] {
+  return [...new Set(ids.filter((id): id is string => Boolean(id)))];
+}
+
 export function mergeAccount<T extends CloudMeta>(opts: {
   local: T;
   cloud: T | null;
   lastCloudIds: string[] | null;
   tombstones?: string[];
+  deletedLooks?: string[];
+  /** Last pulled snapshot. Concurrent edits to different pieces both survive. */
+  base?: T | null;
 }): MergeResult<T> {
   const localCount = accountPool(opts.local.garments).length;
   const cloudCount = opts.cloud ? accountPool(opts.cloud.garments).length : 0;
   const action = decideLink(localCount, cloudCount);
+  const deletedGarments = uniqIds([
+    ...(opts.tombstones ?? []),
+    ...(opts.local.deletedGarments ?? []),
+    ...(opts.cloud?.deletedGarments ?? []),
+    ...opts.local.garments.filter((g) => g.tombstone).map((g) => g.id),
+    ...(opts.cloud?.garments ?? []).filter((g) => g.tombstone).map((g) => g.id),
+  ]);
+  const deletedLooks = uniqIds([
+    ...(opts.deletedLooks ?? []),
+    ...(opts.local.deletedLooks ?? []),
+    ...(opts.cloud?.deletedLooks ?? []),
+    ...opts.local.looks.filter((l) => l.tombstone).map((l) => l.id),
+    ...(opts.cloud?.looks ?? []).filter((l) => l.tombstone).map((l) => l.id),
+  ]);
+  const stamped = {
+    ...opts.local,
+    deletedGarments,
+    deletedLooks,
+  };
 
-  if (!shouldApplyCloud(localCount, cloudCount) || !opts.cloud) {
-    return { action, next: opts.local, appliedCloud: false };
+  // No row, or an empty row with no tombstones, must not wipe the phone.
+  // A tombstone is the only way an empty live rack deletes a piece.
+  if (!opts.cloud || (!shouldApplyCloud(localCount, cloudCount) && deletedGarments.length === 0 && deletedLooks.length === 0)) {
+    return { action, next: stamped, appliedCloud: false };
   }
 
   const garments = mergeGarments({
     local: opts.local.garments,
     cloud: opts.cloud.garments,
     lastCloudIds: opts.lastCloudIds,
-    tombstones: opts.tombstones,
+    tombstones: deletedGarments,
+    base: opts.base?.garments ?? null,
   });
   const allowed = new Set(garments.filter((g) => !g.archived).map((g) => g.id));
-  const looks = mergeLooks(opts.local.looks, opts.cloud.looks, allowed);
+  const looks = mergeLooks(
+    opts.local.looks,
+    opts.cloud.looks,
+    allowed,
+    new Set(deletedLooks),
+    opts.base?.looks ?? null,
+  );
   const journal = mergeJournal(opts.local.journal, opts.cloud.journal, allowed);
   const avoid = mergeAvoid(opts.local.avoid, opts.cloud.avoid, allowed);
   const drop = mergeDrop(opts.local.drop, opts.cloud.drop, allowed);
@@ -188,7 +296,7 @@ export function mergeAccount<T extends CloudMeta>(opts: {
     action,
     appliedCloud: true,
     next: {
-      ...opts.local,
+      ...stamped,
       garments,
       looks,
       journal,
@@ -196,6 +304,8 @@ export function mergeAccount<T extends CloudMeta>(opts: {
       drop,
       refPhoto,
       v: opts.cloud.v || opts.local.v || 6,
+      rev: typeof opts.cloud.rev === "number" ? opts.cloud.rev : opts.local.rev,
+      updatedAt: opts.cloud.updatedAt ?? opts.local.updatedAt,
     },
   };
 }

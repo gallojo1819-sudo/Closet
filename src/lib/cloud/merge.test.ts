@@ -127,18 +127,40 @@ describe("mergeGarments", () => {
     assert.deepEqual(next.map((x) => x.id).sort(), ["keep", "new-on-phone"]);
   });
 
-  it("after first link, a cloud delete drops that id; unpushed local adds stay", () => {
+  it("a missing cloud id is not a delete; only a tombstone drops it", () => {
     const local = [g("keep"), g("gone"), g("new-on-phone")];
     const cloud = [g("keep")];
-    const next = mergeGarments({
+    const kept = mergeGarments({
       local,
       cloud,
       lastCloudIds: ["keep", "gone"],
     });
-    assert.deepEqual(
-      next.map((x) => x.id).sort(),
-      ["keep", "new-on-phone"],
-    );
+    assert.deepEqual(kept.map((x) => x.id).sort(), ["gone", "keep", "new-on-phone"]);
+    const dropped = mergeGarments({
+      local,
+      cloud,
+      lastCloudIds: ["keep", "gone"],
+      tombstones: ["gone"],
+    });
+    assert.deepEqual(dropped.map((x) => x.id).sort(), ["keep", "new-on-phone"]);
+  });
+
+  it("concurrent edits to different garments both survive", () => {
+    const base = [
+      { id: "g1", name: "one" },
+      { id: "g2", name: "two" },
+    ];
+    const local = [
+      { id: "g1", name: "one" },
+      { id: "g2", name: "beta" },
+    ];
+    const cloud = [
+      { id: "g1", name: "alpha" },
+      { id: "g2", name: "two" },
+    ];
+    const next = mergeGarments({ local, cloud, lastCloudIds: ["g1", "g2"], base });
+    assert.equal(next.find((g) => g.id === "g1")?.name, "alpha");
+    assert.equal(next.find((g) => g.id === "g2")?.name, "beta");
   });
 });
 

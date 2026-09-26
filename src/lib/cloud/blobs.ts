@@ -12,6 +12,7 @@ import {
   garmentObjectPath,
   getSupabase,
 } from "./client.ts";
+import { decideBlobPut, isAlreadyStored } from "./guard.ts";
 import { parseCloudSrc } from "./src.ts";
 import {
   OPEN_THUMB_CONCURRENCY,
@@ -21,6 +22,7 @@ import {
 
 const inflight = new Map<string, Promise<boolean>>();
 const uploaded = new Set<string>();
+const folderCache = new Map<string, Set<string>>();
 const signedCache = new Map<string, { url: string; exp: number }>();
 const reportedCloud = new Set<string>();
 
@@ -255,29 +257,70 @@ export async function countListedThumbs(userId: string): Promise<number> {
   return countTjpgFromLists(level1, nested);
 }
 
+async function remoteFolder(userId: string, garmentId: string): Promise<Set<string> | null> {
+  const folder = `${userId}/${garmentId}`;
+  const cached = folderCache.get(folder);
+  if (cached) return cached;
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb.storage.from(closetImagesBucket()).list(folder, { limit: 20 });
+  if (error) return null;
+  const names = new Set((data ?? []).map((row) => row.name).filter(Boolean));
+  folderCache.set(folder, names);
+  return names;
+}
+
+function rememberRemote(userId: string, garmentId: string, name: string) {
+  const folder = `${userId}/${garmentId}`;
+  const names = folderCache.get(folder) ?? new Set<string>();
+  names.add(name);
+  folderCache.set(folder, names);
+}
+
 export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Promise<boolean> {
   const mark = `${g.id}:${kind}`;
   if (uploaded.has(mark)) return true;
   const sb = getSupabase();
   if (!sb) return false;
+  const fileName = `${kind}.jpg`;
+  const listed = await remoteFolder(userId, g.id);
+  const remoteExists = listed?.has(fileName) ?? false;
+  if (remoteExists) {
+    uploaded.add(mark);
+    return true;
+  }
   const raw = await blobFor(g, kind);
-  if (!raw) return kind !== "t";
+  if (
+    decideBlobPut({
+      alreadyUploaded: false,
+      remoteExists,
+      hasLocalBlob: Boolean(raw),
+    }) === "skip"
+  ) {
+    return kind !== "t";
+  }
   let blob: Blob;
   try {
-    blob = await blobAsJpeg(raw);
+    blob = await blobAsJpeg(raw!);
   } catch (err) {
     setLocalOnly(true);
     throw err;
   }
   const path = garmentObjectPath(userId, g.id, kind);
   const { error } = await sb.storage.from(closetImagesBucket()).upload(path, blob, {
-    upsert: true,
+    upsert: false,
     contentType: "image/jpeg",
   });
   if (error) {
+    if (isAlreadyStored(error)) {
+      rememberRemote(userId, g.id, fileName);
+      uploaded.add(mark);
+      return true;
+    }
     setLocalOnly(true);
     throw error;
   }
+  rememberRemote(userId, g.id, fileName);
   const { data: landed, error: dlErr } = await sb.storage
     .from(closetImagesBucket())
     .download(path);

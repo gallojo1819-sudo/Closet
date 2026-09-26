@@ -309,6 +309,7 @@ function LookbookPage() {
           looks = settleCompose(again.looks, askRack, blocked);
           if (!looks.length) return { ok: false as const, error: "repeat" };
         }
+        // Hide a rejected composed card. This is not the saved looks array.
         const survived = criticRejectOnly(
           looks.map((look) => toShownLook(look, occasion)),
           askRack,
