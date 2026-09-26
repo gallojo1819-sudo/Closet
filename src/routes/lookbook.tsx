@@ -28,8 +28,11 @@ import {
   composeRack,
   keepCardsOnFail,
   NOT_ON_RACK,
+  NOT_THESE_LINE,
   peekCompose,
   rememberCompose,
+  repeatsBlocked,
+  RESHUFFLING,
   settleCompose,
   STYLIST_HOLDS,
   STYLIST_SILENT,
@@ -259,7 +262,8 @@ function LookbookPage() {
   useEffect(() => {
     const askRack = rackRef.current;
     const paint = chapterPaint(peekCompose(stableKey));
-    if (!paint.call && !forceRef.current) return;
+    const forcing = forceRef.current;
+    if (!paint.call && !forcing) return;
     forceRef.current = false;
     if (!askRack.length) {
       setScreen((s) => (s.key === stableKey ? { ...s, waiting: false } : s));
@@ -268,7 +272,14 @@ function LookbookPage() {
     let live = true;
     const blocked = notTheseRef.current;
     setScreen((s) =>
-      s.key === stableKey ? { ...s, waiting: true, miss: null, cards: paint.showCards ? s.cards : [] } : s,
+      s.key === stableKey
+        ? {
+            ...s,
+            waiting: true,
+            miss: null,
+            cards: forcing ? [] : paint.showCards ? s.cards : [],
+          }
+        : s,
     );
     void composeOnce(`${stableKey}|try|${attempt}|gen|${reshuffleGen}`, async () => {
       const ask = async (extra?: string) => {
@@ -291,7 +302,13 @@ function LookbookPage() {
           turned = await ask(NOT_ON_RACK);
         }
         if (!turned.ok) return turned;
-        const looks = settleCompose(turned.looks, askRack, blocked);
+        let looks = settleCompose(turned.looks, askRack, blocked);
+        if (!looks.length && repeatsBlocked(turned.looks, blocked)) {
+          const again = await ask(NOT_THESE_LINE);
+          if (!again.ok) return again;
+          looks = settleCompose(again.looks, askRack, blocked);
+          if (!looks.length) return { ok: false as const, error: "repeat" };
+        }
         const survived = criticRejectOnly(
           looks.map((look) => toShownLook(look, occasion)),
           askRack,
@@ -313,7 +330,7 @@ function LookbookPage() {
           const keep = keepCardsOnFail(s.cards.length > 0, kind);
           return { ...s, waiting: false, miss: kind, cards: keep ? s.cards : [] };
         });
-        if (reshuffleRef.current && kind === "silent") setWeekNote("Couldn't reshuffle — try again.");
+        if (reshuffleRef.current) setWeekNote(null);
         return;
       }
       rememberCompose(stableKey, result.looks);
@@ -531,7 +548,6 @@ function LookbookPage() {
         type="button"
         onClick={() => {
           const current = cards.map((c) => c.look.garmentIds).filter((ids) => ids.length >= 3);
-          if (!current.length) return;
           const prior = blockedRef.current.get(stableKey) ?? [];
           const seen = new Set(prior.map((ids) => [...ids].sort().join(",")));
           const next = [...prior];
@@ -542,6 +558,8 @@ function LookbookPage() {
           blockedRef.current.set(stableKey, next);
           setSkip({ chapter: chapterKey, ids: next });
           forceRef.current = true;
+          setScreen((s) => ({ ...s, key: stableKey, cards: [], waiting: true, miss: null }));
+          setWeekNote(RESHUFFLING);
           setReshuffleGen((n) => n + 1);
           setWeekPulse((x) => x + 1);
         }}
@@ -610,7 +628,9 @@ function LookbookPage() {
           </p>
         )}
         {waiting && visible.length === 0 ? (
-          <p className="mt-3 text-sm text-ink-soft">Building looks…</p>
+          weekNote === RESHUFFLING ? null : (
+            <p className="mt-3 text-sm text-ink-soft">Building looks…</p>
+          )
         ) : visible.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">
             {emptyFilterCopy(

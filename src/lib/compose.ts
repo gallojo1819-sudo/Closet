@@ -15,6 +15,8 @@ export const COMPOSE_MAX_TOKENS = 1200;
 export const STYLIST_SILENT = "The stylist didn’t answer — try again.";
 export const STYLIST_HOLDS = "Nothing in this chapter holds.";
 export const NOT_ON_RACK = "those ids are not on the rack.";
+export const NOT_THESE_LINE = "not these ids.";
+export const RESHUFFLING = "Reshuffling…";
 
 export const COMPOSE_SYSTEM = `You dress Joe, 5′8, NYC.
 Weekday is Ralph: a shirt, polo, or knit, a trouser or a clean jean, a leather shoe. A jacket only if it finishes the look. Out is the same idea, sharper, after dark. Weekend is easier: jean, knit or hoodie, sneaker or boot. Travel is the same clothes, one layer he can take off. Comfy is knit, cord or jean, a shoe he can walk in.
@@ -160,6 +162,13 @@ function hoodieWithLoafer(pieces: Garment[]): boolean {
  * Drop an invented id. Drop a look that then has fewer than three real pieces.
  * Drop a costume and a look that repeats the previous one.
  */
+/** Every returned look is one of the banned id sets. */
+export function repeatsBlocked(raw: ComposedLook[], blocked: string[][]): boolean {
+  if (!raw.length || !blocked.length) return false;
+  const ban = new Set(blocked.map((ids) => [...ids].sort().join(",")));
+  return raw.every((look) => ban.has([...look.ids].sort().join(",")));
+}
+
 export function allIdsInvented(raw: ComposedLook[], rack: Garment[]): boolean {
   const ids = raw.flatMap((look) => look.ids);
   if (!ids.length) return false;

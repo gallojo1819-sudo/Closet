@@ -17,6 +17,7 @@ import {
   parseCompose,
   peekCompose,
   rememberCompose,
+  repeatsBlocked,
   settleCompose,
   STYLIST_HOLDS,
   STYLIST_SILENT,
@@ -186,6 +187,24 @@ describe("stylist compose", () => {
       rack,
     );
     assert.equal(onlyHoodie.length, 0);
+  });
+
+  it("reshuffle retries the same ids once and does not call that an empty chapter", () => {
+    const banned = ["g_ox", "g_tr", "g_lf"];
+    const same = [{ ids: [...banned], name: "Again", why: "Same three." }];
+    assert.equal(repeatsBlocked(same, [banned]), true);
+    const dropped = settleCompose(same, rack, [banned]);
+    assert.equal(dropped.length, 0);
+    assert.equal(stylistMiss("repeat"), "silent");
+    assert.notEqual(stylistMiss("repeat"), "holds");
+    const summer = composeMessage(rack, { occasion: "weekday", season: "summer", house: "all" });
+    const winter = composeMessage(rack, { occasion: "weekday", season: "winter", house: "all" });
+    assert.equal(summer.includes("Ask: weekday, summer, all."), true);
+    assert.equal(winter.includes("Ask: weekday, winter, all."), true);
+    assert.notEqual(
+      composeCacheKey("weekday", "summer", "all", rack.map((g) => g.id)),
+      composeCacheKey("weekday", "winter", "all", rack.map((g) => g.id)),
+    );
   });
 
   it("a chip change clears unless that chapter is already cached", async () => {
