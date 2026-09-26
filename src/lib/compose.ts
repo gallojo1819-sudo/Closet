@@ -23,7 +23,7 @@ Italian is a knit or a camp collar, a trouser, a suede loafer. Sweet Stable may 
 One top. One bottom. One shoe. One jacket or none. A hoodie is never a coat.
 Refuse a costume: graphic knit with pleats and loafers, two loud patterns, blazer with rugby, blazer with a mule.
 Prefer pieces he has not worn. Do not invent a name or an id.
-Return JSON only: an object {"looks":[{"ids":[],"name":"Quiet office","why":"one sentence"}]}.
+Return JSON only: looks, each with ids, name, and why.
 Copy ids from the list, character for character. An id you invent will be thrown out.
 Three looks, or fewer if only one is honest. Two looks must differ in at least two pieces.`;
 
@@ -216,7 +216,7 @@ export function settleCompose(
 }
 
 export function stylistMiss(error: string): "silent" | "holds" {
-  if (error === "holds" || error === "empty" || error === "compose") return "holds";
+  if (error === "holds") return "holds";
   return "silent";
 }
 

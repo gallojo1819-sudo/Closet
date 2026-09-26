@@ -152,6 +152,8 @@ describe("stylist compose", () => {
     assert.notEqual(STYLIST_SILENT, STYLIST_HOLDS);
     assert.equal(stylistMiss("timeout"), "silent");
     assert.equal(stylistMiss("403"), "silent");
+    assert.equal(stylistMiss("empty"), "silent");
+    assert.equal(stylistMiss("compose"), "silent");
     assert.equal(stylistMiss("holds"), "holds");
     assert.equal(STYLIST_SILENT, "The stylist didn’t answer — try again.");
     const invented = [{ ids: ["g_...", "g_...", "g_..."], name: "Fake", why: "No." }];
