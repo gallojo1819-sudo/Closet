@@ -1,14 +1,22 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  allIdsInvented,
+  COMPOSE_MAX_TOKENS,
   COMPOSE_MODEL,
+  COMPOSE_SYSTEM,
   COMPOSE_TEMPERATURE,
+  COMPOSE_TIMEOUT_MS,
   clearComposeCache,
   composeCacheKey,
   composeMessage,
   composeOnce,
   composeRack,
   parseCompose,
+  settleCompose,
+  STYLIST_HOLDS,
+  STYLIST_SILENT,
+  stylistMiss,
   validateCompose,
 } from "./compose.ts";
 import type { Garment } from "./types.ts";
@@ -134,6 +142,44 @@ describe("stylist compose", () => {
     const weekend = composeCacheKey("weekend", "fall", "polo", ["g_ox", "g_tr", "g_lf"]);
     await composeOnce(weekend, run);
     assert.equal(calls, 2);
+  });
+
+  it("a timeout is not the same sentence as an empty chapter", () => {
+    assert.equal(COMPOSE_TIMEOUT_MS, 45_000);
+    assert.equal(COMPOSE_MAX_TOKENS, 1200);
+    assert.equal(COMPOSE_SYSTEM.includes("g_..."), false);
+    assert.equal(COMPOSE_SYSTEM.includes("character for character"), true);
+    assert.notEqual(STYLIST_SILENT, STYLIST_HOLDS);
+    assert.equal(stylistMiss("timeout"), "silent");
+    assert.equal(stylistMiss("403"), "silent");
+    assert.equal(stylistMiss("holds"), "holds");
+    assert.equal(STYLIST_SILENT, "The stylist didn’t answer — try again.");
+    const invented = [{ ids: ["g_...", "g_...", "g_..."], name: "Fake", why: "No." }];
+    assert.equal(allIdsInvented(invented, rack), true);
+    const kept = settleCompose(invented, rack);
+    assert.equal(kept.length, 0);
+  });
+
+  it("three real looks survive when the clash check would delete all of them", () => {
+    const blazer = piece({ id: "g_bz", name: "Navy blazer", category: "outerwear", subtype: "blazer" });
+    const rugby = piece({ id: "g_rg", name: "Navy rugby", category: "top", subtype: "rugby" });
+    const mule = piece({ id: "g_mu", name: "Brown mule", category: "footwear", subtype: "mule", colors: ["brown"] });
+    const wide = [...rack, blazer, rugby, mule];
+    const shown = settleCompose(
+      [
+        { ids: ["g_hd", "g_jn", "g_lf"], name: "One", why: "The model wrote this." },
+        { ids: ["g_bz", "g_rg", "g_sn"], name: "Two", why: "Still the model." },
+        { ids: ["g_bz", "g_tr", "g_mu"], name: "Three", why: "A blazer and a mule." },
+      ],
+      wide,
+    );
+    assert.equal(shown.length, 3);
+    assert.equal(shown.every((look) => look.ids.every((id) => wide.some((g) => g.id === id))), true);
+    const onlyHoodie = settleCompose(
+      [{ ids: ["g_hd", "g_jn", "g_lf"], name: "Costume", why: "No." }],
+      rack,
+    );
+    assert.equal(onlyHoodie.length, 0);
   });
 
   it("a failed call does not invent a regex trio", () => {

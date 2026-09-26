@@ -158,11 +158,23 @@ export function criticRejectOnly(
       .filter((g): g is Garment => Boolean(g));
     if (pieces.length < 3) continue;
     if (pieces.some((g) => badCriticName(g.name))) continue;
-    if (lookClashes(pieces)) continue;
     const key = criticKey(look.garmentIds);
     if (reject.has(key) || seen.has(key)) continue;
+    if (lookClashes(pieces)) {
+      seen.add(key);
+      continue;
+    }
     seen.add(key);
     out.push(look);
+  }
+  const clashed = looks.filter((look) => {
+    const pieces = look.garmentIds
+      .map((id) => byId.get(id))
+      .filter((g): g is Garment => Boolean(g));
+    return pieces.length >= 3 && !pieces.some((g) => badCriticName(g.name)) && lookClashes(pieces);
+  });
+  if (!out.length && clashed.length >= 3) {
+    return clashed.filter((look) => !reject.has(criticKey(look.garmentIds)));
   }
   return out;
 }

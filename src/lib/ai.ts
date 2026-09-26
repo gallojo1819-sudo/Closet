@@ -1,7 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { CAMERA_TAG_RULES, cameraPieceCategory } from "./camera-tag";
 import { CRITIC_MAX, CRITIC_SYSTEM, parseCriticVerdict, type CriticRow } from "./critic";
-import { COMPOSE_MODEL, COMPOSE_SYSTEM, COMPOSE_TEMPERATURE, parseCompose } from "./compose";
+import {
+  COMPOSE_MAX_TOKENS,
+  COMPOSE_MODEL,
+  COMPOSE_SYSTEM,
+  COMPOSE_TEMPERATURE,
+  parseCompose,
+} from "./compose";
 import { livePool } from "./rack";
 import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
 import {
@@ -506,22 +512,35 @@ export const composeChapter = createServerFn({ method: "POST" })
   > => {
     const message = (data.message ?? "").trim();
     if (!message) return { ok: false, error: "empty" };
-    const composed = await xaiFetch("https://api.x.ai/v1/chat/completions", {
-      model: COMPOSE_MODEL,
-      max_tokens: 500,
-      temperature: COMPOSE_TEMPERATURE,
-      messages: [
-        { role: "system", content: COMPOSE_SYSTEM },
-        { role: "user", content: message },
-      ],
-    });
-    if (!composed.ok) {
-      return { ok: false, error: composed.status === 403 ? "403" : composed.error || "compose" };
+    const ask = async (prompt: string) => {
+      const composed = await xaiFetch("https://api.x.ai/v1/chat/completions", {
+        model: COMPOSE_MODEL,
+        max_tokens: COMPOSE_MAX_TOKENS,
+        temperature: COMPOSE_TEMPERATURE,
+        messages: [
+          { role: "system", content: COMPOSE_SYSTEM },
+          { role: "user", content: prompt },
+        ],
+      });
+      if (!composed.ok) {
+        return {
+          ok: false as const,
+          error: composed.status === 403 ? "403" : composed.error || "compose",
+          text: "",
+        };
+      }
+      const body = composed.json as { choices?: { message?: { content?: string } }[] };
+      return { ok: true as const, error: "", text: body.choices?.[0]?.message?.content ?? "" };
+    };
+    let turned = await ask(message);
+    if (!turned.ok) return { ok: false, error: turned.error };
+    let looks = turned.text.trim() ? parseCompose(turned.text) : null;
+    if (!turned.text.trim() || !looks) {
+      turned = await ask(message);
+      if (!turned.ok) return { ok: false, error: turned.error };
+      looks = turned.text.trim() ? parseCompose(turned.text) : null;
     }
-    const body = composed.json as { choices?: { message?: { content?: string } }[] };
-    const text = body.choices?.[0]?.message?.content ?? "";
-    const looks = parseCompose(text);
-    if (!looks) return { ok: false, error: "compose" };
+    if (!looks) return { ok: false, error: "empty" };
     return { ok: true, looks };
   });
 

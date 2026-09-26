@@ -19,12 +19,18 @@ import {
 } from "@/lib/lookbook";
 import { composeChapter } from "@/lib/ai";
 import {
+  allIdsInvented,
+  COMPOSE_TIMEOUT_MS,
   composeCacheKey,
   composeMessage,
   composeOnce,
   composeRack,
+  NOT_ON_RACK,
+  settleCompose,
+  STYLIST_HOLDS,
+  STYLIST_SILENT,
+  stylistMiss,
   toShownLook,
-  validateCompose,
 } from "@/lib/compose";
 import { criticKey, criticRejectOnly } from "@/lib/critic";
 import { withTimeout } from "@/lib/ingest";
@@ -201,13 +207,15 @@ function LookbookPage() {
     );
     return matched.length ? matched : rows;
   }, [garments, season, color]);
-  const composeKey = composeCacheKey(
+  const [attempt, setAttempt] = useState(0);
+  const [miss, setMiss] = useState<"silent" | "holds" | null>(null);
+  const composeKey = `${composeCacheKey(
     occasion,
     season,
     houseChip,
     wearRack.map((g) => g.id),
     notThese,
-  );
+  )}|try|${attempt}`;
   const [cards, setCards] = useState<{ look: Look; why: string }[]>([]);
   const [waiting, setWaiting] = useState(false);
   const rackRef = useRef(wearRack);
@@ -220,35 +228,54 @@ function LookbookPage() {
     if (!askRack.length) return;
     let live = true;
     setWaiting(true);
+    setMiss(null);
     void composeOnce(key, async () => {
-      try {
+      const ask = async (extra?: string) => {
         const message = composeMessage(
           askRack,
           { occasion, season, house: houseChip },
           notTheseRef.current,
         );
-        const composed = await withTimeout(composeChapter({ data: { message } }), 12_000);
-        if (!composed?.ok) return { ok: false as const, error: "compose" };
-        const drafted = validateCompose(composed.looks, askRack, notTheseRef.current);
+        const composed = await withTimeout(
+          composeChapter({ data: { message: extra ? `${message}\n\n${extra}` : message } }),
+          COMPOSE_TIMEOUT_MS,
+        );
+        if (!composed) return { ok: false as const, error: "timeout" };
+        if (!composed.ok) return { ok: false as const, error: composed.error || "timeout" };
+        return { ok: true as const, looks: composed.looks };
+      };
+      try {
+        let turned = await ask();
+        if (turned.ok && allIdsInvented(turned.looks, askRack)) {
+          turned = await ask(NOT_ON_RACK);
+        }
+        if (!turned.ok) return turned;
+        const looks = settleCompose(turned.looks, askRack, notTheseRef.current);
         const survived = criticRejectOnly(
-          drafted.map((look) => toShownLook(look, occasion)),
+          looks.map((look) => toShownLook(look, occasion)),
           askRack,
           null,
         );
         const allowed = new Set(survived.map((look) => criticKey(look.garmentIds)));
-        const looks = drafted.filter((look) => allowed.has(criticKey(look.ids)));
-        if (!looks.length) return { ok: false as const, error: "compose" };
-        return { ok: true as const, looks };
+        const kept = looks.filter((look) => allowed.has(criticKey(look.ids)));
+        if (!kept.length) return { ok: false as const, error: "holds" };
+        return { ok: true as const, looks: kept };
       } catch {
-        return { ok: false as const, error: "compose" };
+        return { ok: false as const, error: "timeout" };
       }
     }).then((result) => {
       if (!live) return;
       setWaiting(false);
       if (!result.ok) {
-        if (notTheseRef.current.length) setWeekNote("Couldn't reshuffle — try again.");
+        const kind = stylistMiss(result.error);
+        setMiss(kind);
+        if (kind === "holds") setCards([]);
+        if (notTheseRef.current.length && kind === "silent") {
+          setWeekNote("Couldn't reshuffle — try again.");
+        }
         return;
       }
+      setMiss(null);
       setCards(
         result.looks.map((look) => ({
           look: toShownLook(look, occasion),
@@ -510,6 +537,14 @@ function LookbookPage() {
       <section className="mt-10">
         <p className="micro text-ink-soft">This week</p>
         {weekNote && <p className="mt-1 micro text-ink-soft">{weekNote}</p>}
+        {miss === "silent" && visible.length > 0 && (
+          <p className="mt-3 text-sm text-ink-soft">
+            {STYLIST_SILENT}
+            <button type="button" className="ml-3 underline" onClick={() => setAttempt((n) => n + 1)}>
+              Try again
+            </button>
+          </p>
+        )}
         {waiting && visible.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">Building looks…</p>
         ) : visible.length === 0 ? (
@@ -521,7 +556,13 @@ function LookbookPage() {
               houseChip,
               color,
               canBuild,
-            ) ?? "Nothing in this chapter holds."}
+            ) ??
+              (miss === "silent" ? STYLIST_SILENT : miss === "holds" ? STYLIST_HOLDS : "Building looks…")}
+            {miss && (
+              <button type="button" className="ml-3 underline" onClick={() => setAttempt((n) => n + 1)}>
+                Try again
+              </button>
+            )}
           </p>
         ) : (
           <ul

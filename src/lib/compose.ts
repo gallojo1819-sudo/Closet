@@ -10,6 +10,11 @@ import { todayISO } from "./utils.ts";
 
 export const COMPOSE_MODEL = "grok-4.5";
 export const COMPOSE_TEMPERATURE = 0.2;
+export const COMPOSE_TIMEOUT_MS = 45_000;
+export const COMPOSE_MAX_TOKENS = 1200;
+export const STYLIST_SILENT = "The stylist didn’t answer — try again.";
+export const STYLIST_HOLDS = "Nothing in this chapter holds.";
+export const NOT_ON_RACK = "those ids are not on the rack.";
 
 export const COMPOSE_SYSTEM = `You dress Joe, 5′8, NYC.
 Weekday is Ralph: a shirt, polo, or knit, a trouser or a clean jean, a leather shoe. A jacket only if it finishes the look. Out is the same idea, sharper, after dark. Weekend is easier: jean, knit or hoodie, sneaker or boot. Travel is the same clothes, one layer he can take off. Comfy is knit, cord or jean, a shoe he can walk in.
@@ -18,8 +23,8 @@ Italian is a knit or a camp collar, a trouser, a suede loafer. Sweet Stable may 
 One top. One bottom. One shoe. One jacket or none. A hoodie is never a coat.
 Refuse a costume: graphic knit with pleats and loafers, two loud patterns, blazer with rugby, blazer with a mule.
 Prefer pieces he has not worn. Do not invent a name or an id.
-Return JSON only:
-{ "looks": [ { "ids": ["g_...","g_...","g_..."], "name": "Quiet office", "why": "one sentence" } ] }
+Return JSON only: an object {"looks":[{"ids":[],"name":"Quiet office","why":"one sentence"}]}.
+Copy ids from the list, character for character. An id you invent will be thrown out.
 Three looks, or fewer if only one is honest. Two looks must differ in at least two pieces.`;
 
 export type RackPiece = {
@@ -155,10 +160,18 @@ function hoodieWithLoafer(pieces: Garment[]): boolean {
  * Drop an invented id. Drop a look that then has fewer than three real pieces.
  * Drop a costume and a look that repeats the previous one.
  */
+export function allIdsInvented(raw: ComposedLook[], rack: Garment[]): boolean {
+  const ids = raw.flatMap((look) => look.ids);
+  if (!ids.length) return false;
+  const have = new Set(rack.map((g) => g.id));
+  return ids.every((id) => !have.has(id));
+}
+
 export function validateCompose(
   raw: ComposedLook[],
   rack: Garment[],
   notThese: string[][] = [],
+  opts?: { clashes?: boolean },
 ): ComposedLook[] {
   const byId = new Map(rack.map((g) => [g.id, g]));
   const kept: ComposedLook[] = [];
@@ -172,7 +185,7 @@ export function validateCompose(
     if (notThese.some((prev) => sameIds(prev, ids))) continue;
     if (kept.some((prev) => !differs(prev.ids, ids))) continue;
     const pieces = ids.map((id) => byId.get(id)!);
-    if (hoodieWithLoafer(pieces) || lookClashes(pieces)) continue;
+    if (opts?.clashes !== false && (hoodieWithLoafer(pieces) || lookClashes(pieces))) continue;
     const name =
       look.name ||
       pieces
@@ -184,6 +197,27 @@ export function validateCompose(
     if (kept.length >= 3) break;
   }
   return kept;
+}
+
+/**
+ * A hoodie with a loafer can still drop.
+ * If that check is the only reason three real looks are gone, keep the model's looks.
+ */
+export function settleCompose(
+  raw: ComposedLook[],
+  rack: Garment[],
+  notThese: string[][] = [],
+): ComposedLook[] {
+  const strict = validateCompose(raw, rack, notThese);
+  if (strict.length) return strict;
+  const real = validateCompose(raw, rack, notThese, { clashes: false });
+  if (real.length >= 3) return real;
+  return [];
+}
+
+export function stylistMiss(error: string): "silent" | "holds" {
+  if (error === "holds" || error === "empty" || error === "compose") return "holds";
+  return "silent";
 }
 
 export function toShownLook(look: ComposedLook, occasion: Occasion): Look {
