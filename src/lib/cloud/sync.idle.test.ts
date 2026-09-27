@@ -343,6 +343,134 @@ describe("startCloudSync idle", () => {
     }
   });
 
+  it("an edit during a push does not revert another device's change", async () => {
+    resetCloudSyncForTests();
+    setAccountProgress(null);
+    setOnline(true);
+    installDom();
+    const calls: Calls = { rpc: 0, update: 0, upload: 0 };
+    const payloads: { id: string; name?: string }[][] = [];
+    let release: () => void = () => {};
+    const piece = (id: string, name: string) => ({
+      id,
+      name,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      archived: false,
+      demo: false,
+      imageSrc: `sb:u/${id}/o.jpg`,
+      cutoutSrc: `sb:u/${id}/c.jpg`,
+      colors: ["navy"],
+      category: "top",
+      subtype: "oxford",
+      wornOn: [] as string[],
+    });
+    let row = {
+      ...cloudRow(),
+      garments: [piece("g1", "Navy oxford"), piece("g2", "X"), piece("g3", "Old")],
+    };
+    const chain = {
+      select() {
+        return chain;
+      },
+      eq() {
+        return chain;
+      },
+      maybeSingle: async () => ({ data: row, error: null }),
+      insert() {
+        calls.update += 1;
+        return chain;
+      },
+      update() {
+        calls.update += 1;
+        return chain;
+      },
+    };
+    setSupabaseForTests({
+      auth: {
+        onAuthStateChange(cb: (event: string, session: unknown) => void) {
+          queueMicrotask(() =>
+            cb("INITIAL_SESSION", {
+              user: { id: "5d458205-b3ca-433a-8b75-4c0a2bbfa1ee", email: "joe@prereal.com" },
+            }),
+          );
+          return { data: { subscription: { unsubscribe() {} } } };
+        },
+        startAutoRefresh: async () => {},
+        stopAutoRefresh: async () => {},
+        getSession: async () => ({ data: { session: { user: { id: "u" } } } }),
+      },
+      from() {
+        return chain;
+      },
+      rpc(_name: string, args: { p_garments: { id: string; name?: string }[] }) {
+        calls.rpc += 1;
+        const finish = () => {
+          const nextRev = Number(row.rev) + 1;
+          row = {
+            ...row,
+            garments: args.p_garments as typeof row.garments,
+            rev: nextRev,
+            updated_at: `2026-09-26T14:00:${String(nextRev).padStart(2, "0")}.000Z`,
+          };
+          payloads.push(args.p_garments);
+          return {
+            data: { ok: true, rev: nextRev, updated_at: row.updated_at },
+            error: null,
+          };
+        };
+        if (calls.rpc === 1) {
+          return new Promise((resolve) => {
+            release = () => resolve(finish());
+          });
+        }
+        return Promise.resolve(finish());
+      },
+      storage: {
+        from() {
+          return {
+            list: async () => ({ data: [], error: null }),
+            upload: async () => {
+              calls.upload += 1;
+              return { error: null };
+            },
+            remove: async () => ({ error: null }),
+            download: async () => ({ data: null, error: null }),
+          };
+        },
+      },
+    } as never);
+    useCloset.setState({
+      garments: [piece("g1", "Navy oxford"), piece("g2", "X"), piece("g3", "Old")] as never,
+      looks: [],
+    });
+    const stop = startCloudSync();
+    try {
+      await waitUntil(
+        () => getAccount().progress === "3 pieces on this phone.",
+        "pull did not finish",
+      );
+      row = {
+        ...row,
+        rev: 5,
+        updated_at: "2026-09-26T14:05:00.000Z",
+        garments: row.garments.map((g) => (g.id === "g2" ? { ...g, name: "Y" } : g)),
+      };
+      useCloset.getState().updateGarment("g1", { name: "Local" });
+      await waitUntil(() => calls.rpc >= 1, "push did not start");
+      useCloset.getState().updateGarment("g3", { name: "During" });
+      release();
+      await waitUntil(() => calls.rpc >= 2, "second push did not start");
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      const second = payloads[payloads.length - 1];
+      assert.equal(second?.find((g) => g.id === "g2")?.name, "Y");
+      assert.equal(second?.find((g) => g.id === "g3")?.name, "During");
+      assert.equal(calls.update, 0);
+    } finally {
+      stop();
+      setSupabaseForTests(null);
+    }
+  });
+
   it("an offline edit survives going back online and a focus pull", async () => {
     resetCloudSyncForTests();
     setOnline(true);

@@ -30,6 +30,8 @@ import {
   shouldSchedulePush,
   freshMemory,
   isRevConflict,
+  liveGarmentIds,
+  liveLookIds,
   markDirty,
   type FetchCloud,
   type SyncMemory,
@@ -384,6 +386,74 @@ async function absorb(userId: string, fetched: FetchCloud): Promise<void> {
   );
 }
 
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Base after a write that did not paint the store.
+ * A field this phone just saved moves to the written value, so a newer edit
+ * still wins. A field it did not touch stays on the pre-write base, so another
+ * device's change is not sent back as a local edit.
+ */
+function baseAfterInFlight(
+  prev: CloudMeta | null,
+  written: CloudMeta | null,
+  started: CloudMeta,
+): CloudMeta | null {
+  if (!prev) return prev;
+  if (!written) return prev;
+  const keep = <T,>(before: T, saved: T, local: T): T =>
+    sameJson(local, before) ? before : saved;
+  return {
+    ...prev,
+    garments: rebaseById(prev.garments, written.garments, started.garments),
+    looks: rebaseById(prev.looks, written.looks, started.looks),
+    journal: keep(prev.journal, written.journal, started.journal),
+    avoid: keep(prev.avoid, written.avoid, started.avoid),
+    drop: keep(prev.drop, written.drop, started.drop),
+    refPhoto: keep(prev.refPhoto, written.refPhoto, started.refPhoto),
+    deletedGarments: keep(prev.deletedGarments, written.deletedGarments, started.deletedGarments),
+    deletedLooks: keep(prev.deletedLooks, written.deletedLooks, started.deletedLooks),
+  };
+}
+
+function rebaseById<T extends { id: string }>(prev: T[], written: T[], started: T[]): T[] {
+  const writtenMap = new Map(written.map((row) => [row.id, row]));
+  const startedMap = new Map(started.map((row) => [row.id, row]));
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const row of prev) {
+    seen.add(row.id);
+    const next = rebasePiece(row, writtenMap.get(row.id), startedMap.get(row.id));
+    if (next) out.push(next);
+  }
+  for (const row of started) {
+    if (seen.has(row.id)) continue;
+    const next = rebasePiece(undefined, writtenMap.get(row.id), row);
+    if (next) out.push(next);
+  }
+  return out;
+}
+
+function rebasePiece<T extends { id: string }>(
+  prev: T | undefined,
+  written: T | undefined,
+  started: T | undefined,
+): T | undefined {
+  if (!prev && !started) return undefined;
+  if (!written) return prev ?? started;
+  if (!prev || !started) return written;
+  const before = prev as Record<string, unknown>;
+  const saved = written as Record<string, unknown>;
+  const local = started as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of new Set([...Object.keys(before), ...Object.keys(saved), ...Object.keys(local)])) {
+    out[key] = sameJson(local[key], before[key]) ? before[key] : saved[key];
+  }
+  return out as T;
+}
+
 function finishDeferredEdit() {
   if (!pushAgain) return;
   mem = markDirty(mem);
@@ -412,10 +482,12 @@ async function pushNow() {
     return;
   }
   pushing = true;
+  const prevBase = mem.base;
+  const pushedLocal = snapshot();
   try {
     const result = await pushIfDirty({
       mem,
-      local: snapshot(),
+      local: pushedLocal,
       tombstones: tombstonesNow(),
       fetchCloud: () => fetchCloud(user.id),
       write: (expected, payload) => casWrite(user.id, expected, payload),
@@ -465,10 +537,17 @@ async function pushNow() {
       else clearPendingEdit();
       return;
     }
-    // A newer edit arrived while this snapshot was in flight. Keep it.
-    // Adopt rev and base from the write; do not paint the pre-edit row.
+    // A newer edit arrived while this snapshot was in flight. Do not paint the
+    // pre-edit row. Keep the pre-write base for fields this phone did not
+    // change, and adopt only rev and updatedAt from the write.
     if (pushAgain) {
-      mem = markDirty(mem);
+      const nextBase = baseAfterInFlight(prevBase, result.merged, pushedLocal);
+      mem = markDirty({
+        ...result.mem,
+        base: nextBase,
+        baseGarmentIds: nextBase ? liveGarmentIds(nextBase) : [],
+        baseLookIds: nextBase ? liveLookIds(nextBase) : [],
+      });
       return;
     }
     clearPendingEdit();
