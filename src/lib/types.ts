@@ -60,6 +60,8 @@ export type Look = {
   lookbook?: boolean;
   /** Quiet recipe stamp. Manual looks may omit. */
   recipeId?: string;
+  /** Critic hid this look. It stays in the saved array. */
+  rejected?: boolean;
   createdAt: string;
 };
 

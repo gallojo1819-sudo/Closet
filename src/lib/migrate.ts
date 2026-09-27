@@ -15,6 +15,6 @@ export async function migrateImagesToIdb(): Promise<void> {
     if (g.cutoutSrc.startsWith("data:")) {
       patch.cutoutSrc = await stashDataUrl(imageKey(g.id, "c"), g.cutoutSrc);
     }
-    if (patch.imageSrc || patch.cutoutSrc) updateGarment(g.id, patch);
+    if (patch.imageSrc || patch.cutoutSrc) updateGarment(g.id, patch, { quiet: true });
   }
 }

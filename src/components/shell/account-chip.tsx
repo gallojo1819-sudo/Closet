@@ -7,8 +7,8 @@ import {
   signOutAccount,
   useAccount,
 } from "@/lib/cloud/account";
-import { backupPhotos } from "@/lib/cloud/sync";
-import { LOCAL_ONLY_CAPTION, SIGN_IN_PROMPT, savedAccountCopy } from "@/lib/cloud/copy";
+import { backupPhotos, retryCloudSave } from "@/lib/cloud/sync";
+import { LOCAL_ONLY_CAPTION, SAVE_RETRY, SIGN_IN_PROMPT, savedAccountCopy } from "@/lib/cloud/copy";
 import { cn } from "@/lib/utils";
 
 export function AccountChip({ night, count }: { night: boolean; count: number }) {
@@ -27,7 +27,13 @@ export function AccountChip({ night, count }: { night: boolean; count: number })
     <>
       <button
         type="button"
-        onClick={() => openAccountDialog()}
+        onClick={() => {
+          if (account.progress === SAVE_RETRY) {
+            retryCloudSave();
+            return;
+          }
+          openAccountDialog();
+        }}
         className={cn(
           "micro text-left hover:opacity-80",
           account.user ? "max-w-[14rem] truncate sm:max-w-none" : "",

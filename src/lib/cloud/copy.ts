@@ -56,3 +56,6 @@ export function pulledCopy(count: number): string {
 export const EMPTY_ACCOUNT_CONFIRM = "Remove from this phone and your account?";
 
 export const LOCAL_ONLY_CAPTION = "On this phone — not on your account yet.";
+
+/** Shown after a failed save. Tap retries. The next edit retries too. */
+export const SAVE_RETRY = "Couldn't save. Retry";

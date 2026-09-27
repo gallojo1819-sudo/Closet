@@ -6,24 +6,51 @@ import { isRetryableCloudError, onOnlineIntent, shouldPushClosetMeta, visibleClo
 void "fake-user-joe";
 
 describe("onOnlineIntent", () => {
-  it("back on Wi‑Fi with local pieces retries the account push", () => {
+  it("a saved user edit retries once the pull has landed and the network is back", () => {
     assert.equal(
-      onOnlineIntent({ online: true, signedIn: true, localCount: 12, localOnly: true }),
+      onOnlineIntent({
+        online: true,
+        signedIn: true,
+        localCount: 12,
+        localOnly: true,
+        pendingEdit: true,
+        pulled: true,
+      }),
       "push",
     );
+  });
+
+  it("a full rack on Wi‑Fi does not push, and a edit does not push before the pull", () => {
     assert.equal(
-      onOnlineIntent({ online: true, signedIn: true, localCount: 145 }),
-      "push",
+      onOnlineIntent({ online: true, signedIn: true, localCount: 145, pulled: true }),
+      "idle",
+    );
+    assert.equal(
+      onOnlineIntent({
+        online: true,
+        signedIn: true,
+        pendingEdit: true,
+        pulled: false,
+        localCount: 145,
+      }),
+      "idle",
     );
   });
 
   it("stays idle while offline or signed out", () => {
     assert.equal(
-      onOnlineIntent({ online: false, signedIn: true, localCount: 12, localOnly: true }),
+      onOnlineIntent({
+        online: false,
+        signedIn: true,
+        localCount: 12,
+        localOnly: true,
+        pendingEdit: true,
+        pulled: true,
+      }),
       "idle",
     );
     assert.equal(
-      onOnlineIntent({ online: true, signedIn: false, localCount: 12 }),
+      onOnlineIntent({ online: true, signedIn: false, localCount: 12, pendingEdit: true, pulled: true }),
       "idle",
     );
   });
@@ -39,17 +66,22 @@ describe("shouldPushClosetMeta", () => {
 });
 
 describe("visibleCloudIntent", () => {
-  it("never pulls empty cloud over a non-empty rack — pushes instead", () => {
-    assert.equal(
-      visibleCloudIntent({ action: "push", appliedCloud: false }),
-      "push",
-    );
+  it("focus does not push a rack that was only opened", () => {
+    assert.equal(visibleCloudIntent({ action: "push", appliedCloud: false }), "idle");
+    assert.equal(visibleCloudIntent({ action: "union", appliedCloud: false }), "idle");
   });
 
   it("applies a real cloud pull", () => {
     assert.equal(
       visibleCloudIntent({ action: "pull", appliedCloud: true }),
       "apply",
+    );
+  });
+
+  it("a pending edit may push after the focus pull", () => {
+    assert.equal(
+      visibleCloudIntent({ action: "union", appliedCloud: false, pendingEdit: true }),
+      "push",
     );
   });
 });

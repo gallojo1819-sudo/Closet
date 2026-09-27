@@ -55,7 +55,9 @@ import {
 } from "./style";
 import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
-import { addTombstone, readTombstones } from "./cloud/tombstone";
+import { forgetCoverSha } from "./cloud/blobs";
+import { noteRefPhotoEdit, noteUserEdit } from "./cloud/edit";
+import { addLookTombstone, addTombstone, readTombstones } from "./cloud/tombstone";
 import { allowSampleRack } from "./cloud/home";
 import { EMPTY_ACCOUNT_CONFIRM } from "./cloud/copy";
 import { dressThisPiece } from "./dress";
@@ -82,7 +84,7 @@ type ClosetState = {
     g: Omit<Garment, "id" | "createdAt" | "archived" | "wornOn" | "demo"> & { id?: string },
     opts?: { quiet?: boolean },
   ) => string;
-  updateGarment: (id: string, patch: Partial<Garment>) => void;
+  updateGarment: (id: string, patch: Partial<Garment>, opts?: { quiet?: boolean }) => void;
   removeGarment: (id: string) => void;
   wearToday: (ids: string[]) => void;
   skipDrop: () => void;
@@ -272,12 +274,15 @@ export const useCloset = create<ClosetState>()(
           };
         });
         if (!opts?.quiet) get().ensureLookbook();
+        noteUserEdit();
         return id;
       },
-      updateGarment: (id, patch) => {
+      updateGarment: (id, patch, opts) => {
+        if ("cutoutSrc" in patch) forgetCoverSha(id);
         set((s) => ({
           garments: s.garments.map((g) => (g.id === id ? { ...g, ...patch } : g)),
         }));
+        if (!opts?.quiet) noteUserEdit();
       },
       removeGarment: (id) => {
         const g = get().garments.find((x) => x.id === id);
@@ -307,6 +312,7 @@ export const useCloset = create<ClosetState>()(
               })()
             : s.drop,
         }));
+        noteUserEdit();
       },
       wearToday: (ids) => {
         const day = todayISO();
@@ -331,6 +337,7 @@ export const useCloset = create<ClosetState>()(
             avoid,
           };
         });
+        noteUserEdit();
       },
       skipDrop: () => {
         const drop = get().drop;
@@ -354,6 +361,7 @@ export const useCloset = create<ClosetState>()(
             skipCount: get().skipCount + 1,
           });
           get().rerollDrop(drop.weather, drop.occasion, skipped);
+          noteUserEdit();
         } catch {
           set({
             drop: {
@@ -379,6 +387,7 @@ export const useCloset = create<ClosetState>()(
             ...s.looks,
           ],
         }));
+        noteUserEdit();
         return id;
       },
       outfitWith: (lockedIds, occasion, house) => {
@@ -433,8 +442,13 @@ export const useCloset = create<ClosetState>()(
               : l,
           ),
         }));
+        noteUserEdit();
       },
-      removeLook: (id) => set((s) => ({ looks: s.looks.filter((l) => l.id !== id) })),
+      removeLook: (id) => {
+        addLookTombstone(id);
+        set((s) => ({ looks: s.looks.filter((l) => l.id !== id) }));
+        noteUserEdit();
+      },
       setDrop: (drop) => set({ drop }),
       rerollDrop: (weather, occasion, previousIds) => {
         const prev = get().drop;
@@ -516,6 +530,7 @@ export const useCloset = create<ClosetState>()(
         set({
           drop: { ...drop, lockedIds: [...locked], lockNote: drop.lockNote ?? null },
         });
+        noteUserEdit();
       },
       removeDropPiece: (id) => {
         const drop = get().drop;
@@ -559,6 +574,7 @@ export const useCloset = create<ClosetState>()(
             garmentIds: drop.garmentIds.map((gid) => (gid === id ? next.id : gid)),
           },
         });
+        noteUserEdit();
       },
       pushMessage: (m) =>
         set((s) => ({
@@ -723,16 +739,19 @@ export const useCloset = create<ClosetState>()(
         });
       },
       setRefPhoto: (key, backup) => {
+        noteRefPhotoEdit();
         if (key === null) {
           const prev = get().refPhoto;
           if (prev && isIdbKey(prev)) void deleteImage(prev).catch(() => {});
           set({ refPhoto: null, refPhotoBackup: null });
+          noteUserEdit();
           return;
         }
         set({
           refPhoto: key,
           ...(backup !== undefined ? { refPhotoBackup: backup } : {}),
         });
+        noteUserEdit();
       },
       purgeDemoRack: () => {
         const s = get();
@@ -768,10 +787,14 @@ export const useCloset = create<ClosetState>()(
           }
           const name = nameFromPixels(g, colors);
           if (name && name !== g.name) {
-            get().updateGarment(g.id, {
-              name,
-              colors: colors.length ? colors : g.colors,
-            });
+            get().updateGarment(
+              g.id,
+              {
+                name,
+                colors: colors.length ? colors : g.colors,
+              },
+              { quiet: true },
+            );
           }
         }
       },
@@ -847,6 +870,11 @@ export const useCloset = create<ClosetState>()(
         if (!opts?.sample && typeof window !== "undefined" && isAccountSignedIn()) {
           if (!window.confirm(EMPTY_ACCOUNT_CONFIRM)) return;
         }
+        const wipingAccount = !opts?.sample && isAccountSignedIn();
+        if (wipingAccount) {
+          for (const g of get().garments) addTombstone(g.id);
+          for (const l of get().looks) addLookTombstone(l.id);
+        }
         set({
           garments: [],
           looks: [],
@@ -859,6 +887,7 @@ export const useCloset = create<ClosetState>()(
           skipCount: 0,
           reshuffleCount: 0,
         });
+        if (wipingAccount) noteUserEdit();
         void clearClosetMeta().catch(() => {});
         // Joe's body photo stays. Only Fit → Remove deletes it.
       },

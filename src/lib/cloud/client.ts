@@ -55,8 +55,16 @@ function persistStorage(): SupportedStorage {
 }
 
 let client: SupabaseClient | null | undefined;
+let testClient: { current: SupabaseClient | null } | null = null;
+
+/** Tests only. Production leaves this unset. */
+export function setSupabaseForTests(next: SupabaseClient | null): void {
+  testClient = { current: next };
+  client = next;
+}
 
 export function getSupabase(): SupabaseClient | null {
+  if (testClient) return testClient.current;
   if (client !== undefined) return client;
   if (typeof window === "undefined") {
     client = null;
@@ -92,7 +100,22 @@ export function refObjectPath(userId: string): string {
   return `${userId}/me/ref.jpg`;
 }
 
+/** Preview sign-in must return to that host, not the production origin. */
+const OAUTH_QUERY_DROP = new Set(["code", "error", "error_description", "state"]);
+
+export function redirectToFromLocation(loc: {
+  origin: string;
+  pathname: string;
+  search?: string;
+}): string {
+  const path = loc.pathname.startsWith("/") ? loc.pathname : `/${loc.pathname}`;
+  const params = new URLSearchParams(loc.search ?? "");
+  for (const key of OAUTH_QUERY_DROP) params.delete(key);
+  const query = params.toString();
+  return `${loc.origin}${path}${query ? `?${query}` : ""}`;
+}
+
 export function authRedirectTo(): string {
   if (typeof window === "undefined") return "";
-  return window.location.origin;
+  return redirectToFromLocation(window.location);
 }

@@ -1,4 +1,5 @@
 import {
+  cloudImageKey,
   getImage,
   imageKey,
   isIdbKey,
@@ -12,6 +13,7 @@ import {
   garmentObjectPath,
   getSupabase,
 } from "./client.ts";
+import { decideBlobPut, isAlreadyStored } from "./guard.ts";
 import { parseCloudSrc } from "./src.ts";
 import {
   OPEN_THUMB_CONCURRENCY,
@@ -21,6 +23,7 @@ import {
 
 const inflight = new Map<string, Promise<boolean>>();
 const uploaded = new Set<string>();
+const folderCache = new Map<string, Set<string>>();
 const signedCache = new Map<string, { url: string; exp: number }>();
 const reportedCloud = new Set<string>();
 
@@ -98,19 +101,26 @@ export async function fetchCloudBlob(
   userId?: string,
   srcHint?: string,
 ): Promise<boolean> {
-  const mark = `${id}:${kind}`;
+  const hinted = parseCloudSrc(srcHint);
+  const hintPath = hinted && hinted.kind === kind ? hinted.path : "";
+  const mark = hintPath ? `${id}:${kind}:${hintPath}` : `${id}:${kind}`;
   const pending = inflight.get(mark);
   if (pending) return pending;
   const work = (async () => {
-    if (await hasLocalBlob(id, kind)) {
+    if (hintPath) {
+      try {
+        if (await getImage(cloudImageKey(hintPath))) return true;
+      } catch {
+        /* IDB miss falls through to storage */
+      }
+    } else if (await hasLocalBlob(id, kind)) {
       return true;
     }
     const uid = userId ?? getAccount().user?.id;
     const sb = getSupabase();
     if (!sb) return false;
     const paths: string[] = [];
-    const hinted = parseCloudSrc(srcHint);
-    if (hinted) paths.push(hinted.path);
+    if (hintPath) paths.push(hintPath);
     if (uid) paths.push(garmentObjectPath(uid, id, kind));
     if (kind === "t" && uid) {
       paths.push(garmentObjectPath(uid, id, "c"));
@@ -123,6 +133,7 @@ export async function fetchCloudBlob(
         continue;
       }
       if (!data || data.size === 0) continue;
+      await putImage(cloudImageKey(path), data);
       await putImage(imageKey(id, kind), data);
       return true;
     }
@@ -140,9 +151,9 @@ export function requestThumb(id: string): void {
   void fetchCloudBlob(id, "t");
 }
 
-export function requestCutout(id: string): void {
+export function requestCutout(id: string, hint?: string): void {
   void (async () => {
-    if (await fetchCloudBlob(id, "c")) return;
+    if (await fetchCloudBlob(id, "c", undefined, hint)) return;
     await fetchCloudBlob(id, "o");
   })();
 }
@@ -255,29 +266,99 @@ export async function countListedThumbs(userId: string): Promise<number> {
   return countTjpgFromLists(level1, nested);
 }
 
+async function remoteFolder(userId: string, garmentId: string): Promise<Set<string> | null> {
+  const folder = `${userId}/${garmentId}`;
+  const cached = folderCache.get(folder);
+  if (cached) return cached;
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb.storage.from(closetImagesBucket()).list(folder, { limit: 20 });
+  if (error) return null;
+  const names = new Set((data ?? []).map((row) => row.name).filter(Boolean));
+  folderCache.set(folder, names);
+  return names;
+}
+
+const coverSha = new Map<string, string>();
+
+export function peekCoverSha(id: string): string | undefined {
+  return coverSha.get(id);
+}
+
+/** The next cover upload must hash the current bytes, not the previous sha. */
+export function forgetCoverSha(id: string): void {
+  coverSha.delete(id);
+  uploaded.delete(`${id}:c`);
+}
+
+export async function sha8(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-1", bytes);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 8);
+}
+
+export function coverFileName(sha: string): string {
+  return `c-${sha}.jpg`;
+}
+
+export function refFileName(sha: string): string {
+  return `ref-${sha}.jpg`;
+}
+
+function rememberRemote(userId: string, garmentId: string, name: string) {
+  const folder = `${userId}/${garmentId}`;
+  const names = folderCache.get(folder) ?? new Set<string>();
+  names.add(name);
+  folderCache.set(folder, names);
+}
+
 export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Promise<boolean> {
   const mark = `${g.id}:${kind}`;
-  if (uploaded.has(mark)) return true;
+  if (kind !== "c" && uploaded.has(mark)) return true;
   const sb = getSupabase();
   if (!sb) return false;
+  if (kind === "c") return uploadVersionedCover(userId, g);
+  const fileName = `${kind}.jpg`;
+  const listed = await remoteFolder(userId, g.id);
+  const remoteExists = listed?.has(fileName) ?? false;
+  if (remoteExists) {
+    uploaded.add(mark);
+    return true;
+  }
   const raw = await blobFor(g, kind);
-  if (!raw) return kind !== "t";
+  if (
+    decideBlobPut({
+      alreadyUploaded: false,
+      remoteExists,
+      hasLocalBlob: Boolean(raw),
+    }) === "skip"
+  ) {
+    return kind !== "t";
+  }
   let blob: Blob;
   try {
-    blob = await blobAsJpeg(raw);
+    blob = await blobAsJpeg(raw!);
   } catch (err) {
     setLocalOnly(true);
     throw err;
   }
   const path = garmentObjectPath(userId, g.id, kind);
   const { error } = await sb.storage.from(closetImagesBucket()).upload(path, blob, {
-    upsert: true,
+    upsert: false,
     contentType: "image/jpeg",
   });
   if (error) {
+    if (isAlreadyStored(error)) {
+      rememberRemote(userId, g.id, fileName);
+      uploaded.add(mark);
+      return true;
+    }
     setLocalOnly(true);
     throw error;
   }
+  rememberRemote(userId, g.id, fileName);
   const { data: landed, error: dlErr } = await sb.storage
     .from(closetImagesBucket())
     .download(path);
@@ -295,6 +376,47 @@ export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Pr
       /* IDB cache is best-effort */
     }
   }
+  return true;
+}
+
+async function uploadVersionedCover(userId: string, g: Garment): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) return false;
+  const raw = await blobFor(g, "c");
+  if (!raw) return false;
+  let blob: Blob;
+  try {
+    blob = await blobAsJpeg(raw);
+  } catch (err) {
+    setLocalOnly(true);
+    throw err;
+  }
+  const sha = await sha8(await blob.arrayBuffer());
+  const fileName = coverFileName(sha);
+  const listed = await remoteFolder(userId, g.id);
+  if (listed?.has(fileName)) {
+    coverSha.set(g.id, sha);
+    uploaded.add(`${g.id}:c`);
+    return true;
+  }
+  const path = `${userId}/${g.id}/${fileName}`;
+  const { error } = await sb.storage.from(closetImagesBucket()).upload(path, blob, {
+    upsert: false,
+    contentType: "image/jpeg",
+  });
+  if (error) {
+    if (isAlreadyStored(error)) {
+      rememberRemote(userId, g.id, fileName);
+      coverSha.set(g.id, sha);
+      uploaded.add(`${g.id}:c`);
+      return true;
+    }
+    setLocalOnly(true);
+    throw error;
+  }
+  rememberRemote(userId, g.id, fileName);
+  coverSha.set(g.id, sha);
+  uploaded.add(`${g.id}:c`);
   return true;
 }
 

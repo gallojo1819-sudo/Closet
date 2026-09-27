@@ -146,9 +146,9 @@ export function GarmentDetail({
   void getTile;
 
   useEffect(() => {
-    void fetchCloudBlob(garment.id, "c");
-    void fetchCloudBlob(garment.id, "o");
-  }, [garment.id]);
+    void fetchCloudBlob(garment.id, "c", undefined, garment.cutoutSrc);
+    void fetchCloudBlob(garment.id, "o", undefined, garment.imageSrc);
+  }, [garment.id, garment.cutoutSrc, garment.imageSrc]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

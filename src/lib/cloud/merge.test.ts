@@ -30,11 +30,11 @@ function meta(ids: string[], extra: Partial<CloudMeta> = {}): CloudMeta {
 }
 
 describe("accountPool", () => {
-  it("drops demo and archived, never ships sample as the account rack", () => {
+  it("drops demo and keeps archived until a tombstone", () => {
     const pool = accountPool([g("real"), g("sample", { demo: true }), g("old", { archived: true })]);
     assert.deepEqual(
-      pool.map((x) => x.id),
-      ["real"],
+      pool.map((x) => x.id).sort(),
+      ["old", "real"],
     );
   });
 });
@@ -127,18 +127,40 @@ describe("mergeGarments", () => {
     assert.deepEqual(next.map((x) => x.id).sort(), ["keep", "new-on-phone"]);
   });
 
-  it("after first link, a cloud delete drops that id; unpushed local adds stay", () => {
+  it("a missing cloud id is not a delete; only a tombstone drops it", () => {
     const local = [g("keep"), g("gone"), g("new-on-phone")];
     const cloud = [g("keep")];
-    const next = mergeGarments({
+    const kept = mergeGarments({
       local,
       cloud,
       lastCloudIds: ["keep", "gone"],
     });
-    assert.deepEqual(
-      next.map((x) => x.id).sort(),
-      ["keep", "new-on-phone"],
-    );
+    assert.deepEqual(kept.map((x) => x.id).sort(), ["gone", "keep", "new-on-phone"]);
+    const dropped = mergeGarments({
+      local,
+      cloud,
+      lastCloudIds: ["keep", "gone"],
+      tombstones: ["gone"],
+    });
+    assert.deepEqual(dropped.map((x) => x.id).sort(), ["keep", "new-on-phone"]);
+  });
+
+  it("concurrent edits to different garments both survive", () => {
+    const base = [
+      { id: "g1", name: "one" },
+      { id: "g2", name: "two" },
+    ];
+    const local = [
+      { id: "g1", name: "one" },
+      { id: "g2", name: "beta" },
+    ];
+    const cloud = [
+      { id: "g1", name: "alpha" },
+      { id: "g2", name: "two" },
+    ];
+    const next = mergeGarments({ local, cloud, lastCloudIds: ["g1", "g2"], base });
+    assert.equal(next.find((g) => g.id === "g1")?.name, "alpha");
+    assert.equal(next.find((g) => g.id === "g2")?.name, "beta");
   });
 });
 
@@ -184,7 +206,9 @@ describe("mergeAccount", () => {
     assert.equal(result.action, "union");
     assert.equal(result.next.garments.length, 2);
     assert.ok(result.next.looks.some((l) => l.id === "look-b"));
-    assert.ok(!result.next.looks.some((l) => l.id === "look-a"));
+    const short = result.next.looks.find((l) => l.id === "look-a");
+    assert.equal(short?.broken, true);
+    assert.deepEqual(short?.garmentIds, ["a"]);
   });
 
   it("tombstone drops g_x and a look that falls under 2 pieces; looks do not grow", () => {
@@ -212,6 +236,8 @@ describe("mergeAccount", () => {
     assert.ok(result.next.looks.some((l) => l.id === "stay"));
     assert.ok(!result.next.looks.some((l) => l.garmentIds.includes("g_x")));
     assert.ok(result.next.looks.length <= before + 1);
-    assert.ok(!result.next.looks.some((l) => l.id === "die"));
+    const die = result.next.looks.find((l) => l.id === "die");
+    assert.equal(die?.broken, true);
+    assert.ok(!die?.garmentIds.includes("g_x"));
   });
 });

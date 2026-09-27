@@ -1,6 +1,6 @@
 /**
  * One critic call per chapter. It does not invent pieces and it does not
- * write closet.v6. A rejected row never renders.
+ * write closet.v6. A rejected row is hidden. It is not removed from the saved array.
  */
 import { lookClashes } from "./lookbook.ts";
 import type { Garment, Look, Occasion } from "./types.ts";
@@ -116,6 +116,23 @@ export function parseCriticVerdict(text: string): CriticVerdict | null {
  * Kept rows only, at most 3. A key the model invented is ignored.
  * "New piece" and "Brown top" never render.
  */
+/**
+ * Mark rejected looks. Every saved id stays, in the same order.
+ * Display code may hide `rejected`. It must not splice the saved array.
+ */
+export function savedLooksAfterCritic(looks: Look[], verdict: CriticVerdict | null): Look[] {
+  if (!verdict) return looks;
+  const reject = new Set(verdict.reject.map((key) => criticKey(key.split(","))));
+  let changed = false;
+  const next = looks.map((look) => {
+    const rejected = reject.has(criticKey(look.garmentIds));
+    if (Boolean(look.rejected) === rejected) return look;
+    changed = true;
+    return { ...look, rejected };
+  });
+  return changed ? next : looks;
+}
+
 export function applyCritic(looks: Look[], garments: Garment[], verdict: CriticVerdict): Look[] {
   const byId = new Map(garments.map((g) => [g.id, g]));
   const allowed = new Set(criticRows(looks, garments).map((r) => r.key));

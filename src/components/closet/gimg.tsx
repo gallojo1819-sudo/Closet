@@ -40,7 +40,7 @@ export function GarmentImg({
 
   useEffect(() => {
     if (!thumb) {
-      requestCutout(garment.id);
+      requestCutout(garment.id, garment.cutoutSrc);
       return;
     }
     if (eager || thumbSrc) {
@@ -57,7 +57,7 @@ export function GarmentImg({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [garment.id, thumb, eager, thumbSrc]);
+  }, [garment.id, garment.cutoutSrc, thumb, eager, thumbSrc]);
 
   return (
     <div

@@ -3,14 +3,35 @@ import { getAccount } from "./cloud/account";
 import { fetchCloudBlob, signedCloudUrl } from "./cloud/blobs";
 import { garmentObjectPath } from "./cloud/client";
 import { isCloudSrc, paintSrc, parseCloudSrc, parseIdbImageKey } from "./cloud/src";
-import { imageKey, isIdbKey, resolveImage, watchImage } from "./images";
+import { cloudImageKey, getImage, imageKey, isIdbKey, putImage, resolveImage, watchImage } from "./images";
+
+/** o.jpg / t.jpg / c.jpg from before path-keyed cache. Not c-<sha>.jpg. */
+function unversionedCloudFile(path: string): boolean {
+  return /\/[oct]\.jpg$/.test(path);
+}
 
 async function resolveDisplaySrc(src: string): Promise<string> {
   if (isCloudSrc(src)) {
     const parsed = parseCloudSrc(src);
     if (!parsed) return "";
-    const key = imageKey(parsed.id, parsed.kind);
-    const hit = await resolveImage(key);
+    const pathKey = cloudImageKey(parsed.path);
+    let hit = await resolveImage(pathKey);
+    if (!hit && unversionedCloudFile(parsed.path)) {
+      const legacyKey = imageKey(parsed.id, parsed.kind);
+      try {
+        const blob = await getImage(legacyKey);
+        if (blob) {
+          try {
+            await putImage(pathKey, blob);
+          } catch {
+            /* still show the copy cached under the old key */
+          }
+          hit = (await resolveImage(pathKey)) || (await resolveImage(legacyKey));
+        }
+      } catch {
+        /* IDB unavailable — fall through to storage */
+      }
+    }
     if (hit) return paintSrc(hit, "");
     const signed = await signedCloudUrl(parsed.path);
     void fetchCloudBlob(parsed.id, parsed.kind, parsed.userId, src);
@@ -39,7 +60,7 @@ async function resolveDisplaySrc(src: string): Promise<string> {
 function watchKey(src: string): string {
   if (isCloudSrc(src)) {
     const parsed = parseCloudSrc(src);
-    return parsed ? imageKey(parsed.id, parsed.kind) : src;
+    return parsed ? cloudImageKey(parsed.path) : src;
   }
   return src;
 }
