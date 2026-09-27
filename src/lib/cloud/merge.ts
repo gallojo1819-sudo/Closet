@@ -21,6 +21,8 @@ export type CloudLook = {
   id: string;
   garmentIds: string[];
   tombstone?: boolean;
+  /** Fewer than two pieces still in the closet. Kept, not deleted. */
+  broken?: boolean;
   name?: string;
 };
 
@@ -48,8 +50,9 @@ export type CloudMeta = {
 export type LinkAction = "push" | "pull" | "union" | "keep";
 
 /** Real pieces that belong on the account. Demo never ships. */
+/** Demo never ships. Archived pieces stay in the synced array until a tombstone. */
 export function accountPool<T extends CloudGarment>(garments: T[]): T[] {
-  return garments.filter((g) => !g.archived && g.demo !== true);
+  return garments.filter((g) => g.demo !== true);
 }
 
 export function decideLink(localCount: number, cloudCount: number): LinkAction {
@@ -131,7 +134,7 @@ export function mergeGarments<T extends CloudGarment>(opts: {
   void opts.lastCloudIds;
   const dead = new Set(opts.tombstones ?? []);
   const live = (rows: T[]) =>
-    accountPool(rows).filter((g) => g.tombstone !== true && !dead.has(g.id));
+    rows.filter((g) => g.demo !== true && g.tombstone !== true && !dead.has(g.id));
   const localReal = live(opts.local);
   const cloudReal = live(opts.cloud);
   const baseReal = live(opts.base ?? []);
@@ -182,8 +185,12 @@ export function mergeLooks<T extends CloudLook>(
     }
     if (!pick) continue;
     const garmentIds = pick.garmentIds.filter((gid) => allowed.has(gid));
-    if (garmentIds.length < 2) continue;
-    out.push(garmentIds.length === pick.garmentIds.length ? pick : { ...pick, garmentIds });
+    const broken = garmentIds.length < 2;
+    out.push(
+      garmentIds.length === pick.garmentIds.length && !broken
+        ? pick
+        : { ...pick, garmentIds, broken },
+    );
   }
   return out;
 }

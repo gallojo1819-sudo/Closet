@@ -12,10 +12,14 @@ import {
   forgetUploaded,
   isForbidden,
   mapPool,
+  peekCoverSha,
   prefetchEagerThumbs,
+  refFileName,
+  sha8,
   uploadKind,
   wasUploaded,
 } from "./blobs.ts";
+import { isAlreadyStored } from "./guard.ts";
 import {
   mergeForSync,
   packCloud,
@@ -30,7 +34,7 @@ import {
   type SyncMemory,
   type WriteResult,
 } from "./commit.ts";
-import { clearPendingEdit, onUserEdit, peekPendingEdit } from "./edit.ts";
+import { clearPendingEdit, onRefPhotoEdit, onUserEdit, peekPendingEdit } from "./edit.ts";
 import { isHomeEmail, WRONG_ACCOUNT } from "./home.ts";
 import { idbCount, isCloudSrc, rewriteCloudSrcs } from "./src.ts";
 import {
@@ -53,7 +57,7 @@ import {
 } from "./copy.ts";
 import { supabaseConfigured } from "./env.ts";
 import { accountPool, type CloudMeta } from "./merge.ts";
-import { onOnlineIntent } from "./online.ts";
+
 
 const LAST_KEY = "closet.cloud.last";
 const PUSH_MS = 1000;
@@ -201,7 +205,7 @@ async function fallbackCas(
     body.deleted_looks = payload.deletedLooks ?? [];
   }
   if (!expected.updatedAt && expected.rev === null) {
-    if (revColumns) body.rev = 1;
+    body.rev = 1;
     const { data, error } = await sb
       .from("closet_meta")
       .insert({ user_id: userId, ...body })
@@ -216,10 +220,10 @@ async function fallbackCas(
     const row = Array.isArray(data) ? data[0] : null;
     return { ok: true, rev: revColumns ? 1 : 0, updatedAt: row?.updated_at ?? updatedAt };
   }
-  const nextRev = expected.rev === null ? null : expected.rev + 1;
-  if (nextRev !== null) body.rev = nextRev;
+  const nextRev = (expected.rev ?? 0) + 1;
+  body.rev = nextRev;
   let query = sb.from("closet_meta").update(body).eq("user_id", userId);
-  query = nextRev !== null && expected.rev !== null
+  query = expected.rev !== null
     ? query.eq("rev", expected.rev)
     : query.eq("updated_at", expected.updatedAt ?? "");
   const { data, error } = await query.select("updated_at");
@@ -270,12 +274,6 @@ async function uploadRef(userId: string, refPhoto: string | null): Promise<void>
     refDirty = false;
     return;
   }
-  const { data: listed } = await sb.storage.from(closetImagesBucket()).list(`${userId}/me`, { limit: 10 });
-  const exists = (listed ?? []).some((row) => row.name === "ref.jpg");
-  if (exists && !refDirty) {
-    uploadedRef.add("me:ref");
-    return;
-  }
   const key = isIdbKey(refPhoto) ? refPhoto : refImageKey();
   let blob: Blob | null = null;
   try {
@@ -284,11 +282,25 @@ async function uploadRef(userId: string, refPhoto: string | null): Promise<void>
     blob = null;
   }
   if (!blob) return;
-  const { error } = await sb.storage.from(closetImagesBucket()).upload(path, blob, {
-    upsert: Boolean(exists && refDirty),
+  const sha = await sha8(await blob.arrayBuffer());
+  const name = refFileName(sha);
+  const { data: listed } = await sb.storage.from(closetImagesBucket()).list(`${userId}/me`, { limit: 20 });
+  const names = new Set((listed ?? []).map((row) => row.name).filter(Boolean));
+  if (names.has(name)) {
+    uploadedRef.add("me:ref");
+    refDirty = false;
+    return;
+  }
+  if (!refDirty) {
+    uploadedRef.add("me:ref");
+    return;
+  }
+  const versioned = `${userId}/me/${name}`;
+  const { error } = await sb.storage.from(closetImagesBucket()).upload(versioned, blob, {
+    upsert: false,
     contentType: blob.type || "image/jpeg",
   });
-  if (!error) {
+  if (!error || isAlreadyStored(error)) {
     uploadedRef.add("me:ref");
     refDirty = false;
   }
@@ -383,16 +395,23 @@ async function pushNow() {
       write: (expected, payload) => casWrite(user.id, expected, payload),
       prepare: async (merged) => {
         try {
-          const kinds = await uploadMissing(user.id, liveGarments(merged));
+          const live = liveGarments(merged);
+          const kinds = await uploadMissing(user.id, live);
           if (!kinds.size) return merged;
+          const coverShas = new Map<string, string>();
+          for (const g of live) {
+            const sha = peekCoverSha(g.id);
+            if (sha) coverShas.set(g.id, sha);
+          }
           const rewritten = rewriteCloudSrcs(
-            liveGarments(merged).map((g) => ({
+            live.map((g) => ({
               ...g,
               imageSrc: g.imageSrc ?? "",
               cutoutSrc: g.cutoutSrc ?? "",
             })),
             user.id,
             kinds,
+            coverShas,
           );
           const byId = new Map(rewritten.map((g) => [g.id, g]));
           return {
@@ -410,13 +429,19 @@ async function pushNow() {
       },
     });
     mem = result.mem;
-    if (pushAgain) mem = markDirty(mem);
-    if (result.refused) {
-      setAccountProgress("Didn't save — that would drop pieces you didn't delete.");
+    pushAgain = false;
+    if (result.refused || !result.wrote) {
+      clearPendingEdit();
+      if (result.refused) {
+        setAccountProgress("Didn't save — that would drop pieces you didn't delete.");
+      }
       return;
     }
-    if (!result.wrote || !result.merged) return;
-    if (!pushAgain) {
+    if (!result.merged) {
+      clearPendingEdit();
+      return;
+    }
+    {
       applyMerged(result.merged);
       clearPendingEdit();
       const deletedG = result.merged.deletedGarments ?? [];
@@ -434,7 +459,7 @@ async function pushNow() {
     pushing = false;
     if (pushAgain) {
       pushAgain = false;
-      schedulePush();
+      clearPendingEdit();
     }
   }
 }
@@ -497,7 +522,6 @@ async function firstLink(userId: string) {
     if (n > 0) setAccountProgress(pulledCopy(n));
   } finally {
     linking = false;
-    if (shouldSchedulePush(mem)) schedulePush();
   }
 }
 
@@ -521,7 +545,6 @@ async function pullOnVisible() {
     await absorb(user.id, fetched);
   } finally {
     linking = false;
-    if (shouldSchedulePush(mem)) schedulePush();
   }
 }
 
@@ -562,17 +585,7 @@ export function startCloudSync(): () => void {
     void pullOnVisible();
   };
   const retryOnline = () => {
-    if (
-      onOnlineIntent({
-        online: typeof navigator === "undefined" || navigator.onLine !== false,
-        signedIn: Boolean(getAccount().user),
-        pendingEdit: mem.dirty || peekPendingEdit(),
-        pulled: mem.pulled,
-      }) !== "push"
-    ) {
-      return;
-    }
-    schedulePush();
+    void pullOnVisible();
   };
   const onOffline = () => {
     setLocalOnly(true);
@@ -593,11 +606,11 @@ export function startCloudSync(): () => void {
   ).connection;
   conn?.addEventListener?.("change", retryOnline);
 
+  const unsubRef = onRefPhotoEdit(() => {
+    uploadedRef.delete("me:ref");
+    refDirty = true;
+  });
   const unsubStore = useCloset.subscribe((s, prev) => {
-    if (s.refPhoto !== prev.refPhoto) {
-      uploadedRef.delete("me:ref");
-      refDirty = true;
-    }
     if (s.garments !== prev.garments) {
       const ids = new Set(s.garments.map((g) => g.id));
       for (const g of prev.garments) {
@@ -621,6 +634,7 @@ export function startCloudSync(): () => void {
     conn?.removeEventListener?.("change", retryOnline);
     unsubStore();
     unsubEdit();
+    unsubRef();
     if (pushTimer !== undefined) window.clearTimeout(pushTimer);
   };
 }

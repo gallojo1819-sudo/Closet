@@ -55,7 +55,7 @@ import {
 } from "./style";
 import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
-import { noteUserEdit } from "./cloud/edit";
+import { noteRefPhotoEdit, noteUserEdit } from "./cloud/edit";
 import { addLookTombstone, addTombstone, readTombstones } from "./cloud/tombstone";
 import { allowSampleRack } from "./cloud/home";
 import { EMPTY_ACCOUNT_CONFIRM } from "./cloud/copy";
@@ -737,6 +737,7 @@ export const useCloset = create<ClosetState>()(
         });
       },
       setRefPhoto: (key, backup) => {
+        noteRefPhotoEdit();
         if (key === null) {
           const prev = get().refPhoto;
           if (prev && isIdbKey(prev)) void deleteImage(prev).catch(() => {});

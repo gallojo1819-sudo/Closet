@@ -270,6 +270,28 @@ async function remoteFolder(userId: string, garmentId: string): Promise<Set<stri
   return names;
 }
 
+const coverSha = new Map<string, string>();
+
+export function peekCoverSha(id: string): string | undefined {
+  return coverSha.get(id);
+}
+
+export async function sha8(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-1", bytes);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 8);
+}
+
+export function coverFileName(sha: string): string {
+  return `c-${sha}.jpg`;
+}
+
+export function refFileName(sha: string): string {
+  return `ref-${sha}.jpg`;
+}
+
 function rememberRemote(userId: string, garmentId: string, name: string) {
   const folder = `${userId}/${garmentId}`;
   const names = folderCache.get(folder) ?? new Set<string>();
@@ -279,9 +301,10 @@ function rememberRemote(userId: string, garmentId: string, name: string) {
 
 export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Promise<boolean> {
   const mark = `${g.id}:${kind}`;
-  if (uploaded.has(mark)) return true;
+  if (uploaded.has(mark) && (kind !== "c" || peekCoverSha(g.id))) return true;
   const sb = getSupabase();
   if (!sb) return false;
+  if (kind === "c") return uploadVersionedCover(userId, g);
   const fileName = `${kind}.jpg`;
   const listed = await remoteFolder(userId, g.id);
   const remoteExists = listed?.has(fileName) ?? false;
@@ -338,6 +361,47 @@ export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Pr
       /* IDB cache is best-effort */
     }
   }
+  return true;
+}
+
+async function uploadVersionedCover(userId: string, g: Garment): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) return false;
+  const raw = await blobFor(g, "c");
+  if (!raw) return false;
+  let blob: Blob;
+  try {
+    blob = await blobAsJpeg(raw);
+  } catch (err) {
+    setLocalOnly(true);
+    throw err;
+  }
+  const sha = await sha8(await blob.arrayBuffer());
+  const fileName = coverFileName(sha);
+  const listed = await remoteFolder(userId, g.id);
+  if (listed?.has(fileName)) {
+    coverSha.set(g.id, sha);
+    uploaded.add(`${g.id}:c`);
+    return true;
+  }
+  const path = `${userId}/${g.id}/${fileName}`;
+  const { error } = await sb.storage.from(closetImagesBucket()).upload(path, blob, {
+    upsert: false,
+    contentType: "image/jpeg",
+  });
+  if (error) {
+    if (isAlreadyStored(error)) {
+      rememberRemote(userId, g.id, fileName);
+      coverSha.set(g.id, sha);
+      uploaded.add(`${g.id}:c`);
+      return true;
+    }
+    setLocalOnly(true);
+    throw error;
+  }
+  rememberRemote(userId, g.id, fileName);
+  coverSha.set(g.id, sha);
+  uploaded.add(`${g.id}:c`);
   return true;
 }
 

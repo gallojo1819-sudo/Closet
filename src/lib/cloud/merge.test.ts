@@ -30,11 +30,11 @@ function meta(ids: string[], extra: Partial<CloudMeta> = {}): CloudMeta {
 }
 
 describe("accountPool", () => {
-  it("drops demo and archived, never ships sample as the account rack", () => {
+  it("drops demo and keeps archived until a tombstone", () => {
     const pool = accountPool([g("real"), g("sample", { demo: true }), g("old", { archived: true })]);
     assert.deepEqual(
-      pool.map((x) => x.id),
-      ["real"],
+      pool.map((x) => x.id).sort(),
+      ["old", "real"],
     );
   });
 });
@@ -206,7 +206,9 @@ describe("mergeAccount", () => {
     assert.equal(result.action, "union");
     assert.equal(result.next.garments.length, 2);
     assert.ok(result.next.looks.some((l) => l.id === "look-b"));
-    assert.ok(!result.next.looks.some((l) => l.id === "look-a"));
+    const short = result.next.looks.find((l) => l.id === "look-a");
+    assert.equal(short?.broken, true);
+    assert.deepEqual(short?.garmentIds, ["a"]);
   });
 
   it("tombstone drops g_x and a look that falls under 2 pieces; looks do not grow", () => {
@@ -234,6 +236,8 @@ describe("mergeAccount", () => {
     assert.ok(result.next.looks.some((l) => l.id === "stay"));
     assert.ok(!result.next.looks.some((l) => l.garmentIds.includes("g_x")));
     assert.ok(result.next.looks.length <= before + 1);
-    assert.ok(!result.next.looks.some((l) => l.id === "die"));
+    const die = result.next.looks.find((l) => l.id === "die");
+    assert.equal(die?.broken, true);
+    assert.ok(!die?.garmentIds.includes("g_x"));
   });
 });

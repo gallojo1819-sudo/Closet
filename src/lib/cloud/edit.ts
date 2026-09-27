@@ -25,3 +25,17 @@ export function noteUserEdit(): void {
   pending = true;
   for (const fn of listeners) fn();
 }
+
+const refListeners = new Set<Listener>();
+
+/** Only an explicit reference-photo change. A cloud merge must not set this. */
+export function onRefPhotoEdit(fn: Listener): () => void {
+  refListeners.add(fn);
+  return () => {
+    refListeners.delete(fn);
+  };
+}
+
+export function noteRefPhotoEdit(): void {
+  for (const fn of refListeners) fn();
+}

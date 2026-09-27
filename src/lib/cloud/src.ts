@@ -16,7 +16,7 @@ export function parseCloudSrc(
 ): { userId: string; id: string; kind: BlobKind; path: string } | null {
   if (!isCloudSrc(s)) return null;
   const path = s.slice(CLOUD_PREFIX.length);
-  const m = /^([^/]+)\/([^/]+)\/([oct])\.jpg$/.exec(path);
+  const m = /^([^/]+)\/([^/]+)\/([oct])(?:-([0-9a-f]{8}))?\.jpg$/.exec(path);
   if (!m) return null;
   return { userId: m[1]!, id: m[2]!, kind: m[3] as BlobKind, path };
 }
@@ -62,14 +62,18 @@ export function rewriteCloudSrcs<T extends SrcGarment>(
   garments: T[],
   userId: string,
   uploadedKinds: Set<string>,
+  coverShas?: ReadonlyMap<string, string>,
 ): T[] {
   return garments.map((g) => {
     const o = uploadedKinds.has(`${g.id}:o`);
     const c = uploadedKinds.has(`${g.id}:c`);
     const t = uploadedKinds.has(`${g.id}:t`);
     if (!o && !c && !t) return g;
+    const sha = c ? coverShas?.get(g.id) : undefined;
     const cutoutSrc = c
-      ? cloudSrc(userId, g.id, "c")
+      ? sha
+        ? `${CLOUD_PREFIX}${userId}/${g.id}/c-${sha}.jpg`
+        : cloudSrc(userId, g.id, "c")
       : t
         ? cloudSrc(userId, g.id, "t")
         : g.cutoutSrc;
