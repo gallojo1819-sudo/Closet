@@ -29,6 +29,7 @@ import {
   rpcFailurePlan,
   shouldSchedulePush,
   freshMemory,
+  isRevConflict,
   markDirty,
   type FetchCloud,
   type SyncMemory,
@@ -52,6 +53,7 @@ import {
 } from "./client.ts";
 import {
   LOCAL_ONLY_CAPTION,
+  SAVE_RETRY,
   cloudErrorCopy,
   pulledCopy,
 } from "./copy.ts";
@@ -158,6 +160,7 @@ async function casWrite(
       p_deleted_looks: packed.deletedLooks ?? [],
     });
     if (error) {
+      if (isRevConflict(error)) return { ok: false, conflict: true };
       if (!isMissingRpc(error)) {
         if (!isForbidden(error)) setAccountProgress("Could not save to your account.");
         return { ok: false, conflict: false };
@@ -211,7 +214,11 @@ async function fallbackCas(
       .insert({ user_id: userId, ...body })
       .select("updated_at");
     if (error) {
-      if (error.code === "23505" || /duplicate|already exists/i.test(error.message ?? "")) {
+      if (
+        isRevConflict(error) ||
+        error.code === "23505" ||
+        /duplicate|already exists/i.test(error.message ?? "")
+      ) {
         return { ok: false, conflict: true };
       }
       if (!isForbidden(error)) setAccountProgress("Could not save to your account.");
@@ -228,6 +235,7 @@ async function fallbackCas(
     : query.eq("updated_at", expected.updatedAt ?? "");
   const { data, error } = await query.select("updated_at");
   if (error) {
+    if (isRevConflict(error)) return { ok: false, conflict: true };
     if (!isForbidden(error)) setAccountProgress("Could not save to your account.");
     return { ok: false, conflict: false };
   }
@@ -268,7 +276,15 @@ async function uploadRef(userId: string, refPhoto: string | null): Promise<void>
   const path = refObjectPath(userId);
   if (!refPhoto) {
     if (refDirty) {
-      await sb.storage.from(closetImagesBucket()).remove([path]);
+      const folder = `${userId}/me`;
+      const { data: listed } = await sb.storage.from(closetImagesBucket()).list(folder, { limit: 100 });
+      const paths = new Set<string>([path]);
+      for (const row of listed ?? []) {
+        if (row.name === "ref.jpg" || (row.name && /^ref-.+\.jpg$/i.test(row.name))) {
+          paths.add(`${folder}/${row.name}`);
+        }
+      }
+      await sb.storage.from(closetImagesBucket()).remove([...paths]);
       uploadedRef.delete("me:ref");
     }
     refDirty = false;
@@ -368,6 +384,15 @@ async function absorb(userId: string, fetched: FetchCloud): Promise<void> {
   );
 }
 
+function finishDeferredEdit() {
+  if (!pushAgain) return;
+  mem = markDirty(mem);
+  if (!shouldSchedulePush(mem) || linking || holdPush || pushing) return;
+  if (!getAccount().user || typeof window === "undefined") return;
+  pushAgain = false;
+  schedulePush();
+}
+
 async function pushNow() {
   const user = getAccount().user;
   if (!user) return;
@@ -375,12 +400,13 @@ async function pushNow() {
     pushAgain = true;
     return;
   }
+  if (!shouldSchedulePush(mem)) return;
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     setLocalOnly(true);
-    setAccountProgress(LOCAL_ONLY_CAPTION);
+    setAccountProgress(SAVE_RETRY);
+    pushAgain = true;
     return;
   }
-  if (!shouldSchedulePush(mem)) return;
   if (pushing) {
     pushAgain = true;
     return;
@@ -429,38 +455,42 @@ async function pushNow() {
       },
     });
     mem = result.mem;
-    pushAgain = false;
-    if (result.refused || !result.wrote) {
+    if (result.refused) {
       clearPendingEdit();
-      if (result.refused) {
-        setAccountProgress("Didn't save — that would drop pieces you didn't delete.");
-      }
+      setAccountProgress("Didn't save — that would drop pieces you didn't delete.");
       return;
     }
-    if (!result.merged) {
-      clearPendingEdit();
+    if (!result.wrote || !result.merged) {
+      if (result.retry) setAccountProgress(SAVE_RETRY);
+      else clearPendingEdit();
       return;
     }
-    {
-      applyMerged(result.merged);
-      clearPendingEdit();
-      const deletedG = result.merged.deletedGarments ?? [];
-      const deletedL = result.merged.deletedLooks ?? [];
-      clearTombstones(deletedG);
-      clearLookTombstones(deletedL);
-      writeLast(
-        user.id,
-        liveGarments(result.merged).map((g) => g.id),
-      );
-      setLocalOnly(false);
-      void uploadRef(user.id, useCloset.getState().refPhoto);
+    // A newer edit arrived while this snapshot was in flight. Keep it.
+    // Adopt rev and base from the write; do not paint the pre-edit row.
+    if (pushAgain) {
+      mem = markDirty(mem);
+      return;
     }
+    clearPendingEdit();
+    applyMerged(result.merged);
+    if (pushAgain) {
+      mem = markDirty(mem);
+      return;
+    }
+    const deletedG = result.merged.deletedGarments ?? [];
+    const deletedL = result.merged.deletedLooks ?? [];
+    clearTombstones(deletedG);
+    clearLookTombstones(deletedL);
+    writeLast(
+      user.id,
+      liveGarments(result.merged).map((g) => g.id),
+    );
+    setLocalOnly(false);
+    if (getAccount().progress === SAVE_RETRY) setAccountProgress(null);
+    void uploadRef(user.id, useCloset.getState().refPhoto);
   } finally {
     pushing = false;
-    if (pushAgain) {
-      pushAgain = false;
-      clearPendingEdit();
-    }
+    finishDeferredEdit();
   }
 }
 
@@ -495,12 +525,15 @@ function schedulePush() {
 
 async function firstLink(userId: string) {
   linking = true;
+  let deferEdit = true;
   try {
     const email = getAccount().user?.email;
     const fetched = await fetchCloud(userId);
     if (!fetched.ok) return;
     const cloudCount = fetched.cloud ? accountPool(fetched.cloud.garments).length : 0;
     if (!isHomeEmail(email) && cloudCount === 0) {
+      deferEdit = false;
+      pushAgain = false;
       patchAccount({ wrongAccount: true, progress: WRONG_ACCOUNT });
       return;
     }
@@ -519,9 +552,10 @@ async function firstLink(userId: string) {
       }
     }
     const n = accountPool(useCloset.getState().garments).length;
-    if (n > 0) setAccountProgress(pulledCopy(n));
+    if (n > 0 && getAccount().progress !== SAVE_RETRY) setAccountProgress(pulledCopy(n));
   } finally {
     linking = false;
+    if (deferEdit) finishDeferredEdit();
   }
 }
 
@@ -545,7 +579,33 @@ async function pullOnVisible() {
     await absorb(user.id, fetched);
   } finally {
     linking = false;
+    finishDeferredEdit();
   }
+}
+
+/** Tests start from a cold module. Production never calls this. */
+export function resetCloudSyncForTests(): void {
+  started = false;
+  linking = false;
+  pushing = false;
+  pushAgain = false;
+  holdPush = false;
+  mem = freshMemory();
+  revColumns = null;
+  rpcOk = null;
+  refDirty = false;
+  clearPendingEdit();
+  if (pushTimer !== undefined && typeof window !== "undefined") {
+    window.clearTimeout(pushTimer);
+  }
+  pushTimer = undefined;
+}
+
+/** The Retry line, or the next edit, sends the dirty rack again. */
+export function retryCloudSave(): void {
+  if (!peekPendingEdit() && !mem.dirty) return;
+  mem = markDirty(mem);
+  schedulePush();
 }
 
 export function startCloudSync(): () => void {

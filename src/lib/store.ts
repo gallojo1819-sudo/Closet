@@ -55,6 +55,7 @@ import {
 } from "./style";
 import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
+import { forgetCoverSha } from "./cloud/blobs";
 import { noteRefPhotoEdit, noteUserEdit } from "./cloud/edit";
 import { addLookTombstone, addTombstone, readTombstones } from "./cloud/tombstone";
 import { allowSampleRack } from "./cloud/home";
@@ -277,6 +278,7 @@ export const useCloset = create<ClosetState>()(
         return id;
       },
       updateGarment: (id, patch, opts) => {
+        if ("cutoutSrc" in patch) forgetCoverSha(id);
         set((s) => ({
           garments: s.garments.map((g) => (g.id === id ? { ...g, ...patch } : g)),
         }));

@@ -86,17 +86,40 @@ export function liveLookIds(meta: CloudMeta): string[] {
   return meta.looks.filter((l) => l.tombstone !== true).map((l) => l.id);
 }
 
+/**
+ * Base is the last server snapshot, never the merged rack.
+ * An unsent local edit lives in the store; the next push diffs it against this row.
+ * A null server row means there is no base.
+ */
 export function rememberPull(mem: SyncMemory, cloud: CloudMeta | null, merged: CloudMeta): SyncMemory {
-  const snap = cloneMeta(merged);
+  void merged;
+  if (!cloud) {
+    return {
+      pulled: true,
+      dirty: mem.dirty,
+      rev: null,
+      updatedAt: null,
+      baseGarmentIds: [],
+      baseLookIds: [],
+      base: null,
+    };
+  }
+  const snap = cloneMeta(cloud);
   return {
     pulled: true,
     dirty: mem.dirty,
-    rev: cloud && typeof cloud.rev === "number" ? cloud.rev : null,
-    updatedAt: cloud?.updatedAt ?? null,
+    rev: typeof cloud.rev === "number" ? cloud.rev : null,
+    updatedAt: cloud.updatedAt ?? null,
     baseGarmentIds: liveGarmentIds(snap),
     baseLookIds: liveLookIds(snap),
     base: snap,
   };
+}
+
+/** Postgres 40001 from closet_meta_require_rev_bump. Retry the compare-and-swap; do not abort. */
+export function isRevConflict(error: { code?: string; message?: string }): boolean {
+  if (error.code === "40001") return true;
+  return /stale write refused/i.test(error.message ?? "");
 }
 
 function uniq(ids: string[]): string[] {
@@ -226,17 +249,19 @@ export async function pushIfDirty(opts: {
   mem: SyncMemory;
   wrote: boolean;
   refused: boolean;
+  /** Network failure or three conflicts. Keep the edit and retry. */
+  retry: boolean;
   merged: CloudMeta | null;
 }> {
   if (!shouldSchedulePush(opts.mem)) {
-    return { mem: opts.mem, wrote: false, refused: false, merged: null };
+    return { mem: opts.mem, wrote: false, refused: false, retry: false, merged: null };
   }
 
   const base = opts.mem.base;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const fetched = await opts.fetchCloud();
-    if (!fetched.ok) return { mem: opts.mem, wrote: false, refused: false, merged: null };
+    if (!fetched.ok) return { mem: opts.mem, wrote: false, refused: false, retry: true, merged: null };
     const cloud = fetched.cloud;
     const merged = mergeForSync({
       local: opts.local,
@@ -269,6 +294,7 @@ export async function pushIfDirty(opts: {
         mem: { ...opts.mem, dirty: false },
         wrote: false,
         refused: true,
+        retry: false,
         merged: null,
       };
     }
@@ -305,15 +331,15 @@ export async function pushIfDirty(opts: {
         stored,
         stored ?? payload,
       );
-      return { mem: nextMem, wrote: true, refused: false, merged: stored };
+      return { mem: nextMem, wrote: true, refused: false, retry: false, merged: stored };
     }
     if (!result.conflict) {
-      return { mem: opts.mem, wrote: false, refused: false, merged: null };
+      return { mem: opts.mem, wrote: false, refused: false, retry: false, merged: null };
     }
     // Next attempt re-fetches and merges against the same base, so an edit
     // on this phone still diffs from the last pull.
     void base;
   }
 
-  return { mem: opts.mem, wrote: false, refused: false, merged: null };
+  return { mem: opts.mem, wrote: false, refused: false, retry: true, merged: null };
 }

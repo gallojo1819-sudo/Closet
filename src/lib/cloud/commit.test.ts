@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   freshMemory,
+  isRevConflict,
   markDirty,
   mergeForSync,
   packCloud,
@@ -186,6 +187,14 @@ function createClient(hub: Hub, initial: CloudMeta) {
       mem = markDirty(mem);
       considerSchedule();
     },
+    editLook(id: string, name: string) {
+      local = {
+        ...local,
+        looks: local.looks.map((l) => (l.id === id ? { ...l, name } : l)),
+      };
+      mem = markDirty(mem);
+      considerSchedule();
+    },
     deleteGarment(id: string) {
       deletedGarments = [...new Set([...deletedGarments, id])];
       local = {
@@ -249,6 +258,34 @@ describe("two clients", () => {
     look(`l${i}`, [garments[i % garments.length]!.id, garments[(i + 1) % garments.length]!.id, garments[(i + 2) % garments.length]!.id]),
   );
   const seed = meta(garments, looks);
+
+  it("an unsent garment edit survives another pull and is what gets pushed", async () => {
+    const hub = createHub(seed);
+    const phone = createClient(hub, seed);
+    await phone.open();
+    phone.editGarment("g1", "Renamed");
+    await phone.open();
+    assert.equal(phone.memory().base?.garments.find((g) => g.id === "g1")?.name, "g1");
+    assert.equal(phone.local().garments.find((g) => g.id === "g1")?.name, "Renamed");
+    await phone.advance(1000);
+    assert.equal(hub.writes(), 1);
+    assert.equal(hub.cloud()?.garments.find((g) => g.id === "g1")?.name, "Renamed");
+    assert.equal(phone.local().garments.find((g) => g.id === "g1")?.name, "Renamed");
+  });
+
+  it("an unsent look edit survives another pull and is what gets pushed", async () => {
+    const hub = createHub(seed);
+    const phone = createClient(hub, seed);
+    await phone.open();
+    phone.editLook("l0", "Sunday");
+    await phone.open();
+    assert.equal(phone.memory().base?.looks.find((l) => l.id === "l0")?.name, undefined);
+    assert.equal(phone.local().looks.find((l) => l.id === "l0")?.name, "Sunday");
+    await phone.advance(1000);
+    assert.equal(hub.writes(), 1);
+    assert.equal(hub.cloud()?.looks.find((l) => l.id === "l0")?.name, "Sunday");
+    assert.equal(phone.local().looks.find((l) => l.id === "l0")?.name, "Sunday");
+  });
 
   it("a stale local cache left idle writes nothing and uploads nothing", async () => {
     const hub = createHub(seed);
@@ -392,6 +429,15 @@ describe("conflict retry", () => {
     assert.equal(writes, 2);
     assert.equal(server.garments.find((g) => g.id === "g1")?.name, "Alpha");
     assert.equal(server.garments.find((g) => g.id === "g2")?.name, "Beta");
+  });
+});
+
+describe("rev conflict", () => {
+  it("errcode 40001 is a conflict, not an abort", () => {
+    assert.equal(isRevConflict({ code: "40001", message: "closet_meta: stale write refused" }), true);
+    assert.equal(isRevConflict({ message: "closet_meta: stale write refused (rev must be 5, got 4)" }), true);
+    assert.equal(isRevConflict({ code: "42501", message: "permission denied" }), false);
+    assert.equal(rpcFailurePlan({ code: "40001", message: "closet_meta: stale write refused" }), "abort");
   });
 });
 

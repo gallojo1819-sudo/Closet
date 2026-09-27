@@ -3,14 +3,13 @@ import { getAccount } from "./cloud/account";
 import { fetchCloudBlob, signedCloudUrl } from "./cloud/blobs";
 import { garmentObjectPath } from "./cloud/client";
 import { isCloudSrc, paintSrc, parseCloudSrc, parseIdbImageKey } from "./cloud/src";
-import { imageKey, isIdbKey, resolveImage, watchImage } from "./images";
+import { cloudImageKey, isIdbKey, resolveImage, watchImage } from "./images";
 
 async function resolveDisplaySrc(src: string): Promise<string> {
   if (isCloudSrc(src)) {
     const parsed = parseCloudSrc(src);
     if (!parsed) return "";
-    const key = imageKey(parsed.id, parsed.kind);
-    const hit = await resolveImage(key);
+    const hit = await resolveImage(cloudImageKey(parsed.path));
     if (hit) return paintSrc(hit, "");
     const signed = await signedCloudUrl(parsed.path);
     void fetchCloudBlob(parsed.id, parsed.kind, parsed.userId, src);
@@ -39,7 +38,7 @@ async function resolveDisplaySrc(src: string): Promise<string> {
 function watchKey(src: string): string {
   if (isCloudSrc(src)) {
     const parsed = parseCloudSrc(src);
-    return parsed ? imageKey(parsed.id, parsed.kind) : src;
+    return parsed ? cloudImageKey(parsed.path) : src;
   }
   return src;
 }

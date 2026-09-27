@@ -27,6 +27,11 @@ export function imageKey(id: string, kind: "o" | "c" | "t"): string {
   return `${KEY_PREFIX}${id}:${kind}`;
 }
 
+/** One cache entry per storage object, so a new c-<sha>.jpg does not reuse the old cover. */
+export function cloudImageKey(path: string): string {
+  return `${KEY_PREFIX}cloud:${path}`;
+}
+
 export function isIdbKey(src: string | undefined | null): src is string {
   return typeof src === "string" && src.startsWith(KEY_PREFIX);
 }

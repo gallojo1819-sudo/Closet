@@ -1,4 +1,5 @@
 import {
+  cloudImageKey,
   getImage,
   imageKey,
   isIdbKey,
@@ -100,19 +101,26 @@ export async function fetchCloudBlob(
   userId?: string,
   srcHint?: string,
 ): Promise<boolean> {
-  const mark = `${id}:${kind}`;
+  const hinted = parseCloudSrc(srcHint);
+  const hintPath = hinted && hinted.kind === kind ? hinted.path : "";
+  const mark = hintPath ? `${id}:${kind}:${hintPath}` : `${id}:${kind}`;
   const pending = inflight.get(mark);
   if (pending) return pending;
   const work = (async () => {
-    if (await hasLocalBlob(id, kind)) {
+    if (hintPath) {
+      try {
+        if (await getImage(cloudImageKey(hintPath))) return true;
+      } catch {
+        /* IDB miss falls through to storage */
+      }
+    } else if (await hasLocalBlob(id, kind)) {
       return true;
     }
     const uid = userId ?? getAccount().user?.id;
     const sb = getSupabase();
     if (!sb) return false;
     const paths: string[] = [];
-    const hinted = parseCloudSrc(srcHint);
-    if (hinted) paths.push(hinted.path);
+    if (hintPath) paths.push(hintPath);
     if (uid) paths.push(garmentObjectPath(uid, id, kind));
     if (kind === "t" && uid) {
       paths.push(garmentObjectPath(uid, id, "c"));
@@ -125,6 +133,7 @@ export async function fetchCloudBlob(
         continue;
       }
       if (!data || data.size === 0) continue;
+      await putImage(cloudImageKey(path), data);
       await putImage(imageKey(id, kind), data);
       return true;
     }
@@ -142,9 +151,9 @@ export function requestThumb(id: string): void {
   void fetchCloudBlob(id, "t");
 }
 
-export function requestCutout(id: string): void {
+export function requestCutout(id: string, hint?: string): void {
   void (async () => {
-    if (await fetchCloudBlob(id, "c")) return;
+    if (await fetchCloudBlob(id, "c", undefined, hint)) return;
     await fetchCloudBlob(id, "o");
   })();
 }
@@ -276,6 +285,12 @@ export function peekCoverSha(id: string): string | undefined {
   return coverSha.get(id);
 }
 
+/** The next cover upload must hash the current bytes, not the previous sha. */
+export function forgetCoverSha(id: string): void {
+  coverSha.delete(id);
+  uploaded.delete(`${id}:c`);
+}
+
 export async function sha8(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-1", bytes);
   return [...new Uint8Array(digest)]
@@ -301,7 +316,7 @@ function rememberRemote(userId: string, garmentId: string, name: string) {
 
 export async function uploadKind(userId: string, g: Garment, kind: BlobKind): Promise<boolean> {
   const mark = `${g.id}:${kind}`;
-  if (uploaded.has(mark) && (kind !== "c" || peekCoverSha(g.id))) return true;
+  if (kind !== "c" && uploaded.has(mark)) return true;
   const sb = getSupabase();
   if (!sb) return false;
   if (kind === "c") return uploadVersionedCover(userId, g);
