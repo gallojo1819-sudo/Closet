@@ -250,6 +250,21 @@ describe("two clients", () => {
   );
   const seed = meta(garments, looks);
 
+  it("a stale local cache left idle writes nothing and uploads nothing", async () => {
+    const hub = createHub(seed);
+    const stale = meta(garments.slice(0, 3), looks.slice(0, 4));
+    const phone = createClient(hub, stale);
+    await phone.open();
+    phone.focus();
+    phone.reroll();
+    await phone.advance(10 * MINUTE);
+    assert.equal(hub.writes(), 0);
+    assert.deepEqual(hub.puts, []);
+    assert.equal(liveIds(hub.cloud()).length, garments.length);
+    assert.equal(hub.cloud()?.looks.length, looks.length);
+    assert.equal(hub.cloud()?.updatedAt, "2026-09-26T14:00:00.000Z");
+  });
+
   it("idle clients do not write for 10 simulated minutes", async () => {
     const hub = createHub(seed);
     const a = createClient(hub, seed);

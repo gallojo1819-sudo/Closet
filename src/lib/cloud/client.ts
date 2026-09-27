@@ -92,7 +92,17 @@ export function refObjectPath(userId: string): string {
   return `${userId}/me/ref.jpg`;
 }
 
+/** Preview sign-in must return to that host, not the production origin. */
+export function redirectToFromLocation(loc: {
+  origin: string;
+  pathname: string;
+  search?: string;
+}): string {
+  const path = loc.pathname.startsWith("/") ? loc.pathname : `/${loc.pathname}`;
+  return `${loc.origin}${path}${loc.search ?? ""}`;
+}
+
 export function authRedirectTo(): string {
   if (typeof window === "undefined") return "";
-  return window.location.origin;
+  return redirectToFromLocation(window.location);
 }
