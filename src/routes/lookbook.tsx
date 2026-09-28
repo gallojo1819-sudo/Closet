@@ -10,7 +10,7 @@ import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import {
-  chapterVisible,
+  buildReshuffleRow,
   comboKey,
   emptyFilterCopy,
   lookbookPool,
@@ -18,30 +18,6 @@ import {
   unusedFromLooks,
   visibleHero,
 } from "@/lib/lookbook";
-import { composeChapter } from "@/lib/ai";
-import {
-  allIdsInvented,
-  chapterPaint,
-  COMPOSE_TIMEOUT_MS,
-  composeCacheKey,
-  composeMessage,
-  composeOnce,
-  composeRack,
-  keepCardsOnFail,
-  NOT_ON_RACK,
-  NOT_THESE_LINE,
-  peekCompose,
-  rememberCompose,
-  repeatsBlocked,
-  RESHUFFLING,
-  settleCompose,
-  STYLIST_HOLDS,
-  STYLIST_SILENT,
-  stylistMiss,
-  toShownLook,
-} from "@/lib/compose";
-import { criticKey, criticRejectOnly } from "@/lib/critic";
-import { withTimeout } from "@/lib/ingest";
 import { seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { spreadTitle } from "@/lib/look";
@@ -163,7 +139,6 @@ function LookbookPage() {
   const outfitWith = useCloset((s) => s.outfitWith);
   const [play, setPlay] = useState(false);
   const [weekPulse, setWeekPulse] = useState(0);
-  const [weekNote, setWeekNote] = useState<string | null>(null);
   const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]["id"]>("weekday");
   const [seasonChip, setSeasonChip] = useState<"auto" | Season>("auto");
   const [houseChip, setHouseChip] = useState<"all" | House>("all");
@@ -205,147 +180,23 @@ function LookbookPage() {
   const piecesFor = (look: Look) =>
     look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
-  const chapterKey = `${occasion}:${houseChip}:${season}:${color ?? ""}`;
-  const [skip, setSkip] = useState<{ chapter: string; ids: string[][] } | null>(null);
-  const wearRack = useMemo(() => composeRack(garments, season), [garments, season]);
-  const rankKey = `${occasion}:${season}:${houseChip}:${color ?? ""}:${looksAll.length}:${garments.length}`;
-  const rankCache = useRef(new Map<string, ReturnType<typeof chapterVisible>>());
-  const ranked = useMemo(() => {
-    const hit = rankCache.current.get(rankKey);
-    if (hit) return hit;
-    const source = book.length ? book : looksAll;
-    const next = chapterVisible(source, garments, occasion, {
-      season,
-      house: houseChip,
-      color,
-      min: 3,
-      pad: false,
-    });
-    rankCache.current.set(rankKey, next);
-    return next;
-  }, [rankKey, book, looksAll, garments, occasion, season, houseChip, color]);
-  const [attempt, setAttempt] = useState(0);
-  const [reshuffleGen, setReshuffleGen] = useState(0);
-  const stableKey = composeCacheKey(
-    occasion,
-    season,
-    houseChip,
-    wearRack.map((g) => g.id),
+  const filterKey = `${occasion}:${season}:${houseChip}:${color ?? ""}:${garments.length}`;
+  const openRow = useMemo(
+    () =>
+      buildReshuffleRow(garments, occasion, {
+        house: houseChip === "all" ? undefined : houseChip,
+        season,
+        color,
+        salt: 1,
+        cap: 8,
+      }),
+    [garments, occasion, season, houseChip, color],
   );
-  const blockedRef = useRef(new Map<string, string[][]>());
-  const forceRef = useRef(false);
-  const [screen, setScreen] = useState<{
-    key: string;
-    cards: { look: Look; why: string }[];
-    waiting: boolean;
-    miss: "silent" | "holds" | null;
-  }>({ key: "", cards: [], waiting: false, miss: null });
-  const rackRef = useRef(wearRack);
-  const blockedNow = blockedRef.current.get(stableKey) ?? [];
-  const notTheseNow = skip?.chapter === chapterKey ? skip.ids : blockedNow;
-  rackRef.current = wearRack;
-  const notTheseRef = useRef(notTheseNow);
-  const reshuffleRef = useRef(false);
-  notTheseRef.current = notTheseNow;
-  reshuffleRef.current = skip?.chapter === chapterKey;
-  useEffect(() => {
-    if (!forceRef.current) return;
-    const askRack = rackRef.current;
-    const paint = chapterPaint(peekCompose(stableKey));
-    const forcing = forceRef.current;
-    if (!paint.call && !forcing) return;
-    forceRef.current = false;
-    if (!askRack.length) {
-      setScreen((s) => (s.key === stableKey ? { ...s, waiting: false } : s));
-      return;
-    }
-    let live = true;
-    const blocked = notTheseRef.current;
-    setScreen((s) =>
-      s.key === stableKey
-        ? {
-            ...s,
-            waiting: true,
-            miss: null,
-            cards: forcing ? [] : paint.showCards ? s.cards : [],
-          }
-        : s,
-    );
-    void composeOnce(`${stableKey}|try|${attempt}|gen|${reshuffleGen}`, async () => {
-      const ask = async (extra?: string) => {
-        const message = composeMessage(
-          askRack,
-          { occasion, season, house: houseChip },
-          blocked,
-        );
-        const composed = await withTimeout(
-          composeChapter({ data: { message: extra ? `${message}\n\n${extra}` : message } }),
-          COMPOSE_TIMEOUT_MS,
-        );
-        if (!composed) return { ok: false as const, error: "timeout" };
-        if (!composed.ok) return { ok: false as const, error: composed.error || "timeout" };
-        return { ok: true as const, looks: composed.looks };
-      };
-      try {
-        let turned = await ask();
-        if (turned.ok && allIdsInvented(turned.looks, askRack)) {
-          turned = await ask(NOT_ON_RACK);
-        }
-        if (!turned.ok) return turned;
-        let looks = settleCompose(turned.looks, askRack, blocked);
-        if (!looks.length && repeatsBlocked(turned.looks, blocked)) {
-          const again = await ask(NOT_THESE_LINE);
-          if (!again.ok) return again;
-          looks = settleCompose(again.looks, askRack, blocked);
-          if (!looks.length) return { ok: false as const, error: "repeat" };
-        }
-        // Hide a rejected composed card. This is not the saved looks array.
-        const survived = criticRejectOnly(
-          looks.map((look) => toShownLook(look, occasion)),
-          askRack,
-          null,
-        );
-        const allowed = new Set(survived.map((look) => criticKey(look.garmentIds)));
-        const kept = looks.filter((look) => allowed.has(criticKey(look.ids)));
-        if (!kept.length) return { ok: false as const, error: "holds" };
-        return { ok: true as const, looks: kept };
-      } catch {
-        return { ok: false as const, error: "timeout" };
-      }
-    }).then((result) => {
-      if (!live) return;
-      if (!result.ok) {
-        const kind = stylistMiss(result.error);
-        setScreen((s) => {
-          if (s.key !== stableKey) return s;
-          const keep = keepCardsOnFail(s.cards.length > 0, kind);
-          return { ...s, waiting: false, miss: kind, cards: keep ? s.cards : [] };
-        });
-        if (reshuffleRef.current) setWeekNote(null);
-        return;
-      }
-      rememberCompose(stableKey, result.looks);
-      setScreen({
-        key: stableKey,
-        waiting: false,
-        miss: null,
-        cards: result.looks.map((look) => ({
-          look: toShownLook(look, occasion),
-          why: look.why,
-        })),
-      });
-      if (reshuffleRef.current) setWeekNote(`Reshuffle · ${result.looks.length} looks`);
-    });
-    return () => {
-      live = false;
-    };
-  }, [stableKey, attempt, reshuffleGen, occasion, houseChip, season]);
-  const cards =
-    screen.key === stableKey && screen.cards.length > 0
-      ? screen.cards
-      : ranked.map((look) => ({ look, why: "" }));
-  const waiting = screen.waiting;
-  const miss = screen.miss;
+  const [shown, setShown] = useState<{ key: string; looks: Look[] } | null>(null);
+  const [salt, setSalt] = useState(1);
+  const row =
+    shown && shown.key === filterKey && shown.looks.length > 0 ? shown.looks : openRow;
+  const cards = row.map((look) => ({ look, why: "" }));
   const visible = cards;
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
@@ -410,10 +261,12 @@ function LookbookPage() {
         Lookbook
       </h1>
       {hydrated && (
-        <p className="mt-3 text-ink-soft max-w-xl">
-          {looksAll.length} looks · {chapterLabel} ·{" "}
-          {seasonLabel.replace(/^Auto · /, "")}
-        </p>
+        <>
+          <p className="mt-3 text-ink-soft max-w-xl">
+            {row.length} looks · {chapterLabel} · {seasonLabel.replace(/^Auto · /, "")}
+          </p>
+          <p className="mt-1 micro text-ink-soft">{looksAll.length} saved</p>
+        </>
       )}
       {gap && (
         <p className="mt-3 text-sm text-ink-soft max-w-xl">{gap}</p>
@@ -540,21 +393,21 @@ function LookbookPage() {
       <button
         type="button"
         onClick={() => {
-          const current = cards.map((c) => c.look.garmentIds).filter((ids) => ids.length >= 3);
-          const prior = blockedRef.current.get(stableKey) ?? [];
-          const seen = new Set(prior.map((ids) => [...ids].sort().join(",")));
-          const next = [...prior];
-          for (const ids of current) {
-            const mark = [...ids].sort().join(",");
-            if (!seen.has(mark)) next.push(ids);
+          const nextSalt = salt + 1;
+          const next = buildReshuffleRow(garments, occasion, {
+            house: houseChip === "all" ? undefined : houseChip,
+            season,
+            color,
+            salt: nextSalt,
+            cap: 8,
+            excludeKeys: row.map((look) => comboKey(look.garmentIds)),
+            mustInclude: unusedFromLooks(garments, looksAll).map((g) => g.id),
+          });
+          setSalt(nextSalt);
+          if (next.length) {
+            setShown({ key: filterKey, looks: next });
+            setWeekPulse((x) => x + 1);
           }
-          blockedRef.current.set(stableKey, next);
-          setSkip({ chapter: chapterKey, ids: next });
-          forceRef.current = true;
-          setScreen((s) => ({ ...s, key: stableKey, cards: [], waiting: true, miss: null }));
-          setWeekNote(RESHUFFLING);
-          setReshuffleGen((n) => n + 1);
-          setWeekPulse((x) => x + 1);
         }}
         className="inline-flex h-11 items-center border border-hairline px-4 text-sm text-ink hover:border-hairline-strong"
       >
@@ -604,27 +457,7 @@ function LookbookPage() {
         <>
       <section className="mt-10">
         <p className="micro text-ink-soft">This week</p>
-        {weekNote && <p className="mt-1 micro text-ink-soft">{weekNote}</p>}
-        {miss === "silent" && visible.length > 0 && (
-          <p className="mt-3 text-sm text-ink-soft">
-            {STYLIST_SILENT}
-            <button
-              type="button"
-              className="ml-3 underline"
-              onClick={() => {
-                forceRef.current = true;
-                setAttempt((n) => n + 1);
-              }}
-            >
-              Try again
-            </button>
-          </p>
-        )}
-        {waiting && visible.length === 0 ? (
-          weekNote === RESHUFFLING ? null : (
-            <p className="mt-3 text-sm text-ink-soft">Building looks…</p>
-          )
-        ) : visible.length === 0 ? (
+        {visible.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">
             {emptyFilterCopy(
               chapterLabel,
@@ -633,20 +466,7 @@ function LookbookPage() {
               houseChip,
               color,
               canBuild,
-            ) ??
-              (miss === "silent" ? STYLIST_SILENT : miss === "holds" ? STYLIST_HOLDS : "Building looks…")}
-            {miss && (
-              <button
-                type="button"
-                className="ml-3 underline"
-                onClick={() => {
-                  forceRef.current = true;
-                  setAttempt((n) => n + 1);
-                }}
-              >
-                Try again
-              </button>
-            )}
+            ) ?? "Need a top, a bottom, and shoes."}
           </p>
         ) : (
           <ul
@@ -691,9 +511,6 @@ function LookbookPage() {
       </section>
 
       <section className="mt-12">
-        <p className="text-sm text-ink-soft">
-          {looksAll.length} looks
-        </p>
         {unused.length > 0 && (
           <>
             <p className="mt-2 micro text-ink-soft">Not in a look yet</p>

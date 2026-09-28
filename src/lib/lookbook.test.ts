@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   applyShuffle,
   buildChapter,
@@ -1297,5 +1298,62 @@ describe("reshuffle row", () => {
       buildReshuffleRow(g, "weekday", { salt: i + 1, cap: 6 });
     }
     assert.equal(looks.length, n);
+  });
+
+  it("a new salt drops the combos on screen and stars an unused piece", () => {
+    const g = [
+      ...dressRack(),
+      piece({ id: "idle_ox", name: "Idle oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "hd", name: "90s hoodie", category: "top", subtype: "hoodie" }),
+    ];
+    const saved: Look[] = [
+      {
+        id: "keep",
+        name: "Olive field jacket · weekday",
+        occasion: "weekday",
+        garmentIds: ["ox0", "tr0", "lf0"],
+        source: "manual",
+        lookbook: true,
+        createdAt: "2026-09-01T00:00:00.000Z",
+      },
+    ];
+    const before = saved.length;
+    const first = buildReshuffleRow(g, "weekday", { salt: 1, cap: 8, season: "fall" });
+    const second = buildReshuffleRow(g, "weekday", {
+      salt: 2,
+      cap: 8,
+      season: "fall",
+      excludeKeys: first.map((look) => comboKey(look.garmentIds)),
+      mustInclude: ["idle_ox"],
+    });
+    assert.equal(first.length, 8);
+    assert.equal(second.length, 8);
+    assert.ok(first[0] && second[0]);
+    assert.notDeepEqual(first[0].garmentIds, second[0].garmentIds);
+    const ids = second.flatMap((look) => look.garmentIds);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.equal(
+      second.some((look) => look.garmentIds.includes("idle_ox")),
+      true,
+    );
+    for (const look of second) {
+      const names = look.garmentIds.map(
+        (id) => g.find((item) => item.id === id)?.subtype ?? "",
+      );
+      const hoodie = names.some((name) => /hoodie/i.test(name));
+      const loafer = names.some((name) => /loafer/i.test(name));
+      assert.equal(hoodie && loafer, false);
+    }
+    const blazerLooks = second.filter((look) =>
+      look.garmentIds.some((id) => /blazer/i.test(g.find((item) => item.id === id)?.subtype ?? "")),
+    );
+    assert.ok(blazerLooks.length < second.length);
+    assert.equal(saved.length, before);
+    const src = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
+    const buttonAt = src.search(/Reshuffle\s*<\/button>/);
+    const clickAt = src.lastIndexOf("onClick", buttonAt);
+    const click = src.slice(clickAt, buttonAt);
+    assert.equal(click.includes("buildReshuffleRow"), true);
+    assert.equal(click.includes("composeChapter"), false);
   });
 });
