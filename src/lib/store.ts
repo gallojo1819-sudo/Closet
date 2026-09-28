@@ -99,7 +99,7 @@ type ClosetState = {
   swapDropPiece: (id: string) => void;
   removeDropPiece: (id: string) => void;
   toggleLock: (id: string) => void;
-  pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => void;
+  pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => string;
   setRefPhoto: (key: string | null, backup?: string | null) => void;
   restoreRefPhoto: () => Promise<void>;
   restoreFromIdbMeta: () => Promise<void>;
@@ -576,13 +576,13 @@ export const useCloset = create<ClosetState>()(
         });
         noteUserEdit();
       },
-      pushMessage: (m) =>
+      pushMessage: (m) => {
+        const id = uid("m");
         set((s) => ({
-          messages: [
-            ...s.messages,
-            { ...m, id: uid("m"), createdAt: new Date().toISOString() },
-          ],
-        })),
+          messages: [...s.messages, { ...m, id, createdAt: new Date().toISOString() }],
+        }));
+        return id;
+      },
       fillThisWeek: (season) => {
         const s = get();
         if (s.thisWeek.length >= 3) return s.thisWeek.length;

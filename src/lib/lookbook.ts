@@ -1390,7 +1390,6 @@ export function chapterVisible(
     if (mapOccasion(look.occasion) !== occasion) return false;
     if (lookClashes(pieces)) return false;
     if (season && !lookFitsSeason(pieces, season)) return false;
-    if (opts?.color && !lookHasColor(pieces, opts.color)) return false;
     return true;
   });
 
@@ -1401,6 +1400,11 @@ export function chapterVisible(
       const ha = lookFitsHouse(pa, house, occasion, pool) ? 1 : 0;
       const hb = lookFitsHouse(pb, house, occasion, pool) ? 1 : 0;
       if (hb !== ha) return hb - ha;
+    }
+    if (opts?.color) {
+      const ca = lookHasColor(pa, opts.color) ? 1 : 0;
+      const cb = lookHasColor(pb, opts.color) ? 1 : 0;
+      if (cb !== ca) return cb - ca;
     }
     if (season) return seasonRank(pb, season) - seasonRank(pa, season);
     return 0;

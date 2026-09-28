@@ -1053,6 +1053,67 @@ describe("jacket quotas + recipes", () => {
   });
 });
 
+describe("color chip rank", () => {
+  it("a color chip changes the first card when another color ranks higher", () => {
+    const navyTop = piece({
+      id: "ox",
+      name: "Navy oxford",
+      category: "top",
+      subtype: "oxford",
+      colors: ["navy"],
+    });
+    const chino = piece({
+      id: "ch",
+      name: "Khaki chino",
+      category: "bottom",
+      subtype: "chino",
+      colors: ["khaki"],
+    });
+    const loafer = piece({
+      id: "lf",
+      name: "Brown loafer",
+      category: "footwear",
+      subtype: "loafer",
+      colors: ["brown"],
+    });
+    const oliveTop = piece({
+      id: "os",
+      name: "Olive overshirt",
+      category: "top",
+      subtype: "overshirt",
+      colors: ["olive"],
+    });
+    const garments = [navyTop, chino, loafer, oliveTop];
+    const navy: Look = {
+      id: "l_navy",
+      name: "Navy office",
+      occasion: "weekday",
+      garmentIds: ["ox", "ch", "lf"],
+      source: "ai",
+      createdAt: "2026-09-01T00:00:00.000Z",
+    };
+    const olive: Look = {
+      id: "l_olive",
+      name: "Olive office",
+      occasion: "weekday",
+      garmentIds: ["os", "ch", "lf"],
+      source: "ai",
+      createdAt: "2026-09-01T00:00:00.000Z",
+    };
+    const plain = chapterVisible([navy, olive], garments, "weekday", { min: 1, pad: false });
+    const oliveFirst = chapterVisible([navy, olive], garments, "weekday", {
+      color: "olive",
+      min: 1,
+      pad: false,
+    });
+    assert.equal(plain[0]?.id, "l_navy");
+    assert.equal(oliveFirst[0]?.id, "l_olive");
+    const started = Date.now();
+    chapterVisible([navy, olive], garments, "weekday", { color: "navy", min: 1, pad: false });
+    assert.ok(Date.now() - started < 500);
+  });
+});
+
 describe("chapterVisible never empty", () => {
   it("Weekday × 545 / Purple / SweetStable / ItalianSummer / ItalianWinter each ≥3", () => {
     const g = dressRack();

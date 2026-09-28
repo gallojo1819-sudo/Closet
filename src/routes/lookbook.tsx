@@ -10,6 +10,7 @@ import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import {
+  chapterVisible,
   comboKey,
   emptyFilterCopy,
   lookbookPool,
@@ -206,15 +207,23 @@ function LookbookPage() {
 
   const chapterKey = `${occasion}:${houseChip}:${season}:${color ?? ""}`;
   const [skip, setSkip] = useState<{ chapter: string; ids: string[][] } | null>(null);
-  const wearRack = useMemo(() => {
-    const rows = composeRack(garments, season);
-    if (!color) return rows;
-    const chip = color.toLowerCase();
-    const matched = rows.filter((g) =>
-      g.colors.some((c) => c.toLowerCase() === chip) || g.name.toLowerCase().includes(chip),
-    );
-    return matched.length ? matched : rows;
-  }, [garments, season, color]);
+  const wearRack = useMemo(() => composeRack(garments, season), [garments, season]);
+  const rankKey = `${occasion}:${season}:${houseChip}:${color ?? ""}:${looksAll.length}:${garments.length}`;
+  const rankCache = useRef(new Map<string, ReturnType<typeof chapterVisible>>());
+  const ranked = useMemo(() => {
+    const hit = rankCache.current.get(rankKey);
+    if (hit) return hit;
+    const source = book.length ? book : looksAll;
+    const next = chapterVisible(source, garments, occasion, {
+      season,
+      house: houseChip,
+      color,
+      min: 3,
+      pad: false,
+    });
+    rankCache.current.set(rankKey, next);
+    return next;
+  }, [rankKey, book, looksAll, garments, occasion, season, houseChip, color]);
   const [attempt, setAttempt] = useState(0);
   const [reshuffleGen, setReshuffleGen] = useState(0);
   const stableKey = composeCacheKey(
@@ -231,26 +240,6 @@ function LookbookPage() {
     waiting: boolean;
     miss: "silent" | "holds" | null;
   }>({ key: "", cards: [], waiting: false, miss: null });
-  if (screen.key !== stableKey) {
-    if (screen.cards.length) {
-      blockedRef.current.set(
-        stableKey,
-        screen.cards.map((card) => card.look.garmentIds),
-      );
-    }
-    forceRef.current = false;
-    const paint = chapterPaint(peekCompose(stableKey));
-    const hit = paint.showCards ? peekCompose(stableKey) : undefined;
-    setScreen({
-      key: stableKey,
-      cards: hit
-        ? hit.map((look) => ({ look: toShownLook(look, occasion), why: look.why }))
-        : [],
-      waiting: paint.building && wearRack.length > 0,
-      miss: null,
-    });
-    if (attempt !== 0) setAttempt(0);
-  }
   const rackRef = useRef(wearRack);
   const blockedNow = blockedRef.current.get(stableKey) ?? [];
   const notTheseNow = skip?.chapter === chapterKey ? skip.ids : blockedNow;
@@ -260,6 +249,7 @@ function LookbookPage() {
   notTheseRef.current = notTheseNow;
   reshuffleRef.current = skip?.chapter === chapterKey;
   useEffect(() => {
+    if (!forceRef.current) return;
     const askRack = rackRef.current;
     const paint = chapterPaint(peekCompose(stableKey));
     const forcing = forceRef.current;
@@ -350,13 +340,15 @@ function LookbookPage() {
       live = false;
     };
   }, [stableKey, attempt, reshuffleGen, occasion, houseChip, season]);
-  const cards = screen.cards;
+  const cards =
+    screen.key === stableKey && screen.cards.length > 0
+      ? screen.cards
+      : ranked.map((look) => ({ look, why: "" }));
   const waiting = screen.waiting;
   const miss = screen.miss;
   const visible = cards;
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
-  const usedN = garments.length - unused.length;
   const rack = useMemo(
     () => [...garments].sort((a, b) => daysIdle(b) - daysIdle(a) || a.id.localeCompare(b.id)),
     [garments],
@@ -419,7 +411,7 @@ function LookbookPage() {
       </h1>
       {hydrated && (
         <p className="mt-3 text-ink-soft max-w-xl">
-          {usedN} of {garments.length} in looks · {chapterLabel} ·{" "}
+          {looksAll.length} looks · {chapterLabel} ·{" "}
           {seasonLabel.replace(/^Auto · /, "")}
         </p>
       )}
@@ -700,7 +692,7 @@ function LookbookPage() {
 
       <section className="mt-12">
         <p className="text-sm text-ink-soft">
-          {usedN} of {garments.length} in looks
+          {looksAll.length} looks
         </p>
         {unused.length > 0 && (
           <>
