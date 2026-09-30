@@ -42,21 +42,23 @@ function LookCardFace({
   pieces,
   onOpen,
   cardRef,
+  named,
 }: {
   look: Look;
   pieces: Garment[];
   onOpen: () => void;
   cardRef: (el: HTMLElement | null) => void;
+  named: boolean;
 }) {
   const extra = comboKey(pieces.map((p) => p.id));
-  const liveSrc = useImageSrc(lookOnMeKey(look.id, extra));
-  const cachedSrc = liveSrc;
+  const cachedSrc = useImageSrc(lookOnMeKey(look.id, extra));
+  const [onYou, setOnYou] = useState<"off" | "on" | "out">("off");
 
   return (
     <div
       ref={cardRef}
-      className="relative w-full border border-hairline bg-paper aspect-[4/5] overflow-hidden"
-      style={{ viewTransitionName: "none" }}
+      className="look-card relative w-full border border-hairline bg-paper aspect-[4/5]"
+      style={named ? { viewTransitionName: `look-${look.id}` } : undefined}
     >
       <button
         type="button"
@@ -64,17 +66,64 @@ function LookCardFace({
         aria-label={look.name}
         className="absolute inset-0 block"
       >
-        <LookKit pieces={pieces} className="h-full pointer-events-none" />
-        {cachedSrc && (
-          <img
-            src={cachedSrc}
-            alt=""
-            className="on-you-glass absolute inset-0 z-10 h-full w-full object-contain bg-paper pointer-events-none"
-          />
-        )}
+        <LookKit
+          layout="stack"
+          pieces={pieces}
+          className="h-full pointer-events-none"
+          onYouSrc={cachedSrc || undefined}
+          showOnYou={onYou === "on" || onYou === "out"}
+          onYouLeaving={onYou === "out"}
+          onYouHidden={() => setOnYou((v) => (v === "out" ? "off" : v))}
+        />
       </button>
+      {cachedSrc ? (
+        <button
+          type="button"
+          aria-pressed={onYou === "on"}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setOnYou((v) => {
+              if (v !== "on") return "on";
+              if (
+                typeof window !== "undefined" &&
+                window.matchMedia("(prefers-reduced-motion: reduce)").matches
+              ) {
+                return "off";
+              }
+              return "out";
+            });
+          }}
+          className="absolute bottom-2 right-2 z-20 micro border border-hairline bg-paper px-2 py-1 text-ink"
+        >
+          On you
+        </button>
+      ) : null}
     </div>
   );
+}
+
+function pieceDots(pieces: Garment[]): { slot: string; color: string }[] {
+  const slots: { slot: string; pick: (g: Garment) => boolean }[] = [
+    {
+      slot: "top",
+      pick: (g) => {
+        const s = slotOf(g);
+        return s === "top" || s === "dress";
+      },
+    },
+    { slot: "bottom", pick: (g) => slotOf(g) === "bottom" },
+    { slot: "shoe", pick: (g) => slotOf(g) === "footwear" },
+  ];
+  const out: { slot: string; color: string }[] = [];
+  for (const { slot, pick } of slots) {
+    const color = pieces
+      .find(pick)
+      ?.colors.map((c) => c.trim())
+      .find(Boolean);
+    if (color) out.push({ slot, color });
+  }
+  return out;
 }
 
 function LookCard({
@@ -88,6 +137,7 @@ function LookCard({
   houseLabel,
   chip,
   note,
+  named,
 }: {
   look: Look;
   pieces: Garment[];
@@ -99,7 +149,9 @@ function LookCard({
   houseLabel: string;
   chip: string;
   note?: string | null;
+  named: boolean;
 }) {
+  const dots = pieceDots(pieces);
   return (
     <li
       id={`look-${look.id}`}
@@ -118,10 +170,27 @@ function LookCard({
           />
         }
       >
-        <LookCardFace look={look} pieces={pieces} onOpen={onOpen} cardRef={cardRef} />
+        <LookCardFace
+          look={look}
+          pieces={pieces}
+          onOpen={onOpen}
+          cardRef={cardRef}
+          named={named}
+        />
       </IdleMount>
       <p className="mt-3">{spreadTitle(pieces, look.occasion as Occasion)}</p>
-      <p className="micro text-ink-soft">
+      {dots.length > 0 && (
+        <div className="mt-2 flex gap-1.5" aria-hidden="true">
+          {dots.map((dot) => (
+            <span
+              key={dot.slot}
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ backgroundColor: paletteCss(dot.color) }}
+            />
+          ))}
+        </div>
+      )}
+      <p className="micro mt-2 text-ink-soft">
         {houseLabel} · {chip} · {season}
       </p>
       {note && <p className="micro mt-1 text-ink-soft">{note}</p>}
@@ -494,6 +563,7 @@ function LookbookPage() {
                       : HOUSE_LABEL[houseChip]
                   }
                   note={card.why}
+                  named={openId === look.id}
                   highlight={highlightId === look.id}
                   onOpen={() => {
                     lastAnchor.current = cardEls.current.get(look.id) ?? null;

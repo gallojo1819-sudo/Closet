@@ -168,3 +168,78 @@
     animation: none;
   }
 }
+
+/* Lookbook stack: bands separate on hover. Entry rise is view-timeline only. */
+.look-kit-stack {
+  background: #f4efe6;
+}
+
+.look-kit-band {
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.look-card:hover .look-kit-band,
+.look-card:focus-within .look-kit-band {
+  transform: translateY(calc((var(--band-i) - (var(--band-n) - 1) / 2) * 8px));
+}
+
+.look-on-you {
+  animation: look-on-you-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.look-on-you.is-out {
+  animation: look-on-you-out 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes look-on-you-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes look-on-you-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes look-band-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .look-kit-rise {
+    animation-name: look-band-rise;
+    animation-duration: auto;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 40%;
+    animation-delay: calc(var(--band-i) * 40ms);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .look-kit-rise {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .look-on-you,
+  .look-on-you.is-out {
+    animation: none;
+  }
+}

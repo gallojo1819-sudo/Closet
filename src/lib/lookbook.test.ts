@@ -1357,3 +1357,159 @@ describe("reshuffle row", () => {
     assert.equal(click.includes("composeChapter"), false);
   });
 });
+
+describe("lookbook card stack", () => {
+  it("cards stay on buildReshuffleRow, and the stack does not cover Closet or the sheet", () => {
+    const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
+    const kit = readFileSync(new URL("../components/closet/look-kit.tsx", import.meta.url), "utf8");
+    const sheet = readFileSync(new URL("../components/closet/look-sheet.tsx", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+    assert.equal(/from\s+["'][^"']*ai(\.ts)?["']/.test(book), false);
+    assert.equal(/from\s+["'][^"']*ai(\.ts)?["']/.test(kit), false);
+    assert.equal(book.includes("composeChapter"), false);
+    assert.equal(book.includes("chapterVisible"), false);
+    assert.equal(book.includes("buildReshuffleRow"), true);
+    assert.match(book, /const cards = row\.map/);
+    assert.equal(book.split('layout="stack"').length - 1, 1);
+    assert.equal(sheet.includes('layout="stack"'), false);
+    assert.equal(book.includes('viewTransitionName: "none"'), false);
+    assert.equal(book.split("viewTransitionName").length - 1, 1);
+    assert.match(book, /named \? \{ viewTransitionName: `look-\$\{look\.id\}` \}/);
+    assert.match(book, /named=\{openId === look\.id\}/);
+    const face = book.slice(book.indexOf("function LookCardFace"), book.indexOf("function pieceDots"));
+    assert.equal(/<img\b/.test(face), false);
+    assert.match(face, /showOnYou=\{onYou === "on" \|\| onYou === "out"\}/);
+    assert.match(face, /On you/);
+    const titleAt = book.indexOf("spreadTitle(pieces, look.occasion");
+    const lineAt = book.indexOf("{houseLabel} · {chip} · {season}");
+    assert.ok(titleAt > 0 && lineAt > titleAt);
+    const between = book.slice(titleAt, lineAt);
+    assert.match(between, /paletteCss\(dot\.color\)/);
+    assert.equal(/\b(Colors|Swatches|Palette)\b/.test(between), false);
+    assert.equal(kit.includes("setTimeout"), false);
+    assert.equal(kit.includes("setInterval"), false);
+    assert.match(kit, /showOnYou && onYouSrc/);
+    assert.match(css, /@supports \(animation-timeline: view\(\)\)/);
+    assert.match(css, /translateY\(10px\)/);
+    assert.match(css, /var\(--band-i\) \* 40ms/);
+    assert.match(css, /\* 8px\)/);
+    assert.match(css, /transition: transform 280ms/);
+    assert.match(css, /look-on-you-in 160ms/);
+    assert.match(css, /look-on-you-out 160ms/);
+    const rise = css.slice(css.indexOf("@keyframes look-band-rise"), css.indexOf("@supports (animation-timeline: view())"));
+    assert.equal(/\b(width|height|gap|margin|top|left|rotate)\s*:/.test(rise), false);
+    const reduce = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    assert.match(reduce, /\.look-kit-rise\s*\{[^}]*animation:\s*none/);
+    const hero = book.slice(book.indexOf("5 looks with"));
+    assert.equal(hero.includes('layout="stack"'), false);
+  });
+
+  it("three pieces render three bands, and a cached On you image stays out until it is on", async () => {
+    const ts = await import("typescript");
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { pathToFileURL } = await import("node:url");
+    const dir = mkdtempSync(join(tmpdir(), "look-kit-"));
+    try {
+      const src = readFileSync(new URL("../components/closet/look-kit.tsx", import.meta.url), "utf8");
+      let js = ts.transpileModule(src, {
+        compilerOptions: {
+          jsx: ts.JsxEmit.ReactJSX,
+          target: ts.ScriptTarget.ES2022,
+          module: ts.ModuleKind.ESNext,
+        },
+        fileName: "look-kit.tsx",
+      }).outputText;
+      const href = (rel: string) => new URL(rel, import.meta.url).href;
+      const reactHref = import.meta.resolve("react");
+      const jsxHref = import.meta.resolve("react/jsx-runtime");
+      const stub = join(dir, "gimg.mjs");
+      writeFileSync(
+        stub,
+        `import { createElement } from ${JSON.stringify(reactHref)};
+export function GarmentImg(props) {
+  return createElement("img", {
+    "data-piece": props.garment.id,
+    alt: props.garment.name || "",
+    className: props.className || "",
+    src: "plate:" + props.garment.id,
+  });
+}
+`,
+      );
+      js = js.replaceAll('from "react/jsx-runtime"', `from ${JSON.stringify(jsxHref)}`);
+      js = js.replaceAll('from "react"', `from ${JSON.stringify(reactHref)}`);
+      const specs = [
+        ["@/components/closet/gimg", pathToFileURL(stub).href],
+        ["@/lib/look", href("./look.ts")],
+        ["@/lib/style", href("./style.ts")],
+        ["@/lib/utils", href("./utils.ts")],
+      ];
+      for (const [spec, target] of specs) {
+        js = js.replaceAll(`from "${spec}"`, `from ${JSON.stringify(target)}`);
+      }
+      assert.equal(js.includes("@/"), false, js);
+      const kitFile = join(dir, "kit.mjs");
+      writeFileSync(kitFile, js);
+      const { LookKit } = await import(pathToFileURL(kitFile).href);
+      const pieces = [
+        piece({ id: "shirt", name: "Oxford shirt", category: "top", subtype: "oxford", colors: ["navy"] }),
+        piece({ id: "trouser", name: "Wool trouser", category: "bottom", subtype: "trouser", colors: ["stone"] }),
+        piece({ id: "shoe", name: "Brown loafer", category: "footwear", subtype: "loafer", colors: ["brown"] }),
+      ];
+      const cached = "https://cached.example/on-you.jpg";
+      const stack = renderToStaticMarkup(
+        createElement(LookKit, { layout: "stack", pieces, onYouSrc: cached, showOnYou: false }),
+      );
+      assert.deepEqual(
+        [...stack.matchAll(/data-band="([^"]+)"/g)].map((m) => m[1]),
+        ["top", "bottom", "shoe"],
+      );
+      assert.deepEqual(
+        [...stack.matchAll(/data-share="([^"]+)"/g)].map((m) => m[1]),
+        ["46", "34", "20"],
+      );
+      assert.equal(stack.includes("grid-template-columns"), false);
+      assert.equal(stack.includes("1fr 1fr"), false);
+      assert.equal(stack.includes("rotate"), false);
+      assert.match(stack, /#f4efe6/i);
+      assert.match(stack, /object-contain/);
+      assert.equal(stack.includes(cached), false);
+      assert.equal(stack.includes("look-on-you"), false);
+      const on = renderToStaticMarkup(
+        createElement(LookKit, { layout: "stack", pieces, onYouSrc: cached, showOnYou: true }),
+      );
+      assert.equal(on.includes(cached), true);
+      assert.match(on, /look-on-you/);
+      const grid = renderToStaticMarkup(
+        createElement(LookKit, { pieces, onYouSrc: cached, showOnYou: true }),
+      );
+      assert.equal(grid.includes("grid-template-columns"), true);
+      assert.equal(grid.includes("1fr 1fr"), true);
+      assert.equal(grid.includes(cached), false);
+      assert.equal(grid.includes('data-layout="stack"'), false);
+      const withJacket = renderToStaticMarkup(
+        createElement(LookKit, {
+          layout: "stack",
+          pieces: [
+            ...pieces,
+            piece({ id: "jacket", name: "Navy blazer", category: "outerwear", subtype: "blazer" }),
+          ],
+        }),
+      );
+      assert.deepEqual(
+        [...withJacket.matchAll(/data-band="([^"]+)"/g)].map((m) => m[1]),
+        ["top", "jacket", "bottom", "shoe"],
+      );
+      assert.deepEqual(
+        [...withJacket.matchAll(/data-share="([^"]+)"/g)].map((m) => m[1]),
+        ["46", "8", "34", "20"],
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
