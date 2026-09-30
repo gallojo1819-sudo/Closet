@@ -10,6 +10,7 @@ import { getAccount, patchAccount, setAccountProgress, setLocalOnly } from "./ac
 import {
   countListedThumbs,
   forgetUploaded,
+  hasLocalBlob,
   isForbidden,
   mapPool,
   peekCoverSha,
@@ -56,8 +57,11 @@ import {
 import {
   LOCAL_ONLY_CAPTION,
   SAVE_RETRY,
+  backupFailedCopy,
+  backingUpCopy,
   cloudErrorCopy,
   pulledCopy,
+  savedAccountCopy,
 } from "./copy.ts";
 import { supabaseConfigured } from "./env.ts";
 import { accountPool, type CloudMeta } from "./merge.ts";
@@ -82,6 +86,7 @@ let revColumns: boolean | null = null;
 /** null until the first push. False when closet_meta_push is not deployed. */
 let rpcOk: boolean | null = null;
 let refDirty = false;
+let backupRunning = false;
 const uploadedRef = new Set<string>();
 
 function writeLast(userId: string, ids: string[]) {
@@ -573,19 +578,76 @@ async function pushNow() {
   }
 }
 
-/** Explicit Backup. Uploads only objects that are not already in the bucket. Does not rewrite closet_meta. */
+/**
+ * Upload plates that are still only on this device, then write sb: into closet_meta
+ * on the same save. A failed upload does not count. Leftover idb: stays on the banner.
+ */
 export function backupPhotos(): void {
   const user = getAccount().user;
   if (!user) return;
-  void (async () => {
-    try {
-      await uploadMissing(user.id, accountPool(useCloset.getState().garments) as Garment[]);
-      await uploadRef(user.id, useCloset.getState().refPhoto);
-    } catch (err) {
-      setLocalOnly(true);
-      setAccountProgress(cloudErrorCopy(err));
+  void runBackup(user.id);
+}
+
+async function deviceHasPlate(garments: Garment[]): Promise<boolean> {
+  for (const g of garments) {
+    if (await hasLocalBlob(g.id, "t")) return true;
+    if (await hasLocalBlob(g.id, "c")) return true;
+    if (await hasLocalBlob(g.id, "o")) return true;
+  }
+  return false;
+}
+
+async function runBackup(userId: string): Promise<void> {
+  if (backupRunning) return;
+  backupRunning = true;
+  try {
+    const garments = accountPool(useCloset.getState().garments) as Garment[];
+    const targets = garments.filter((g) => needsBlobUpload(g));
+    const total = targets.length;
+    const tick = { done: 0, failed: 0 };
+    if (total > 0) setAccountProgress(backingUpCopy(0, total));
+    await mapPool(targets, 2, async (g) => {
+      let thumbOk = false;
+      for (const kind of ["t", "c", "o"] as const) {
+        try {
+          const up = await uploadKind(userId, g, kind);
+          if (kind === "t" && up) thumbOk = true;
+        } catch {
+          /* one plate can fail; the rest of the rack still backs up */
+        }
+      }
+      if (!thumbOk) tick.failed += 1;
+      tick.done += 1;
+      setAccountProgress(backingUpCopy(tick.done, total));
+    });
+    await uploadRef(userId, useCloset.getState().refPhoto);
+    if (total === 0) return;
+    if (!mem.pulled) {
+      const fetched = await fetchCloud(userId);
+      if (fetched.ok) await absorb(userId, fetched);
     }
-  })();
+    mem = markDirty(mem);
+    await pushNow();
+    const left = idbCount(accountPool(useCloset.getState().garments));
+    if (left === 0) {
+      const n = accountPool(useCloset.getState().garments).length;
+      setAccountProgress(savedAccountCopy(n));
+      try {
+        patchAccount({ listedThumbs: await countListedThumbs(userId), localOnly: false });
+      } catch {
+        /* banner hides on idbCount 0 either way */
+      }
+      return;
+    }
+    const progress = getAccount().progress ?? "";
+    if (/Didn't save|Couldn't save|Backup failed/i.test(progress)) return;
+    setAccountProgress(backupFailedCopy(left || tick.failed));
+  } catch (err) {
+    setLocalOnly(true);
+    setAccountProgress(cloudErrorCopy(err));
+  } finally {
+    backupRunning = false;
+  }
 }
 
 function schedulePush() {
@@ -605,6 +667,7 @@ function schedulePush() {
 async function firstLink(userId: string) {
   linking = true;
   let deferEdit = true;
+  let autoBackup = false;
   try {
     const email = getAccount().user?.email;
     const fetched = await fetchCloud(userId);
@@ -625,6 +688,7 @@ async function firstLink(userId: string) {
       try {
         const thumbs = await countListedThumbs(userId);
         patchAccount({ listedThumbs: thumbs });
+        autoBackup = true;
       } catch (err) {
         setLocalOnly(true);
         setAccountProgress(cloudErrorCopy(err));
@@ -636,6 +700,9 @@ async function firstLink(userId: string) {
     linking = false;
     if (deferEdit) finishDeferredEdit();
   }
+  if (!autoBackup || !deferEdit) return;
+  const pool = livePool(useCloset.getState().garments);
+  if (await deviceHasPlate(pool)) void runBackup(userId);
 }
 
 async function pullOnVisible() {
@@ -673,6 +740,7 @@ export function resetCloudSyncForTests(): void {
   revColumns = null;
   rpcOk = null;
   refDirty = false;
+  backupRunning = false;
   clearPendingEdit();
   if (pushTimer !== undefined && typeof window !== "undefined") {
     window.clearTimeout(pushTimer);
