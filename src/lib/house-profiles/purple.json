@@ -1,0 +1,23 @@
+{
+  "signals": [
+    "cashmere or camel jacket or unconstructed",
+    "suede loafer or chelsea",
+    "camel or charcoal or loden or beige or ivory or tobacco"
+  ],
+  "minSignals": 2,
+  "anchors": [],
+  "banned": ["rugby", "fair isle", "sangallo", "990", "boat"],
+  "jackets": ["blazer"],
+  "shoes": ["suede loafer", "chelsea"],
+  "palette": ["camel", "charcoal", "ivory"],
+  "occasionNote": "Purple is thin on Weekday — closest plates",
+  "cardNote": "Cashmere, suede, and a quiet jacket.",
+  "gap": "",
+  "requireOwned": [],
+  "kills": [
+    { "when": "polo-default", "message": "House switch cannot recolor PoloDefault" },
+    { "when": "blue-ocbd", "message": "Non-Polo cannot be OCBD + khaki + penny" },
+    { "when": "cable-jean-sneaker", "message": "Purple is not cable + jean + sneaker" }
+  ],
+  "holes": []
+}

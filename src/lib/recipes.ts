@@ -48,6 +48,11 @@ export type RecipeId =
   | "WE_FIELD_WHITE_SHIRT"
   | "WE_CHAMBRAY_ROLLED"
   | "WD_DENIM_UNDER_CHORE"
+  | "WD_RRL_FIELD"
+  | "WD_RRL_SUEDE"
+  | "WD_RRL_DENIM"
+  | "WE_RRL_CHORE"
+  | "WE_RRL_DENIM"
   | "CF_LOAMY_FLEECE";
 
 export type OuterWant =
@@ -116,6 +121,21 @@ function isLoaferish(g: Garment): boolean {
 function isSneakerish(g: Garment): boolean {
   const s = shoeFamily(g);
   return s === "leather_sneaker" || s === "suede_sneaker" || s === "nb990" || s === "white_court";
+}
+
+/** Denim shirt or a work shirt. Not an oxford. */
+function isRrlTop(g: Garment): boolean {
+  const b = garmentBlob(g);
+  if (/oxford|\bocbd\b/.test(b) && !/work shirt|chambray|western|pearl/.test(b)) return false;
+  return (
+    (/denim/.test(b) && /shirt/.test(b)) ||
+    /work shirt|western|pearl\s*snap|chambray|flannel/.test(b)
+  );
+}
+
+function isRrlShoe(g: Garment): boolean {
+  const s = shoeFamily(g);
+  return s === "boot" || s === "chelsea";
 }
 
 function isDadSneaker(g: Garment): boolean {
@@ -242,7 +262,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "WE_CHORE_IVY",
     occasions: ["weekend"],
-    houses: ["polo", "rrl"],
+    houses: ["polo"],
     outer: "chore",
     outerRequired: false,
     top: (g) => isButtonDown(g) || isPiquePolo(g) || topType(g) === "work_shirt",
@@ -262,7 +282,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "WE_DENIM_LAYER",
     occasions: ["weekend"],
-    houses: ["rrl", "ald"],
+    houses: ["ald"],
     outer: "denim",
     outerRequired: false,
     top: (g) => topType(g) === "work_shirt" || topType(g) === "tee" || topType(g) === "hoodie",
@@ -342,7 +362,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "WD_WESTERN_UNDER_NAVY",
     occasions: ["weekday"],
-    houses: ["rrl", "polo"],
+    houses: ["polo"],
     outer: "blazer",
     outerRequired: true,
     top: (g) => /western|work shirt|pearl/.test(garmentBlob(g)),
@@ -354,7 +374,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "WD_CHORE_CRISP",
     occasions: ["weekday"],
-    houses: ["rrl", "polo"],
+    houses: ["polo"],
     outer: "chore",
     outerRequired: true,
     top: isButtonDown,
@@ -382,11 +402,69 @@ export const RECIPES: Recipe[] = [
     houses: ["rrl"],
     outer: "chore",
     outerRequired: true,
-    top: (g) => /denim/.test(garmentBlob(g)) && /shirt/.test(garmentBlob(g)),
+    top: isRrlTop,
     bottom: isJean,
-    shoe: (g) => shoeFamily(g) === "boot" || isSneakerish(g),
+    shoe: isRrlShoe,
     ready: (pool) => pool.some((g) => /\bchore\b/.test(garmentBlob(g))),
     gap: "No chore coat — closest plates",
+  },
+  {
+    id: "WD_RRL_FIELD",
+    occasions: ["weekday"],
+    houses: ["rrl"],
+    outer: "field",
+    outerRequired: true,
+    top: isRrlTop,
+    bottom: isJean,
+    shoe: isRrlShoe,
+    ready: (pool) => pool.some((g) => /\bfield\b/.test(garmentBlob(g))),
+    gap: "No field jacket — closest plates",
+  },
+  {
+    id: "WD_RRL_SUEDE",
+    occasions: ["weekday"],
+    houses: ["rrl"],
+    outer: "suede",
+    outerRequired: true,
+    top: isRrlTop,
+    bottom: isJean,
+    shoe: isRrlShoe,
+    ready: (pool) => pool.some((g) => /suede/.test(garmentBlob(g)) && /jacket|coat/.test(garmentBlob(g))),
+    gap: "No suede jacket — closest plates",
+  },
+  {
+    id: "WD_RRL_DENIM",
+    occasions: ["weekday"],
+    houses: ["rrl"],
+    outer: "denim",
+    outerRequired: true,
+    top: isRrlTop,
+    bottom: isJean,
+    shoe: isRrlShoe,
+    ready: (pool) => pool.some((g) => /trucker|denim jacket/.test(garmentBlob(g))),
+    gap: "No denim jacket — closest plates",
+  },
+  {
+    id: "WE_RRL_CHORE",
+    occasions: ["weekend"],
+    houses: ["rrl"],
+    outer: "chore",
+    outerRequired: false,
+    top: isRrlTop,
+    bottom: isJean,
+    shoe: isRrlShoe,
+  },
+  {
+    id: "WE_RRL_DENIM",
+    occasions: ["weekend"],
+    houses: ["rrl"],
+    outer: "denim",
+    outerRequired: true,
+    top: isRrlTop,
+    bottom: isJean,
+    shoe: isRrlShoe,
+    ready: (pool) => pool.some((g) => /trucker|denim jacket/.test(garmentBlob(g))),
+    gap: "No denim jacket — closest plates",
   },
   {
     id: "OUT_TONAL_BROWN",
@@ -421,7 +499,7 @@ export const RECIPES: Recipe[] = [
     outerRequired: true,
     top: (g) => topType(g) === "work_shirt" || /denim/.test(garmentBlob(g)),
     bottom: (g) => isJean(g),
-    shoe: (g) => shoeFamily(g) === "boot",
+    shoe: isRrlShoe,
     ready: (pool) => pool.some((g) => /selvedge|suede/.test(garmentBlob(g))),
     gap: "No suede outer — closest plates",
   },
@@ -440,7 +518,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "WE_DOUBLE_DENIM",
     occasions: ["weekend"],
-    houses: ["rrl", "ald"],
+    houses: ["ald"],
     outer: "denim",
     outerRequired: true,
     top: (g) => /denim/.test(garmentBlob(g)) && /shirt/.test(garmentBlob(g)),
@@ -464,7 +542,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "WE_FIELD_WHITE_SHIRT",
     occasions: ["weekend"],
-    houses: ["rrl", "sweetStable"],
+    houses: ["sweetStable"],
     outer: "field",
     outerRequired: true,
     top: (g) => isButtonDown(g) && /white|ivory|cream/.test(garmentBlob(g)),
@@ -639,6 +717,16 @@ export function recipesFor(
   });
 }
 
+function chooseRecipe(list: Recipe[], track?: ChapterTrack): Recipe {
+  const fresh = track ? list.filter((r) => !track.usedRecipes.has(r.id)) : list;
+  const pickFrom = fresh.length ? fresh : list;
+  if (track?.lastRecipe) {
+    const rotated = pickFrom.filter((r) => r.id !== track.lastRecipe);
+    if (rotated.length) return rotated[track.index % rotated.length]!;
+  }
+  return pickFrom[track ? track.index % pickFrom.length : 0]!;
+}
+
 export function pickRecipe(
   occasion: Occasion,
   pool: Garment[],
@@ -646,6 +734,13 @@ export function pickRecipe(
 ): Recipe {
   const house = opts?.house && opts.house !== "all" ? opts.house : undefined;
   const track = opts?.track;
+  if (house === "rrl") {
+    const owned = RECIPES.filter((r) => r.houses.includes("rrl"));
+    const forOcc = owned.filter((r) => r.occasions.includes(occasion));
+    const fit = forOcc.filter((r) => recipeFitsPool(r, pool));
+    const list = fit.length ? fit : forOcc.length ? forOcc : owned;
+    return chooseRecipe(list, track);
+  }
   let list = recipesFor(occasion, house).filter((r) => recipeFitsPool(r, pool));
   if (!list.length && house) {
     list = RECIPES.filter((r) => r.houses.includes(house) && recipeFitsPool(r, pool));
@@ -663,13 +758,7 @@ export function pickRecipe(
       if (prep) return prep;
     }
   }
-  const fresh = track ? list.filter((r) => !track.usedRecipes.has(r.id)) : list;
-  const pickFrom = fresh.length ? fresh : list;
-  if (track?.lastRecipe) {
-    const rotated = pickFrom.filter((r) => r.id !== track.lastRecipe);
-    if (rotated.length) return rotated[track.index % rotated.length]!;
-  }
-  return pickFrom[track ? track.index % pickFrom.length : 0]!;
+  return chooseRecipe(list, track);
 }
 
 export function recipeScore(pieces: Garment[], r: Recipe): number {
@@ -688,7 +777,10 @@ export function matchRecipe(
   occasion: Occasion,
   house?: House | "all" | null,
 ): RecipeId | undefined {
-  const list = recipesFor(occasion, house);
+  const rrlOnly = house === "rrl";
+  const list = rrlOnly
+    ? RECIPES.filter((r) => r.houses.includes("rrl") && r.occasions.includes(occasion))
+    : recipesFor(occasion, house);
   let best: Recipe | undefined;
   let bestN = 0;
   for (const r of list) {
@@ -699,6 +791,7 @@ export function matchRecipe(
     }
   }
   if (best && bestN >= 3) return best.id;
+  if (rrlOnly) return undefined;
   const any = RECIPES.filter((r) => r.occasions.includes(occasion));
   for (const r of any) {
     const n = recipeScore(pieces, r);

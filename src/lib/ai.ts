@@ -16,6 +16,7 @@ import {
   occasionFromDressPrompt,
   resolvePiecesFromText,
 } from "./dress";
+import { appendHouseGap, houseFromPrompt, stylistHouseBrief, type House } from "./houses";
 import { defaultOccasion, houseMixPenalty, momentOfDay, pickLook } from "./style";
 import type { Category, Garment, Occasion } from "./types";
 
@@ -437,21 +438,31 @@ function resolveStylistLook(
   prompt: string,
   f: number,
   grokText?: string,
+  house?: House | null,
 ): { text: string; garmentIds: string[]; occasion: Occasion } {
+  const active = house ?? houseFromPrompt(prompt);
   const named = resolvePiecesFromText(prompt, garments);
   const occasion = named.length
     ? occasionFromDressPrompt(prompt)
     : occasionFromPrompt(prompt);
+  const say = (pieces: Garment[], occ: Occasion, locked: string[]) =>
+    appendHouseGap(
+      grokText?.trim() ? grokText.trim() : dressReply(pieces, occ, locked),
+      active,
+      garments,
+      occ,
+    );
   if (named.length) {
     const dressed = dressThisPiece({
       lockedIds: named.map((g) => g.id),
       garments,
       occasion,
       weather: { f, label: "Fair", code: 2 },
+      house: active ?? undefined,
     });
     if (dressed) {
       return {
-        text: dressReply(dressed.pieces, dressed.occasion, dressed.lockedIds),
+        text: say(dressed.pieces, dressed.occasion, dressed.lockedIds),
         garmentIds: dressed.garmentIds,
         occasion: dressed.occasion,
       };
@@ -469,13 +480,14 @@ function resolveStylistLook(
       moment: momentOfDay(),
       weather: { f, label: "Fair", code: 2 },
       recentWorn: skip ? [] : undefined,
+      house: active ?? undefined,
     });
     pieces = ids
       .map((id) => garments.find((g) => g.id === id))
       .filter((g): g is Garment => Boolean(g));
   }
   return {
-    text: dressReply(pieces, occasion, named.map((g) => g.id)),
+    text: say(pieces, occasion, named.map((g) => g.id)),
     garmentIds: ids,
     occasion,
   };
@@ -590,6 +602,7 @@ export const askStylist = createServerFn({ method: "POST" })
       context?: string;
       garments?: Garment[];
       weatherF?: number;
+      house?: House | null;
     }) => input,
   )
   .handler(
@@ -601,9 +614,11 @@ export const askStylist = createServerFn({ method: "POST" })
     > => {
     const rack = livePool(data.garments ?? []);
     const f = data.weatherF ?? 68;
+    const house = data.house ?? houseFromPrompt(data.prompt);
+    const brief = house ? `\n\n${stylistHouseBrief(house)}` : "";
     const fallback = () =>
       rack.length
-        ? { ok: true as const, ...resolveStylistLook(rack, data.prompt, f) }
+        ? { ok: true as const, ...resolveStylistLook(rack, data.prompt, f, undefined, house) }
         : { ok: false as const, error: "The stylist has nothing to dress." };
 
     if (!process.env.XAI_API_KEY) return fallback();
@@ -611,7 +626,7 @@ export const askStylist = createServerFn({ method: "POST" })
     const messages = [
       {
         role: "system",
-        content: `${STYLIST_SYSTEM}
+        content: `${STYLIST_SYSTEM}${brief}
 
 ${data.context ? `TODAY\n${data.context}\n` : ""}
 CLOSET
@@ -631,7 +646,7 @@ ${data.closet.slice(0, 6000)}`,
         const body = r.json as { choices?: { message?: { content?: string } }[] };
         const text = body.choices?.[0]?.message?.content ?? "";
         if (text.trim() && rack.length) {
-          return { ok: true, ...resolveStylistLook(rack, data.prompt, f, text) };
+          return { ok: true, ...resolveStylistLook(rack, data.prompt, f, text, house) };
         }
       }
       if (rack.length) return fallback();

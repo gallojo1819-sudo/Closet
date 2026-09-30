@@ -10,6 +10,7 @@ import {
   housesOf,
   leadHouse,
   lookHouses,
+  housePieceBanned,
   lookPrint,
   shoeFamily,
   type House,
@@ -778,7 +779,9 @@ export function pickLook(
     recipeById(opts.recipeId) ??
     pickRecipe(opts.occasion, pool, { house: opts.house, track: chapter });
   const realOuters = pool.filter(isTrueOuter);
-  const bdWant = opts.occasion === "weekday" ? scaledButtonDownQuota(pool, 3) : 0;
+  const quotaHouse = opts.house && opts.house !== "all" ? opts.house : "polo";
+  const bdWant =
+    opts.occasion === "weekday" && quotaHouse === "polo" ? scaledButtonDownQuota(pool, 3) : 0;
 
   const avoid = opts.avoid ?? {};
   const recent = new Set(opts.recentWorn ?? []);
@@ -877,6 +880,16 @@ export function pickLook(
     const famChange = shoesSrc.filter((g) => !last3fam.has(shoeFamily(g)));
     shoesSrc = rotated.length ? rotated : famChange.length ? famChange : shoesSrc.filter((g) => !last3ids.has(g.id));
     if (!shoesSrc.length) shoesSrc = rankShoes;
+    if (opts.legalCombo && house) {
+      const kept = shoesSrc.filter((g) => !housePieceBanned([g], house, opts.occasion));
+      if (kept.length) shoesSrc = kept;
+      else {
+        const back = rankShoes.filter(
+          (g) => !last3ids.has(g.id) && !housePieceBanned([g], house, opts.occasion),
+        );
+        if (back.length) shoesSrc = back;
+      }
+    }
   }
   const shoeList = pin.get("footwear") ? [pin.get("footwear")!] : shoesSrc.slice(0, salted ? 4 : 8);
 

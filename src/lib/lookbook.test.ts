@@ -791,7 +791,7 @@ describe("2026-09 stylist pack", () => {
     assert.equal(lookClashes(look), false);
     assert.equal(lookFitsOccasion(look, "weekday"), true);
     assert.equal(lookFitsOccasion(look, "weekend"), true);
-    assert.equal(lookFitsHouse(look, "ald", "weekday", look), false);
+    assert.equal(lookFitsHouse(look, "ald", "weekday", look), true);
   });
 
   it("fair isle+cord+loafer weekday → VALID (Sweet Stable weekday)", () => {
@@ -803,6 +803,12 @@ describe("2026-09 stylist pack", () => {
     assert.equal(lookClashes(look), false);
     assert.equal(lookFitsOccasion(look, "weekday"), true);
     assert.equal(lookFitsHouse(look, "sweetStable", "weekday", look), true);
+    const booted = [
+      piece({ id: "fi2", name: "Cream fair isle", category: "top", subtype: "knit" }),
+      piece({ id: "cord2", name: "Brown cords", category: "bottom", subtype: "cord" }),
+      piece({ id: "bt2", name: "Brown boot", category: "footwear", subtype: "boot" }),
+    ];
+    assert.equal(lookFitsHouse(booted, "sweetStable", "weekday", booted), true);
   });
 
   it("oxford+dark jean+loafer weekday → VALID", () => {
@@ -1511,5 +1517,154 @@ export function GarmentImg(props) {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("house chips dress the row", () => {
+  const RRL_GAP = "Closest RRL from your closet. Boots would finish it.";
+
+  function rrlCloset(withBoots: boolean): Garment[] {
+    const work = [
+      ["w1", "Chambray work shirt"],
+      ["w2", "Indigo work shirt"],
+      ["w3", "Grey flannel shirt"],
+      ["w4", "Olive work shirt"],
+      ["w5", "Brown chambray shirt"],
+      ["w6", "Rust flannel shirt"],
+      ["w7", "Navy work shirt"],
+      ["w8", "Stone chambray shirt"],
+    ].map(([id, name]) =>
+      piece({ id: id!, name: name!, category: "top", subtype: "shirt" }),
+    );
+    const oxfords = Array.from({ length: 8 }, (_, i) =>
+      piece({ id: `ox${i}`, name: `Navy oxford ${i}`, category: "top", subtype: "oxford" }),
+    );
+    const jeans = Array.from({ length: 8 }, (_, i) =>
+      piece({
+        id: `jn${i}`,
+        name: `Indigo selvedge jean ${i}`,
+        category: "bottom",
+        subtype: "jean",
+      }),
+    );
+    const chinos = Array.from({ length: 8 }, (_, i) =>
+      piece({ id: `ch${i}`, name: `Khaki chino ${i}`, category: "bottom", subtype: "chino" }),
+    );
+    const pleated = [
+      piece({
+        id: "pleat",
+        name: "Grey pleated dress trousers",
+        category: "bottom",
+        subtype: "trouser",
+      }),
+    ];
+    const boots = withBoots
+      ? Array.from({ length: 8 }, (_, i) =>
+          piece({ id: `boot${i}`, name: `Brown boot ${i}`, category: "footwear", subtype: "boot" }),
+        )
+      : [];
+    const chelseas = Array.from({ length: 4 }, (_, i) =>
+      piece({ id: `chel${i}`, name: `Brown chelsea ${i}`, category: "footwear", subtype: "chelsea" }),
+    );
+    const badShoes = [
+      piece({ id: "penny", name: "Brown penny loafers", category: "footwear", subtype: "loafer" }),
+      piece({ id: "tassel", name: "Brown tassel loafers", category: "footwear", subtype: "loafer" }),
+      piece({ id: "suedelf", name: "Tan suede loafers", category: "footwear", subtype: "loafer" }),
+      piece({ id: "mule", name: "Black driving mule", category: "footwear", subtype: "mule" }),
+      piece({ id: "fash", name: "Black fashion sneaker", category: "footwear", subtype: "sneaker" }),
+      piece({ id: "court", name: "White court sneaker", category: "footwear", subtype: "sneaker" }),
+    ];
+    const jackets = [
+      piece({ id: "chore", name: "Brown chore jacket", category: "outerwear", subtype: "chore" }),
+      piece({ id: "denimj", name: "Indigo denim jacket", category: "outerwear", subtype: "denim jacket" }),
+      piece({ id: "suedej", name: "Brown suede jacket", category: "outerwear", subtype: "suede jacket" }),
+      piece({ id: "fieldj", name: "Olive field jacket", category: "outerwear", subtype: "field jacket" }),
+      piece({ id: "navyb", name: "Navy blazer", category: "outerwear", subtype: "blazer" }),
+    ];
+    const pink = piece({
+      id: "pink",
+      name: "Pink pique polo",
+      category: "top",
+      subtype: "polo",
+      colors: ["pink"],
+    });
+    return [...work, ...oxfords, ...jeans, ...chinos, ...pleated, ...boots, ...chelseas, ...badShoes, ...jackets, pink];
+  }
+
+  function piecesOf(rack: Garment[], look: Look): Garment[] {
+    return look.garmentIds
+      .map((id) => rack.find((g) => g.id === id))
+      .filter((g): g is Garment => Boolean(g));
+  }
+
+  it("RRL weekday fall keeps loafers and pleats out of the first three", () => {
+    const rack = rrlCloset(true);
+    const row = buildReshuffleRow(rack, "weekday", {
+      house: "rrl",
+      season: "fall",
+      cap: 8,
+      salt: 1,
+    });
+    assert.ok(row.length >= 3, `row ${row.length}`);
+    const first = row.slice(0, 3);
+    for (const look of first) {
+      const blob = piecesOf(rack, look)
+        .map((g) => `${g.name} ${g.subtype}`)
+        .join(" ")
+        .toLowerCase();
+      assert.equal(/pleat/.test(blob), false, blob);
+      assert.equal(/loafer|mule/.test(blob), false, blob);
+      assert.equal(/fashion/.test(blob), false, blob);
+      assert.match(blob, /jean|selvedge|denim|work shirt|chambray|flannel/);
+      assert.match(blob, /\bboot\b/);
+      assert.match(blob, /chore|denim jacket|suede jacket|field/);
+      assert.equal(/blazer/.test(blob), false, blob);
+      assert.equal(look.gap, undefined);
+    }
+    const jacketIds = new Set<string>();
+    for (const look of row.slice(0, 6)) {
+      const jacket = piecesOf(rack, look).find((g) =>
+        /chore|denim jacket|suede jacket|field jacket/i.test(`${g.name} ${g.subtype}`),
+      );
+      if (jacket) jacketIds.add(jacket.id);
+    }
+    assert.ok(jacketIds.size >= 4, [...jacketIds].join(","));
+    for (const slot of ["top", "bottom", "footwear"] as const) {
+      const ids: string[] = [];
+      for (const look of row) {
+        for (const g of piecesOf(rack, look)) {
+          const s = slotOf(g);
+          if (s === slot || (slot === "top" && s === "dress")) ids.push(g.id);
+        }
+      }
+      assert.equal(new Set(ids).size, ids.length, slot);
+    }
+    const polo = buildReshuffleRow(rack, "weekday", {
+      house: "polo",
+      season: "fall",
+      cap: 8,
+      salt: 1,
+    });
+    const keyOf = (looks: Look[]) =>
+      looks
+        .slice(0, 3)
+        .map((look) => comboKey(look.garmentIds))
+        .join("||");
+    assert.notEqual(keyOf(row), keyOf(polo));
+  });
+
+  it("RRL without boots still fills three and shows the gap", () => {
+    const rack = rrlCloset(false);
+    const row = buildReshuffleRow(rack, "weekday", {
+      house: "rrl",
+      season: "fall",
+      cap: 8,
+      salt: 2,
+    });
+    assert.ok(row.length >= 3, `row ${row.length}`);
+    assert.ok(
+      row.slice(0, 3).some((look) => look.gap === RRL_GAP),
+      row.slice(0, 3).map((look) => look.gap ?? "").join(" | "),
+    );
   });
 });

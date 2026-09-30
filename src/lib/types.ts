@@ -62,6 +62,8 @@ export type Look = {
   recipeId?: string;
   /** Critic hid this look. It stays in the saved array. */
   rejected?: boolean;
+  /** Closest-fill note. Hard house looks omit it. */
+  gap?: string;
   createdAt: string;
 };
 
@@ -71,6 +73,9 @@ export type StylistMessage = {
   text: string;
   lookId?: string;
   garmentIds?: string[];
+  /** Draft stays on the message so a reload still shows Save and Wear. */
+  draftName?: string;
+  draftOccasion?: Occasion;
   createdAt: string;
 };
 

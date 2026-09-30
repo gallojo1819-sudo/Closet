@@ -1,0 +1,26 @@
+{
+  "signals": [
+    "merino or turtleneck",
+    "flannel or trouser",
+    "suede loafer or derby or chelsea",
+    "overcoat or suede jacket or navy blazer or unconstructed"
+  ],
+  "minSignals": 2,
+  "anchors": [],
+  "banned": ["camp", "linen", "driving mule", "990", "white court", "fair isle"],
+  "jackets": ["overcoat", "suede", "blazer"],
+  "shoes": ["suede loafer", "derby", "chelsea"],
+  "palette": ["charcoal", "camel", "navy"],
+  "occasionNote": "",
+  "cardNote": "Merino, flannel, and a coat.",
+  "gap": "No overcoat — shearling or blazer over merino",
+  "requireOwned": [],
+  "kills": [
+    { "when": "polo-default", "message": "House switch cannot recolor PoloDefault" },
+    { "when": "blue-ocbd", "message": "Non-Polo cannot be OCBD + khaki + penny" },
+    { "when": "overcoat-tee-court", "message": "Italian winter overcoat is not white sneaker + tee" }
+  ],
+  "holes": [
+    { "missing": "overcoat", "note": "No overcoat — shearling or blazer over merino" }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "signals": [
+    "summer walk or suede loafer",
+    "chino or linen or drawstring",
+    "unconstructed or no jacket",
+    "beige or ivory or tobacco or sand or cream or ocean"
+  ],
+  "minSignals": 2,
+  "anchors": [],
+  "banned": ["990", "boot", "rugby", "fair isle", "not summer shoe"],
+  "jackets": [],
+  "shoes": ["summer walk", "suede loafer"],
+  "palette": ["sand", "cream", "ivory"],
+  "occasionNote": "Italian summer is thin on Weekday — closest plates",
+  "cardNote": "Linen, an unconstructed jacket, and a Summer Walk.",
+  "gap": "No Summer Walk / suede loafer",
+  "requireOwned": [],
+  "kills": [
+    { "when": "polo-default", "message": "House switch cannot recolor PoloDefault" },
+    { "when": "blue-ocbd", "message": "Non-Polo cannot be OCBD + khaki + penny" },
+    { "when": "unless-summer-shoe", "message": "Italian summer needs a Summer Walk or suede loafer" },
+    { "when": "navy-blazer-chino-penny", "message": "Italian summer is not structured navy blazer + chino + penny" }
+  ],
+  "holes": [
+    { "missing": "summer walk or suede loafer", "note": "No Summer Walk / suede loafer" }
+  ]
+}

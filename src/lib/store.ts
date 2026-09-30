@@ -100,6 +100,7 @@ type ClosetState = {
   removeDropPiece: (id: string) => void;
   toggleLock: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => string;
+  stampMessage: (id: string, patch: Partial<Pick<StylistMessage, "lookId" | "text" | "garmentIds" | "draftName" | "draftOccasion">>) => void;
   setRefPhoto: (key: string | null, backup?: string | null) => void;
   restoreRefPhoto: () => Promise<void>;
   restoreFromIdbMeta: () => Promise<void>;
@@ -405,27 +406,16 @@ export const useCloset = create<ClosetState>()(
         const star =
           dressed.pieces.find((g) => dressed.lockedIds.includes(g.id)) ??
           dressed.pieces[0]!;
-        const id = get().saveLook({
+        const key = comboKey(dressed.garmentIds).replace(/\|/g, "_");
+        return {
+          id: `draft_${key}`,
           name: `${star.name} · ${dressed.occasion}`,
           occasion: dressed.occasion,
           garmentIds: dressed.garmentIds,
-          source: "manual",
+          source: "ai",
           lookbook: false,
-        });
-        set({
-          drop: {
-            date: todayISO(),
-            garmentIds: dressed.garmentIds,
-            worn: false,
-            verdict: "pending",
-            weather: s.drop?.weather,
-            occasion: dressed.occasion,
-            moment: momentOfDay(),
-            lockedIds: dressed.lockedIds,
-            lockNote: null,
-          },
-        });
-        return get().looks.find((l) => l.id === id) ?? null;
+          createdAt: new Date().toISOString(),
+        };
       },
       keepLook: (id, patch) => {
         set((s) => ({
@@ -582,6 +572,11 @@ export const useCloset = create<ClosetState>()(
           messages: [...s.messages, { ...m, id, createdAt: new Date().toISOString() }],
         }));
         return id;
+      },
+      stampMessage: (id, patch) => {
+        set((s) => ({
+          messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+        }));
       },
       fillThisWeek: (season) => {
         const s = get();

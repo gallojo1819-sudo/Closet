@@ -1,4 +1,4 @@
-import type { Occasion } from "./types.ts";
+import type { Occasion, StylistMessage } from "./types.ts";
 
 /** What an answer may become, once the user taps Save. Asking does not write it. */
 export type StylistDraft = {
@@ -6,6 +6,17 @@ export type StylistDraft = {
   occasion: Occasion;
   garmentIds: string[];
 };
+
+/** The draft lives on the message, so a reload still has Save and Wear. */
+export function draftFromMessage(message: StylistMessage): StylistDraft | null {
+  if (message.role !== "stylist") return null;
+  if (!message.draftName || !message.draftOccasion || !message.garmentIds?.length) return null;
+  return {
+    name: message.draftName,
+    occasion: message.draftOccasion,
+    garmentIds: message.garmentIds,
+  };
+}
 
 /**
  * A question leaves looks and Today untouched.

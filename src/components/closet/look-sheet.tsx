@@ -73,6 +73,7 @@ export function LookSheet({
   const piecesRef = useRef(activePieces);
   piecesRef.current = activePieces;
   const keepLook = useCloset((s) => s.keepLook);
+  const saveLook = useCloset((s) => s.saveLook);
   const looks = useCloset((s) => s.looks);
   const refPhoto = useCloset((s) => s.refPhoto);
   const painted = frame || cachedSrc;
@@ -211,12 +212,21 @@ export function LookSheet({
             </button>
             <button
               type="button"
-              onClick={() =>
-                keepLook(look.id, {
-                  garmentIds: activePieces.map((g) => g.id),
-                  name: nameLook(activePieces) || look.name,
-                })
-              }
+              onClick={() => {
+                const name = nameLook(activePieces) || look.name;
+                const garmentIds = activePieces.map((g) => g.id);
+                if (!looks.some((l) => l.id === look.id)) {
+                  saveLook({
+                    name,
+                    occasion: mapOccasion(look.occasion),
+                    garmentIds,
+                    source: "manual",
+                    lookbook: false,
+                  });
+                  return;
+                }
+                keepLook(look.id, { garmentIds, name });
+              }}
               className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
             >
               {comboSaved || look.source === "manual" ? "Saved" : "Save look"}

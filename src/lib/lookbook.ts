@@ -27,9 +27,14 @@ import {
 import {
   bottomType,
   houseFingerprintOk,
+  houseGapNote,
   houseLegalCombo,
+  housePieceBanned,
+  houseProfile,
+  isHardHouseLook,
   lookPrint,
   mapHouse,
+  profilePhraseHits,
   shoeFamily,
   topType,
 } from "./houses.ts";
@@ -458,6 +463,20 @@ export function lookFitsOccasion(
   if (o === "weekday") {
     if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
     if (rugby && blazer) return false;
+    if (house === "rrl") {
+      const work = /western|pearl\s*snap|work shirt|chambray|flannel/.test(blob);
+      const denim = jean || /selvedge|denim/.test(blob);
+      const fashion = shoes.some((g) => {
+        const b = pieceBlob(g);
+        return /sneaker/.test(b) && !/court|\b990\b|\bboot/.test(b);
+      });
+      const court = shoes.some((g) => /court/.test(pieceBlob(g)));
+      if (loafer || mule || fashion || court) return false;
+      if (!(denim || work)) return false;
+      const ownsBoot = (pool ?? pieces).some((g) => shoeFamily(g) === "boot");
+      if (ownsBoot) return boot || /chelsea/.test(blob);
+      return true;
+    }
     if (house === "ald") {
       return (hoodie || rugby || graphic) && (jean || chino) && (sneaker || loafer);
     }
@@ -767,7 +786,7 @@ export function buildChapter(
       chapter: track,
       legalCombo: house ? (p) => houseLegalCombo(p, house, occasion, undefined, pool) : undefined,
     });
-    if (ids.length < 3) continue;
+    if (ids.length < 3) break;
     prev = ids;
     let pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
     if (pieces.length < 3) continue;
@@ -1614,6 +1633,19 @@ function knitColorTwin(a: Garment[], b: Garment[]): boolean {
   return pa.bottom_type === pb.bottom_type && pa.shoe_family === pb.shoe_family;
 }
 
+function jacketNameHits(g: Garment, name: string): boolean {
+  const b = `${g.name} ${g.subtype}`.toLowerCase();
+  if (name === "blazer") return isBlazerPiece(g) && slotOf(g) === "outerwear";
+  if (name === "overcoat") return slotOf(g) === "outerwear" && /overcoat|topcoat/.test(b);
+  if (slotOf(g) !== "outerwear") return false;
+  const k = outerKind(g);
+  if (name === "chore") return k === "chore";
+  if (name === "denim") return k === "denim";
+  if (name === "suede") return k === "suede";
+  if (name === "field") return k === "field";
+  return false;
+}
+
 /**
  * This week row from livePool. Not Monday-keyed. Does not append lookbook AI covers.
  */
@@ -1668,7 +1700,30 @@ export function buildReshuffleRow(
   }));
   const bottoms = shuffle(pool.filter((g) => slotOf(g) === "bottom"));
   const shoes = shuffle(pool.filter((g) => slotOf(g) === "footwear"));
-  const jackets = shuffle(pool.filter((g) => isBlazerPiece(g)));
+  const profile = house ? houseProfile(house) : undefined;
+  const onProfile = (g: Garment) => {
+    if (!profile) return false;
+    if (profile.signals.some((sig) => profilePhraseHits([g], sig, occasion))) return true;
+    if (profile.shoes.some((sig) => profilePhraseHits([g], sig, occasion))) return true;
+    if (profile.jackets.some((name) => jacketNameHits(g, name))) return true;
+    return false;
+  };
+  const prefer = (list: Garment[]) => {
+    if (!profile) return list;
+    const yes = list.filter(onProfile);
+    return yes.length ? yes : list;
+  };
+  const topSrc = prefer(tops);
+  const botSrc = prefer(bottoms);
+  const shoeSrc = prefer(shoes);
+  const rugged = Boolean(
+    profile && profile.jackets.some((name) => name !== "blazer" && name !== "overcoat"),
+  );
+  const jackets = shuffle(
+    profile
+      ? pool.filter((g) => profile.jackets.some((name) => jacketNameHits(g, name)))
+      : pool.filter((g) => isBlazerPiece(g)),
+  );
   const color = opts?.color?.trim().toLowerCase() ?? "";
   const legal = (pieces: Garment[]): boolean => {
     if (pieces.length < 3) return false;
@@ -1682,12 +1737,23 @@ export function buildReshuffleRow(
     if (banned.has(comboKey(pieces.map((p) => p.id)))) return false;
     return true;
   };
+  const acceptJacket = (core: Garment[], jacket: Garment): Garment[] | null => {
+    if (core.some((p) => p.id === jacket.id)) return null;
+    const next = [...core, jacket];
+    if (isBlazerPiece(jacket)) {
+      if (!lookAllowsBlazer(core, jacket, occasion)) return null;
+      return next;
+    }
+    if (lookClashes(next)) return null;
+    if (!lookFitsOccasion(next, occasion, pool, house)) return null;
+    if (house && housePieceBanned(next, house, occasion)) return null;
+    return next;
+  };
   const withJacket = (core: Garment[], i: number): Garment[] | null => {
     if (!jackets.length || i % 4 !== 3) return null;
     const jacket = jackets[i % jackets.length];
-    if (!jacket || core.some((p) => p.id === jacket.id)) return null;
-    if (!lookAllowsBlazer(core, jacket, occasion)) return null;
-    return [...core, jacket];
+    if (!jacket) return null;
+    return acceptJacket(core, jacket);
   };
   const draws: Garment[][] = [];
   const seenDraw = new Set<string>();
@@ -1695,6 +1761,19 @@ export function buildReshuffleRow(
     if (!legal(pieces)) return;
     const key = comboKey(pieces.map((p) => p.id));
     if (seenDraw.has(key)) return;
+    seenDraw.add(key);
+    draws.push(pieces);
+  };
+  const pushLoose = (pieces: Garment[]) => {
+    if (pieces.length < 3) return;
+    if (new Set(pieces.map((p) => p.id)).size !== pieces.length) return;
+    if (!lookTop(pieces) || !pieces.some((g) => slotOf(g) === "bottom") || !lookShoe(pieces)) return;
+    if (lookClashes(pieces)) return;
+    if (season && !lookFitsSeason(pieces, season)) return;
+    if (color && !lookHasColor(pieces, color)) return;
+    if (!lookFitsOccasion(pieces, occasion, pool)) return;
+    const key = comboKey(pieces.map((p) => p.id));
+    if (seenDraw.has(key) || banned.has(key)) return;
     seenDraw.add(key);
     draws.push(pieces);
   };
@@ -1731,16 +1810,76 @@ export function buildReshuffleRow(
       if (draws.some((d) => d.some((p) => p.id === star.id))) break;
     }
   }
-  const n = Math.max(tops.length, bottoms.length, shoes.length, cap * 4);
-  for (let i = 0; i < n && draws.length < cap * 4; i++) {
-    const top = tops[i % tops.length];
-    const bot = bottoms[(i * 3 + salt0) % Math.max(bottoms.length, 1)];
-    const shoe = shoes[(i * 5 + salt0 * 2) % Math.max(shoes.length, 1)];
+  const n = Math.max(topSrc.length, botSrc.length, shoeSrc.length, cap * 4);
+  const drawLimit = cap * 4;
+  for (let i = 0; i < n && draws.length < drawLimit; i++) {
+    const top = topSrc[i % topSrc.length];
+    const bot = botSrc[(i * 3 + salt0) % Math.max(botSrc.length, 1)];
+    const shoe = shoeSrc[(i * 5 + salt0 * 2) % Math.max(shoeSrc.length, 1)];
     if (!top || !bot || !shoe) continue;
     const core = [top, bot, shoe];
     pushDraw(core);
-    const jacketed = withJacket(core, i);
-    if (jacketed) pushDraw(jacketed);
+    if (rugged) {
+      for (let j = 0; j < Math.min(jackets.length, 4); j++) {
+        const jacket = jackets[(i + j) % jackets.length];
+        if (!jacket) continue;
+        const next = acceptJacket(core, jacket);
+        if (next) pushDraw(next);
+      }
+    } else {
+      const jacketed = withJacket(core, i);
+      if (jacketed) pushDraw(jacketed);
+    }
+  }
+  if (house) {
+    const shoeList = shoeSrc.length ? shoeSrc : shoes;
+    const topList = topSrc.length ? topSrc : tops;
+    const botList = botSrc.length ? botSrc : bottoms;
+    const take = Math.min(Math.max(topList.length, botList.length, shoeList.length), 12);
+    for (let i = 0; i < take; i++) {
+      const top = topList[i % topList.length];
+      const bot = botList[i % botList.length];
+      const shoe = shoeList[i % shoeList.length];
+      if (!top || !bot || !shoe) continue;
+      if (new Set([top.id, bot.id, shoe.id]).size < 3) continue;
+      const core = [top, bot, shoe];
+      pushDraw(core);
+      for (const jacket of jackets) {
+        const next = acceptJacket(core, jacket);
+        if (next) pushDraw(next);
+      }
+    }
+  }
+  if (house && draws.filter((d) => !housePieceBanned(d, house, occasion)).length < 3) {
+    const span = Math.max(tops.length, bottoms.length, shoes.length, 1);
+    let added = 0;
+    for (let i = 0; i < span * 6 && added < 48; i++) {
+      const top = tops[i % Math.max(tops.length, 1)];
+      const bot = bottoms[(i * 3 + salt0) % Math.max(bottoms.length, 1)];
+      const shoe = shoes[(i * 5 + salt0 * 2) % Math.max(shoes.length, 1)];
+      if (!top || !bot || !shoe) continue;
+      const before = draws.length;
+      pushLoose([top, bot, shoe]);
+      if (draws.length > before) added += 1;
+    }
+  }
+  if (house) {
+    const spec = houseProfile(house);
+    const rackReady = spec.requireOwned.every((token) => profilePhraseHits(pool, token, occasion));
+    const score = (pieces: Garment[]) => {
+      const banned = housePieceBanned(pieces, house, occasion);
+      const finger = houseFingerprintOk(pieces, house, occasion, pool);
+      const hard =
+        finger &&
+        rackReady &&
+        spec.requireOwned.every((token) => profilePhraseHits(pieces, token, occasion));
+      if (hard) return 1000 + spec.signals.length;
+      let s = banned ? 0 : 40;
+      if (finger) s += 300;
+      s += spec.signals.filter((sig) => profilePhraseHits(pieces, sig, occasion)).length;
+      return s;
+    };
+    draws.sort((left, right) => score(right) - score(left));
   }
   void weather;
   void usedCount;
@@ -1766,14 +1905,39 @@ export function buildReshuffleRow(
     axes3: boolean;
   };
 
-  const pack = (strict: Strict): Look[] => {
+  const slotOwned = {
+    top: tops.length,
+    bottom: bottoms.length,
+    footwear: shoes.length,
+    outerwear: pool.filter((g) => slotOf(g) === "outerwear").length,
+  };
+  const pack = (strict: Strict, allowBanned = false): Look[] => {
     const row: Look[] = [];
     const used = new Set<string>();
+    const seen = new Map<string, number>();
     const keys = new Set<string>();
     let cable = false;
+    const lockedRepeat = (pieces: Garment[]) => {
+      if (cap < 8) return false;
+      for (const p of pieces) {
+        const slot = wearCapSlot(p);
+        if (!slot) continue;
+        if (slotOwned[slot] >= 8 && (seen.get(p.id) ?? 0) >= 1) return true;
+      }
+      return false;
+    };
     for (const pieces of draws) {
       if (row.length >= cap) break;
       if (strict.uniqueIds && pieces.some((p) => used.has(p.id))) continue;
+      if (lockedRepeat(pieces)) continue;
+      if (
+        !allowBanned &&
+        house &&
+        housePieceBanned(pieces, house, occasion) &&
+        row.length < 3
+      ) {
+        continue;
+      }
       const top = lookTop(pieces);
       if (top && isCreamCable(top) && cable) continue;
       const recipeId = matchRecipe(pieces, occasion, house);
@@ -1799,6 +1963,7 @@ export function buildReshuffleRow(
       if (keys.has(key) || banned.has(key)) continue;
       keys.add(key);
       if (strict.uniqueIds) for (const p of pieces) used.add(p.id);
+      for (const p of pieces) seen.set(p.id, (seen.get(p.id) ?? 0) + 1);
       if (top && isCreamCable(top)) cable = true;
       noteChapterLook(track, pieces, recipeId, occasion);
       row.push({
@@ -1815,6 +1980,60 @@ export function buildReshuffleRow(
     return row;
   };
 
+  const spreadJackets = (row: Look[]): Look[] => {
+    if (!house || !rugged || jackets.length < 4 || row.length < 4) return row;
+    const next = row.map((look) => ({ ...look, garmentIds: [...look.garmentIds] }));
+    const limit = Math.min(6, next.length);
+    const claimed = new Set<string>();
+    const outerOnce = cap >= 8 && slotOwned.outerwear >= 8;
+    for (let i = 0; i < limit; i++) {
+      const look = next[i]!;
+      const pieces = look.garmentIds
+        .map((id) => byId.get(id))
+        .filter((g): g is Garment => Boolean(g));
+      const current = pieces.find((g) => jackets.some((j) => j.id === g.id));
+      if (current && !claimed.has(current.id)) {
+        claimed.add(current.id);
+        continue;
+      }
+      const want = jackets.find((j) => !claimed.has(j.id));
+      if (!want) continue;
+      if (outerOnce) {
+        for (const other of next) {
+          if (other === look || !other.garmentIds.includes(want.id)) continue;
+          other.garmentIds = other.garmentIds.filter((id) => id !== want.id);
+          const otherKey = comboKey(other.garmentIds);
+          other.id = `reshuffle_${occasion}_j_${otherKey.replace(/\|/g, "_")}`;
+        }
+      }
+      const core = pieces.filter((g) => !jackets.some((j) => j.id === g.id));
+      const combined = acceptJacket(core, want);
+      if (!combined) continue;
+      look.garmentIds = combined.map((g) => g.id);
+      const key = comboKey(look.garmentIds);
+      look.id = `reshuffle_${occasion}_${i}_${key.replace(/\|/g, "_")}`;
+      claimed.add(want.id);
+    }
+    return next;
+  };
+  const tagGaps = (row: Look[]): Look[] => {
+    if (!house) return row;
+    const spec = houseProfile(house);
+    const missing = spec.requireOwned.some((token) => !profilePhraseHits(pool, token, occasion));
+    const hardFlags = row.map((look) => {
+      const pieces = look.garmentIds
+        .map((id) => byId.get(id))
+        .filter((g): g is Garment => Boolean(g));
+      return isHardHouseLook(pieces, house, occasion, pool);
+    });
+    const hardCount = hardFlags.filter(Boolean).length;
+    if (hardCount >= 3 && !missing) return row;
+    const note = missing ? houseGapNote(house, pool, occasion) || spec.gap : spec.cardNote;
+    if (!note) return row;
+    return row.map((look, i) => (hardFlags[i] ? look : { ...look, gap: note }));
+  };
+  const finish = (row: Look[]) => tagGaps(spreadJackets(row));
+
   const phases: Strict[] = [
     { uniqueIds: true, uniqueOuter: true, uniqueShoe: true, axes3: true },
     { uniqueIds: true, uniqueOuter: false, uniqueShoe: true, axes3: true },
@@ -1826,9 +2045,16 @@ export function buildReshuffleRow(
   for (const strict of phases) {
     const row = pack(strict);
     if (row.length > best.length) best = row;
-    if (row.length >= cap) return row;
+    if (row.length >= cap) return finish(row);
   }
-  return best;
+  if (house && best.length < 3) {
+    const row = pack(
+      { uniqueIds: false, uniqueOuter: false, uniqueShoe: false, axes3: false },
+      true,
+    );
+    if (row.length > best.length) best = row;
+  }
+  return finish(best);
 }
 
 /** 7 scarce-first spreads. Each id at most once in the week. Pool is livePool, not the book. */

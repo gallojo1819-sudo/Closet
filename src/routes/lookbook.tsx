@@ -265,7 +265,7 @@ function LookbookPage() {
   const [salt, setSalt] = useState(1);
   const row =
     shown && shown.key === filterKey && shown.looks.length > 0 ? shown.looks : openRow;
-  const cards = row.map((look) => ({ look, why: "" }));
+  const cards = row.map((look) => ({ look, why: look.gap ?? "" }));
   const visible = cards;
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);

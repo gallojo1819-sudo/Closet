@@ -1,0 +1,27 @@
+{
+  "signals": [
+    "rugby or oversized oxford",
+    "untucked",
+    "jean",
+    "loafer or 990"
+  ],
+  "minSignals": 2,
+  "anchors": ["rugby or oversized oxford"],
+  "banned": ["navy blazer"],
+  "jackets": ["chore", "denim", "field"],
+  "shoes": ["990", "loafer"],
+  "palette": ["indigo", "navy"],
+  "occasionNote": "",
+  "cardNote": "Rugby, jeans, and a loafer or 990.",
+  "gap": "No 990s for ALD — dad sneaker",
+  "requireOwned": [],
+  "kills": [
+    { "when": "polo-default", "message": "House switch cannot recolor PoloDefault" },
+    { "when": "blue-ocbd", "message": "Non-Polo cannot be OCBD + khaki + penny" },
+    { "when": "rugby-blazer", "message": "Rugby and a blazer do not dress ALD" }
+  ],
+  "holes": [
+    { "missing": "990", "note": "No 990s for ALD — dad sneaker" },
+    { "missing": "rugby or oversized oxford", "note": "No rugby for ALD" }
+  ]
+}

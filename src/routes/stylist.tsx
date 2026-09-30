@@ -12,8 +12,8 @@ import {
   occasionFromDressPrompt,
   resolvePiecesFromText,
 } from "@/lib/dress";
-import { recordStylistQuestion, stylistLookToSave } from "@/lib/stylist-thread";
-import { houseFromPrompt } from "@/lib/houses";
+import { draftFromMessage, recordStylistQuestion, stylistLookToSave } from "@/lib/stylist-thread";
+import { appendHouseGap, houseFromPrompt } from "@/lib/houses";
 import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
 import { daysIdle, defaultOccasion, HOUSE_LABEL, housesOf, momentOfDay } from "@/lib/style";
@@ -70,15 +70,12 @@ function StylistPage() {
   const forStylist = garments;
   const messages = useCloset((s) => s.messages);
   const pushMessage = useCloset((s) => s.pushMessage);
+  const stampMessage = useCloset((s) => s.stampMessage);
   const saveLook = useCloset((s) => s.saveLook);
   const setDrop = useCloset((s) => s.setDrop);
   const looks = useCloset((s) => s.looks);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [drafts, setDrafts] = useState<
-    Record<string, { name: string; occasion: Occasion; garmentIds: string[] }>
-  >({});
-  const [savedIds, setSavedIds] = useState<Record<string, string>>({});
 
   const send = async (prompt: string) => {
     const q = prompt.trim();
@@ -108,19 +105,19 @@ function StylistPage() {
       });
       if (dressed) {
         const pieces = dressed.pieces;
-        const messageId = pushMessage({
+        const activeHouse = house ?? houseHint ?? null;
+        pushMessage({
           role: "stylist",
-          text: dressReply(pieces, occasion, named.map((g) => g.id)),
-          garmentIds: dressed.garmentIds,
-        });
-        setDrafts((prev) => ({
-          ...prev,
-          [messageId]: {
-            name: nameLook(pieces),
+          text: appendHouseGap(
+            dressReply(pieces, occasion, named.map((g) => g.id)),
+            activeHouse,
+            owned,
             occasion,
-            garmentIds: dressed.garmentIds,
-          },
-        }));
+          ),
+          garmentIds: dressed.garmentIds,
+          draftName: nameLook(pieces),
+          draftOccasion: occasion,
+        });
       } else {
         pushMessage({ role: "stylist", text: WHICH_PIECE });
       }
@@ -170,6 +167,7 @@ function StylistPage() {
         context,
         garments: forStylist,
         weatherF: drop?.weather?.f ?? 68,
+        house: houseFromPrompt(q),
       },
     });
     if (res.ok && res.garmentIds.length) {
@@ -177,19 +175,13 @@ function StylistPage() {
         .map((id) => forStylist.find((g) => g.id === id))
         .filter((g): g is Garment => Boolean(g));
       const occasion = (res.occasion ?? defaultOccasion()) as Occasion;
-      const messageId = pushMessage({
+      pushMessage({
         role: "stylist",
         text: res.text,
         garmentIds: res.garmentIds,
+        draftName: nameLook(pieces),
+        draftOccasion: occasion,
       });
-      setDrafts((prev) => ({
-        ...prev,
-        [messageId]: {
-          name: nameLook(pieces),
-          occasion,
-          garmentIds: res.garmentIds,
-        },
-      }));
     } else {
       pushMessage({
         role: "stylist",
@@ -200,7 +192,8 @@ function StylistPage() {
   };
 
   const wearDraft = (messageId: string) => {
-    const draft = drafts[messageId];
+    const message = messages.find((m) => m.id === messageId);
+    const draft = message ? draftFromMessage(message) : null;
     if (!draft) return;
     setDrop({
       date: todayISO(),
@@ -214,10 +207,11 @@ function StylistPage() {
   };
 
   const saveDraft = (messageId: string) => {
-    const draft = drafts[messageId];
-    if (!draft || savedIds[messageId]) return;
+    const message = messages.find((m) => m.id === messageId);
+    const draft = message ? draftFromMessage(message) : null;
+    if (!draft || message?.lookId) return;
     const id = saveLook(stylistLookToSave(draft));
-    setSavedIds((prev) => ({ ...prev, [messageId]: id }));
+    stampMessage(messageId, { lookId: id });
   };
 
   return (
@@ -264,18 +258,18 @@ function StylistPage() {
                 className="mt-3 max-w-sm border border-champagne/20"
               />
             )}
-            {m.role === "stylist" && (drafts[m.id] || m.lookId) && (
+            {m.role === "stylist" && (draftFromMessage(m) || m.lookId) && (
               <div className="mt-3 flex flex-wrap gap-3">
-                {drafts[m.id] && (
+                {draftFromMessage(m) && (
                   <button
                     type="button"
                     onClick={() => saveDraft(m.id)}
                     className="micro text-champagne/80 hover:text-champagne underline-offset-2 hover:underline"
                   >
-                    {savedIds[m.id] ? "Saved" : "Save"}
+                    {m.lookId ? "Saved" : "Save"}
                   </button>
                 )}
-                {drafts[m.id] && (
+                {draftFromMessage(m) && (
                   <button
                     type="button"
                     onClick={() => wearDraft(m.id)}
@@ -284,10 +278,10 @@ function StylistPage() {
                     Wear this
                   </button>
                 )}
-                {(savedIds[m.id] || m.lookId) && (
+                {m.lookId && (
                   <Link
                     to="/lookbook"
-                    search={{ look: savedIds[m.id] ?? m.lookId }}
+                    search={{ look: m.lookId }}
                     className="micro text-champagne/80 hover:text-champagne underline-offset-2 hover:underline"
                   >
                     See on you →

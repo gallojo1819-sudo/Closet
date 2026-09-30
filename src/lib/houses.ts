@@ -2,6 +2,7 @@
  * Hard house fingerprints. Tokens from name/subtype/notes/colors — never a shop.
  * PoloDefault is last for All. A selected house never falls back to oxford+chino+penny.
  */
+import { HOUSE_PROFILES, type HouseProfile } from "./house-profiles/index.ts";
 import { resolveTuck } from "./tuck.ts";
 import type { Garment, Occasion } from "./types.ts";
 
@@ -306,239 +307,296 @@ export function axesDiffer(a: LookPrint, b: LookPrint): number {
   return n;
 }
 
-const POLO_TOP: TopType[] = ["oxford", "pique_polo", "cable"];
-const POLO_SHOE: ShoeFamily[] = ["penny_loafer", "leather_sneaker", "boat"];
+export function houseProfile(house: House): HouseProfile {
+  return HOUSE_PROFILES[house];
+}
 
-function hits(print: LookPrint, house: House, pool?: Garment[]): { required: number; forbidden: number } {
+/** One profile phrase. "a or b" hits if either side hits. The words are the JSON, not a second rule list. */
+export function profilePhraseHits(
+  pieces: Garment[],
+  phrase: string,
+  occasion?: Occasion,
+  print: LookPrint = lookPrint(pieces, occasion),
+): boolean {
+  const raw = phrase.trim().toLowerCase();
+  if (!raw) return false;
+  if (raw === "pink polo as the only top") return atomHits(raw, print, pieces);
+  if (raw.includes(" and ")) {
+    return raw.split(" and ").every((part) => profilePhraseHits(pieces, part.trim(), occasion, print));
+  }
+  return raw.split(" or ").some((part) => atomHits(part.trim(), print, pieces));
+}
+
+function atomHits(phrase: string, print: LookPrint, pieces: Garment[]): boolean {
+  const tops = topsOf(pieces);
+  const shoes = shoesOf(pieces);
+  const outers = pieces.filter((g) => slotOf(g) === "outerwear");
+  const outerBlob = outers.map(garmentBlob).join(" ");
+  const blob = pieces.map(garmentBlob).join(" ");
+  switch (phrase) {
+    case "oxford":
+      return print.top_type === "oxford";
+    case "polo":
+    case "pique polo":
+      return print.top_type === "pique_polo";
+    case "cable":
+      return print.top_type === "cable";
+    case "rugby":
+      return print.top_type === "rugby";
+    case "oversized oxford":
+      return print.top_type === "oversized_oxford";
+    case "camp":
+      return print.top_type === "camp";
+    case "portofino":
+      return print.top_type === "linen_portofino";
+    case "italian knit polo":
+      return print.top_type === "italian_knit_polo";
+    case "sangallo":
+      return print.top_type === "sangallo";
+    case "serafino":
+      return print.top_type === "serafino";
+    case "bowling":
+      return print.top_type === "bowling";
+    case "light cashmere tee":
+      return print.top_type === "light_cashmere_tee";
+    case "fair isle":
+      return print.top_type === "fair_isle";
+    case "gingham":
+      return print.top_type === "gingham";
+    case "work shirt":
+      return tops.some((g) => /work shirt|western|pearl\s*snap/.test(garmentBlob(g)));
+    case "western":
+      return /western|cowboy/.test(blob);
+    case "pearl-snap":
+    case "pearl snap":
+      return /pearl\s*snap/.test(blob);
+    case "chambray":
+      return /chambray/.test(blob);
+    case "flannel shirt":
+      return tops.some((g) => /flannel/.test(garmentBlob(g)));
+    case "selvedge":
+      return /selvedge/.test(blob);
+    case "jean":
+    case "jeans":
+      return pieces.some(
+        (g) => slotOf(g) === "bottom" && (bottomType(g) === "jean" || /jean|denim|selvedge/.test(garmentBlob(g))),
+      );
+    case "denim":
+      return pieces.some((g) => slotOf(g) === "bottom" && /denim|selvedge|\bjeans?\b/.test(garmentBlob(g)));
+    case "cord":
+      return pieces.some((g) => slotOf(g) === "bottom" && bottomType(g) === "cord");
+    case "chino":
+      return print.bottom_type === "chino" || print.bottom_type === "khaki";
+    case "linen":
+      return print.bottom_type === "linen" || (print.top_type === "linen_portofino");
+    case "drawstring":
+      return print.bottom_type === "drawstring";
+    case "flannel":
+      return print.bottom_type === "flannel" || /flannel/.test(blob);
+    case "trouser":
+      return print.bottom_type === "trouser" || print.bottom_type === "flannel";
+    case "pleated dress trousers":
+    case "pleated trousers":
+      return pieces.some(
+        (g) => /pleat/.test(garmentBlob(g)) && /trouser/.test(garmentBlob(g)) && bottomType(g) !== "jean",
+      );
+    case "penny loafer":
+      return shoes.some((g) => shoeFamily(g) === "penny_loafer");
+    case "tassel loafer":
+      return /tassel/.test(blob) && /loafer/.test(blob);
+    case "suede loafer":
+      return shoes.some((g) => shoeFamily(g) === "suede_loafer");
+    case "loafer":
+      return shoes.some((g) => {
+        const fam = shoeFamily(g);
+        return fam === "penny_loafer" || fam === "suede_loafer";
+      });
+    case "driving mule":
+      return shoes.some((g) => shoeFamily(g) === "driving_mule");
+    case "boot":
+      return shoes.some((g) => shoeFamily(g) === "boot");
+    case "chelsea":
+      return shoes.some((g) => shoeFamily(g) === "chelsea");
+    case "990":
+      return shoes.some((g) => shoeFamily(g) === "nb990");
+    case "leather sneaker":
+      return shoes.some((g) => shoeFamily(g) === "leather_sneaker");
+    case "boat":
+      return shoes.some((g) => shoeFamily(g) === "boat");
+    case "white court":
+    case "court sneaker":
+      return shoes.some((g) => shoeFamily(g) === "white_court" || /court/.test(garmentBlob(g)));
+    case "fashion sneaker":
+      return shoes.some((g) => {
+        const b = garmentBlob(g);
+        if (!/sneaker/.test(b)) return false;
+        if (/court|\b990\b|\bboot/.test(b)) return false;
+        const fam = shoeFamily(g);
+        return fam === "leather_sneaker" || fam === "suede_sneaker" || /fashion/.test(b);
+      });
+    case "not summer shoe":
+      return print.shoe_family !== "summer_walk" && print.shoe_family !== "suede_loafer";
+    case "summer walk":
+      return shoes.some((g) => shoeFamily(g) === "summer_walk");
+    case "derby":
+      return shoes.some((g) => shoeFamily(g) === "derby");
+    case "suede sneaker":
+      return shoes.some((g) => shoeFamily(g) === "suede_sneaker");
+    case "chore jacket":
+    case "chore":
+      return print.outer_attitude === "chore" || /\bchore\b/.test(outerBlob);
+    case "denim jacket":
+      return print.outer_attitude === "denim" || /denim jacket|trucker/.test(outerBlob);
+    case "suede jacket":
+      return print.outer_attitude === "suede" || (/suede|shearling/.test(outerBlob) && /jacket|coat/.test(outerBlob));
+    case "field jacket":
+    case "field":
+      return print.outer_attitude === "field" || /\bfield\b/.test(outerBlob);
+    case "navy blazer":
+      return print.outer_attitude === "navy_blazer" || (/navy/.test(outerBlob) && /blazer/.test(outerBlob));
+    case "blazer":
+      return /blazer/.test(outerBlob);
+    case "unconstructed":
+      return print.outer_attitude === "unconstructed";
+    case "no jacket":
+      return print.outer_attitude === "none";
+    case "overcoat":
+      return print.outer_attitude === "overcoat" || /overcoat|topcoat/.test(outerBlob);
+    case "camel jacket":
+      return print.outer_attitude === "camel_jacket";
+    case "cashmere":
+      return print.top_type === "cashmere_top" || /cashmere/.test(blob);
+    case "merino":
+      return print.top_type === "merino";
+    case "turtleneck":
+      return print.top_type === "turtleneck";
+    case "untucked":
+      return print.tuck === "out";
+    case "tucked oxford":
+      return print.top_type === "oxford" && print.tuck === "in";
+    case "camel":
+    case "charcoal":
+    case "loden":
+    case "beige":
+    case "ivory":
+    case "tobacco":
+    case "sand":
+    case "cream":
+    case "ocean":
+      return new RegExp(`\\b${phrase}\\b`).test(blob);
+    case "pink polo as the only top": {
+      if (tops.length !== 1) return false;
+      const only = tops[0]!;
+      return topType(only) === "pique_polo" && /pink/.test(garmentBlob(only));
+    }
+    default:
+      return new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(blob);
+  }
+}
+
+function scoreProfile(
+  pieces: Garment[],
+  house: House,
+  occasion: Occasion | undefined,
+  print: LookPrint,
+): { required: number; forbidden: number } {
+  const profile = HOUSE_PROFILES[house];
   let required = 0;
   let forbidden = 0;
-  if (house === "polo") {
-    if (POLO_TOP.includes(print.top_type)) required += 1;
-    if (POLO_SHOE.includes(print.shoe_family)) required += 1;
-    if (print.top_type === "oxford" && print.tuck === "in") required += 1;
-    if (print.shoe_family === "nb990" || print.shoe_family === "driving_mule") forbidden += 1;
-    if (print.top_type === "sangallo" || print.top_type === "fair_isle") forbidden += 1;
+  for (const signal of profile.signals) {
+    if (profilePhraseHits(pieces, signal, occasion, print)) required += 1;
   }
-  if (house === "purple") {
-    if (print.top_type === "cashmere_top" || print.outer_attitude === "camel_jacket" || print.outer_attitude === "unconstructed") {
-      required += 1;
-    }
-    if (print.shoe_family === "suede_loafer" || print.shoe_family === "chelsea") required += 1;
-    if (print.palette_lane === "camel_charcoal_loden" || print.palette_lane === "beige_ivory_tobacco") {
-      required += 1;
-    }
-    if (print.top_type === "rugby" || print.top_type === "fair_isle" || print.top_type === "sangallo") {
-      forbidden += 1;
-    }
-    if (print.shoe_family === "nb990" || print.shoe_family === "boat") forbidden += 1;
-    if (isPoloDefaultSilhouette(print)) forbidden += 1;
+  for (const ban of profile.banned) {
+    if (profilePhraseHits(pieces, ban, occasion, print)) forbidden += 1;
   }
-  if (house === "rrl") {
-    if (
-      print.top_type === "work_shirt" ||
-      print.bottom_type === "jean" ||
-      print.outer_attitude === "chore" ||
-      print.outer_attitude === "denim" ||
-      print.outer_attitude === "suede" ||
-      print.shoe_family === "boot"
-    ) {
-      required += 1;
-    }
-    if (print.bottom_type === "jean") required += 1;
-    if (print.shoe_family === "boot") required += 1;
-    if (print.shoe_family === "driving_mule" || print.shoe_family === "summer_walk") forbidden += 1;
-    if (print.outer_attitude === "navy_blazer") forbidden += 1;
-  }
-  if (house === "ald") {
-    if (print.top_type === "rugby" || print.top_type === "oversized_oxford") required += 1;
-    if (print.shoe_family === "nb990") required += 1;
-    if (print.tuck === "out") required += 1;
-    if (print.bottom_type === "jean") required += 1;
-    if (print.outer_attitude === "navy_blazer") forbidden += 1;
-    if (print.top_type === "rugby" && print.shoe_family === "penny_loafer") forbidden += 1;
-    if (print.shoe_family === "penny_loafer") forbidden += 1;
-    if (print.shoe_family !== "nb990") {
-      const has990 = (pool ?? []).some((g) => shoeFamily(g) === "nb990");
-      const dad =
-        print.shoe_family === "leather_sneaker" || print.shoe_family === "suede_sneaker";
-      if (has990 || !pool?.length || !dad) forbidden += 1;
-    }
-  }
-  if (house === "faloni") {
-    if (
-      print.top_type === "camp" ||
-      print.top_type === "linen_portofino" ||
-      print.top_type === "italian_knit_polo"
-    ) {
-      required += 1;
-    }
-    if (print.shoe_family === "driving_mule" || print.shoe_family === "suede_loafer") required += 1;
-    if (print.tuck === "out") required += 1;
-    if (print.palette_lane === "sand_cream_ocean" || print.palette_lane === "beige_ivory_tobacco") {
-      required += 1;
-    }
-    if (print.shoe_family === "nb990") forbidden += 1;
-    if (print.top_type === "rugby" || print.top_type === "fair_isle" || print.top_type === "sangallo") {
-      forbidden += 1;
-    }
-    if (print.outer_attitude === "navy_blazer") forbidden += 1;
-  }
-  if (house === "fiveFourFive") {
-    if (
-      print.top_type === "sangallo" ||
-      print.top_type === "serafino" ||
-      print.top_type === "bowling" ||
-      print.top_type === "light_cashmere_tee"
-    ) {
-      required += 1;
-    }
-    if (print.shoe_family === "white_court") required += 2;
-    else if (print.shoe_family === "driving_mule" || print.shoe_family === "penny_loafer" || print.shoe_family === "suede_loafer") {
-      required += 1;
-    }
-    if (print.tuck === "out") required += 1;
-    if (print.top_type === "oxford") forbidden += 1;
-    if (print.shoe_family === "nb990") forbidden += 1;
-    if (print.top_type === "fair_isle" || print.top_type === "rugby") forbidden += 1;
-    if (print.outer_attitude === "overcoat" || print.outer_attitude === "camel_jacket") forbidden += 1;
-  }
-  if (house === "sweetStable") {
-    if (print.top_type === "fair_isle" || print.top_type === "gingham") required += 1;
-    if (print.bottom_type === "cord") required += 1;
-    if (print.shoe_family === "boot" || print.shoe_family === "suede_sneaker") required += 1;
-    if (print.shoe_family === "driving_mule" || print.shoe_family === "nb990") forbidden += 1;
-    if (print.top_type === "camp" || print.top_type === "sangallo") forbidden += 1;
-  }
-  if (house === "italianSummer") {
-    if (print.shoe_family === "driving_mule" && print.outer_attitude === "none") forbidden += 1;
-    if (print.shoe_family !== "summer_walk" && print.shoe_family !== "suede_loafer") forbidden += 1;
-    if (print.shoe_family === "summer_walk" || print.shoe_family === "suede_loafer") required += 1;
-    if (
-      print.bottom_type === "chino" ||
-      print.bottom_type === "linen" ||
-      print.bottom_type === "drawstring"
-    ) {
-      required += 1;
-    }
-    if (print.outer_attitude === "unconstructed" || print.outer_attitude === "none") required += 1;
-    if (
-      print.palette_lane === "beige_ivory_tobacco" ||
-      print.palette_lane === "sand_cream_ocean"
-    ) {
-      required += 1;
-    }
-    if (print.shoe_family === "nb990" || print.shoe_family === "boot") forbidden += 1;
-    if (print.top_type === "rugby" || print.top_type === "fair_isle") forbidden += 1;
-  }
-  if (house === "italianWinter") {
-    if (print.top_type === "merino" || print.top_type === "turtleneck") required += 1;
-    if (print.bottom_type === "flannel" || print.bottom_type === "trouser") required += 1;
-    if (
-      print.shoe_family === "suede_loafer" ||
-      print.shoe_family === "derby" ||
-      print.shoe_family === "chelsea"
-    ) {
-      required += 1;
-    }
-    if (
-      print.outer_attitude === "overcoat" ||
-      print.outer_attitude === "suede" ||
-      print.outer_attitude === "navy_blazer" ||
-      print.outer_attitude === "unconstructed"
-    ) {
-      required += 1;
-    }
-    if (print.top_type === "camp" || print.bottom_type === "linen") forbidden += 1;
-    if (print.shoe_family === "driving_mule" || print.shoe_family === "nb990" || print.shoe_family === "white_court") {
-      forbidden += 1;
-    }
-    if (print.top_type === "fair_isle") forbidden += 1;
+  if (
+    profile.anchors.length > 0 &&
+    !profile.anchors.some((anchor) => profilePhraseHits(pieces, anchor, occasion, print))
+  ) {
+    forbidden += 1;
   }
   return { required, forbidden };
+}
+
+function hits(pieces: Garment[], house: House, occasion?: Occasion): { required: number; forbidden: number } {
+  return scoreProfile(pieces, house, occasion, lookPrint(pieces, occasion));
 }
 
 function westernCount(pieces: Garment[]): number {
   return pieces.filter((g) => /western|cowboy|bolo|pearl\s*snap/.test(garmentBlob(g))).length;
 }
 
-/** Kill rules 1–10. */
-export function houseKill(pieces: Garment[], house: House, occasion: Occasion, pool?: Garment[]): string | null {
+function killWhen(when: string, pieces: Garment[], occasion: Occasion): boolean {
   const print = lookPrint(pieces, occasion);
   const top = topsOf(pieces)[0];
   const shoe = shoesOf(pieces)[0];
   const topB = top ? garmentBlob(top) : "";
+  const shoeB = shoe ? garmentBlob(shoe) : "";
   const khaki = print.bottom_type === "khaki" || print.bottom_type === "chino";
-  const ocbdKhakiPenny =
-    print.top_type === "oxford" &&
-    /navy|blue/.test(topB) &&
-    khaki &&
-    print.shoe_family === "penny_loafer";
+  switch (when) {
+    case "gym-sneaker":
+      return Boolean(shoe && /990|jordan|\baj4\b|gym|runner/.test(shoeB));
+    case "polo-default":
+      return isPoloDefaultSilhouette(print);
+    case "blue-ocbd":
+      return (
+        print.top_type === "oxford" &&
+        /navy|blue/.test(topB) &&
+        khaki &&
+        print.shoe_family === "penny_loafer"
+      );
+    case "navy-polo-chino-boat":
+      return (
+        print.top_type === "pique_polo" &&
+        khaki &&
+        (print.shoe_family === "boat" || print.shoe_family === "penny_loafer")
+      );
+    case "faloni-twin":
+      return (
+        (print.top_type === "camp" || print.top_type === "linen_portofino") &&
+        print.shoe_family === "driving_mule"
+      );
+    case "needs-sangallo-or-court":
+      return (
+        print.top_type !== "sangallo" &&
+        print.top_type !== "serafino" &&
+        print.top_type !== "bowling" &&
+        print.top_type !== "light_cashmere_tee" &&
+        print.shoe_family !== "white_court"
+      );
+    case "cable-jean-sneaker":
+      return print.top_type === "cable" && print.bottom_type === "jean" && /sneaker/.test(shoeB);
+    case "navy-blazer-chino-penny":
+      return print.outer_attitude === "navy_blazer" && khaki && print.shoe_family === "penny_loafer";
+    case "overcoat-tee-court":
+      return print.outer_attitude === "overcoat" && print.shoe_family === "white_court" && print.top_type === "tee";
+    case "rugby-blazer":
+      return (
+        pieces.some((g) => /rugby/.test(garmentBlob(g))) &&
+        pieces.some((g) => /blazer/.test(garmentBlob(g)))
+      );
+    case "western-max":
+      return westernCount(pieces) > 1;
+    case "unless-summer-shoe":
+      return print.shoe_family !== "summer_walk" && print.shoe_family !== "suede_loafer";
+    default:
+      return false;
+  }
+}
 
-  if (house === "polo" && shoe && /990|jordan|\baj4\b|gym|runner/.test(garmentBlob(shoe))) {
-    return "Polo is not a gym sneaker";
-  }
-  if (house !== "polo" && ocbdKhakiPenny) return "Non-Polo cannot be OCBD + khaki + penny";
-  if (house === "ald") {
-    const rugbyOrOver = print.top_type === "rugby" || print.top_type === "oversized_oxford";
-    const has990 = (pool ?? []).some((g) => shoeFamily(g) === "nb990");
-    const dad =
-      print.shoe_family === "leather_sneaker" || print.shoe_family === "suede_sneaker";
-    const shoeOk =
-      print.shoe_family === "nb990" || ((!has990 && (pool?.length ?? 0) > 0) && dad);
-    if (!(shoeOk && rugbyOrOver && print.tuck === "out")) {
-      return "ALD needs 990 and rugby/oversized untuck";
-    }
-  }
-  if (house === "faloni") {
-    if (print.top_type === "pique_polo" && khaki && (print.shoe_family === "boat" || print.shoe_family === "penny_loafer")) {
-      return "Faloni is not navy polo + chino + boat";
-    }
-  }
-  if (house === "fiveFourFive") {
-    const faloniTwin =
-      (print.top_type === "camp" || print.top_type === "linen_portofino") &&
-      print.shoe_family === "driving_mule";
-    if (faloniTwin) return "545 cannot twin Faloni linen + mule";
-    if (
-      print.top_type !== "sangallo" &&
-      print.top_type !== "serafino" &&
-      print.top_type !== "bowling" &&
-      print.top_type !== "light_cashmere_tee" &&
-      print.shoe_family !== "white_court"
-    ) {
-      return "545 needs sangallo/serafino or white court";
-    }
-  }
-  if (house === "italianSummer") {
-    if (print.outer_attitude === "navy_blazer" && khaki && print.shoe_family === "penny_loafer") {
-      return "Italian summer is not structured navy blazer + chino + penny";
-    }
-  }
-  if (house === "purple") {
-    if (print.top_type === "cable" && print.bottom_type === "jean" && /sneaker/.test(shoe ? garmentBlob(shoe) : "")) {
-      return "Purple is not cable + jean + sneaker";
-    }
-  }
-  if (house === "rrl") {
-    const signal =
-      print.top_type === "work_shirt" ||
-      print.outer_attitude === "chore" ||
-      print.shoe_family === "boot" ||
-      /selvedge|indigo/.test(pieces.map(garmentBlob).join(" "));
-    if (!signal) return "RRL needs work/indigo/chore/boot";
-    if (westernCount(pieces) > 1) return "RRL max one western signal";
-    if (isPoloDefaultSilhouette(print)) return "RRL is not Polo + darker jean";
-  }
-  if (house === "italianWinter") {
-    if (print.outer_attitude === "overcoat" && print.shoe_family === "white_court" && print.top_type === "tee") {
-      return "Italian winter overcoat is not white sneaker + tee";
-    }
-  }
-  if (house !== "polo" && isPoloDefaultSilhouette(print)) {
-    return "House switch cannot recolor PoloDefault";
+/** Kill rules live on the profile. The closet supplies which `when` applies. */
+export function houseKill(pieces: Garment[], house: House, occasion: Occasion, _pool?: Garment[]): string | null {
+  for (const kill of HOUSE_PROFILES[house].kills) {
+    if (killWhen(kill.when, pieces, occasion)) return kill.message;
   }
   return null;
 }
+
+export function housePieceBanned(pieces: Garment[], house: House, occasion?: Occasion): boolean {
+  return HOUSE_PROFILES[house].banned.some((ban) => profilePhraseHits(pieces, ban, occasion));
+}
+
+const fingerprintCache = new Map<string, boolean>();
 
 export function houseFingerprintOk(
   pieces: Garment[],
@@ -546,24 +604,75 @@ export function houseFingerprintOk(
   occasion: Occasion,
   pool?: Garment[],
 ): boolean {
-  const print = lookPrint(pieces, occasion);
-  const { required, forbidden } = hits(print, house, pool);
-  if (forbidden > 0) return false;
-  if (required < 2) return false;
-  if (houseKill(pieces, house, occasion, pool)) return false;
+  const key = `${house}|${occasion}|${pieces.map((p) => p.id).sort().join("\0")}`;
+  const cached = fingerprintCache.get(key);
+  if (cached !== undefined) return cached;
+  const profile = HOUSE_PROFILES[house];
+  const { required, forbidden } = hits(pieces, house, occasion);
+  const ok =
+    forbidden === 0 &&
+    required >= profile.minSignals &&
+    !houseKill(pieces, house, occasion, pool);
+  if (fingerprintCache.size > 20000) fingerprintCache.clear();
+  fingerprintCache.set(key, ok);
+  return ok;
+}
+
+/** Hard row look: fingerprint, and every requireOwned token the closet actually has. */
+export function isHardHouseLook(
+  pieces: Garment[],
+  house: House,
+  occasion: Occasion,
+  pool?: Garment[],
+): boolean {
+  if (!houseFingerprintOk(pieces, house, occasion, pool)) return false;
+  const profile = HOUSE_PROFILES[house];
+  const rack = pool ?? pieces;
+  for (const token of profile.requireOwned) {
+    if (!profilePhraseHits(rack, token, occasion)) return false;
+    if (!profilePhraseHits(pieces, token, occasion)) return false;
+  }
   return true;
+}
+
+export function stylistHouseBrief(house: House): string {
+  const profile = HOUSE_PROFILES[house];
+  return [
+    `HOUSE ${HOUSE_LABEL[house]}`,
+    `Signals: ${profile.signals.join("; ")}`,
+    `Banned: ${profile.banned.join("; ")}`,
+    `Jackets: ${profile.jackets.join(", ") || "none"}`,
+    `Shoes: ${profile.shoes.join(", ")}`,
+    profile.cardNote ? `Card: ${profile.cardNote}` : "",
+    profile.gap ? `GAP: ${profile.gap}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function appendHouseGap(
+  text: string,
+  house: House | null | undefined,
+  garments: Garment[],
+  occasion?: Occasion,
+): string {
+  if (!house) return text;
+  const gap = houseGapNote(house, garments, occasion);
+  if (!gap) return text;
+  if (text.toLowerCase().includes(gap.toLowerCase())) return text;
+  if (/^MISSING:/im.test(text)) return text;
+  return `${text}\nMISSING: ${gap}`;
 }
 
 /** Polo last. Never PoloDefault when another house claims the look. */
 export function leadHouse(pieces: Garment[], occasion: Occasion = "weekday"): House {
-  const print = lookPrint(pieces, occasion);
   let best: House | null = null;
   let bestN = 0;
   for (const h of HOUSES) {
     if (h === "polo") continue;
     if (houseKill(pieces, h, occasion)) continue;
-    const { required, forbidden } = hits(print, h, pieces);
-    if (forbidden > 0 || required < 2) continue;
+    const { required, forbidden } = hits(pieces, h, occasion);
+    if (forbidden > 0 || required < HOUSE_PROFILES[h].minSignals) continue;
     if (required > bestN) {
       best = h;
       bestN = required;
@@ -573,15 +682,22 @@ export function leadHouse(pieces: Garment[], occasion: Occasion = "weekday"): Ho
   return "polo";
 }
 
+const housesOfCache = new Map<string, House[]>();
+
 export function housesOf(g: Garment): House[] {
+  const key = `${g.id}|${g.name}|${g.subtype}|${g.notes ?? ""}|${g.colors.join(",")}|${g.material}`;
+  const cached = housesOfCache.get(key);
+  if (cached) return cached;
   const fake: Garment[] = [g];
+  const print = lookPrint(fake);
   const out: House[] = [];
   for (const h of HOUSES) {
-    const print = lookPrint(fake);
-    const { required, forbidden } = hits(print, h);
+    const { required, forbidden } = scoreProfile(fake, h, undefined, print);
     if (forbidden === 0 && required >= 1) out.push(h);
   }
-  return out.length ? out : [];
+  if (housesOfCache.size > 4000) housesOfCache.clear();
+  housesOfCache.set(key, out);
+  return out;
 }
 
 export function lookHouses(pieces: Garment[], occasion: Occasion = "weekday"): House[] {
@@ -605,58 +721,10 @@ export function houseFromPrompt(prompt: string): House | null {
 }
 
 export function houseGapNote(house: House, garments: Garment[], occasion?: Occasion): string | null {
-  const shoes = garments.filter((g) => slotOf(g) === "footwear");
-  const tops = garments.filter((g) => slotOf(g) === "top" || slotOf(g) === "dress");
-  const outers = garments.filter((g) => slotOf(g) === "outerwear");
-  if (house === "sweetStable" && occasion === "weekday") {
-    return "Sweet Stable is a Weekend house.";
-  }
-  if (house === "fiveFourFive" && occasion === "weekday") {
-    return "545 is thin on Weekday — closest plates";
-  }
-  if (house === "purple" && occasion === "weekday") {
-    return "Purple is thin on Weekday — closest plates";
-  }
-  if (house === "italianSummer" && occasion === "weekday") {
-    return "Italian summer is thin on Weekday — closest plates";
-  }
-  if (house === "ald") {
-    if (!shoes.some((g) => shoeFamily(g) === "nb990")) return "No 990s for ALD — dad sneaker";
-    if (!tops.some((g) => topType(g) === "rugby" || topType(g) === "oversized_oxford")) {
-      return "No rugby for ALD";
-    }
-  }
-  if (house === "faloni") {
-    if (!shoes.some((g) => shoeFamily(g) === "driving_mule" || shoeFamily(g) === "suede_loafer")) {
-      return "No mule/suede loafer for Faloni";
-    }
-  }
-  if (house === "fiveFourFive") {
-    const sangallo = tops.some((g) => topType(g) === "sangallo" || topType(g) === "serafino");
-    const court = shoes.some((g) => shoeFamily(g) === "white_court");
-    if (!sangallo && !court) return "No sangallo or white court for 545";
-  }
-  if (house === "sweetStable") {
-    if (!tops.some((g) => topType(g) === "fair_isle" || topType(g) === "gingham")) {
-      return "No fair isle for Sweet Stable";
-    }
-  }
-  if (house === "italianSummer") {
-    if (!shoes.some((g) => shoeFamily(g) === "summer_walk" || shoeFamily(g) === "suede_loafer")) {
-      return "No Summer Walk / suede loafer";
-    }
-  }
-  if (house === "rrl") {
-    if (
-      !tops.some((g) => topType(g) === "work_shirt") &&
-      !shoes.some((g) => shoeFamily(g) === "boot")
-    ) {
-      return "No work shirt/boot for RRL";
-    }
-  }
-  if (house === "italianWinter") {
-    const coat = outers.some((g) => /overcoat|topcoat/.test(garmentBlob(g)));
-    if (!coat) return "No overcoat — shearling or blazer over merino";
+  const profile = HOUSE_PROFILES[house];
+  if (occasion === "weekday" && profile.occasionNote) return profile.occasionNote;
+  for (const hole of profile.holes) {
+    if (!profilePhraseHits(garments, hole.missing, occasion)) return hole.note;
   }
   return null;
 }

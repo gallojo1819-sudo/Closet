@@ -1,0 +1,24 @@
+{
+  "signals": [
+    "fair isle or gingham",
+    "cord or jean",
+    "boot or loafer"
+  ],
+  "minSignals": 2,
+  "anchors": [],
+  "banned": ["driving mule", "990", "camp", "sangallo"],
+  "jackets": ["field", "chore"],
+  "shoes": ["boot", "loafer"],
+  "palette": ["cream", "brown"],
+  "occasionNote": "Sweet Stable is a Weekend house.",
+  "cardNote": "Fair isle, cord, and boots.",
+  "gap": "No fair isle for Sweet Stable",
+  "requireOwned": [],
+  "kills": [
+    { "when": "polo-default", "message": "House switch cannot recolor PoloDefault" },
+    { "when": "blue-ocbd", "message": "Non-Polo cannot be OCBD + khaki + penny" }
+  ],
+  "holes": [
+    { "missing": "fair isle or gingham", "note": "No fair isle for Sweet Stable" }
+  ]
+}

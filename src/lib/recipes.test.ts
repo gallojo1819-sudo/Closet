@@ -75,4 +75,37 @@ describe("recipes", () => {
     assert.equal(/shop|buy/i.test(note!), false);
     assert.match(note!, /closest plates/);
   });
+
+  it("RRL weekday does not fall through to oxford, chino, and a loafer", () => {
+    const pool = [
+      g({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      g({ id: "tr", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      g({ id: "lf", name: "Brown penny loafers", category: "footwear", subtype: "loafer" }),
+      g({ id: "bz", name: "Navy blazer", category: "outerwear", subtype: "blazer" }),
+      g({ id: "ws", name: "Indigo work shirt", category: "top", subtype: "shirt" }),
+      g({ id: "jn", name: "Indigo selvedge jean", category: "bottom", subtype: "jean" }),
+      g({ id: "bt", name: "Brown boot", category: "footwear", subtype: "boot" }),
+      g({ id: "ch", name: "Brown chore jacket", category: "outerwear", subtype: "chore" }),
+    ];
+    const picked = pickRecipe("weekday", pool, { house: "rrl" });
+    assert.equal(picked.houses.includes("rrl"), true);
+    assert.notEqual(picked.id, "WD_PREP_OCBD");
+    assert.notEqual(picked.id, "WD_WESTERN_UNDER_NAVY");
+    assert.notEqual(picked.id, "WD_CHORE_CRISP");
+    const prep = [
+      g({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      g({ id: "tr", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      g({ id: "lf", name: "Brown penny loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    assert.notEqual(matchRecipe(prep, "weekday", "rrl"), "WD_PREP_OCBD");
+    const rugged = [
+      g({ id: "ws", name: "Indigo work shirt", category: "top", subtype: "shirt" }),
+      g({ id: "jn", name: "Indigo selvedge jean", category: "bottom", subtype: "jean" }),
+      g({ id: "bt", name: "Brown boot", category: "footwear", subtype: "boot" }),
+      g({ id: "ch", name: "Brown chore jacket", category: "outerwear", subtype: "chore" }),
+    ];
+    const stamped = matchRecipe(rugged, "weekday", "rrl");
+    assert.equal(stamped?.startsWith("WD_"), true);
+    assert.notEqual(stamped, "WD_PREP_OCBD");
+  });
 });
