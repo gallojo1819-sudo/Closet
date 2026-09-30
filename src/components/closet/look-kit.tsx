@@ -78,9 +78,11 @@ export function LookKit({
   );
 }
 
-const BAND_SHARE = { top: 46, jacket: 8, bottom: 34, shoe: 20 } as const;
-type BandRole = keyof typeof BAND_SHARE;
+type BandRole = "top" | "jacket" | "bottom" | "shoe";
 const BAND_ORDER: BandRole[] = ["top", "jacket", "bottom", "shoe"];
+/** One paper. Jacket present: 34 / 20 / 28 / 18. No jacket: 46 / 34 / 20. */
+const SHARE_WITH_JACKET: Record<BandRole, number> = { top: 34, jacket: 20, bottom: 28, shoe: 18 };
+const SHARE_PLAIN: Record<BandRole, number> = { top: 46, jacket: 0, bottom: 34, shoe: 20 };
 
 function bandRole(g: Garment): BandRole | null {
   const slot = slotOf(g);
@@ -111,6 +113,7 @@ function LookKitStack({
   const bands = BAND_ORDER.map((role) => pieces.find((g) => bandRole(g) === role)).filter(
     (g): g is Garment => Boolean(g),
   );
+  const share = bands.some((g) => bandRole(g) === "jacket") ? SHARE_WITH_JACKET : SHARE_PLAIN;
   const dressed = showOnYou && onYouSrc ? onYouSrc : "";
   return (
     <div
@@ -118,31 +121,33 @@ function LookKitStack({
       style={{ backgroundColor: "#F4EFE6" }}
       data-layout="stack"
     >
+      <div className="look-kit-spine" aria-hidden />
       {bands.map((g, i) => {
         const role = bandRole(g)!;
         const style = {
-          flexGrow: BAND_SHARE[role],
+          flexGrow: share[role],
           flexShrink: 1,
           flexBasis: 0,
           ["--band-i" as string]: String(i),
-          ["--band-n" as string]: String(bands.length),
         } as CSSProperties;
         return (
           <div
             key={g.id}
-            className="look-kit-band flex min-h-0 min-w-0 items-center justify-center overflow-hidden"
+            className="look-kit-band relative min-h-0 w-full overflow-hidden"
             data-band={role}
-            data-share={BAND_SHARE[role]}
+            data-share={share[role]}
             style={style}
           >
-            <div className="look-kit-rise flex h-full w-full items-center justify-center">
-              <GarmentImg
-                garment={g}
-                thumb={thumb}
-                eager={!thumb}
-                nudge={false}
-                className="h-full w-full object-contain"
-              />
+            <div className="look-kit-rise absolute inset-0">
+              <div className="look-kit-plate absolute inset-0">
+                <GarmentImg
+                  garment={g}
+                  thumb={thumb}
+                  eager={!thumb}
+                  nudge={false}
+                  className="h-full w-full object-contain mix-blend-multiply"
+                />
+              </div>
             </div>
           </div>
         );

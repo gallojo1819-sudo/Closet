@@ -169,18 +169,34 @@
   }
 }
 
-/* Lookbook stack: bands separate on hover. Entry rise is view-timeline only. */
+/* Lookbook stack: one paper. Entrance is transform and opacity only. */
 .look-kit-stack {
   background: #f4efe6;
 }
 
-.look-kit-band {
-  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+.look-kit-spine {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  margin-left: -0.5px;
+  pointer-events: none;
+  background: var(--color-hairline);
+  transform-origin: top;
+  transform: scaleY(0);
+  animation: look-spine-draw 420ms var(--ease-atelier) both;
 }
 
-.look-card:hover .look-kit-band,
-.look-card:focus-within .look-kit-band {
-  transform: translateY(calc((var(--band-i) - (var(--band-n) - 1) / 2) * 8px));
+.look-kit-plate {
+  transform: scale(1);
+  transition: transform 280ms var(--ease-atelier);
+}
+
+.look-card:hover .look-kit-plate,
+.look-card:focus-within .look-kit-plate {
+  transform: scale(1.04);
 }
 
 .look-on-you {
@@ -212,7 +228,7 @@
 @keyframes look-band-rise {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -220,22 +236,37 @@
   }
 }
 
-@supports (animation-timeline: view()) {
-  .look-kit-rise {
-    animation-name: look-band-rise;
-    animation-duration: auto;
-    animation-timing-function: linear;
-    animation-fill-mode: both;
-    animation-timeline: view();
-    animation-range: entry 0% entry 40%;
-    animation-delay: calc(var(--band-i) * 40ms);
+@keyframes look-spine-draw {
+  from {
+    transform: scaleY(0);
   }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.look-kit-rise {
+  animation-name: look-band-rise;
+  animation-duration: 420ms;
+  animation-timing-function: var(--ease-atelier);
+  animation-fill-mode: both;
+  animation-delay: calc(var(--band-i) * 50ms);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .look-kit-rise {
     animation: none;
     opacity: 1;
+    transform: none;
+  }
+  .look-kit-spine {
+    animation: none;
+    transform: scaleY(0);
+  }
+  .look-kit-plate,
+  .look-card:hover .look-kit-plate,
+  .look-card:focus-within .look-kit-plate {
+    transition: none;
     transform: none;
   }
   .look-on-you,

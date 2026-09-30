@@ -1395,17 +1395,30 @@ describe("lookbook card stack", () => {
     assert.equal(kit.includes("setTimeout"), false);
     assert.equal(kit.includes("setInterval"), false);
     assert.match(kit, /showOnYou && onYouSrc/);
-    assert.match(css, /@supports \(animation-timeline: view\(\)\)/);
-    assert.match(css, /translateY\(10px\)/);
-    assert.match(css, /var\(--band-i\) \* 40ms/);
-    assert.match(css, /\* 8px\)/);
+    assert.match(css, /translateY\(12px\)/);
+    assert.match(css, /var\(--band-i\) \* 50ms/);
+    assert.match(css, /scale\(1\.04\)/);
+    assert.match(css, /transform-origin:\s*top/);
+    assert.match(css, /look-spine-draw 420ms/);
+    assert.match(css, /scaleY\(0\)/);
     assert.match(css, /transition: transform 280ms/);
     assert.match(css, /look-on-you-in 160ms/);
     assert.match(css, /look-on-you-out 160ms/);
-    const rise = css.slice(css.indexOf("@keyframes look-band-rise"), css.indexOf("@supports (animation-timeline: view())"));
+    assert.equal(css.includes("animation-timeline"), false);
+    const rise = css.slice(
+      css.indexOf("@keyframes look-band-rise"),
+      css.indexOf("@keyframes look-spine-draw"),
+    );
     assert.equal(/\b(width|height|gap|margin|top|left|rotate)\s*:/.test(rise), false);
+    const spine = css.slice(
+      css.indexOf("@keyframes look-spine-draw"),
+      css.indexOf(".look-kit-rise {"),
+    );
+    assert.equal(/\b(width|height|gap|margin|top|left|rotate|opacity)\s*:/.test(spine), false);
     const reduce = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
     assert.match(reduce, /\.look-kit-rise\s*\{[^}]*animation:\s*none/);
+    assert.match(reduce, /\.look-kit-spine\s*\{[^}]*animation:\s*none/);
+    assert.match(reduce, /\.look-kit-plate[\s\S]*transform:\s*none/);
     const hero = book.slice(book.indexOf("5 looks with"));
     assert.equal(hero.includes('layout="stack"'), false);
   });
@@ -1481,8 +1494,11 @@ export function GarmentImg(props) {
       assert.equal(stack.includes("grid-template-columns"), false);
       assert.equal(stack.includes("1fr 1fr"), false);
       assert.equal(stack.includes("rotate"), false);
+      assert.equal(stack.includes('data-band="jacket"'), false);
       assert.match(stack, /#f4efe6/i);
       assert.match(stack, /object-contain/);
+      assert.match(stack, /mix-blend-multiply/);
+      assert.equal(stack.includes("background:"), false);
       assert.equal(stack.includes(cached), false);
       assert.equal(stack.includes("look-on-you"), false);
       const on = renderToStaticMarkup(
@@ -1490,6 +1506,8 @@ export function GarmentImg(props) {
       );
       assert.equal(on.includes(cached), true);
       assert.match(on, /look-on-you/);
+      const onYouTag = on.match(/<img[^>]*look-on-you[^>]*>/)?.[0] ?? "";
+      assert.equal(onYouTag.includes("mix-blend-multiply"), false);
       const grid = renderToStaticMarkup(
         createElement(LookKit, { pieces, onYouSrc: cached, showOnYou: true }),
       );
@@ -1512,7 +1530,7 @@ export function GarmentImg(props) {
       );
       assert.deepEqual(
         [...withJacket.matchAll(/data-share="([^"]+)"/g)].map((m) => m[1]),
-        ["46", "8", "34", "20"],
+        ["34", "20", "28", "18"],
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });
