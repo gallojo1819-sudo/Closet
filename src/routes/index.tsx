@@ -144,7 +144,8 @@ function Today() {
   );
   const sample = garments.some((g) => g.demo);
   const lookName = nameLook(pieces);
-  const note = dropNote(pieces, weather, drop?.occasion, drop?.moment);
+  const dropSeason = seasonFromWeather(weather?.f ?? 68);
+  const note = dropNote(pieces, weather, drop?.occasion, drop?.moment, undefined, dropSeason);
   const avoided = useMemo(
     () =>
       drop
@@ -152,7 +153,7 @@ function Today() {
         : null,
     [journal, drop, garments],
   );
-  const houses = lookHouses(pieces);
+  const houses = lookHouses(pieces, drop?.occasion ?? "weekday", dropSeason);
   const week = lastDays(7);
   const strip = useMemo(
     () => todayStripLooks(thisWeek, looksAll.filter((l) => l.lookbook), garments, 7),

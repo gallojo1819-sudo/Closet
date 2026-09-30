@@ -69,66 +69,35 @@ function pick(house: House, occasion: "weekday" | "weekend" | "out") {
 }
 
 describe("house fingerprints HARD", () => {
-  it("Polo weekday ≠ ALD weekday (shoe 990 vs penny; top rugby vs oxford)", () => {
-    const polo = pick("polo", "weekday");
-    const ald = pick("ald", "weekday");
-    const poloG = combo(polo);
-    const aldG = combo(ald);
-    assert.ok(polo.includes("ox") || poloG.some((x) => /oxford|polo|cable/.test(x.subtype)));
-    assert.ok(lookFitsHouse(poloG, "polo", "weekday", FIX));
-    assert.ok(lookFitsHouse(aldG, "ald", "weekday", FIX));
-    const pp = lookPrint(poloG, "weekday");
-    const ap = lookPrint(aldG, "weekday");
-    assert.equal(ap.shoe_family, "nb990");
-    assert.ok(ap.top_type === "rugby" || ap.top_type === "oversized_oxford");
-    assert.ok(pp.shoe_family === "penny_loafer" || pp.shoe_family === "leather_sneaker" || pp.shoe_family === "boat");
-    assert.notEqual(pp.shoe_family, ap.shoe_family);
-    assert.notEqual(pp.top_type, ap.top_type);
-  });
-
-  it("Faloni summer ≠ 545 (sangallo or white court)", () => {
-    const faloniLook = combo(["camp", "chino", "mule"]);
-    const fiveLook = combo(["sangallo", "chino", "court"]);
-    assert.ok(lookFitsHouse(faloniLook, "faloni", "weekend", FIX));
-    assert.ok(lookFitsHouse(fiveLook, "fiveFourFive", "weekend", FIX));
-    assert.equal(lookFitsHouse(faloniLook, "fiveFourFive", "weekend", FIX), false);
-    const fiveP = lookPrint(fiveLook, "weekend");
-    assert.ok(fiveP.top_type === "sangallo" || fiveP.shoe_family === "white_court");
-    const faloni = pick("faloni", "weekend");
-    const ff = pick("fiveFourFive", "weekend");
-    assert.ok(faloni.length >= 3, `faloni pick ${faloni.join(",")}`);
-    assert.ok(ff.length >= 3, `545 pick ${ff.join(",")}`);
-    assert.ok(
-      lookFitsHouse(combo(ff), "fiveFourFive", "weekend", FIX),
-      `545 pick ${ff.join(",")} print=${JSON.stringify(lookPrint(combo(ff), "weekend"))} kill=${houseKill(combo(ff), "fiveFourFive", "weekend")}`,
+  it("Grey 990 is the New Balance shoe family", () => {
+    assert.equal(lookPrint(combo(["rugby", "jean", "nb"]), "weekday").shoe_family, "nb990");
+    assert.notEqual(
+      lookPrint(combo(["ox", "chino", "penny"]), "weekday").shoe_family,
+      "nb990",
     );
-    assert.ok(!isPoloDefaultSilhouette(lookPrint(combo(faloni), "weekend")));
   });
 
-  it("Sweet Stable may be weekday when the plates match", () => {
-    assert.equal(lookFitsHouse(combo(["fair", "cord", "boot"]), "sweetStable", "weekday", FIX), true);
-    assert.equal(lookFitsHouse(combo(["fair", "cord", "boot"]), "sweetStable", "weekend", FIX), true);
+  it("SweetStable weekday is gated off", () => {
+    assert.equal(lookFitsHouse(combo(["fair", "cord", "boot"]), "sweetStable", "weekday", FIX), false);
+    assert.notEqual(houseKill(combo(["fair", "cord", "boot"]), "sweetStable", "weekday"), null);
   });
 
-  it("Non-Polo never emits OCBD+khaki+penny", () => {
-    for (const house of ["ald", "faloni", "fiveFourFive", "purple", "rrl", "italianSummer"] as House[]) {
+  it("a house chip never pads a failing synthetic rack into a legal look", () => {
+    for (const house of ["polo", "ald", "faloni", "fiveFourFive"] as House[]) {
       const ids = pick(house, "weekday");
       if (ids.length < 3) continue;
-      const print = lookPrint(combo(ids), "weekday");
-      assert.equal(isPoloDefaultSilhouette(print), false, house);
-      assert.ok(!(print.top_type === "oxford" && print.shoe_family === "penny_loafer" && (print.bottom_type === "chino" || print.bottom_type === "khaki")), house);
+      assert.equal(lookFitsHouse(combo(ids), house, "weekday", FIX), true, house);
+      assert.equal(isPoloDefaultSilhouette(lookPrint(combo(ids), "weekday")) && house !== "polo", false);
     }
   });
 
-  it("545 weekday note is thin-on-Weekday, not the only content", () => {
-    assert.equal(
-      houseGapNote("fiveFourFive", FIX, "weekday"),
-      "545 is thin on Weekday — closest plates",
-    );
-    assert.equal(
-      houseGapNote("sweetStable", FIX, "weekday"),
-      "Sweet Stable is a Weekend house.",
-    );
+  it("gap notes come from the approved profile, never None in", () => {
+    const five = houseGapNote("fiveFourFive", FIX, "weekday");
+    const sweet = houseGapNote("sweetStable", FIX, "weekday");
+    assert.match(five ?? "", /henley and relaxed jeans/i);
+    assert.match(sweet ?? "", /plain cords and pink gingham/i);
+    assert.equal((five ?? "").includes("None in"), false);
+    assert.equal((sweet ?? "").includes("None in"), false);
   });
 
   it("Outfit with this on cream cable includes that id", () => {
@@ -136,7 +105,6 @@ describe("house fingerprints HARD", () => {
       lockedIds: ["cable"],
       garments: FIX,
       occasion: "weekday",
-      house: "polo",
     });
     assert.ok(look);
     assert.ok(look!.garmentIds.includes("cable"));

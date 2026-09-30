@@ -1,7 +1,6 @@
 import type { CSSProperties } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
-import { kitCells } from "@/lib/look";
-import { slotOf } from "@/lib/style";
+import { kitBand, kitCells } from "@/lib/look";
 import type { Garment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -85,12 +84,7 @@ const SHARE_WITH_JACKET: Record<BandRole, number> = { top: 34, jacket: 20, botto
 const SHARE_PLAIN: Record<BandRole, number> = { top: 46, jacket: 0, bottom: 34, shoe: 20 };
 
 function bandRole(g: Garment): BandRole | null {
-  const slot = slotOf(g);
-  if (slot === "top" || slot === "dress") return "top";
-  if (slot === "outerwear") return "jacket";
-  if (slot === "bottom") return "bottom";
-  if (slot === "footwear") return "shoe";
-  return null;
+  return kitBand(g);
 }
 
 function LookKitStack({

@@ -111,8 +111,22 @@ function pair(a: Garment, b: Garment): string {
 }
 
 function houseOf(pieces: Garment[]): string {
-  const h = lookHouses(pieces)[0] ?? housesOf(pieces[0]!)[0];
-  return h ? HOUSE_LABEL[h] : "Ralph";
+  const passed = lookHouses(pieces)[0];
+  if (passed) return HOUSE_LABEL[passed];
+  const counts = new Map<string, number>();
+  for (const g of pieces) {
+    for (const h of housesOf(g)) counts.set(h, (counts.get(h) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let n = 0;
+  for (const [h, c] of counts) {
+    if (c > n) {
+      best = h;
+      n = c;
+    }
+  }
+  if ((counts.get("polo") ?? 0) === n && n > 0) best = "polo";
+  return best ? HOUSE_LABEL[best as keyof typeof HOUSE_LABEL] : "Ralph";
 }
 
 const EVEN: RackNote = {

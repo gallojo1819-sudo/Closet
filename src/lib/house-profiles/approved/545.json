@@ -1,0 +1,2418 @@
+{
+  "file": "545.json",
+  "rank_bonus": [
+    {
+      "signals": [
+        "henley_serafino",
+        "zip_knit",
+        "knit_polo"
+      ],
+      "bonus": 4
+    },
+    {
+      "signals": [
+        "dark_denim",
+        "light_denim_straight"
+      ],
+      "bonus": 4
+    },
+    {
+      "signals": [
+        "woven_loafer",
+        "leather_plain_loafer"
+      ],
+      "bonus": 3
+    },
+    {
+      "signals": [
+        "suede_jacket",
+        "suede_bomber"
+      ],
+      "bonus": 2
+    }
+  ],
+  "chip_id": "545",
+  "code_house_id": "fiveFourFive",
+  "label": "545",
+  "type": "house",
+  "rule_prefix": "545",
+  "aesthetic": "Milan minimal-casual: serafino henley or zip/polo knit, relaxed denim or wide trouser, dark earthy palette.",
+  "signature_pieces": [
+    "serafino (henley-placket) tee/longsleeve",
+    "everyday polo jumper, half-button / full-zip jumper, cardigan",
+    "checkered flannel shirt",
+    "Denim 01 regular / 02 wide-leg / 04 bootcut",
+    "wide-leg trouser (black/navy/grey/sand)",
+    "tailored wool blazer or leather jacket (brown/black/burgundy)",
+    "sangallo shirt (summer)"
+  ],
+  "palette": {
+    "base": [
+      "black",
+      "navy",
+      "brown",
+      "grey",
+      "sand",
+      "white"
+    ],
+    "accent": [
+      "burgundy",
+      "olive"
+    ],
+    "avoid": [
+      "pink",
+      "mauve",
+      "pale yellow",
+      "mint",
+      "loud pattern"
+    ],
+    "materials": [
+      "cotton jersey",
+      "cashmere",
+      "wool knit",
+      "denim",
+      "leather/suede"
+    ]
+  },
+  "allowed": {
+    "top": [
+      "henley_serafino",
+      "zip_knit",
+      "cardigan_knit",
+      "knit_polo",
+      "bowling",
+      "sangallo",
+      "tee_plain",
+      "solid_crew_knit",
+      "flannel_check_shirt"
+    ],
+    "bottom": [
+      "light_denim_straight",
+      "dark_denim",
+      "ecru_denim",
+      "relaxed_or_dark_trouser"
+    ],
+    "shoe": [
+      "leather_plain_loafer",
+      "woven_loafer",
+      "suede_loafer",
+      "clean_leather_sneaker",
+      "suede_sneaker"
+    ],
+    "outer": [
+      "suede_jacket",
+      "suede_bomber",
+      "blazer_soft"
+    ],
+    "mid": [
+      "mid_cardigan",
+      "mid_zip_knit"
+    ]
+  },
+  "allowed_rule_ids": {
+    "top": "545-A-top",
+    "bottom": "545-A-bottom",
+    "shoe": "545-A-shoe",
+    "outer": "545-A-outer",
+    "mid": "545-A-mid"
+  },
+  "required": {
+    "hard": [],
+    "min_signals": {
+      "id": "545-R1",
+      "count": 3,
+      "why": "at least 3 of: signature knit/henley top, relaxed denim or dark/relaxed trouser, loafer or clean sneaker, suede/leather jacket or soft blazer",
+      "groups": [
+        {
+          "name": "sig_top",
+          "signals": [
+            "henley_serafino",
+            "zip_knit",
+            "cardigan_knit",
+            "knit_polo",
+            "bowling",
+            "sangallo"
+          ]
+        },
+        {
+          "name": "bottom_545",
+          "signals": [
+            "light_denim_straight",
+            "dark_denim",
+            "relaxed_or_dark_trouser"
+          ]
+        },
+        {
+          "name": "shoe_545",
+          "signals": [
+            "woven_loafer",
+            "leather_plain_loafer",
+            "clean_leather_sneaker"
+          ]
+        },
+        {
+          "name": "outer_545",
+          "signals": [
+            "suede_jacket",
+            "suede_bomber",
+            "blazer_soft"
+          ]
+        }
+      ]
+    }
+  },
+  "banned": [
+    {
+      "id": "545-B1",
+      "slot": "shoe",
+      "signals": [
+        "boot",
+        "mule",
+        "tassel_loafer",
+        "fashion_sneaker",
+        "nb_dad_sneaker"
+      ],
+      "why": "545 sells no shoes; these exclusions are inferred, to keep it apart from RRL, Faloni, Polo and ALD."
+    },
+    {
+      "id": "545-B2",
+      "slot": "top",
+      "signals": [
+        "oxford_shirt",
+        "pique_polo",
+        "gingham",
+        "pattern_country_knit",
+        "rugby",
+        "cable_knit",
+        "collegiate_top",
+        "camp_collar",
+        "linen_shirt",
+        "gradient_knit",
+        "fashion_shirt",
+        "denim_chambray_shirt",
+        "tee_logo"
+      ],
+      "why": "Prep, country, resort and loud tops are off-brand."
+    },
+    {
+      "id": "545-B2b",
+      "slot": "top",
+      "signals": [
+        "hoodie_sweat_fleece"
+      ],
+      "unless_occasion": [
+        "comfy"
+      ],
+      "why": "Sweats only for Comfy."
+    },
+    {
+      "id": "545-B3",
+      "slot": "bottom",
+      "signals": [
+        "pinstripe",
+        "light_trouser",
+        "linen_bottom",
+        "cord_bottom",
+        "distressed_denim",
+        "striped_slim_jean",
+        "work_chino",
+        "track_knit_pant"
+      ],
+      "why": "Dark/relaxed only; no cords or pale dress trousers."
+    },
+    {
+      "id": "545-B4",
+      "slot": "outer",
+      "signals": [
+        "chore",
+        "denim_trucker",
+        "field_jacket_earth",
+        "field_mint",
+        "plaid_jacket",
+        "shearling",
+        "toggle_parka",
+        "blazer_navy",
+        "cord_jacket",
+        "zip_jacket_light"
+      ],
+      "why": "Only leather/suede jackets or a soft blazer."
+    },
+    {
+      "id": "545-B5",
+      "slot": "any",
+      "colors_any": [
+        "pink",
+        "mauve",
+        "yellow",
+        "mint",
+        "lavender",
+        "lilac",
+        "peach"
+      ],
+      "why": "The palette is dark and earthy."
+    },
+    {
+      "id": "545-B6",
+      "slot": "top",
+      "signals": [
+        "bowling",
+        "sangallo"
+      ],
+      "season_in": [
+        "fall",
+        "winter"
+      ],
+      "why": "Bowling/sangallo shirts are summer only."
+    }
+  ],
+  "pairing_rules": [
+    {
+      "id": "545-P1",
+      "type": "if_then",
+      "if": {
+        "slot": "top",
+        "signals": [
+          "flannel_check_shirt"
+        ]
+      },
+      "then": {
+        "slot": "bottom",
+        "signals": [
+          "light_denim_straight",
+          "dark_denim",
+          "ecru_denim"
+        ]
+      },
+      "why": "The checkered flannel goes with denim."
+    },
+    {
+      "id": "545-P2",
+      "type": "if_then",
+      "if": {
+        "slot": "outer",
+        "signals": [
+          "blazer_soft"
+        ]
+      },
+      "then": {
+        "slot": "top",
+        "signals": [
+          "henley_serafino",
+          "knit_polo",
+          "tee_plain",
+          "solid_crew_knit",
+          "zip_knit"
+        ]
+      },
+      "why": "Blazer over jersey/knit, never over a shirt."
+    }
+  ],
+  "allowed_jackets": {
+    "signals": [
+      "suede_jacket",
+      "suede_bomber",
+      "blazer_soft"
+    ],
+    "keywords": [
+      "leather jacket",
+      "suede jacket",
+      "suede bomber",
+      "brown/taupe tailored blazer",
+      "cardigan/zip knit (mid)"
+    ],
+    "not": [
+      "chore",
+      "trucker",
+      "field",
+      "plaid",
+      "shearling",
+      "toggle",
+      "navy blazer"
+    ],
+    "joe_plate_ids": [
+      {
+        "id": "g_1pg9y05mlkek",
+        "name": "Brown suede jacket"
+      },
+      {
+        "id": "g_py2swfwot1ed",
+        "name": "Brown suede jacket"
+      },
+      {
+        "id": "g_8od90wk1sl9k",
+        "name": "Brown suede bomber jacket"
+      },
+      {
+        "id": "g_whgv0gu6m08l",
+        "name": "Beige corduroy blazer"
+      },
+      {
+        "id": "g_98p2sivflrxg",
+        "name": "Ivory double-breasted blazer"
+      },
+      {
+        "id": "g_juk45cokjxxy",
+        "name": "Taupe blazer"
+      }
+    ]
+  },
+  "allowed_shoes": {
+    "signals": [
+      "leather_plain_loafer",
+      "woven_loafer",
+      "suede_loafer",
+      "clean_leather_sneaker",
+      "suede_sneaker"
+    ],
+    "keywords": [
+      "leather loafer",
+      "woven loafer",
+      "suede loafer",
+      "white/cream/brown leather sneaker",
+      "suede sneaker"
+    ],
+    "not": [
+      "boot",
+      "mule",
+      "tassel",
+      "Golden Goose",
+      "Gucci",
+      "New Balance"
+    ],
+    "confidence": "inferred (545 sells no footwear)",
+    "joe_plate_ids": [
+      {
+        "id": "g_5g4fqg77s4rw",
+        "name": "Black woven loafers"
+      },
+      {
+        "id": "g_om0dh5nps1ke",
+        "name": "Brown leather loafers"
+      },
+      {
+        "id": "g_fzekzikyrf50",
+        "name": "Navy suede sneakers"
+      },
+      {
+        "id": "g_01xaga54r12h",
+        "name": "White leather sneakers"
+      },
+      {
+        "id": "g_8ukg5mi9r3fc",
+        "name": "Brown suede loafers"
+      },
+      {
+        "id": "g_upni66uiqtgb",
+        "name": "Cream leather sneakers"
+      },
+      {
+        "id": "g_2wf48xbqlgcv",
+        "name": "White leather sneakers"
+      },
+      {
+        "id": "g_9q0j6ksxlgcv",
+        "name": "White leather sneakers"
+      },
+      {
+        "id": "g_wgarjdurj7yp",
+        "name": "Brown leather sneakers"
+      },
+      {
+        "id": "g_08shegj8gqie",
+        "name": "Grey and white low-top sneakers"
+      }
+    ]
+  },
+  "occasion_gate": {
+    "weekend": {
+      "status": "primary",
+      "rule_id": "545-G-weekend",
+      "modifier": ""
+    },
+    "out": {
+      "status": "primary",
+      "rule_id": "545-G-out",
+      "modifier": "Knit polo/zip + dark denim + woven loafer + suede jacket"
+    },
+    "weekday": {
+      "status": "allowed",
+      "rule_id": "545-G-weekday",
+      "modifier": "Knit + relaxed grey/brown trouser + loafer"
+    },
+    "travel": {
+      "status": "allowed",
+      "rule_id": "545-G-travel",
+      "modifier": ""
+    },
+    "comfy": {
+      "status": "allowed",
+      "rule_id": "545-G-comfy",
+      "modifier": "henley/sweats + relaxed jean + sneaker"
+    }
+  },
+  "season_gate": {
+    "spring": {
+      "status": "allowed",
+      "rule_id": "545-G-spring",
+      "modifier": ""
+    },
+    "summer": {
+      "status": "allowed",
+      "rule_id": "545-G-summer",
+      "modifier": "Bowling/sangallo shirt allowed"
+    },
+    "fall": {
+      "status": "primary",
+      "rule_id": "545-G-fall",
+      "modifier": ""
+    },
+    "winter": {
+      "status": "primary",
+      "rule_id": "545-G-winter",
+      "modifier": ""
+    }
+  },
+  "card_note": "Milan minimal: henley or zip knit, relaxed denim, loafers, suede jacket.",
+  "gap_note": "No serafino, sangallo or wide-leg denim: henley and relaxed jeans stand in.",
+  "must_differ": {
+    "faloni": "545 uses denim or dark/relaxed trousers and never pale pleats or mules.",
+    "ald": "No hoodies/NB; loafers and a suede jacket are allowed.",
+    "italianwinter": "545 allows sneakers and denim; IW bans both."
+  },
+  "scoring": {
+    "hard_fail": [
+      "545-R1",
+      "545-A-*",
+      "545-B1..B6",
+      "545-P1..P2"
+    ],
+    "soft": {
+      "545-D1": -25
+    },
+    "empty_state": "Show the closest look that passes 2 of 4 groups, labelled with the gap note."
+  },
+  "joe_fill": {
+    "gaps": [
+      "No serafino tee (Light Blue henley g_m7bg5j5z10wc is the proxy).",
+      "No sangallo, no wide-leg or bootcut denim (the relaxed light jeans g_rvrs9hibr981 are the proxy).",
+      "No leather jacket (suede jackets stand in)."
+    ],
+    "slot_whitelist": {
+      "top": [
+        {
+          "id": "g_j4qu90fgv347",
+          "name": "Light Blue plaid flannel",
+          "signals": [
+            "flannel_check_shirt"
+          ]
+        },
+        {
+          "id": "g_teatot7o1lst",
+          "name": "Grey plaid shirt",
+          "signals": [
+            "flannel_check_shirt"
+          ]
+        },
+        {
+          "id": "g_m7bg5j5z10wc",
+          "name": "Light Blue henley",
+          "signals": [
+            "henley_serafino"
+          ]
+        },
+        {
+          "id": "g_21b6d3qcohmu",
+          "name": "Brown blue plaid shirt",
+          "signals": [
+            "flannel_check_shirt"
+          ]
+        },
+        {
+          "id": "g_gp53xkrmem9b",
+          "name": "Grey knit sweater",
+          "signals": [
+            "solid_crew_knit"
+          ]
+        },
+        {
+          "id": "g_bq9qnaa1vkon",
+          "name": "Brown knit polo",
+          "signals": [
+            "knit_polo"
+          ]
+        },
+        {
+          "id": "g_2b6fao81vqrs",
+          "name": "Blue plaid flannel shirt",
+          "signals": [
+            "flannel_check_shirt"
+          ]
+        },
+        {
+          "id": "g_3821acdhupu9",
+          "name": "Cream ribbed half-zip sweater",
+          "signals": [
+            "zip_knit"
+          ]
+        },
+        {
+          "id": "g_v2gxktsmsoov",
+          "name": "Beige crewneck sweater",
+          "signals": [
+            "solid_crew_knit"
+          ]
+        },
+        {
+          "id": "g_ri78lj9vspyj",
+          "name": "Beige ribbed sweater",
+          "signals": [
+            "solid_crew_knit"
+          ]
+        },
+        {
+          "id": "g_xowln4uos3ug",
+          "name": "Beige knit sweater",
+          "signals": [
+            "solid_crew_knit"
+          ]
+        },
+        {
+          "id": "g_z8gvd1zvrcif",
+          "name": "Brown knit zip sweater",
+          "signals": [
+            "zip_knit"
+          ]
+        },
+        {
+          "id": "g_ugyaieefqcxe",
+          "name": "White knit cardigan",
+          "signals": [
+            "cardigan_knit"
+          ]
+        },
+        {
+          "id": "g_jkj2nzfzpf1o",
+          "name": "Black bowling shirt",
+          "signals": [
+            "bowling"
+          ]
+        },
+        {
+          "id": "g_xuqvrfy5ocv4",
+          "name": "Olive zip-up knit sweater",
+          "signals": [
+            "zip_knit"
+          ]
+        },
+        {
+          "id": "g_xbt3gpjuo1p4",
+          "name": "Burgundy collared sweater",
+          "signals": [
+            "knit_polo"
+          ]
+        },
+        {
+          "id": "g_qrx875pbmh6n",
+          "name": "Beige textured sweater",
+          "signals": [
+            "solid_crew_knit"
+          ]
+        },
+        {
+          "id": "g_zh2l854ghu1t",
+          "name": "Green herringbone knit shirt",
+          "signals": [
+            "knit_polo"
+          ]
+        },
+        {
+          "id": "g_mir3akjyhwnr",
+          "name": "Light blue t-shirt",
+          "signals": [
+            "tee_plain"
+          ]
+        }
+      ],
+      "bottom": [
+        {
+          "id": "g_x1vivoqz2ixd",
+          "name": "Maroon/brown trousers",
+          "signals": [
+            "relaxed_or_dark_trouser"
+          ]
+        },
+        {
+          "id": "g_dzsh3qh7v6sb",
+          "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers",
+          "signals": [
+            "dark_denim"
+          ]
+        },
+        {
+          "id": "g_fvc535elt23d",
+          "name": "Light blue jeans",
+          "signals": [
+            "light_denim_straight"
+          ]
+        },
+        {
+          "id": "g_rvrs9hibr981",
+          "name": "Light blue jeans",
+          "signals": [
+            "light_denim_straight"
+          ]
+        },
+        {
+          "id": "g_bee1dg9rnfe5",
+          "name": "Grey pleated trousers",
+          "signals": [
+            "relaxed_or_dark_trouser"
+          ]
+        },
+        {
+          "id": "g_k75fdfdsnak0",
+          "name": "Light grey pleated trousers",
+          "signals": [
+            "relaxed_or_dark_trouser"
+          ]
+        },
+        {
+          "id": "g_j994h3k9l8ot",
+          "name": "Cream straight-leg jeans",
+          "signals": [
+            "ecru_denim"
+          ]
+        },
+        {
+          "id": "g_yfkavdj5irwe",
+          "name": "Light grey pleated trousers",
+          "signals": [
+            "relaxed_or_dark_trouser"
+          ]
+        }
+      ],
+      "shoe": [
+        {
+          "id": "g_5g4fqg77s4rw",
+          "name": "Black woven loafers",
+          "signals": [
+            "woven_loafer"
+          ]
+        },
+        {
+          "id": "g_om0dh5nps1ke",
+          "name": "Brown leather loafers",
+          "signals": [
+            "leather_plain_loafer"
+          ]
+        },
+        {
+          "id": "g_fzekzikyrf50",
+          "name": "Navy suede sneakers",
+          "signals": [
+            "suede_sneaker"
+          ]
+        },
+        {
+          "id": "g_01xaga54r12h",
+          "name": "White leather sneakers",
+          "signals": [
+            "clean_leather_sneaker"
+          ]
+        },
+        {
+          "id": "g_8ukg5mi9r3fc",
+          "name": "Brown suede loafers",
+          "signals": [
+            "suede_loafer"
+          ]
+        },
+        {
+          "id": "g_upni66uiqtgb",
+          "name": "Cream leather sneakers",
+          "signals": [
+            "clean_leather_sneaker"
+          ]
+        },
+        {
+          "id": "g_2wf48xbqlgcv",
+          "name": "White leather sneakers",
+          "signals": [
+            "clean_leather_sneaker"
+          ]
+        },
+        {
+          "id": "g_9q0j6ksxlgcv",
+          "name": "White leather sneakers",
+          "signals": [
+            "clean_leather_sneaker"
+          ]
+        },
+        {
+          "id": "g_wgarjdurj7yp",
+          "name": "Brown leather sneakers",
+          "signals": [
+            "clean_leather_sneaker"
+          ]
+        },
+        {
+          "id": "g_08shegj8gqie",
+          "name": "Grey and white low-top sneakers",
+          "signals": [
+            "suede_sneaker"
+          ]
+        }
+      ],
+      "outer": [
+        {
+          "id": "g_1pg9y05mlkek",
+          "name": "Brown suede jacket",
+          "signals": [
+            "suede_jacket"
+          ]
+        },
+        {
+          "id": "g_py2swfwot1ed",
+          "name": "Brown suede jacket",
+          "signals": [
+            "suede_jacket"
+          ]
+        },
+        {
+          "id": "g_8od90wk1sl9k",
+          "name": "Brown suede bomber jacket",
+          "signals": [
+            "suede_bomber"
+          ]
+        },
+        {
+          "id": "g_whgv0gu6m08l",
+          "name": "Beige corduroy blazer",
+          "signals": [
+            "blazer_soft"
+          ]
+        },
+        {
+          "id": "g_98p2sivflrxg",
+          "name": "Ivory double-breasted blazer",
+          "signals": [
+            "blazer_soft"
+          ]
+        },
+        {
+          "id": "g_juk45cokjxxy",
+          "name": "Taupe blazer",
+          "signals": [
+            "blazer_soft"
+          ]
+        }
+      ],
+      "mid": [
+        {
+          "id": "g_xc4gr022xmvm",
+          "name": "Cream cable-knit cardigan",
+          "signals": [
+            "mid_cardigan"
+          ]
+        },
+        {
+          "id": "g_j2id379jo424",
+          "name": "Blue zip-up knit jacket",
+          "signals": [
+            "mid_zip_knit"
+          ]
+        },
+        {
+          "id": "g_hhbz4ghpjmd1",
+          "name": "Navy ribbed zip sweater",
+          "signals": [
+            "mid_zip_knit"
+          ]
+        }
+      ]
+    },
+    "valid_look_counts": {
+      "weekday/fall": {
+        "valid_cores_top_bottom_shoe": 994,
+        "valid_looks_incl_outer_choice": 5873,
+        "distinct_tops": 18,
+        "distinct_bottoms": 8,
+        "distinct_shoes": 10
+      },
+      "weekend/fall": {
+        "valid_cores_top_bottom_shoe": 994,
+        "valid_looks_incl_outer_choice": 5873,
+        "distinct_tops": 18,
+        "distinct_bottoms": 8,
+        "distinct_shoes": 10
+      },
+      "out/fall": {
+        "valid_cores_top_bottom_shoe": 994,
+        "valid_looks_incl_outer_choice": 5873,
+        "distinct_tops": 18,
+        "distinct_bottoms": 8,
+        "distinct_shoes": 10
+      },
+      "weekend/summer": {
+        "valid_cores_top_bottom_shoe": 784,
+        "valid_looks_incl_outer_choice": 2499,
+        "distinct_tops": 12,
+        "distinct_bottoms": 8,
+        "distinct_shoes": 10
+      },
+      "weekday/winter": {
+        "valid_cores_top_bottom_shoe": 994,
+        "valid_looks_incl_outer_choice": 5873,
+        "distinct_tops": 18,
+        "distinct_bottoms": 8,
+        "distinct_shoes": 10
+      }
+    },
+    "proposed_top3": {
+      "weekday/fall": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_z8gvd1zvrcif",
+              "name": "Brown knit zip sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.8
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 49.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8od90wk1sl9k",
+              "name": "Brown suede bomber jacket"
+            },
+            "score": 47.75
+          }
+        ]
+      },
+      "weekend/fall": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_z8gvd1zvrcif",
+              "name": "Brown knit zip sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.8
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 49.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8od90wk1sl9k",
+              "name": "Brown suede bomber jacket"
+            },
+            "score": 47.75
+          }
+        ]
+      },
+      "out/fall": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_z8gvd1zvrcif",
+              "name": "Brown knit zip sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.8
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 49.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8od90wk1sl9k",
+              "name": "Brown suede bomber jacket"
+            },
+            "score": 47.75
+          }
+        ]
+      },
+      "weekend/summer": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_z8gvd1zvrcif",
+              "name": "Brown knit zip sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 48.65
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 47.55
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 46.15
+          }
+        ]
+      },
+      "weekday/winter": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_z8gvd1zvrcif",
+              "name": "Brown knit zip sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.8
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 49.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8od90wk1sl9k",
+              "name": "Brown suede bomber jacket"
+            },
+            "score": 47.75
+          }
+        ]
+      }
+    }
+  },
+  "current_code_scoring": "houses.ts fiveFourFive: required tokens (serafino/henley/knit + denim/relaxed + loafer/court), palette tokens also polluted by notes. lookFitsOccasion HAS a fiveFourFive Weekday branch. The prior brain's 'white court' rule was unsourced, and flannel IS in 545's catalog.",
+  "test_cases": [
+    {
+      "id": "545-T1",
+      "desc": "Light blue henley + relaxed light blue jeans + white leather sneakers",
+      "context": {
+        "occasion": "weekend",
+        "season": "fall"
+      },
+      "look": {
+        "top": "g_m7bg5j5z10wc",
+        "bottom": "g_rvrs9hibr981",
+        "shoe": "g_9q0j6ksxlgcv"
+      },
+      "expected": "pass",
+      "rule_ids": [],
+      "_validator": {
+        "result": "pass",
+        "fired": [],
+        "soft": [],
+        "matches_expected": true
+      }
+    },
+    {
+      "id": "545-T2",
+      "desc": "Burgundy collared sweater + navy denim + black woven loafers + brown suede jacket",
+      "context": {
+        "occasion": "out",
+        "season": "fall"
+      },
+      "look": {
+        "top": "g_xbt3gpjuo1p4",
+        "bottom": "g_dzsh3qh7v6sb",
+        "shoe": "g_5g4fqg77s4rw",
+        "outer": "g_py2swfwot1ed"
+      },
+      "expected": "pass",
+      "rule_ids": [],
+      "_validator": {
+        "result": "pass",
+        "fired": [],
+        "soft": [],
+        "matches_expected": true
+      }
+    },
+    {
+      "id": "545-T3",
+      "desc": "Ivory camp collar + sage pleated + white sneakers",
+      "context": {
+        "occasion": "weekend",
+        "season": "summer"
+      },
+      "look": {
+        "top": "g_lqf1mrlsure9",
+        "bottom": "g_66xj06nllgf2",
+        "shoe": "g_9q0j6ksxlgcv"
+      },
+      "expected": "fail",
+      "rule_ids": [
+        "545-B2",
+        "545-B3"
+      ],
+      "_validator": {
+        "result": "fail",
+        "fired": [
+          "545-A-bottom",
+          "545-A-top",
+          "545-B2",
+          "545-B3",
+          "545-R1"
+        ],
+        "soft": [],
+        "matches_expected": true
+      }
+    }
+  ],
+  "sources": [
+    {
+      "title": "545 Milano full catalog",
+      "url": "https://fivefourfive.it/collections/all"
+    },
+    {
+      "title": "545 Serafino longsleeve",
+      "url": "https://fivefourfive.it/products/545-serafino-longsleeve-white"
+    }
+  ],
+  "keywords": {
+    "denim_chambray_shirt": {
+      "slot": "top",
+      "any": [
+        "denim shirt",
+        "chambray",
+        "denim overshirt",
+        "western shirt",
+        "workshirt",
+        "work shirt",
+        "pearl snap"
+      ],
+      "none": [
+        "jacket",
+        "trucker",
+        "jean",
+        "trouser"
+      ]
+    },
+    "flannel_check_shirt": {
+      "slot": "top",
+      "any": [
+        "flannel",
+        "plaid shirt",
+        "check shirt",
+        "checked shirt",
+        "tartan shirt",
+        "buffalo check",
+        "plaid flannel"
+      ],
+      "none": [
+        "gingham",
+        "jacket",
+        "trouser",
+        "pant",
+        "shearling",
+        "blazer"
+      ]
+    },
+    "henley_serafino": {
+      "slot": "top",
+      "any": [
+        "henley",
+        "serafino",
+        "waffle"
+      ]
+    },
+    "tee_plain": {
+      "slot": "top",
+      "any": [
+        "t-shirt",
+        "tee"
+      ],
+      "none": [
+        "logo",
+        "graphic",
+        "print",
+        "polo"
+      ]
+    },
+    "tee_logo": {
+      "slot": "top",
+      "any": [
+        "logo",
+        "graphic"
+      ]
+    },
+    "oxford_shirt": {
+      "slot": "top",
+      "or": [
+        {
+          "any": [
+            "oxford",
+            "ocbd",
+            "button-down",
+            "button down",
+            "button-up",
+            "button up",
+            "dress shirt",
+            "striped shirt",
+            "poplin"
+          ],
+          "none": [
+            "flannel",
+            "plaid",
+            "denim",
+            "chambray",
+            "gingham",
+            "linen",
+            "camp",
+            "bowling",
+            "printed",
+            "embroidered",
+            "knit",
+            "check"
+          ]
+        },
+        {
+          "subtype_exact": [
+            "shirt"
+          ],
+          "none": [
+            "flannel",
+            "plaid",
+            "denim",
+            "chambray",
+            "gingham",
+            "linen",
+            "camp",
+            "bowling",
+            "printed",
+            "embroidered",
+            "knit",
+            "check"
+          ]
+        }
+      ]
+    },
+    "pique_polo": {
+      "slot": "top",
+      "any": [
+        "polo"
+      ],
+      "none": [
+        "knit",
+        "ribbed",
+        "polo bear",
+        "collared sweater",
+        "rugby",
+        "sweater",
+        "sweatshirt"
+      ],
+      "material_none": [
+        "knit"
+      ]
+    },
+    "knit_polo": {
+      "slot": "top",
+      "or": [
+        {
+          "any": [
+            "knit polo",
+            "ribbed polo",
+            "collared sweater",
+            "polo sweater",
+            "polo jumper",
+            "knit shirt"
+          ]
+        },
+        {
+          "any": [
+            "polo"
+          ],
+          "material_any": [
+            "knit"
+          ],
+          "none": [
+            "polo bear"
+          ]
+        }
+      ]
+    },
+    "cable_knit": {
+      "slot": "top",
+      "any": [
+        "cable"
+      ]
+    },
+    "solid_crew_knit": {
+      "slot": "top",
+      "any": [
+        "crewneck sweater",
+        "knit sweater",
+        "ribbed sweater",
+        "textured sweater",
+        "merino",
+        "cashmere",
+        "fine-gauge",
+        "fine gauge",
+        "lambswool",
+        "turtleneck",
+        "rollneck",
+        "roll-neck",
+        "crew knit"
+      ],
+      "none": [
+        "cable",
+        "fair isle",
+        "diamond",
+        "argyle",
+        "gradient",
+        "zip",
+        "cardigan",
+        "graphic",
+        "logo",
+        "sweatshirt",
+        "hoodie",
+        "fleece",
+        "r sweater"
+      ]
+    },
+    "turtleneck_knit": {
+      "slot": "top",
+      "any": [
+        "turtleneck",
+        "rollneck",
+        "roll-neck",
+        "funnel neck"
+      ],
+      "none": [
+        "sweatshirt"
+      ]
+    },
+    "gradient_knit": {
+      "slot": "top",
+      "any": [
+        "gradient",
+        "ombre"
+      ]
+    },
+    "pattern_country_knit": {
+      "slot": "top",
+      "any": [
+        "fair isle",
+        "fairisle",
+        "fair-isle",
+        "diamond knit",
+        "argyle",
+        "nordic"
+      ]
+    },
+    "fair_isle": {
+      "slot": "top",
+      "any": [
+        "fair isle",
+        "fairisle",
+        "fair-isle"
+      ]
+    },
+    "gingham": {
+      "slot": "top",
+      "any": [
+        "gingham"
+      ]
+    },
+    "rugby": {
+      "slot": "top",
+      "any": [
+        "rugby"
+      ]
+    },
+    "oversized_oxford": {
+      "slot": "top",
+      "any": [
+        "oversized oxford",
+        "oversized ocbd"
+      ]
+    },
+    "collegiate_top": {
+      "slot": "top",
+      "any": [
+        "varsity",
+        "r sweater",
+        "polo bear",
+        "flag sweatshirt",
+        "letterman",
+        "collegiate"
+      ]
+    },
+    "zip_knit": {
+      "slot": "any",
+      "any": [
+        "zip sweater",
+        "zip-up knit",
+        "half-zip sweater",
+        "quarter-zip sweater",
+        "half-button",
+        "zip jumper"
+      ],
+      "none": [
+        "fair isle",
+        "fleece",
+        "sweatshirt"
+      ]
+    },
+    "cardigan_knit": {
+      "slot": "any",
+      "any": [
+        "cardigan"
+      ]
+    },
+    "hoodie_sweat_fleece": {
+      "slot": "any",
+      "any": [
+        "hoodie",
+        "sweatshirt",
+        "fleece",
+        "track"
+      ]
+    },
+    "linen_shirt": {
+      "slot": "top",
+      "any": [
+        "linen"
+      ],
+      "none": [
+        "trouser",
+        "pant"
+      ]
+    },
+    "camp_collar": {
+      "slot": "top",
+      "any": [
+        "camp",
+        "cuban",
+        "resort collar",
+        "portofino"
+      ]
+    },
+    "bowling": {
+      "slot": "top",
+      "any": [
+        "bowling"
+      ]
+    },
+    "sangallo": {
+      "slot": "top",
+      "any": [
+        "sangallo",
+        "broderie",
+        "eyelet"
+      ]
+    },
+    "fashion_shirt": {
+      "slot": "top",
+      "any": [
+        "printed",
+        "embroidered",
+        "print shirt"
+      ]
+    },
+    "denim_bottom": {
+      "slot": "bottom",
+      "any": [
+        "jean",
+        "denim",
+        "selvedge"
+      ],
+      "none": [
+        "jacket",
+        "shirt",
+        "trucker"
+      ]
+    },
+    "dark_denim": {
+      "slot": "bottom",
+      "any": [
+        "jean",
+        "denim",
+        "selvedge"
+      ],
+      "none": [
+        "jacket",
+        "shirt",
+        "distressed"
+      ],
+      "colors_any": [
+        "navy",
+        "indigo",
+        "dark",
+        "raw",
+        "rinse",
+        "black"
+      ]
+    },
+    "light_denim_straight": {
+      "slot": "bottom",
+      "any": [
+        "jean",
+        "denim"
+      ],
+      "none": [
+        "distressed",
+        "striped",
+        "ripped"
+      ],
+      "colors_any": [
+        "light blue",
+        "blue"
+      ],
+      "colors_none": [
+        "navy"
+      ],
+      "fit_any": [
+        "regular",
+        "relaxed",
+        "straight"
+      ]
+    },
+    "ecru_denim": {
+      "slot": "bottom",
+      "any": [
+        "jean",
+        "denim"
+      ],
+      "none": [
+        "distressed"
+      ],
+      "colors_any": [
+        "cream",
+        "ecru",
+        "off-white"
+      ]
+    },
+    "distressed_denim": {
+      "slot": "bottom",
+      "any": [
+        "distressed",
+        "ripped",
+        "destroyed"
+      ]
+    },
+    "striped_slim_jean": {
+      "slot": "bottom",
+      "any": [
+        "striped jean"
+      ]
+    },
+    "cord_bottom": {
+      "slot": "bottom",
+      "any": [
+        "cord",
+        "corduroy",
+        "needlecord"
+      ]
+    },
+    "work_chino": {
+      "slot": "bottom",
+      "any": [
+        "chino",
+        "khaki",
+        "fatigue",
+        "carpenter",
+        "cargo",
+        "officer",
+        "gurkha",
+        "frayed"
+      ],
+      "colors_any": [
+        "brown",
+        "olive",
+        "khaki",
+        "tan",
+        "navy",
+        "chocolate"
+      ]
+    },
+    "pleated_trouser": {
+      "slot": "bottom",
+      "any": [
+        "pleated"
+      ]
+    },
+    "dress_trouser": {
+      "slot": "bottom",
+      "any": [
+        "trouser",
+        "pinstripe",
+        "slack"
+      ],
+      "none": [
+        "denim",
+        "cord",
+        "jean",
+        "track"
+      ]
+    },
+    "wool_trouser": {
+      "slot": "bottom",
+      "or": [
+        {
+          "any": [
+            "trouser",
+            "pinstripe",
+            "flannel",
+            "slack"
+          ],
+          "none": [
+            "denim",
+            "cord",
+            "jean",
+            "linen"
+          ],
+          "material_any": [
+            "wool",
+            "flannel"
+          ]
+        },
+        {
+          "any": [
+            "trouser",
+            "pinstripe",
+            "flannel",
+            "slack"
+          ],
+          "none": [
+            "denim",
+            "cord",
+            "jean",
+            "linen"
+          ],
+          "colors_any": [
+            "grey",
+            "charcoal"
+          ]
+        }
+      ]
+    },
+    "light_trouser": {
+      "slot": "bottom",
+      "any": [
+        "trouser",
+        "pant",
+        "chino"
+      ],
+      "none": [
+        "jean",
+        "denim",
+        "cord",
+        "fleece",
+        "track",
+        "ribbed",
+        "frayed"
+      ],
+      "colors_any": [
+        "cream",
+        "ivory",
+        "beige",
+        "sand",
+        "stone",
+        "white",
+        "sage",
+        "light blue",
+        "ecru",
+        "taupe"
+      ]
+    },
+    "linen_bottom": {
+      "slot": "bottom",
+      "material_any": [
+        "linen"
+      ],
+      "any": [
+        "trouser",
+        "pant",
+        "short"
+      ]
+    },
+    "pinstripe": {
+      "slot": "bottom",
+      "any": [
+        "pinstripe",
+        "chalkstripe",
+        "chalk stripe"
+      ]
+    },
+    "track_knit_pant": {
+      "slot": "bottom",
+      "any": [
+        "track",
+        "fleece",
+        "sweatpant",
+        "jogger",
+        "ribbed pant"
+      ]
+    },
+    "shorts": {
+      "slot": "bottom",
+      "any": [
+        "short"
+      ]
+    },
+    "boot": {
+      "slot": "shoe",
+      "any": [
+        "boot"
+      ],
+      "none": [
+        "sneaker"
+      ]
+    },
+    "loafer_any": {
+      "slot": "shoe",
+      "any": [
+        "loafer",
+        "slip-on",
+        "moccasin",
+        "penny"
+      ]
+    },
+    "suede_loafer": {
+      "slot": "shoe",
+      "any": [
+        "loafer",
+        "moccasin"
+      ],
+      "material_any": [
+        "suede"
+      ]
+    },
+    "leather_plain_loafer": {
+      "slot": "shoe",
+      "any": [
+        "loafer",
+        "penny"
+      ],
+      "material_any": [
+        "leather"
+      ],
+      "none": [
+        "tassel",
+        "woven"
+      ]
+    },
+    "tassel_loafer": {
+      "slot": "shoe",
+      "any": [
+        "tassel"
+      ]
+    },
+    "woven_loafer": {
+      "slot": "shoe",
+      "any": [
+        "woven"
+      ],
+      "none": [
+        "sneaker"
+      ]
+    },
+    "mule": {
+      "slot": "shoe",
+      "any": [
+        "mule",
+        "slide",
+        "driving"
+      ]
+    },
+    "summer_walk": {
+      "slot": "shoe",
+      "any": [
+        "summer walk",
+        "white-sole",
+        "white sole"
+      ]
+    },
+    "clean_leather_sneaker": {
+      "slot": "shoe",
+      "any": [
+        "sneaker",
+        "trainer",
+        "court"
+      ],
+      "material_any": [
+        "leather"
+      ],
+      "colors_any": [
+        "white",
+        "cream",
+        "brown",
+        "ivory"
+      ],
+      "none": [
+        "distressed",
+        "star"
+      ],
+      "brand_none": [
+        "golden goose",
+        "gucci"
+      ]
+    },
+    "suede_sneaker": {
+      "slot": "shoe",
+      "any": [
+        "sneaker",
+        "low-top",
+        "trainer"
+      ],
+      "material_any": [
+        "suede"
+      ],
+      "none": [
+        "distressed",
+        "star"
+      ],
+      "brand_none": [
+        "golden goose"
+      ]
+    },
+    "fashion_sneaker": {
+      "slot": "shoe",
+      "or": [
+        {
+          "brand_any": [
+            "golden goose",
+            "gucci",
+            "common projects x"
+          ]
+        },
+        {
+          "any": [
+            "distressed sneaker",
+            "star sneaker"
+          ]
+        }
+      ]
+    },
+    "nb_dad_sneaker": {
+      "slot": "shoe",
+      "or": [
+        {
+          "any": [
+            "990",
+            "991",
+            "992",
+            "993",
+            "997",
+            "2002r",
+            "new balance"
+          ]
+        },
+        {
+          "brand_any": [
+            "new balance"
+          ]
+        }
+      ]
+    },
+    "sneaker_any": {
+      "slot": "shoe",
+      "any": [
+        "sneaker",
+        "trainer",
+        "low-top",
+        "court"
+      ]
+    },
+    "chore": {
+      "slot": "outer",
+      "any": [
+        "chore"
+      ]
+    },
+    "denim_trucker": {
+      "slot": "outer",
+      "any": [
+        "denim jacket",
+        "trucker",
+        "jean jacket"
+      ],
+      "none": [
+        "shearling",
+        "plaid"
+      ]
+    },
+    "suede_jacket": {
+      "slot": "outer",
+      "any": [
+        "suede"
+      ],
+      "none": [
+        "bomber",
+        "shearling"
+      ]
+    },
+    "suede_bomber": {
+      "slot": "outer",
+      "any": [
+        "bomber"
+      ],
+      "material_any": [
+        "suede",
+        "leather"
+      ],
+      "none": [
+        "shearling"
+      ]
+    },
+    "shearling": {
+      "slot": "outer",
+      "any": [
+        "shearling",
+        "sherpa",
+        "deep pile"
+      ]
+    },
+    "field_jacket_earth": {
+      "slot": "outer",
+      "any": [
+        "field jacket"
+      ],
+      "none": [
+        "suede",
+        "mint"
+      ],
+      "colors_any": [
+        "olive",
+        "navy",
+        "khaki",
+        "tan",
+        "brown",
+        "chocolate"
+      ]
+    },
+    "field_mint": {
+      "slot": "outer",
+      "any": [
+        "field jacket"
+      ],
+      "colors_any": [
+        "mint"
+      ]
+    },
+    "blazer_any": {
+      "slot": "outer",
+      "any": [
+        "blazer",
+        "sport coat",
+        "sportcoat"
+      ]
+    },
+    "blazer_navy": {
+      "slot": "outer",
+      "any": [
+        "blazer",
+        "sport coat",
+        "sportcoat"
+      ],
+      "colors_any": [
+        "navy"
+      ],
+      "none": [
+        "cord"
+      ]
+    },
+    "blazer_soft": {
+      "slot": "outer",
+      "any": [
+        "blazer",
+        "sport coat",
+        "sportcoat"
+      ],
+      "colors_any": [
+        "taupe",
+        "ivory",
+        "beige",
+        "cream",
+        "tan",
+        "brown"
+      ]
+    },
+    "blazer_ivory_db": {
+      "slot": "outer",
+      "any": [
+        "double-breasted",
+        "double breasted"
+      ]
+    },
+    "plaid_jacket": {
+      "slot": "outer",
+      "any": [
+        "plaid jacket",
+        "tweed",
+        "check jacket",
+        "herringbone jacket"
+      ],
+      "none": [
+        "shearling"
+      ]
+    },
+    "cord_jacket": {
+      "slot": "outer",
+      "any": [
+        "corduroy jacket",
+        "cord jacket"
+      ],
+      "none": [
+        "blazer"
+      ]
+    },
+    "zip_jacket_light": {
+      "slot": "outer",
+      "any": [
+        "zip jacket",
+        "harrington",
+        "blouson"
+      ],
+      "none": [
+        "knit"
+      ]
+    },
+    "toggle_parka": {
+      "slot": "outer",
+      "any": [
+        "toggle",
+        "parka",
+        "anorak",
+        "puffer jacket"
+      ]
+    },
+    "overcoat": {
+      "slot": "outer",
+      "any": [
+        "overcoat",
+        "topcoat",
+        "car coat",
+        "polo coat",
+        "peacoat",
+        "trench"
+      ]
+    },
+    "mid_cardigan": {
+      "slot": "mid",
+      "any": [
+        "cardigan"
+      ]
+    },
+    "mid_zip_knit": {
+      "slot": "mid",
+      "any": [
+        "zip sweater",
+        "zip-up knit"
+      ]
+    },
+    "mid_fleece": {
+      "slot": "mid",
+      "any": [
+        "fleece"
+      ]
+    },
+    "mid_vest": {
+      "slot": "mid",
+      "any": [
+        "vest",
+        "gilet"
+      ]
+    },
+    "plaid_piece": {
+      "slot": "any",
+      "any": [
+        "plaid",
+        "tartan",
+        "check",
+        "buffalo",
+        "windowpane"
+      ],
+      "none": [
+        "gingham"
+      ]
+    },
+    "relaxed_oxford": {
+      "slot": "top",
+      "any": [
+        "oxford",
+        "button-up",
+        "button up",
+        "button-down",
+        "button down",
+        "shirt"
+      ],
+      "none": [
+        "flannel",
+        "plaid",
+        "denim",
+        "chambray",
+        "gingham",
+        "linen",
+        "camp",
+        "bowling",
+        "printed",
+        "embroidered",
+        "knit",
+        "check",
+        "t-shirt",
+        "sweatshirt",
+        "polo"
+      ],
+      "fit_any": [
+        "relaxed",
+        "oversized",
+        "boxy"
+      ]
+    },
+    "relaxed_or_dark_trouser": {
+      "slot": "bottom",
+      "or": [
+        {
+          "any": [
+            "trouser",
+            "pant",
+            "slack"
+          ],
+          "none": [
+            "jean",
+            "denim",
+            "cord",
+            "track",
+            "fleece",
+            "ribbed",
+            "linen",
+            "pinstripe",
+            "frayed"
+          ],
+          "fit_any": [
+            "relaxed",
+            "wide",
+            "loose"
+          ]
+        },
+        {
+          "any": [
+            "trouser",
+            "pant",
+            "slack"
+          ],
+          "none": [
+            "jean",
+            "denim",
+            "cord",
+            "track",
+            "fleece",
+            "ribbed",
+            "linen",
+            "pinstripe",
+            "frayed"
+          ],
+          "colors_any": [
+            "navy",
+            "black",
+            "grey",
+            "charcoal",
+            "brown",
+            "maroon",
+            "burgundy"
+          ],
+          "colors_none": [
+            "light grey"
+          ]
+        }
+      ]
+    },
+    "suede_sneaker_dark": {
+      "slot": "shoe",
+      "any": [
+        "sneaker",
+        "low-top",
+        "trainer"
+      ],
+      "material_any": [
+        "suede"
+      ],
+      "none": [
+        "distressed",
+        "star"
+      ],
+      "brand_none": [
+        "golden goose"
+      ],
+      "colors_any": [
+        "navy",
+        "brown",
+        "olive",
+        "green",
+        "burgundy"
+      ],
+      "colors_none": [
+        "grey"
+      ]
+    },
+    "frayed_pant": {
+      "slot": "bottom",
+      "any": [
+        "frayed",
+        "raw hem",
+        "raw-hem"
+      ]
+    },
+    "light_grey_trouser": {
+      "slot": "bottom",
+      "any": [
+        "trouser",
+        "pant"
+      ],
+      "none": [
+        "jean",
+        "denim",
+        "cord",
+        "track"
+      ],
+      "colors_any": [
+        "light grey",
+        "stone"
+      ]
+    }
+  },
+  "dominance_caps": {
+    "plates": {
+      "g_2djvq6l9qxbb": {
+        "name": "Navy leather tassel loafers",
+        "saved_looks_of_601": 171,
+        "rule_id": "545-D1",
+        "status": "banned_by_house_rules",
+        "max_per_row": 0,
+        "max_in_top3": 0
+      },
+      "g_mqjsmpqgwwvm": {
+        "name": "Cream cable-knit sweater",
+        "saved_looks_of_601": 125,
+        "rule_id": "545-D1",
+        "status": "banned_by_house_rules",
+        "max_per_row": 0,
+        "max_in_top3": 0
+      },
+      "g_v3ovns4bv344": {
+        "name": "Navy corduroy trousers",
+        "saved_looks_of_601": 113,
+        "rule_id": "545-D1",
+        "status": "banned_by_house_rules",
+        "max_per_row": 0,
+        "max_in_top3": 0
+      },
+      "g_gyc76ur3ikb9": {
+        "name": "Beige trousers",
+        "saved_looks_of_601": 95,
+        "rule_id": "545-D1",
+        "status": "banned_by_house_rules",
+        "max_per_row": 0,
+        "max_in_top3": 0
+      },
+      "g_ayfv9c97ohmv": {
+        "name": "Brown corduroy trousers (gurkha)",
+        "saved_looks_of_601": 89,
+        "rule_id": "545-D1",
+        "status": "banned_by_house_rules",
+        "max_per_row": 0,
+        "max_in_top3": 0
+      }
+    }
+  }
+}

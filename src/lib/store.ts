@@ -47,13 +47,16 @@ import {
   coreComboKey,
   daysIdle,
   defaultOccasion,
+  isMulePiece,
   momentOfDay,
   pickLook,
   slotOf,
   weekUniformKeys,
   type House,
 } from "./style";
-import { mapOccasion, OCCASIONS, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
+import { isLinenCampPiece, seasonFromWeather } from "./season";
+import { isLegal } from "./stylist/legal";
+import { mapOccasion, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
 import { forgetCoverSha } from "./cloud/blobs";
 import { noteRefPhotoEdit, noteUserEdit } from "./cloud/edit";
@@ -146,9 +149,12 @@ function pickDrop(
     skip?: boolean;
   },
 ): string[] {
+  const occ = occasion ?? defaultOccasion();
+  const season = seasonFromWeather(weather?.f ?? 68);
+  const cold = season === "fall" || season === "winter";
   return pickLook(garments, {
     weather,
-    occasion: occasion ?? defaultOccasion(),
+    occasion: occ,
     moment: momentOfDay(),
     avoid,
     recentWorn,
@@ -160,6 +166,20 @@ function pickDrop(
     excludeKeys: extra?.excludeKeys,
     minSlotChange: extra?.skip ? 2 : 0,
     requireSilhouetteChange: Boolean(extra?.skip),
+    legalCombo: (pieces) => {
+      if (
+        cold &&
+        pieces.some(
+          (g) =>
+            isMulePiece(g) ||
+            isLinenCampPiece(g) ||
+            ((g.seasons?.length ?? 0) > 0 && g.seasons.every((s) => s === "summer")),
+        )
+      ) {
+        return false;
+      }
+      return isLegal(pieces, { occasion: occ, season });
+    },
   });
 }
 

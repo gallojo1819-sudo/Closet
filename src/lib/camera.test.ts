@@ -54,7 +54,7 @@ describe("Take photo onChange", () => {
   it("390 viewport: onChange fires, garment in livePool before printGarment resolves", async () => {
     assert.equal(addQueueConcurrency({ width: 390 }), 2);
     const pool: { id: string; name: string }[] = [];
-    let printResolved = false;
+    const printResolved = false;
     const file = new File([new Uint8Array([1, 2, 3])], "IMG_0001.heic", {
       type: "image/heic",
     });

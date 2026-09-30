@@ -64,6 +64,10 @@ export type Look = {
   rejected?: boolean;
   /** Closest-fill note. Hard house looks omit it. */
   gap?: string;
+  /** House is off for this occasion or season. The card is the gate, not an outfit. */
+  gate?: { occasion: string; season: string; text: string };
+  /** Shown when a house has fewer than three legal looks. */
+  needsPieces?: boolean;
   createdAt: string;
 };
 

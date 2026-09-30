@@ -1,0 +1,389 @@
+{
+ "file": "color-value-map.json",
+ "version": "2026-09-30",
+ "purpose": "Colour family + value (light/mid/dark) for every colour string in Joe's live closet_meta (142 plates, snapshot closet_meta_garments_2026-09-30.json). Used by the proposed stylist rules (COL-7..COL-13, XC-*) in 2026-09-30-stylist-review-b03aa4d.md. Proposal only; not wired into the app.",
+ "how_to_use": [
+  "1. Lower-case each string in garment.colors[]. If it is in `raw_aliases`, replace it with the listed canonical tokens (first token = dominant). Drop tokens that map to [].",
+  "2. The DOMINANT colour of a garment = canonical token of colors[0]. Harmony rules use only dominant colours; secondary colours (index 1+) are trim/accent and never count toward accent budgets, value contrast or black/navy/brown checks.",
+  "3. Look up family, value (1 = lightest .. 5 = darkest) and level (1-2 light, 3 mid, 4-5 dark) in `colors`.",
+  "4. Accent role depends on the piece: see `role_by_slot`. Light blue is a NEUTRAL on shirts/tops/denim, but an ACCENT on non-denim trousers, shoes and non-denim outerwear.",
+  "5. Denim pieces also get a wash level from `denim_wash` (name keywords first, then dominant colour)."
+ ],
+ "value_levels": {
+  "light": [
+   1,
+   2
+  ],
+  "mid": [
+   3
+  ],
+  "dark": [
+   4,
+   5
+  ]
+ },
+ "raw_aliases": {
+  "navy blue/brown. match original": [
+   "navy",
+   "brown"
+  ],
+  "navy/black": [
+   "navy",
+   "black"
+  ],
+  "maroon/brown": [
+   "maroon",
+   "brown"
+  ],
+  "multicolor": [],
+  "silver": [
+   "silver"
+  ],
+  "off-white": [
+   "cream"
+  ],
+  "ecru": [
+   "cream"
+  ],
+  "gray": [
+   "grey"
+  ],
+  "light gray": [
+   "light grey"
+  ],
+  "oatmeal": [
+   "beige"
+  ],
+  "stone": [
+   "beige"
+  ],
+  "sand": [
+   "beige"
+  ],
+  "camel": [
+   "tan"
+  ],
+  "tobacco": [
+   "brown"
+  ],
+  "indigo": [
+   "navy"
+  ],
+  "teal": [
+   "blue"
+  ]
+ },
+ "families_note": "Families match approved color.json COL-1 so filters and harmony rules agree (blue, brown, cream, grey, green, red, pink, black, yellow).",
+ "colors": {
+  "white": {
+   "family": "cream",
+   "value": 1,
+   "level": "light",
+   "temp": "cool",
+   "default_role": "neutral"
+  },
+  "ivory": {
+   "family": "cream",
+   "value": 1,
+   "level": "light",
+   "temp": "warm",
+   "default_role": "neutral"
+  },
+  "cream": {
+   "family": "cream",
+   "value": 1,
+   "level": "light",
+   "temp": "warm",
+   "default_role": "neutral"
+  },
+  "beige": {
+   "family": "cream",
+   "value": 2,
+   "level": "light",
+   "temp": "warm",
+   "default_role": "neutral"
+  },
+  "khaki": {
+   "family": "brown",
+   "value": 3,
+   "level": "mid",
+   "temp": "warm",
+   "default_role": "neutral"
+  },
+  "tan": {
+   "family": "brown",
+   "value": 3,
+   "level": "mid",
+   "temp": "warm",
+   "default_role": "neutral"
+  },
+  "taupe": {
+   "family": "brown",
+   "value": 3,
+   "level": "mid",
+   "temp": "neutral",
+   "default_role": "neutral"
+  },
+  "brown": {
+   "family": "brown",
+   "value": 4,
+   "level": "dark",
+   "temp": "warm",
+   "default_role": "neutral"
+  },
+  "chocolate": {
+   "family": "brown",
+   "value": 5,
+   "level": "dark",
+   "temp": "warm",
+   "default_role": "neutral"
+  },
+  "rust": {
+   "family": "red",
+   "value": 3,
+   "level": "mid",
+   "temp": "warm",
+   "default_role": "accent"
+  },
+  "light grey": {
+   "family": "grey",
+   "value": 2,
+   "level": "light",
+   "temp": "cool",
+   "default_role": "neutral"
+  },
+  "silver": {
+   "family": "grey",
+   "value": 2,
+   "level": "light",
+   "temp": "cool",
+   "default_role": "neutral"
+  },
+  "grey": {
+   "family": "grey",
+   "value": 3,
+   "level": "mid",
+   "temp": "cool",
+   "default_role": "neutral"
+  },
+  "charcoal": {
+   "family": "grey",
+   "value": 4,
+   "level": "dark",
+   "temp": "cool",
+   "default_role": "neutral"
+  },
+  "light blue": {
+   "family": "blue",
+   "value": 2,
+   "level": "light",
+   "temp": "cool",
+   "default_role": "neutral_on_top_or_denim_else_accent"
+  },
+  "blue": {
+   "family": "blue",
+   "value": 3,
+   "level": "mid",
+   "temp": "cool",
+   "default_role": "neutral"
+  },
+  "navy": {
+   "family": "blue",
+   "value": 5,
+   "level": "dark",
+   "temp": "cool",
+   "default_role": "neutral"
+  },
+  "black": {
+   "family": "black",
+   "value": 5,
+   "level": "dark",
+   "temp": "neutral",
+   "default_role": "neutral"
+  },
+  "olive": {
+   "family": "green",
+   "value": 4,
+   "level": "dark",
+   "temp": "warm",
+   "default_role": "neutral"
+  },
+  "sage": {
+   "family": "green",
+   "value": 3,
+   "level": "mid",
+   "temp": "cool",
+   "default_role": "accent",
+   "accent_family": "green",
+   "pastel": true
+  },
+  "mint": {
+   "family": "green",
+   "value": 2,
+   "level": "light",
+   "temp": "cool",
+   "default_role": "accent",
+   "accent_family": "green",
+   "pastel": true
+  },
+  "green": {
+   "family": "green",
+   "value": 3,
+   "level": "mid",
+   "temp": "cool",
+   "default_role": "accent",
+   "accent_family": "green"
+  },
+  "red": {
+   "family": "red",
+   "value": 3,
+   "level": "mid",
+   "temp": "warm",
+   "default_role": "accent",
+   "accent_family": "red"
+  },
+  "burgundy": {
+   "family": "red",
+   "value": 4,
+   "level": "dark",
+   "temp": "warm",
+   "default_role": "accent",
+   "accent_family": "red"
+  },
+  "maroon": {
+   "family": "red",
+   "value": 4,
+   "level": "dark",
+   "temp": "warm",
+   "default_role": "accent",
+   "accent_family": "red"
+  },
+  "pink": {
+   "family": "pink",
+   "value": 2,
+   "level": "light",
+   "temp": "warm",
+   "default_role": "accent",
+   "accent_family": "pink",
+   "pastel": true
+  },
+  "mauve": {
+   "family": "pink",
+   "value": 3,
+   "level": "mid",
+   "temp": "cool",
+   "default_role": "accent",
+   "accent_family": "pink",
+   "pastel": true
+  },
+  "yellow": {
+   "family": "yellow",
+   "value": 2,
+   "level": "light",
+   "temp": "warm",
+   "default_role": "accent",
+   "accent_family": "yellow",
+   "pastel": true
+  }
+ },
+ "role_by_slot": {
+  "rule": "A dominant colour is an ACCENT if default_role == 'accent', OR if it is 'light blue' and the piece is not a top and not denim (material 'denim' or name matches jean|denim|chambray). Accent family = accent_family, or 'light_blue' for the light-blue case.",
+  "examples": {
+   "g_2rtuat7aheik Light blue dress shirt": "neutral (top)",
+   "g_939onlwfrg9j Light blue long-sleeve polo": "neutral (top)",
+   "g_rvrs9hibr981 Light blue jeans": "neutral (denim)",
+   "g_0pfc8ytc1sbb Light Blue striped trousers": "accent light_blue (non-denim bottom)",
+   "g_m6ri2fgg2hmd Light Blue trousers": "accent light_blue (non-denim bottom)",
+   "g_kde45hmnqie9 Light blue leather sneakers (Gucci)": "accent light_blue (shoe)",
+   "g_66xj06nllgf2 Sage pleated trousers": "accent soft_green",
+   "g_ttw2m97ww8z5 Light pink polo": "accent pink",
+   "g_rxglifsoqobm Pink suede star sneakers": "accent pink (shoe)"
+  }
+ },
+ "denim_wash": {
+  "scale": {
+   "ecru": 0,
+   "light": 1,
+   "mid": 2,
+   "dark": 3
+  },
+  "name_keywords_first": {
+   "ecru": [
+    "white",
+    "ecru",
+    "cream",
+    "off-white"
+   ],
+   "light": [
+    "light",
+    "bleach",
+    "stone wash",
+    "stonewash"
+   ],
+   "dark": [
+    "dark",
+    "indigo",
+    "raw",
+    "rinse",
+    "black",
+    "navy"
+   ]
+  },
+  "else_by_dominant_colour": {
+   "white": "ecru",
+   "cream": "ecru",
+   "ivory": "ecru",
+   "light blue": "light",
+   "blue": "mid",
+   "navy": "dark",
+   "black": "dark"
+  },
+  "joe_denim": {
+   "g_zw51yaqdsx0q White distressed jeans": "ecru",
+   "g_j994h3k9l8ot Cream straight-leg jeans": "ecru",
+   "g_fvc535elt23d Light blue jeans": "light",
+   "g_rvrs9hibr981 Light blue jeans": "light",
+   "g_lxqx9egrqg14 Light blue striped jeans": "light",
+   "g_dzsh3qh7v6sb Navy denim trousers (garbled name)": "dark",
+   "g_vtbi91noucd3 Light Blue denim jacket": "light",
+   "g_ulv8tgkujvjh Light blue denim jacket (colors ['blue'])": "light (name wins over colour)",
+   "g_491tzu2suiv7 Blue plaid shearling jacket (material denim)": "mid",
+   "g_1zteshjh31ac Light Blue denim shirt": "light",
+   "g_yo7mwga1xi3m Light blue denim shirt": "light",
+   "g_v7uvadckh79p Light blue denim overshirt": "light"
+  },
+  "gap_note": "Joe owns no mid-wash jean and only one dark denim bottom, so every light denim top/jacket can only pair with g_dzsh3qh7v6sb or with ecru/white jeans (ecru + light = soft fail, see XC-DEN-1)."
+ },
+ "texture_classes": {
+  "purpose": "For tonal checks: two pieces of the same colour need different texture classes.",
+  "knit": [
+   "knit",
+   "ribbed knit",
+   "cable",
+   "wool sweater"
+  ],
+  "smooth_woven": [
+   "cotton",
+   "woven",
+   "polyester",
+   "linen"
+  ],
+  "rugged_woven": [
+   "denim",
+   "corduroy",
+   "flannel",
+   "wool (trouser/jacket)",
+   "canvas"
+  ],
+  "nap": [
+   "suede",
+   "fleece",
+   "shearling"
+  ],
+  "leather": [
+   "leather"
+  ],
+  "unknown": "empty material string: treat as 'unknown' and never count it as a texture difference"
+ },
+ "validated_against": "All 31 distinct colour strings in the 142 live plates map to a canonical token (multicolor -> none)."
+}

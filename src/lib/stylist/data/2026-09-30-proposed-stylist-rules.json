@@ -1,0 +1,2031 @@
+{
+ "file": "2026-09-30-proposed-stylist-rules.json",
+ "status": "PROPOSED (not approved, not wired into the app). From the stylist review of prod b03aa4d sim rows.",
+ "depends_on": [
+  "color-value-map.json",
+  "house-profiles/*.json keywords library (same match-spec format as build.py: any/none/material_any/colors_any/brand_any/fit_any/subtype_exact/or)"
+ ],
+ "conventions": {
+  "slots": "top, mid, outer, bottom, shoe (slot_of() from build.py: outerwear named cardigan/fleece/vest/zip sweater/zip-up knit = mid)",
+  "dominant": "dominant colour = color-value-map canonical token of colors[0]; value/level/family/accent from color-value-map.json",
+  "vertical_order": [
+   "outer",
+   "mid",
+   "top",
+   "bottom",
+   "shoe"
+  ],
+  "severity": "hard = look is illegal; soft = add delta to rank score (same semantics as house profiles)",
+  "fields_used": "name, subtype, material, colors, brand, plus fit and warmth where noted (both are closet_meta fields already in the house_check snapshot)",
+  "match_blob": "keyword specs match name | subtype | material (never notes), word-start, case-insensitive, exactly like build.py match()"
+ },
+ "shared_signals": {
+  "tailored_trouser": {
+   "slot": "bottom",
+   "or": [
+    {
+     "any": [
+      "pleated",
+      "pinstripe",
+      "slack",
+      "dress trouser"
+     ],
+     "none": [
+      "jean",
+      "denim",
+      "track",
+      "fleece"
+     ]
+    },
+    {
+     "any": [
+      "trouser"
+     ],
+     "material_any": [
+      "wool",
+      "woven"
+     ],
+     "none": [
+      "jean",
+      "denim",
+      "track",
+      "fleece",
+      "cord",
+      "corduroy"
+     ]
+    }
+   ],
+   "note": "Pleated/pinstripe, or a trouser whose material is wool or 'woven'. Plain cotton 'trousers' count as chinos (casual) and are NOT tailored."
+  },
+  "pleated_trouser": {
+   "slot": "bottom",
+   "any": [
+    "pleated"
+   ]
+  },
+  "track_knit_pant": {
+   "slot": "bottom",
+   "any": [
+    "track",
+    "fleece",
+    "sweatpant",
+    "jogger"
+   ]
+  },
+  "collared_woven_shirt": {
+   "slot": "top",
+   "any": [
+    "shirt",
+    "button-up",
+    "button-down",
+    "oxford",
+    "dress shirt",
+    "camp",
+    "bowling",
+    "gingham"
+   ],
+   "none": [
+    "t-shirt",
+    "sweatshirt",
+    "knit shirt",
+    "flannel",
+    "overshirt"
+   ]
+  },
+  "sweat_fleece_top": {
+   "slot": "any",
+   "any": [
+    "hoodie",
+    "sweatshirt",
+    "fleece",
+    "half-zip fleece",
+    "quarter-zip sweatshirt"
+   ]
+  },
+  "work_flannel_shirt": {
+   "slot": "top",
+   "any": [
+    "flannel",
+    "plaid shirt",
+    "plaid flannel"
+   ],
+   "none": [
+    "gingham"
+   ]
+  },
+  "blazer": {
+   "slot": "outer",
+   "any": [
+    "blazer",
+    "sport coat",
+    "sportcoat"
+   ]
+  },
+  "boot": {
+   "slot": "shoe",
+   "any": [
+    "boot"
+   ],
+   "none": [
+    "sneaker"
+   ]
+  },
+  "loafer": {
+   "slot": "shoe",
+   "any": [
+    "loafer",
+    "moccasin",
+    "penny"
+   ]
+  },
+  "tassel_loafer": {
+   "slot": "shoe",
+   "any": [
+    "tassel"
+   ]
+  },
+  "mule": {
+   "slot": "shoe",
+   "any": [
+    "mule",
+    "slide"
+   ]
+  },
+  "athletic_or_fashion_sneaker": {
+   "slot": "shoe",
+   "or": [
+    {
+     "brand_any": [
+      "golden goose",
+      "gucci",
+      "new balance",
+      "nike"
+     ]
+    },
+    {
+     "any": [
+      "distressed",
+      "star",
+      "low-top",
+      "runner",
+      "trainer"
+     ]
+    },
+    {
+     "any": [
+      "sneaker"
+     ],
+     "material_any": [
+      "suede"
+     ]
+    }
+   ]
+  },
+  "clean_leather_sneaker": {
+   "slot": "shoe",
+   "any": [
+    "sneaker"
+   ],
+   "material_any": [
+    "leather"
+   ],
+   "none": [
+    "distressed",
+    "star"
+   ],
+   "brand_none": [
+    "golden goose",
+    "gucci",
+    "new balance",
+    "nike"
+   ]
+  },
+  "short_sleeve_top": {
+   "slot": "top",
+   "or": [
+    {
+     "any": [
+      "polo"
+     ],
+     "none": [
+      "long-sleeve",
+      "knit",
+      "ribbed",
+      "sweater",
+      "polo bear"
+     ],
+     "material_none": [
+      "knit"
+     ]
+    },
+    {
+     "any": [
+      "t-shirt",
+      "tee",
+      "camp",
+      "bowling"
+     ]
+    }
+   ]
+  },
+  "summer_fabric_piece": {
+   "slot": "any",
+   "or": [
+    {
+     "material_any": [
+      "linen",
+      "seersucker"
+     ]
+    },
+    {
+     "any": [
+      "linen",
+      "seersucker",
+      "camp collar",
+      "camp shirt",
+      "bowling"
+     ]
+    },
+    {
+     "any": [
+      "mule",
+      "slide"
+     ]
+    }
+   ]
+  },
+  "cold_fabric_piece": {
+   "slot": "any",
+   "or": [
+    {
+     "material_any": [
+      "flannel",
+      "fleece",
+      "corduroy"
+     ]
+    },
+    {
+     "any": [
+      "shearling",
+      "sherpa",
+      "fair isle",
+      "cable",
+      "corduroy",
+      "flannel",
+      "fleece"
+     ]
+    }
+   ]
+  },
+  "pinstripe": {
+   "slot": "bottom",
+   "any": [
+    "pinstripe",
+    "chalkstripe",
+    "chalk stripe"
+   ]
+  },
+  "denim_piece": {
+   "slot": "any",
+   "or": [
+    {
+     "material_any": [
+      "denim"
+     ],
+     "none": [
+      "shearling",
+      "plaid"
+     ]
+    },
+    {
+     "any": [
+      "jean",
+      "denim",
+      "chambray"
+     ],
+     "none": [
+      "shearling",
+      "plaid"
+     ]
+    }
+   ]
+  }
+ },
+ "pattern_classes": {
+  "stripe": [
+   "stripe",
+   "striped",
+   "pinstripe",
+   "seersucker",
+   "chalkstripe"
+  ],
+  "check_small": [
+   "gingham",
+   "micro check",
+   "mini check"
+  ],
+  "check_large": [
+   "plaid",
+   "tartan",
+   "check",
+   "buffalo",
+   "windowpane"
+  ],
+  "busy_knit_or_print": [
+   "fair isle",
+   "diamond",
+   "argyle",
+   "printed",
+   "abstract",
+   "flag",
+   "graphic"
+  ]
+ },
+ "cross_chip_color_rules": [
+  {
+   "id": "COL-7",
+   "name": "black_brown",
+   "type": "black_brown",
+   "target_file": "color.json",
+   "description": "Black clothing with brown shoes. A black trouser with any brown shoe, or a black top/outer with a smooth brown LEATHER shoe, is illegal. A black knit/wool top with a dark-brown SUEDE shoe is allowed (texture-separated) at a small penalty. A black shoe under 2+ brown garments is a soft miss.",
+   "logic": {
+    "black_bottom_brown_shoe_any_material": "hard",
+    "black_top_or_outer_or_mid_and_brown_shoe_material_leather": "hard",
+    "black_knit_or_wool_top_and_brown_shoe_material_suede": {
+     "severity": "soft",
+     "delta": -5
+    },
+    "black_shoe_and_2plus_brown_dominant_garments": {
+     "severity": "soft",
+     "delta": -10
+    }
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_teitg9jmpwxa",
+      "bottom": "g_rvrs9hibr981",
+      "shoe": "g_yae8h1k9pjm1"
+     },
+     "expected": "fail",
+     "why": "Black cable-knit + light blue jeans + brown LEATHER tassel loafers (prod ALD #1 / ALL #2)"
+    },
+    {
+     "look": {
+      "top": "g_teitg9jmpwxa",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass (-5)",
+     "why": "Black cable-knit + light grey pleats + brown SUEDE loafers: texture-separated"
+    }
+   ]
+  },
+  {
+   "id": "COL-8",
+   "name": "navy_black",
+   "type": "navy_black",
+   "target_file": "color.json",
+   "description": "Navy and black on different pieces only with clear value separation: they must not touch in the vertical order (outer, mid, top, bottom, shoe) and the piece between them must be light (value <= 2). A mid-value piece between them is a soft miss. Exemptions: a black shoe directly under a navy trouser is the classic navy-suit/black-shoe pairing (R26) and passes; one plate carrying both colours (navy/black cord) is exempt. A NAVY shoe under a black trouser, or black and navy garments touching (black knit over navy cords), is hard.",
+   "logic": {
+    "adjacent_navy_black": "hard",
+    "exempt_black_shoe_under_navy_bottom": true,
+    "separated_by_light_piece": "pass",
+    "separated_by_mid_or_dark_piece": {
+     "severity": "soft",
+     "delta": -15
+    }
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_teitg9jmpwxa",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "why": "Black cable directly over navy cords: black and navy touch"
+    },
+    {
+     "look": {
+      "top": "g_reesb6nbrmm4",
+      "bottom": "g_j994h3k9l8ot",
+      "shoe": "g_5g4fqg77s4rw"
+     },
+     "expected": "pass",
+     "why": "Navy LS polo / cream jeans / black woven loafer: cream separates them (R26)"
+    },
+    {
+     "look": {
+      "top": "g_jkj2nzfzpf1o",
+      "bottom": "g_66xj06nllgf2",
+      "shoe": "g_2djvq6l9qxbb"
+     },
+     "expected": "soft -15",
+     "why": "Black bowling shirt / sage / navy tassel: separated only by a mid tone"
+    },
+    {
+     "look": {
+      "top": "g_xowln4uos3ug",
+      "bottom": "g_dscxzk8inlx2",
+      "shoe": "g_5g4fqg77s4rw"
+     },
+     "expected": "pass",
+     "why": "Navy pinstripe + black woven loafer (approved Purple #2)"
+    }
+   ]
+  },
+  {
+   "id": "COL-9",
+   "name": "accent_budget_everywhere",
+   "type": "accent_budget",
+   "target_file": "color.json",
+   "description": "Accent budget on every look (not only when the Color filter is set). Accent families (dominant colours only, shoes included): pink (pink, mauve), green (sage, mint, green), yellow, red (red, rust, burgundy, maroon), and light_blue when light blue sits on a non-denim bottom, shoe or non-denim outer (light-blue shirts/polos and jeans are neutrals). If a look has 2+ accent families: HARD when at least two of them are light/mid (value <= 3) = pastel/soft stacking, except in spring/summer where it is soft -10 if the look also has an outer or a dark (value >= 4) garment. If only one of the accents is light/mid and the other is deep (burgundy/maroon), soft -5 (wine + sage is a legit muted pairing). Extends approved COL-3 and per-house pastel_budget.",
+   "logic": {
+    "accent_families": {
+     "pink": [
+      "pink",
+      "mauve"
+     ],
+     "green": [
+      "sage",
+      "mint",
+      "green"
+     ],
+     "yellow": [
+      "yellow"
+     ],
+     "red": [
+      "red",
+      "rust",
+      "burgundy",
+      "maroon"
+     ],
+     "light_blue": "light blue on non-denim bottom/shoe/outer"
+    },
+    "two_plus_light_or_mid_accents": {
+     "fall": "hard",
+     "winter": "hard",
+     "spring_summer": {
+      "hard_unless": "outer present or a garment with value >= 4",
+      "else": {
+       "severity": "soft",
+       "delta": -10
+      }
+     }
+    },
+    "one_light_mid_plus_one_deep_accent": {
+     "severity": "soft",
+     "delta": -5
+    }
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_0pfc8ytc1sbb",
+      "shoe": "g_upni66uiqtgb"
+     },
+     "expected": "fail",
+     "why": "Pink polo + light blue striped trousers: pink + light_blue"
+    },
+    {
+     "look": {
+      "top": "g_teitg9jmpwxa",
+      "bottom": "g_66xj06nllgf2",
+      "shoe": "g_kde45hmnqie9"
+     },
+     "expected": "fail",
+     "why": "Sage pleats + Gucci light blue sneakers under a black cable: two accents"
+    },
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_lad85rg9nxs3",
+      "shoe": "g_yae8h1k9pjm1"
+     },
+     "expected": "pass",
+     "why": "Pink polo + ivory pleats + brown tassel: one accent"
+    },
+    {
+     "look": {
+      "top": "g_xbt3gpjuo1p4",
+      "bottom": "g_66xj06nllgf2",
+      "shoe": "g_5g4fqg77s4rw"
+     },
+     "expected": "soft -5",
+     "why": "Burgundy collared sweater + sage pleats (approved Faloni #3)"
+    },
+    {
+     "look": {
+      "top": "g_i80zb0yen5gn",
+      "bottom": "g_dscxzk8inlx2",
+      "shoe": "g_8nrtffa2s13s",
+      "outer": "g_oyyiaxx6rls7"
+     },
+     "expected": "pass",
+     "why": "Green stripe shirt + mint field jacket = one green family"
+    }
+   ]
+  },
+  {
+   "id": "COL-10",
+   "name": "no_value_anchor",
+   "type": "no_value_anchor",
+   "target_file": "color.json",
+   "description": "Washout: if top, bottom, outer/mid (when present) AND shoe are all light (value <= 2) the look has no anchor. On Out, a look also needs at least one garment (not the shoe) at value >= 4.",
+   "logic": {
+    "all_pieces_light": {
+     "severity": "soft",
+     "delta": -15,
+     "out_occasion": "hard"
+    },
+    "out_no_dark_garment": {
+     "severity": "soft",
+     "delta": -10
+    }
+   },
+   "severity": "soft",
+   "tests": [
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_0pfc8ytc1sbb",
+      "shoe": "g_upni66uiqtgb"
+     },
+     "context": {
+      "occasion": "weekday"
+     },
+     "expected": "soft -15"
+    },
+    {
+     "look": {
+      "top": "g_939onlwfrg9j",
+      "bottom": "g_yfkavdj5irwe",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "context": {
+      "occasion": "out"
+     },
+     "expected": "soft -10",
+     "why": "Light blue polo + light grey pleats at dinner: no dark garment"
+    }
+   ]
+  },
+  {
+   "id": "COL-11",
+   "name": "tonal_needs_texture",
+   "type": "tonal_texture",
+   "target_file": "color.json",
+   "description": "Top and bottom with the SAME dominant colour string need different texture classes (knit vs smooth woven vs rugged woven vs nap). Same colour + same texture = hard (earlier rule R3). Same colour with an unknown material on either side = soft -10 (cannot prove contrast). An outer of a different family breaks the tonal block and cancels the penalty.",
+   "logic": {
+    "same_colour_same_texture": "hard",
+    "same_colour_unknown_texture": {
+     "severity": "soft",
+     "delta": -10
+    },
+    "exempt_if_outer_family_differs": true
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_xowln4uos3ug",
+      "bottom": "g_gyc76ur3ikb9",
+      "shoe": "g_8nrtffa2s13s"
+     },
+     "expected": "soft -10",
+     "why": "Beige knit + beige trousers (material blank) with no jacket"
+    },
+    {
+     "look": {
+      "top": "g_v2gxktsmsoov",
+      "bottom": "g_6xkkzn06sbdm",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "why": "Beige crew (knit) + beige cotton trousers: textures differ"
+    }
+   ]
+  },
+  {
+   "id": "COL-12",
+   "name": "light_shoe_dark_trouser_at_night",
+   "type": "light_shoe_dark_bottom",
+   "target_file": "color.json",
+   "description": "On Out, a light shoe (value <= 2: white/cream sneakers) under a dark trouser (value >= 4) cuts the leg and reads daytime.",
+   "logic": {
+    "occasions": [
+     "out"
+    ],
+    "shoe_value_max": 2,
+    "bottom_value_min": 4
+   },
+   "severity": "soft",
+   "delta": -10,
+   "tests": [
+    {
+     "look": {
+      "top": "g_d1awqw83gd3c",
+      "bottom": "g_dscxzk8inlx2",
+      "shoe": "g_01xaga54r12h"
+     },
+     "context": {
+      "occasion": "out"
+     },
+     "expected": "soft -10"
+    },
+    {
+     "look": {
+      "top": "g_d1awqw83gd3c",
+      "bottom": "g_dscxzk8inlx2",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "context": {
+      "occasion": "out"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "COL-13",
+   "name": "muddy_mid_tones",
+   "type": "muddy_pair",
+   "target_file": "color.json",
+   "description": "Top and bottom that are both mid value (3) and form a known muddy pair read dull and dusty with nothing to pull the eye: grey + sage, mid blue + sage, mauve + sage. Soft -10 (a light or dark outer cancels it).",
+   "logic": {
+    "slots": [
+     "top",
+     "bottom"
+    ],
+    "both_value": 3,
+    "pairs": [
+     [
+      "grey",
+      "sage"
+     ],
+     [
+      "blue",
+      "sage"
+     ],
+     [
+      "mauve",
+      "sage"
+     ]
+    ],
+    "cancel_if_outer_value_not_3": true
+   },
+   "severity": "soft",
+   "delta": -10,
+   "tests": [
+    {
+     "look": {
+      "top": "g_ko7zz8iktplc",
+      "bottom": "g_66xj06nllgf2",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -10",
+     "why": "ALD #3: grey LS polo + sage pleats"
+    },
+    {
+     "look": {
+      "top": "g_reesb6nbrmm4",
+      "bottom": "g_66xj06nllgf2",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "why": "Navy polo over sage: clear value contrast"
+    }
+   ]
+  }
+ ],
+ "cross_chip_texture_rules": [
+  {
+   "id": "XC-DEN-1",
+   "name": "denim_wash_gap_all_houses",
+   "type": "denim_wash_gap",
+   "target_file": "_cross_chip.json",
+   "description": "Any two denim pieces (jean vs denim shirt/overshirt/jacket, shirt vs jacket) must be >= 2 wash steps apart on ecru 0 / light 1 / mid 2 / dark 3 (color-value-map denim_wash). Ecru with light = soft -10. Approved JSON only has this in RRL-P1 and ALD-P4; Polo, Faloni, 545, SS, IS, IW, Purple have no gap rule.",
+   "logic": {
+    "min_steps": 2,
+    "ecru_vs_light": {
+     "severity": "soft",
+     "delta": -10
+    }
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_lxqx9egrqg14",
+      "shoe": "g_yae8h1k9pjm1",
+      "outer": "g_vtbi91noucd3"
+     },
+     "expected": "fail",
+     "why": "Light striped jeans + light denim jacket (prod ALD Out #2)"
+    },
+    {
+     "look": {
+      "top": "g_1zteshjh31ac",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "pass",
+     "why": "Light denim shirt over dark denim: 2 steps"
+    }
+   ]
+  },
+  {
+   "id": "XC-DEN-2",
+   "name": "no_triple_denim",
+   "type": "max_matching",
+   "signals": [
+    "denim_piece"
+   ],
+   "max": 2,
+   "target_file": "_cross_chip.json",
+   "description": "Never three denim pieces (approved only in RRL-P5 / ALD-P3).",
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_1zteshjh31ac",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_vtbi91noucd3"
+     },
+     "expected": "fail"
+    },
+    {
+     "look": {
+      "top": "g_teatot7o1lst",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_vtbi91noucd3"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-TEX-1",
+   "name": "athletic_bottom_with_dressy_piece",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "Fleece/track/sweat pants never with a collared woven shirt, a blazer or a loafer (unless occasion comfy).",
+   "logic": {
+    "if": {
+     "slot": "bottom",
+     "signal": "track_knit_pant"
+    },
+    "any_of": [
+     {
+      "slot": "top",
+      "signal": "collared_woven_shirt"
+     },
+     {
+      "slot": "outer",
+      "signal": "blazer"
+     },
+     {
+      "slot": "shoe",
+      "signal": "loafer"
+     }
+    ],
+    "unless_occasion": [
+     "comfy"
+    ]
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_tqnnde1xmp0p",
+      "bottom": "g_mjno2x20podx",
+      "shoe": "g_9q0j6ksxlgcv"
+     },
+     "expected": "fail",
+     "why": "Mauve button-up + black fleece track pants (prod 545 weekend)"
+    },
+    {
+     "look": {
+      "top": "g_7iyagp6doqqz",
+      "bottom": "g_mjno2x20podx",
+      "shoe": "g_9q0j6ksxlgcv"
+     },
+     "expected": "pass",
+     "why": "Hoodie + track pant + sneaker is coherent (Comfy-only by house rules)"
+    }
+   ]
+  },
+  {
+   "id": "XC-TEX-2",
+   "name": "blazer_with_athletic",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "A blazer/sport coat never over a hoodie/sweatshirt/fleece, never with track pants, never with an athletic or fashion sneaker (GG, Gucci, NB, Nike, suede low-top). With a clean leather sneaker: soft -5 (one 'down' piece, R2).",
+   "logic": {
+    "if": {
+     "slot": "outer",
+     "signal": "blazer"
+    },
+    "any_of": [
+     {
+      "slot": "top",
+      "signal": "sweat_fleece_top"
+     },
+     {
+      "slot": "mid",
+      "signal": "sweat_fleece_top"
+     },
+     {
+      "slot": "bottom",
+      "signal": "track_knit_pant"
+     },
+     {
+      "slot": "shoe",
+      "signal": "athletic_or_fashion_sneaker"
+     }
+    ],
+    "soft_any_of": [
+     {
+      "slot": "shoe",
+      "signal": "clean_leather_sneaker",
+      "delta": -5
+     }
+    ]
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_08shegj8gqie",
+      "outer": "g_juk45cokjxxy"
+     },
+     "expected": "fail"
+    },
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8ukg5mi9r3fc",
+      "outer": "g_juk45cokjxxy"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-TEX-3",
+   "name": "tailored_trouser_with_sneaker",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "Pleated / pinstripe / dress trousers with an athletic or fashion sneaker (Nike low-top, GG distressed/star, Gucci, NB, suede runner) = hard on Weekday/Out, soft -10 on Weekend. With a clean leather sneaker: soft -10 on Weekday/Out, 0 on Weekend. The trouser hem swallows a low sneaker; pleats read unfinished over a runner.",
+   "logic": {
+    "if": {
+     "slot": "bottom",
+     "signal": "tailored_trouser"
+    },
+    "hard_when": {
+     "slot": "shoe",
+     "signal": "athletic_or_fashion_sneaker",
+     "occasions": [
+      "weekday",
+      "out"
+     ]
+    },
+    "soft": [
+     {
+      "slot": "shoe",
+      "signal": "athletic_or_fashion_sneaker",
+      "occasions": [
+       "weekend",
+       "travel"
+      ],
+      "delta": -10
+     },
+     {
+      "slot": "shoe",
+      "signal": "clean_leather_sneaker",
+      "occasions": [
+       "weekday",
+       "out"
+      ],
+      "delta": -10
+     }
+    ]
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "bottom": "g_66xj06nllgf2",
+      "shoe": "g_08shegj8gqie"
+     },
+     "context": {
+      "occasion": "weekday"
+     },
+     "expected": "fail",
+     "why": "Grey knit + sage pleats + Nike low-tops (ALL #1, IS #3)"
+    },
+    {
+     "look": {
+      "top": "g_q3e47jxb10wb",
+      "bottom": "g_lad85rg9nxs3",
+      "shoe": "g_b8n14erlispm"
+     },
+     "context": {
+      "occasion": "weekend"
+     },
+     "expected": "soft -10"
+    },
+    {
+     "look": {
+      "top": "g_oimadifuvalb",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_wgarjdurj7yp"
+     },
+     "context": {
+      "occasion": "weekday"
+     },
+     "expected": "soft -10"
+    }
+   ]
+  },
+  {
+   "id": "XC-TEX-4",
+   "name": "sweat_top_with_tailoring",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "Fleece / sweatshirt / hoodie tops never with pleated or dress trousers or with tassel loafers (unless comfy/travel).",
+   "logic": {
+    "if": {
+     "slot": "top",
+     "signal": "sweat_fleece_top"
+    },
+    "any_of": [
+     {
+      "slot": "bottom",
+      "signal": "tailored_trouser"
+     },
+     {
+      "slot": "shoe",
+      "signal": "tassel_loafer"
+     }
+    ],
+    "unless_occasion": [
+     "comfy",
+     "travel"
+    ]
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_o739106dt8ym",
+      "bottom": "g_yfkavdj5irwe",
+      "shoe": "g_8nrtffa2s13s"
+     },
+     "expected": "fail",
+     "why": "Abstract fleece half-zip + light grey pleats + suede tassels (IS weekend #1)"
+    },
+    {
+     "look": {
+      "top": "g_o739106dt8ym",
+      "bottom": "g_fvc535elt23d",
+      "shoe": "g_nq7il0e0glnn"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-TEX-5",
+   "name": "work_flannel_with_dress_trouser",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "A work flannel / plaid flannel shirt with pleated or dress trousers is a texture clash (rugged top, dress bottom): soft -15, hard on Out.",
+   "logic": {
+    "if": {
+     "slot": "top",
+     "signal": "work_flannel_shirt"
+    },
+    "any_of": [
+     {
+      "slot": "bottom",
+      "signal": "tailored_trouser"
+     }
+    ],
+    "delta": -15,
+    "hard_occasions": [
+     "out"
+    ]
+   },
+   "severity": "soft",
+   "tests": [
+    {
+     "look": {
+      "top": "g_2b6fao81vqrs",
+      "bottom": "g_66xj06nllgf2",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -15"
+    },
+    {
+     "look": {
+      "top": "g_2b6fao81vqrs",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-TEX-6",
+   "name": "pinstripe_orphan",
+   "type": "if_then",
+   "target_file": "_cross_chip.json",
+   "description": "Pinstripe trousers without a blazer read like an orphaned suit pant. Generalises IW-P4 (IW-only, -10) to every house.",
+   "logic": {
+    "if": {
+     "slot": "bottom",
+     "signal": "pinstripe"
+    },
+    "then": {
+     "slot": "outer",
+     "signal": "blazer"
+    }
+   },
+   "severity": "soft",
+   "delta": -15,
+   "tests": [
+    {
+     "look": {
+      "top": "g_v2gxktsmsoov",
+      "bottom": "g_dscxzk8inlx2",
+      "shoe": "g_8nrtffa2s13s"
+     },
+     "expected": "soft -15",
+     "why": "Faloni Out #3"
+    },
+    {
+     "look": {
+      "top": "g_v2gxktsmsoov",
+      "bottom": "g_dscxzk8inlx2",
+      "shoe": "g_8nrtffa2s13s",
+      "outer": "g_juk45cokjxxy"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-TEX-7",
+   "name": "resort_shirt_with_dress_shoe",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "Bowling / camp-collar shirt with a tassel loafer mixes resort and dress: soft -10.",
+   "logic": {
+    "if": {
+     "slot": "top",
+     "any": [
+      "bowling",
+      "camp"
+     ]
+    },
+    "any_of": [
+     {
+      "slot": "shoe",
+      "signal": "tassel_loafer"
+     }
+    ]
+   },
+   "severity": "soft",
+   "delta": -10,
+   "tests": [
+    {
+     "look": {
+      "top": "g_jkj2nzfzpf1o",
+      "bottom": "g_66xj06nllgf2",
+      "shoe": "g_2djvq6l9qxbb"
+     },
+     "expected": "soft -10"
+    },
+    {
+     "look": {
+      "top": "g_lqf1mrlsure9",
+      "bottom": "g_0re8nrx2mpdy",
+      "shoe": "g_wymz2j18s6wh"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-TEX-8",
+   "name": "out_needs_a_layer_when_cool",
+   "type": "out_outer",
+   "target_file": "_cross_chip.json",
+   "description": "Out + fall/winter: a short-sleeve polo or tee with no outer/mid is under-dressed (hard). Any other top with no outer on Out fall/winter: soft -10.",
+   "logic": {
+    "occasions": [
+     "out"
+    ],
+    "seasons": [
+     "fall",
+     "winter"
+    ],
+    "hard_if_top": "short_sleeve_top",
+    "soft_delta": -10
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_lad85rg9nxs3",
+      "shoe": "g_yae8h1k9pjm1"
+     },
+     "context": {
+      "occasion": "out",
+      "season": "fall"
+     },
+     "expected": "fail",
+     "why": "Polo Out #1 (recipe OUT_BLAZER_DINNER but no blazer on the card)"
+    },
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_lad85rg9nxs3",
+      "shoe": "g_yae8h1k9pjm1",
+      "outer": "g_5josnvyoi4z9"
+     },
+     "context": {
+      "occasion": "out",
+      "season": "fall"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-TEX-9",
+   "name": "utility_jacket_with_mule",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "A utility outer (field jacket, chore, denim trucker) over a mule/slide mixes workwear and resort: soft -10. Seen on the live Today featured card (pink gingham + light grey pleats + navy field jacket + brown suede mules).",
+   "logic": {
+    "if": {
+     "slot": "outer",
+     "any": [
+      "field jacket",
+      "chore",
+      "denim jacket",
+      "trucker"
+     ]
+    },
+    "any_of": [
+     {
+      "slot": "shoe",
+      "signal": "mule"
+     }
+    ]
+   },
+   "severity": "soft",
+   "delta": -10,
+   "tests": [
+    {
+     "look": {
+      "top": "g_zzrq3j5n2njk",
+      "bottom": "g_yfkavdj5irwe",
+      "shoe": "g_wymz2j18s6wh",
+      "outer": "g_qnmo5yzgl50b"
+     },
+     "expected": "soft -10",
+     "why": "Today featured card, live UI 12:58 PM ET"
+    },
+    {
+     "look": {
+      "top": "g_zzrq3j5n2njk",
+      "bottom": "g_yfkavdj5irwe",
+      "shoe": "g_8ukg5mi9r3fc",
+      "outer": "g_qnmo5yzgl50b"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-PROP-1",
+   "name": "pleated_or_dress_trouser_with_boot",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "Joe's only boot is a brown leather lace-up work boot (g_b4zsf3dfrhdv). Boots go with straight jeans, cords, chinos and flat dark wool (R10, and POLO-P2's 'chino, cord or wool'). A PLEATED trouser, or any pale dress trouser (tailored_trouser with dominant value <= 2), over that boot stacks and breaks badly at 5'8 regular and mixes work boot with dress trouser: hard.",
+   "logic": {
+    "if": {
+     "slot": "shoe",
+     "signal": "boot"
+    },
+    "any_of": [
+     {
+      "slot": "bottom",
+      "signal": "pleated_trouser"
+     },
+     {
+      "slot": "bottom",
+      "signal": "tailored_trouser",
+      "dominant_value_max": 2
+     }
+    ],
+    "compatible_with": "POLO-P2 (flat grey/navy wool trouser + boot stays legal)"
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_bq9qnaa1vkon",
+      "bottom": "g_66xj06nllgf2",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "fail",
+     "why": "Faloni #2 / IW #3 / RRL Out #2"
+    },
+    {
+     "look": {
+      "top": "g_bq9qnaa1vkon",
+      "bottom": "g_ayfv9c97ohmv",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "pass",
+     "why": "Cord gurkha + boot is fine"
+    },
+    {
+     "look": {
+      "top": "g_mqjsmpqgwwvm",
+      "bottom": "g_x1vivoqz2ixd",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "pass",
+     "why": "Flat maroon/brown wool trouser + boot (POLO-P2 legal)"
+    }
+   ]
+  },
+  {
+   "id": "XC-PROP-2",
+   "name": "volume_on_volume",
+   "type": "volume_on_volume",
+   "target_file": "_cross_chip.json",
+   "description": "At 5'8 regular, a relaxed chunky top (fit relaxed AND (warmth >= 4 OR name cable/fleece/hoodie)) over a relaxed pleated trouser (fit relaxed AND pleated) swamps the frame: soft -10. One relaxed piece at a time.",
+   "logic": {
+    "top": {
+     "fit_any": [
+      "relaxed",
+      "oversized"
+     ],
+     "warmth_min": 4,
+     "or_any": [
+      "cable",
+      "fleece",
+      "hoodie"
+     ]
+    },
+    "bottom": {
+     "fit_any": [
+      "relaxed"
+     ],
+     "any": [
+      "pleated"
+     ]
+    }
+   },
+   "severity": "soft",
+   "delta": -10,
+   "tests": [
+    {
+     "look": {
+      "top": "g_teitg9jmpwxa",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -10"
+    },
+    {
+     "look": {
+      "top": "g_xowln4uos3ug",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-SEA-1",
+   "name": "summer_weight_cap",
+   "type": "season_piece",
+   "target_file": "_cross_chip.json",
+   "description": "Summer: no flannel, fleece, corduroy, shearling, fair isle or cable, and no piece with warmth >= 4 (hard). A warmth-3 top or any outer: soft -10.",
+   "logic": {
+    "seasons": [
+     "summer"
+    ],
+    "hard_signal": "cold_fabric_piece",
+    "hard_warmth_min": 4,
+    "soft_warmth_top_min": 3,
+    "soft_any_outer": true,
+    "delta": -10
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_rpjfgscii90r",
+      "bottom": "g_zw51yaqdsx0q",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "context": {
+      "season": "summer"
+     },
+     "expected": "fail",
+     "why": "SS Weekend/Summer #1: fair isle in summer"
+    },
+    {
+     "look": {
+      "top": "g_kh5r3xy9r1i5",
+      "bottom": "g_lad85rg9nxs3",
+      "shoe": "g_wymz2j18s6wh"
+     },
+     "context": {
+      "season": "summer"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-SEA-2",
+   "name": "winter_weight_floor",
+   "type": "season_piece",
+   "target_file": "_cross_chip.json",
+   "description": "Winter: no linen, seersucker, camp or bowling shirts, no mules (hard); a short-sleeve polo/tee with no outer or mid (hard); a light-blue or pastel non-denim trouser (accent bottom, value <= 2) soft -10; top+mid+outer warmth sum < 5 soft -15.",
+   "logic": {
+    "seasons": [
+     "winter"
+    ],
+    "hard_signal": "summer_fabric_piece",
+    "hard_short_sleeve_no_layer": true,
+    "soft_pastel_bottom": -10,
+    "warmth_sum_min": 5,
+    "warmth_sum_delta": -15
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_lad85rg9nxs3",
+      "shoe": "g_yae8h1k9pjm1"
+     },
+     "context": {
+      "season": "winter"
+     },
+     "expected": "fail",
+     "why": "Polo Weekday/Winter #2: pink short-sleeve polo, no layer"
+    },
+    {
+     "look": {
+      "top": "g_mqjsmpqgwwvm",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_8ukg5mi9r3fc",
+      "outer": "g_5josnvyoi4z9"
+     },
+     "context": {
+      "season": "winter"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-SEA-3",
+   "name": "fall_resort_pieces",
+   "type": "season_piece",
+   "target_file": "_cross_chip.json",
+   "description": "Fall Weekday/Out: linen, seersucker, camp or bowling shirts soft -10; mules soft -5 (early-fall edge only).",
+   "logic": {
+    "seasons": [
+     "fall"
+    ],
+    "occasions": [
+     "weekday",
+     "out"
+    ],
+    "soft_signal": "summer_fabric_piece",
+    "delta": -10,
+    "mule_delta": -5
+   },
+   "severity": "soft",
+   "tests": [
+    {
+     "look": {
+      "top": "g_lqf1mrlsure9",
+      "bottom": "g_lad85rg9nxs3",
+      "shoe": "g_wymz2j18s6wh"
+     },
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "expected": "soft -15 (camp -10, mule -5)"
+    },
+    {
+     "look": {
+      "top": "g_bq9qnaa1vkon",
+      "bottom": "g_lad85rg9nxs3",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "context": {
+      "occasion": "out",
+      "season": "fall"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-SEA-4",
+   "name": "mixed_season_look",
+   "type": "mixed_season",
+   "target_file": "_cross_chip.json",
+   "description": "One look must not mix a cold-weather piece (flannel, fleece, corduroy, shearling, fair isle, cable, or warmth >= 4) with a hot-weather piece (linen, seersucker, camp, bowling, mule): soft -15.",
+   "logic": {
+    "cold": "cold_fabric_piece|warmth>=4",
+    "hot": "summer_fabric_piece"
+   },
+   "severity": "soft",
+   "delta": -15,
+   "tests": [
+    {
+     "look": {
+      "top": "g_rpjfgscii90r",
+      "bottom": "g_0re8nrx2mpdy",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -15",
+     "why": "Fair isle + linen pleats"
+    },
+    {
+     "look": {
+      "top": "g_rpjfgscii90r",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "XC-PAT-1",
+   "name": "pattern_discipline",
+   "type": "pattern_budget",
+   "target_file": "_cross_chip.json",
+   "description": "Two same-scale stripes (striped shirt + striped jeans/trousers) = hard; a fine pinstripe/chalkstripe trouser with a striped shirt = soft -5 (different scale, suiting convention). Two large checks = hard. A small check (gingham) under a large check jacket = OK (R8). Two busy knits/prints, or a busy knit/print with any check = hard. Stripe + check = soft -10 unless one of them is the jacket.",
+   "logic": {
+    "classes": "pattern_classes",
+    "max_per_class": 1,
+    "check_small_plus_check_large_ok": true,
+    "busy_plus_check": "hard",
+    "stripe_plus_check": {
+     "severity": "soft",
+     "delta": -10,
+     "exempt_if_one_is_outer": true
+    },
+    "stripe_fine": [
+     "pinstripe",
+     "chalkstripe",
+     "chalk stripe"
+    ],
+    "fine_plus_regular_stripe": {
+     "severity": "soft",
+     "delta": -5
+    }
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_kh5r3xy9r1i5",
+      "bottom": "g_lxqx9egrqg14",
+      "shoe": "g_wgarjdurj7yp"
+     },
+     "expected": "fail",
+     "why": "Striped shirt + striped jeans"
+    },
+    {
+     "look": {
+      "top": "g_teatot7o1lst",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_3qjmw7n4wj2a"
+     },
+     "expected": "fail",
+     "why": "Grey plaid shirt under navy/brown plaid jacket"
+    },
+    {
+     "look": {
+      "top": "g_zzrq3j5n2njk",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_8ukg5mi9r3fc",
+      "outer": "g_3qjmw7n4wj2a"
+     },
+     "expected": "pass",
+     "why": "Gingham under a large plaid"
+    },
+    {
+     "look": {
+      "top": "g_i80zb0yen5gn",
+      "bottom": "g_dscxzk8inlx2",
+      "shoe": "g_8nrtffa2s13s"
+     },
+     "expected": "pass (-5)",
+     "why": "Striped shirt + pinstripe trouser: different scales"
+    }
+   ]
+  }
+ ],
+ "row_level_rules": [
+  {
+   "id": "XC-REP-1",
+   "target_file": "_cross_chip.json",
+   "type": "plate_chip_cap",
+   "description": "Extend CROSS-2 from the 5 dominant plates to EVERY plate: across all house chips' top-3 in one context, one TOP or BOTTOM plate appears in at most 2 chips, one SHOE in at most 3 chips (Joe owns few loafers; single-boot g_b4zsf3dfrhdv exempt). Sage pleated trousers g_66xj06nllgf2 is in 6 chips' top-3 on Weekday/Fall and Winter and is not on the dominant list, so nothing stops it today.",
+   "logic": {
+    "max_chips_per_top_or_bottom_plate": 2,
+    "max_chips_per_shoe_plate": 3,
+    "exempt_plates": [
+     "g_b4zsf3dfrhdv"
+    ],
+    "scope": "top-3 of every house chip, one occasion+season"
+   },
+   "severity": "hard (row builder demotes the weaker chip's card)",
+   "tests": [
+    {
+     "context": "weekday/fall",
+     "plate": "g_66xj06nllgf2",
+     "chips": [
+      "POLO",
+      "ALD",
+      "FALONI",
+      "545",
+      "ITALIANSUMMER",
+      "ITALIANWINTER"
+     ],
+     "expected": "fail for chips 3..6"
+    }
+   ]
+  },
+  {
+   "id": "XC-REP-2",
+   "target_file": "_cross_chip.json",
+   "type": "near_duplicate_core",
+   "description": "CROSS-1 only fires on an identical top|bottom|shoe triple. Two chips' top-3 cards that share top AND bottom (any shoe/outer) are the same outfit to the eye: hard.",
+   "logic": {
+    "shared_slots": [
+     "top",
+     "bottom"
+    ]
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "context": "weekday/fall",
+     "cards": [
+      "ITALIANSUMMER #1 g_vzqle7zdtpis+g_k75fdfdsnak0",
+      "ITALIANWINTER #1 same + taupe blazer"
+     ],
+     "expected": "fail"
+    }
+   ]
+  },
+  {
+   "id": "XC-REP-3",
+   "target_file": "_cross_chip.json",
+   "type": "row_plate_cap",
+   "description": "Inside one chip's 8-look row: the same top or bottom at most 2 times, the same shoe at most 3 times (RRL/SS single-boot exemption stays).",
+   "logic": {
+    "top_max": 2,
+    "bottom_max": 2,
+    "shoe_max": 3,
+    "exempt_plates": [
+     "g_b4zsf3dfrhdv"
+    ]
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "context": "weekday/fall",
+     "chip": "ALD",
+     "expected": "see report counts"
+    }
+   ]
+  },
+  {
+   "id": "XC-REP-4",
+   "target_file": "_cross_chip.json",
+   "type": "season_rows_differ",
+   "description": "For the same occasion and house, the rows for two different seasons must not be identical (Weekend/Fall == Weekend/Summer for every chip in b03aa4d; Weekday/Fall vs Winter differ only by one 545 card).",
+   "logic": {
+    "compare": "row ids per (occasion, house) across seasons"
+   },
+   "severity": "hard (release check, not a per-look rule)",
+   "tests": [
+    {
+     "compare": [
+      "weekend/fall",
+      "weekend/summer"
+     ],
+     "expected": "fail in b03aa4d"
+    }
+   ]
+  },
+  {
+   "id": "XC-REC-1",
+   "target_file": "_cross_chip.json",
+   "type": "recipe_outer_present",
+   "description": "If the look's recipeId promises an outer, the card must carry it (checked against the outer plate's closet_meta name). b03aa4d ships OUT_BLAZER_DINNER cards with no blazer at all (Polo, 545) or a denim/field jacket, WE_CHORE_IVY with no chore, WE_FIELD_WHITE_SHIRT with neither a field jacket nor a white shirt, OUT_IVORY_DB_DENIM with no DB. Either add the outer or relabel/drop the recipe.",
+   "logic": {
+    "recipe_token_to_outer_keywords": {
+     "BLAZER": [
+      "blazer",
+      "sport coat"
+     ],
+     "DB": [
+      "double-breasted"
+     ],
+     "FIELD": [
+      "field jacket"
+     ],
+     "CHORE": [
+      "chore"
+     ]
+    },
+    "input": "row look.recipeId + look outer plate name"
+   },
+   "severity": "hard when the card has NO outer at all; label-fix (info, no penalty) when a different outer is present (e.g. WD_DENIM_UNDER_CHORE carrying the denim trucker on RRL #1, which is a good card)",
+   "tests": [
+    {
+     "recipe": "OUT_BLAZER_DINNER",
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_lad85rg9nxs3",
+      "shoe": "g_yae8h1k9pjm1"
+     },
+     "expected": "fail"
+    },
+    {
+     "recipe": "WE_RRL_CHORE",
+     "look": {
+      "top": "g_2b6fao81vqrs",
+      "bottom": "g_zw51yaqdsx0q",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_8qqqzpwxuwti"
+     },
+     "expected": "pass"
+    }
+   ]
+  }
+ ],
+ "per_house_additions": [
+  {
+   "id": "POLO-P7",
+   "house": "polo",
+   "type": "requires_outer",
+   "seasons": [
+    "fall",
+    "winter"
+   ],
+   "occasions": [
+    "out"
+   ],
+   "severity": "hard",
+   "description": "Promote POLO-P5 to hard for Out: Polo dinner in cool weather means a blazer or sport coat (the recipe was OUT_BLAZER_DINNER but the cards ship without one).",
+   "tests": [
+    {
+     "look": {
+      "top": "g_939onlwfrg9j",
+      "bottom": "g_yfkavdj5irwe",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "context": {
+      "occasion": "out",
+      "season": "fall"
+     },
+     "expected": "fail"
+    },
+    {
+     "look": {
+      "top": "g_939onlwfrg9j",
+      "bottom": "g_yfkavdj5irwe",
+      "shoe": "g_om0dh5nps1ke",
+      "outer": "g_5josnvyoi4z9"
+     },
+     "context": {
+      "occasion": "out",
+      "season": "fall"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "POLO-P4b / ALD-P1b / FAL-P1b / IS-P4b / SS-P3b",
+   "house": "polo, ald, faloni, italiansummer, sweetstable",
+   "type": "pastel_budget",
+   "max": 1,
+   "description": "Patch the existing pastel_budget evaluator: count sage and light-blue non-denim bottoms/shoes/outers as pastel (build.py PASTEL list today = pink, mauve, yellow, mint, lavender, lilac, peach).",
+   "logic": {
+    "pastel_colours_add": [
+     "sage"
+    ],
+    "light_blue_counts_when": "slot in (bottom, shoe, outer) and not denim"
+   },
+   "tests": [
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_0pfc8ytc1sbb",
+      "shoe": "g_upni66uiqtgb"
+     },
+     "expected": "fail"
+    },
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_rvrs9hibr981",
+      "shoe": "g_upni66uiqtgb"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "FAL-P5",
+   "house": "faloni",
+   "type": "winter_layer",
+   "severity": "hard",
+   "description": "Faloni winter = fine knit + wool trouser. A cotton short-sleeve polo or a light-blue/striped cotton trouser in winter needs a knit or jacket layer; otherwise fail (FAL-B5 only covers linen/camp).",
+   "logic": {
+    "seasons": [
+     "winter"
+    ],
+    "if_any": [
+     {
+      "slot": "top",
+      "signal": "short_sleeve_top"
+     },
+     {
+      "slot": "bottom",
+      "colors_any": [
+       "light blue"
+      ],
+      "none": [
+       "jean",
+       "denim"
+      ]
+     }
+    ],
+    "then_any_slot": [
+     "outer",
+     "mid"
+    ]
+   },
+   "tests": [
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_0pfc8ytc1sbb",
+      "shoe": "g_upni66uiqtgb"
+     },
+     "context": {
+      "season": "winter"
+     },
+     "expected": "fail"
+    },
+    {
+     "look": {
+      "top": "g_bq9qnaa1vkon",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_8ukg5mi9r3fc",
+      "outer": "g_py2swfwot1ed"
+     },
+     "context": {
+      "season": "winter"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "FAL-P6",
+   "house": "faloni",
+   "type": "tonal_anchor",
+   "severity": "soft",
+   "delta": -10,
+   "description": "A pale Faloni look (top and bottom both light) needs a brown anchor: shoe or outer with dominant brown family value >= 4. Cream sneakers under pale-on-pale = washout.",
+   "tests": [
+    {
+     "look": {
+      "top": "g_ttw2m97ww8z5",
+      "bottom": "g_0pfc8ytc1sbb",
+      "shoe": "g_upni66uiqtgb"
+     },
+     "expected": "soft -10"
+    },
+    {
+     "look": {
+      "top": "g_xowln4uos3ug",
+      "bottom": "g_80sz9s08xpw1",
+      "shoe": "g_wymz2j18s6wh"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "545-P3",
+   "house": "545",
+   "type": "black_shoe_logic",
+   "severity": "hard",
+   "description": "545 is the one house that uses black. When any garment is dominant black, the shoe must be black, white/cream, or dark-brown SUEDE; never navy, never brown smooth leather.",
+   "tests": [
+    {
+     "look": {
+      "top": "g_jkj2nzfzpf1o",
+      "bottom": "g_66xj06nllgf2",
+      "shoe": "g_2djvq6l9qxbb"
+     },
+     "expected": "fail"
+    },
+    {
+     "look": {
+      "top": "g_jkj2nzfzpf1o",
+      "bottom": "g_fvc535elt23d",
+      "shoe": "g_5g4fqg77s4rw"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "SS-P5",
+   "house": "sweetstable",
+   "type": "pair_ban",
+   "severity": "soft",
+   "delta": -10,
+   "description": "A cream country knit (fair isle / cable) over white or ecru denim is cream-on-white washout; Sweet Stable wants navy cords or dark denim under the knit.",
+   "tests": [
+    {
+     "look": {
+      "top": "g_rpjfgscii90r",
+      "bottom": "g_zw51yaqdsx0q",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -10"
+    },
+    {
+     "look": {
+      "top": "g_rpjfgscii90r",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "IS-P5",
+   "house": "italiansummer",
+   "type": "warmth_cap",
+   "severity": "hard",
+   "description": "Italian Summer top warmth <= 3 (<= 2 in summer); fleece never, even as a mid.",
+   "tests": [
+    {
+     "look": {
+      "top": "g_o739106dt8ym",
+      "bottom": "g_yfkavdj5irwe",
+      "shoe": "g_8nrtffa2s13s"
+     },
+     "expected": "fail"
+    },
+    {
+     "look": {
+      "top": "g_9t24uvtl10wd",
+      "bottom": "g_0re8nrx2mpdy",
+      "shoe": "g_wymz2j18s6wh"
+     },
+     "context": {
+      "season": "summer"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "IW-P5",
+   "house": "italianwinter",
+   "type": "dark_anchor",
+   "severity": "soft",
+   "delta": -15,
+   "description": "Italian Winter needs depth: at least one of top/bottom/outer at value >= 4 (charcoal, navy, brown, chocolate, burgundy). All-light blue/grey/taupe reads spring.",
+   "tests": [
+    {
+     "look": {
+      "top": "g_vzqle7zdtpis",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8ukg5mi9r3fc",
+      "outer": "g_juk45cokjxxy"
+     },
+     "expected": "soft -15"
+    },
+    {
+     "look": {
+      "top": "g_xowln4uos3ug",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_8ukg5mi9r3fc",
+      "outer": "g_1pg9y05mlkek"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "PL-P2",
+   "house": "purple",
+   "type": "tonal_requires_outer",
+   "severity": "hard",
+   "description": "Purple tonal (top and bottom same colour family) is only Purple Label under a soft jacket; bare beige-on-beige is Faloni/IS.",
+   "tests": [
+    {
+     "look": {
+      "top": "g_xowln4uos3ug",
+      "bottom": "g_gyc76ur3ikb9",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "fail"
+    },
+    {
+     "look": {
+      "top": "g_xowln4uos3ug",
+      "bottom": "g_gyc76ur3ikb9",
+      "shoe": "g_om0dh5nps1ke",
+      "outer": "g_juk45cokjxxy"
+     },
+     "expected": "pass"
+    }
+   ]
+  },
+  {
+   "id": "RRL-P7",
+   "house": "rrl",
+   "type": "winter_outer_weight",
+   "severity": "soft",
+   "delta": -10,
+   "description": "In winter a light denim trucker alone is not an RRL winter outer: add a mid (vest/cardigan/zip knit) or use chore/suede/shearling.",
+   "tests": [
+    {
+     "look": {
+      "top": "g_teatot7o1lst",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_vtbi91noucd3"
+     },
+     "context": {
+      "season": "winter"
+     },
+     "expected": "soft -10"
+    },
+    {
+     "look": {
+      "top": "g_teatot7o1lst",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_wwy9b2pusds3"
+     },
+     "context": {
+      "season": "winter"
+     },
+     "expected": "pass"
+    }
+   ]
+  }
+ ]
+}

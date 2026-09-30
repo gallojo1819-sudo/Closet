@@ -13,6 +13,8 @@ export default tseslint.config(
       ".output/**",
       ".vercel/**",
       ".nitro/**",
+      ".next/**",
+      "Closet/**",
       "node_modules/**",
       "src/routeTree.gen.ts",
     ],

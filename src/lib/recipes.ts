@@ -14,6 +14,7 @@ import {
   type ShoeFamily,
 } from "./houses.ts";
 import type { Garment, Occasion } from "./types.ts";
+import { recipeOuterIssue } from "./stylist/row.ts";
 
 export type RecipeId =
   | "WD_PREP_OCBD"
@@ -772,15 +773,29 @@ export function recipeScore(pieces: Garment[], r: Recipe): number {
   return n;
 }
 
+const OCCASION_PREFIX: Record<Occasion, string> = {
+  weekday: "WD_",
+  out: "OUT_",
+  weekend: "WE_",
+  travel: "TR_",
+  comfy: "CF_",
+};
+
 export function matchRecipe(
   pieces: Garment[],
   occasion: Occasion,
   house?: House | "all" | null,
 ): RecipeId | undefined {
+  const outer = pieces.find((g) => g.category === "outerwear");
+  const outerName = outer ? `${outer.name} ${outer.subtype}` : undefined;
+  const sameOccasion = (id: string) => id.startsWith(OCCASION_PREFIX[occasion]);
+  const showsPromise = (id: string) => recipeOuterIssue(id, outerName) == null;
   const rrlOnly = house === "rrl";
-  const list = rrlOnly
-    ? RECIPES.filter((r) => r.houses.includes("rrl") && r.occasions.includes(occasion))
-    : recipesFor(occasion, house);
+  const list = (
+    rrlOnly
+      ? RECIPES.filter((r) => r.houses.includes("rrl") && r.occasions.includes(occasion))
+      : recipesFor(occasion, house)
+  ).filter((r) => sameOccasion(r.id) && showsPromise(r.id));
   let best: Recipe | undefined;
   let bestN = 0;
   for (const r of list) {
@@ -792,7 +807,7 @@ export function matchRecipe(
   }
   if (best && bestN >= 3) return best.id;
   if (rrlOnly) return undefined;
-  const any = RECIPES.filter((r) => r.occasions.includes(occasion));
+  const any = RECIPES.filter((r) => r.occasions.includes(occasion) && sameOccasion(r.id) && showsPromise(r.id));
   for (const r of any) {
     const n = recipeScore(pieces, r);
     if (n > bestN) {

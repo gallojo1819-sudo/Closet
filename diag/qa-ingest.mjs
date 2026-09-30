@@ -59,7 +59,7 @@ const state = await page.evaluate(() => {
   };
 });
 console.log("persist bytes:", state.bytes);
-console.table ? console.log(JSON.stringify(state.garments, null, 1)) : null;
+console.log(JSON.stringify(state.garments, null, 1));
 if (state.bytes > 200_000) fail(`persist too big: ${state.bytes}`);
 else ok("persist is metadata-only");
 for (const g of state.garments) {

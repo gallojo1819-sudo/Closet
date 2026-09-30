@@ -1,0 +1,2505 @@
+{
+  "rule_CROSS-1": "For the same occasion+season, the top-3 looks of any two house chips must not share a core key (top.id|bottom.id|shoe.id). The chip with the stronger fingerprint score for that core keeps it; the other drops to its next valid look.",
+  "rule_CROSS-2": "Across all chips' top-3 for one context, a dominant plate (see dominance) appears in at most 2 chips.",
+  "rule_CROSS-3": "RRL, Polo, Purple and ItalianSummer rows must never equal the All row. If a house has <3 valid looks, show fewer cards + the gap note; never pad from All.",
+  "dominance_global": {
+    "plates": {
+      "g_2djvq6l9qxbb": [
+        "Navy leather tassel loafers",
+        171
+      ],
+      "g_mqjsmpqgwwvm": [
+        "Cream cable-knit sweater",
+        125
+      ],
+      "g_v3ovns4bv344": [
+        "Navy corduroy trousers",
+        113
+      ],
+      "g_gyc76ur3ikb9": [
+        "Beige trousers",
+        95
+      ],
+      "g_ayfv9c97ohmv": [
+        "Brown corduroy trousers (gurkha)",
+        89
+      ]
+    },
+    "rules": [
+      "≤1 per 8-look row per plate (Sweet Stable cords ≤2)",
+      "≤1 dominant plate per look",
+      "≤1 dominant plate in the top-3 of a chip",
+      "−25 soft penalty per use (−15 for SS cords)",
+      "a dominant plate may be #1 only if no non-dominant look passes"
+    ]
+  },
+  "must_differ_pairs": [
+    {
+      "a": "rrl",
+      "b": "polo",
+      "slot_rule": "shoe: RRL boot vs Polo loafer/sneaker (Polo boot only with OCBD/knit + chino/cord/wool); top: work shirt vs OCBD/polo/cable."
+    },
+    {
+      "a": "rrl",
+      "b": "sweetstable",
+      "slot_rule": "top: RRL work shirt/henley vs SS gingham/fair isle/cable; bottom: RRL jean/chino vs SS cord. Both may use the one boot, so the core must differ on top AND bottom."
+    },
+    {
+      "a": "rrl",
+      "b": "ald",
+      "slot_rule": "shoe: boot vs sneaker."
+    },
+    {
+      "a": "polo",
+      "b": "italianwinter",
+      "slot_rule": "IW requires a jacket + fine knit + wool/cord + suede loafer and bans piqué/sneakers; Polo's top-3 should lead with OCBD/piqué/cable."
+    },
+    {
+      "a": "polo",
+      "b": "faloni",
+      "slot_rule": "Faloni: knit polo/linen + pale trouser + suede loafer/mule; Polo: no mules, OCBD/piqué + chino/cord."
+    },
+    {
+      "a": "faloni",
+      "b": "italiansummer",
+      "slot_rule": "IS needs a soft jacket or an all-tonal core; mule only with a jacket. On a shared core, Faloni keeps the jacketless version."
+    },
+    {
+      "a": "faloni",
+      "b": "545",
+      "slot_rule": "545 bottom = denim or dark/relaxed trouser, top = henley/zip/knit polo; Faloni bottom = pale trouser."
+    },
+    {
+      "a": "545",
+      "b": "ald",
+      "slot_rule": "545 bans NB and hoodies (except Comfy) and allows loafers; ALD bans loafers."
+    },
+    {
+      "a": "italianwinter",
+      "b": "purple",
+      "slot_rule": "Purple uses a soft blazer (taupe/ivory/cord) + lighter bottoms; IW uses navy blazer/shearling/suede + dark wool."
+    },
+    {
+      "a": "italianwinter",
+      "b": "sweetstable",
+      "slot_rule": "IW bans boots, fair isle and plaid; SS bans city blazers and woven loafers."
+    }
+  ],
+  "test_cases": [
+    {
+      "id": "X-T1",
+      "desc": "Faloni and IS both surface Brown knit polo + ivory pleated + brown suede loafers in Out/Summer top-3",
+      "core": "g_bq9qnaa1vkon|g_lad85rg9nxs3|g_8ukg5mi9r3fc",
+      "expected": "fail",
+      "rule_ids": [
+        "CROSS-1"
+      ],
+      "resolution": "Faloni keeps the jacketless look; IS takes its next core (e.g. Blue linen shirt + cream pleated + suede loafers + ivory DB)."
+    },
+    {
+      "id": "X-T2",
+      "desc": "RRL row equals All row (today's behaviour)",
+      "expected": "fail",
+      "rule_ids": [
+        "CROSS-3"
+      ]
+    },
+    {
+      "id": "X-T3",
+      "desc": "RRL #1 = Blue plaid flannel + navy denim + boots + chore; SS #1 = Cream fair isle + navy cords + boots + chore",
+      "expected": "pass",
+      "rule_ids": [],
+      "why": "They share the shoe and outer, but the cores differ on top and bottom."
+    }
+  ],
+  "proposed_top3_matrix": {
+    "weekday/fall": {
+      "sweetstable": {
+        "status": "hidden_by_gate",
+        "looks": [],
+        "note": "No horse corduroys, rugby or blue gingham: plain cords and pink gingham stand in."
+      },
+      "rrl": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_2b6fao81vqrs",
+              "name": "Blue plaid flannel shirt"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_qnmo5yzgl50b",
+              "name": "Navy field jacket"
+            },
+            "score": 50.5
+          },
+          {
+            "top": {
+              "id": "g_yo7mwga1xi3m",
+              "name": "Light blue denim shirt"
+            },
+            "bottom": {
+              "id": "g_lg5qftegw0qo",
+              "name": "Brown frayed-hem pants"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_sb0mc7s7v346",
+              "name": "Olive field jacket"
+            },
+            "score": 46.75
+          },
+          {
+            "top": {
+              "id": "g_1zteshjh31ac",
+              "name": "Light Blue denim shirt"
+            },
+            "bottom": {
+              "id": "g_vf28ktbdhmtz",
+              "name": "Dark brown chinos"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_8qqqzpwxuwti",
+              "name": "Brown chore jacket"
+            },
+            "score": 46.35
+          }
+        ]
+      },
+      "purple": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_xowln4uos3ug",
+              "name": "Beige knit sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 50.2
+          },
+          {
+            "top": {
+              "id": "g_qrx875pbmh6n",
+              "name": "Beige textured sweater"
+            },
+            "bottom": {
+              "id": "g_dscxzk8inlx2",
+              "name": "Navy pinstripe trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 37.85
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_bee1dg9rnfe5",
+              "name": "Grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 36.9
+          }
+        ]
+      },
+      "italianwinter": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_xowln4uos3ug",
+              "name": "Beige knit sweater"
+            },
+            "bottom": {
+              "id": "g_bee1dg9rnfe5",
+              "name": "Grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.35
+          },
+          {
+            "top": {
+              "id": "g_qrx875pbmh6n",
+              "name": "Beige textured sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_8nrtffa2s13s",
+              "name": "Brown suede tassel loafers"
+            },
+            "outer": {
+              "id": "g_5josnvyoi4z9",
+              "name": "Navy blazer"
+            },
+            "score": 49.85
+          },
+          {
+            "top": {
+              "id": "g_v2gxktsmsoov",
+              "name": "Beige crewneck sweater"
+            },
+            "bottom": {
+              "id": "g_k75fdfdsnak0",
+              "name": "Light grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 37.45
+          }
+        ]
+      },
+      "faloni": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_wymz2j18s6wh",
+              "name": "Brown suede mules"
+            },
+            "score": 41.8
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_s5d2t696vryw",
+              "name": "Cream trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "score": 39.15
+          },
+          {
+            "top": {
+              "id": "g_xbt3gpjuo1p4",
+              "name": "Burgundy collared sweater"
+            },
+            "bottom": {
+              "id": "g_66xj06nllgf2",
+              "name": "Sage pleated trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "score": 25.65
+          }
+        ]
+      },
+      "545": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_z8gvd1zvrcif",
+              "name": "Brown knit zip sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.8
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 49.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8od90wk1sl9k",
+              "name": "Brown suede bomber jacket"
+            },
+            "score": 47.75
+          }
+        ]
+      },
+      "italiansummer": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 50.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_s5d2t696vryw",
+              "name": "Cream trousers"
+            },
+            "shoe": {
+              "id": "g_wymz2j18s6wh",
+              "name": "Brown suede mules"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 39.4
+          },
+          {
+            "top": {
+              "id": "g_9t24uvtl10wd",
+              "name": "Pink linen shirt"
+            },
+            "bottom": {
+              "id": "g_66xj06nllgf2",
+              "name": "Sage pleated trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 37.35
+          }
+        ]
+      },
+      "ald": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_mpvyy87tse1c",
+              "name": "Cream flag sweatshirt"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_nq7il0e0glnn",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8qqqzpwxuwti",
+              "name": "Brown chore jacket"
+            },
+            "score": 55.6
+          },
+          {
+            "top": {
+              "id": "g_6qz38nwsrupx",
+              "name": "Cream Polo Bear sweatshirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_fzekzikyrf50",
+              "name": "Navy suede sneakers"
+            },
+            "outer": {
+              "id": "g_5gfabeezh485",
+              "name": "White beige toggle jacket"
+            },
+            "score": 50.75
+          },
+          {
+            "top": {
+              "id": "g_d1awqw83gd3c",
+              "name": "Navy R sweater"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_08shegj8gqie",
+              "name": "Grey and white low-top sneakers"
+            },
+            "outer": {
+              "id": "g_vtbi91noucd3",
+              "name": "Light Blue denim jacket"
+            },
+            "score": 48.15
+          }
+        ]
+      },
+      "polo": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_salzdhuswyd3",
+              "name": "Brown cable-knit sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_yae8h1k9pjm1",
+              "name": "Brown leather tassel loafers"
+            },
+            "outer": {
+              "id": "g_qnmo5yzgl50b",
+              "name": "Navy field jacket"
+            },
+            "score": 44.5
+          },
+          {
+            "top": {
+              "id": "g_pa7kfg14rtzl",
+              "name": "White button-up shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_5josnvyoi4z9",
+              "name": "Navy blazer"
+            },
+            "score": 44.05
+          },
+          {
+            "top": {
+              "id": "g_i80zb0yen5gn",
+              "name": "Sage striped shirt"
+            },
+            "bottom": {
+              "id": "g_dscxzk8inlx2",
+              "name": "Navy pinstripe trousers"
+            },
+            "shoe": {
+              "id": "g_8nrtffa2s13s",
+              "name": "Brown suede tassel loafers"
+            },
+            "outer": {
+              "id": "g_oyyiaxx6rls7",
+              "name": "Mint green field jacket"
+            },
+            "score": 43.6
+          }
+        ]
+      }
+    },
+    "weekend/fall": {
+      "rrl": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_2b6fao81vqrs",
+              "name": "Blue plaid flannel shirt"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_qnmo5yzgl50b",
+              "name": "Navy field jacket"
+            },
+            "score": 50.5
+          },
+          {
+            "top": {
+              "id": "g_yo7mwga1xi3m",
+              "name": "Light blue denim shirt"
+            },
+            "bottom": {
+              "id": "g_lg5qftegw0qo",
+              "name": "Brown frayed-hem pants"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_sb0mc7s7v346",
+              "name": "Olive field jacket"
+            },
+            "score": 44.75
+          },
+          {
+            "top": {
+              "id": "g_1zteshjh31ac",
+              "name": "Light Blue denim shirt"
+            },
+            "bottom": {
+              "id": "g_cfm8n594jea7",
+              "name": "Burgundy corduroy pants"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_8qqqzpwxuwti",
+              "name": "Brown chore jacket"
+            },
+            "score": 44.55
+          }
+        ]
+      },
+      "purple": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_xowln4uos3ug",
+              "name": "Beige knit sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 50.2
+          },
+          {
+            "top": {
+              "id": "g_qrx875pbmh6n",
+              "name": "Beige textured sweater"
+            },
+            "bottom": {
+              "id": "g_dscxzk8inlx2",
+              "name": "Navy pinstripe trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 37.85
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_bee1dg9rnfe5",
+              "name": "Grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 36.9
+          }
+        ]
+      },
+      "italianwinter": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_xowln4uos3ug",
+              "name": "Beige knit sweater"
+            },
+            "bottom": {
+              "id": "g_bee1dg9rnfe5",
+              "name": "Grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.35
+          },
+          {
+            "top": {
+              "id": "g_qrx875pbmh6n",
+              "name": "Beige textured sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_8nrtffa2s13s",
+              "name": "Brown suede tassel loafers"
+            },
+            "outer": {
+              "id": "g_5josnvyoi4z9",
+              "name": "Navy blazer"
+            },
+            "score": 49.85
+          },
+          {
+            "top": {
+              "id": "g_v2gxktsmsoov",
+              "name": "Beige crewneck sweater"
+            },
+            "bottom": {
+              "id": "g_k75fdfdsnak0",
+              "name": "Light grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 37.45
+          }
+        ]
+      },
+      "sweetstable": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_vzqle7zdtpis",
+              "name": "Blue ivory diamond knit sweater"
+            },
+            "bottom": {
+              "id": "g_cfm8n594jea7",
+              "name": "Burgundy corduroy pants"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_8qqqzpwxuwti",
+              "name": "Brown chore jacket"
+            },
+            "score": 51.8
+          },
+          {
+            "top": {
+              "id": "g_zzrq3j5n2njk",
+              "name": "Pink gingham shirt"
+            },
+            "bottom": {
+              "id": "g_lg5qftegw0qo",
+              "name": "Brown frayed-hem pants"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_3qjmw7n4wj2a",
+              "name": "Navy brown plaid jacket"
+            },
+            "score": 36.65
+          },
+          {
+            "top": {
+              "id": "g_salzdhuswyd3",
+              "name": "Brown cable-knit sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_8nrtffa2s13s",
+              "name": "Brown suede tassel loafers"
+            },
+            "outer": {
+              "id": "g_x4adkv9zu9yu",
+              "name": "Navy/black corduroy jacket"
+            },
+            "score": 29.85
+          }
+        ]
+      },
+      "545": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_z8gvd1zvrcif",
+              "name": "Brown knit zip sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.8
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 49.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8od90wk1sl9k",
+              "name": "Brown suede bomber jacket"
+            },
+            "score": 47.75
+          }
+        ]
+      },
+      "faloni": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_wymz2j18s6wh",
+              "name": "Brown suede mules"
+            },
+            "score": 41.8
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_s5d2t696vryw",
+              "name": "Cream trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "score": 39.15
+          },
+          {
+            "top": {
+              "id": "g_xbt3gpjuo1p4",
+              "name": "Burgundy collared sweater"
+            },
+            "bottom": {
+              "id": "g_66xj06nllgf2",
+              "name": "Sage pleated trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "score": 26.9
+          }
+        ]
+      },
+      "ald": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_mpvyy87tse1c",
+              "name": "Cream flag sweatshirt"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_nq7il0e0glnn",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8qqqzpwxuwti",
+              "name": "Brown chore jacket"
+            },
+            "score": 55.6
+          },
+          {
+            "top": {
+              "id": "g_6qz38nwsrupx",
+              "name": "Cream Polo Bear sweatshirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_fzekzikyrf50",
+              "name": "Navy suede sneakers"
+            },
+            "outer": {
+              "id": "g_5gfabeezh485",
+              "name": "White beige toggle jacket"
+            },
+            "score": 50.75
+          },
+          {
+            "top": {
+              "id": "g_d1awqw83gd3c",
+              "name": "Navy R sweater"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_08shegj8gqie",
+              "name": "Grey and white low-top sneakers"
+            },
+            "outer": {
+              "id": "g_vtbi91noucd3",
+              "name": "Light Blue denim jacket"
+            },
+            "score": 48.15
+          }
+        ]
+      },
+      "italiansummer": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 50.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_s5d2t696vryw",
+              "name": "Cream trousers"
+            },
+            "shoe": {
+              "id": "g_wymz2j18s6wh",
+              "name": "Brown suede mules"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 39.4
+          },
+          {
+            "top": {
+              "id": "g_xbt3gpjuo1p4",
+              "name": "Burgundy collared sweater"
+            },
+            "bottom": {
+              "id": "g_66xj06nllgf2",
+              "name": "Sage pleated trousers"
+            },
+            "shoe": {
+              "id": "g_upni66uiqtgb",
+              "name": "Cream leather sneakers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 38.65
+          }
+        ]
+      },
+      "polo": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_salzdhuswyd3",
+              "name": "Brown cable-knit sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_qnmo5yzgl50b",
+              "name": "Navy field jacket"
+            },
+            "score": 44.3
+          },
+          {
+            "top": {
+              "id": "g_pa7kfg14rtzl",
+              "name": "White button-up shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_upni66uiqtgb",
+              "name": "Cream leather sneakers"
+            },
+            "outer": {
+              "id": "g_5josnvyoi4z9",
+              "name": "Navy blazer"
+            },
+            "score": 43.95
+          },
+          {
+            "top": {
+              "id": "g_i80zb0yen5gn",
+              "name": "Sage striped shirt"
+            },
+            "bottom": {
+              "id": "g_dscxzk8inlx2",
+              "name": "Navy pinstripe trousers"
+            },
+            "shoe": {
+              "id": "g_wgarjdurj7yp",
+              "name": "Brown leather sneakers"
+            },
+            "outer": {
+              "id": "g_oyyiaxx6rls7",
+              "name": "Mint green field jacket"
+            },
+            "score": 43.7
+          }
+        ]
+      }
+    },
+    "out/fall": {
+      "sweetstable": {
+        "status": "hidden_by_gate",
+        "looks": [],
+        "note": "No horse corduroys, rugby or blue gingham: plain cords and pink gingham stand in."
+      },
+      "rrl": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_2b6fao81vqrs",
+              "name": "Blue plaid flannel shirt"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_qnmo5yzgl50b",
+              "name": "Navy field jacket"
+            },
+            "score": 50.5
+          },
+          {
+            "top": {
+              "id": "g_yo7mwga1xi3m",
+              "name": "Light blue denim shirt"
+            },
+            "bottom": {
+              "id": "g_lg5qftegw0qo",
+              "name": "Brown frayed-hem pants"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_sb0mc7s7v346",
+              "name": "Olive field jacket"
+            },
+            "score": 46.75
+          },
+          {
+            "top": {
+              "id": "g_1zteshjh31ac",
+              "name": "Light Blue denim shirt"
+            },
+            "bottom": {
+              "id": "g_vf28ktbdhmtz",
+              "name": "Dark brown chinos"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_8qqqzpwxuwti",
+              "name": "Brown chore jacket"
+            },
+            "score": 46.35
+          }
+        ]
+      },
+      "purple": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_xowln4uos3ug",
+              "name": "Beige knit sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 50.2
+          },
+          {
+            "top": {
+              "id": "g_qrx875pbmh6n",
+              "name": "Beige textured sweater"
+            },
+            "bottom": {
+              "id": "g_dscxzk8inlx2",
+              "name": "Navy pinstripe trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 37.85
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_bee1dg9rnfe5",
+              "name": "Grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 36.9
+          }
+        ]
+      },
+      "italianwinter": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_xowln4uos3ug",
+              "name": "Beige knit sweater"
+            },
+            "bottom": {
+              "id": "g_bee1dg9rnfe5",
+              "name": "Grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.35
+          },
+          {
+            "top": {
+              "id": "g_qrx875pbmh6n",
+              "name": "Beige textured sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_8nrtffa2s13s",
+              "name": "Brown suede tassel loafers"
+            },
+            "outer": {
+              "id": "g_5josnvyoi4z9",
+              "name": "Navy blazer"
+            },
+            "score": 49.85
+          },
+          {
+            "top": {
+              "id": "g_v2gxktsmsoov",
+              "name": "Beige crewneck sweater"
+            },
+            "bottom": {
+              "id": "g_k75fdfdsnak0",
+              "name": "Light grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 37.45
+          }
+        ]
+      },
+      "faloni": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_wymz2j18s6wh",
+              "name": "Brown suede mules"
+            },
+            "score": 41.8
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_s5d2t696vryw",
+              "name": "Cream trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "score": 39.15
+          },
+          {
+            "top": {
+              "id": "g_xbt3gpjuo1p4",
+              "name": "Burgundy collared sweater"
+            },
+            "bottom": {
+              "id": "g_66xj06nllgf2",
+              "name": "Sage pleated trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "score": 25.65
+          }
+        ]
+      },
+      "545": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_z8gvd1zvrcif",
+              "name": "Brown knit zip sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.8
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 49.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8od90wk1sl9k",
+              "name": "Brown suede bomber jacket"
+            },
+            "score": 47.75
+          }
+        ]
+      },
+      "italiansummer": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 50.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_s5d2t696vryw",
+              "name": "Cream trousers"
+            },
+            "shoe": {
+              "id": "g_wymz2j18s6wh",
+              "name": "Brown suede mules"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 39.4
+          },
+          {
+            "top": {
+              "id": "g_9t24uvtl10wd",
+              "name": "Pink linen shirt"
+            },
+            "bottom": {
+              "id": "g_66xj06nllgf2",
+              "name": "Sage pleated trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 37.35
+          }
+        ]
+      },
+      "ald": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_mpvyy87tse1c",
+              "name": "Cream flag sweatshirt"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_nq7il0e0glnn",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8qqqzpwxuwti",
+              "name": "Brown chore jacket"
+            },
+            "score": 55.6
+          },
+          {
+            "top": {
+              "id": "g_6qz38nwsrupx",
+              "name": "Cream Polo Bear sweatshirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_fzekzikyrf50",
+              "name": "Navy suede sneakers"
+            },
+            "outer": {
+              "id": "g_5gfabeezh485",
+              "name": "White beige toggle jacket"
+            },
+            "score": 50.75
+          },
+          {
+            "top": {
+              "id": "g_d1awqw83gd3c",
+              "name": "Navy R sweater"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_08shegj8gqie",
+              "name": "Grey and white low-top sneakers"
+            },
+            "outer": {
+              "id": "g_vtbi91noucd3",
+              "name": "Light Blue denim jacket"
+            },
+            "score": 48.15
+          }
+        ]
+      },
+      "polo": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_salzdhuswyd3",
+              "name": "Brown cable-knit sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_yae8h1k9pjm1",
+              "name": "Brown leather tassel loafers"
+            },
+            "outer": {
+              "id": "g_qnmo5yzgl50b",
+              "name": "Navy field jacket"
+            },
+            "score": 44.5
+          },
+          {
+            "top": {
+              "id": "g_pa7kfg14rtzl",
+              "name": "White button-up shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_5josnvyoi4z9",
+              "name": "Navy blazer"
+            },
+            "score": 44.05
+          },
+          {
+            "top": {
+              "id": "g_i80zb0yen5gn",
+              "name": "Sage striped shirt"
+            },
+            "bottom": {
+              "id": "g_dscxzk8inlx2",
+              "name": "Navy pinstripe trousers"
+            },
+            "shoe": {
+              "id": "g_8nrtffa2s13s",
+              "name": "Brown suede tassel loafers"
+            },
+            "outer": {
+              "id": "g_oyyiaxx6rls7",
+              "name": "Mint green field jacket"
+            },
+            "score": 43.6
+          }
+        ]
+      }
+    },
+    "weekend/summer": {
+      "sweetstable": {
+        "status": "hidden_by_gate",
+        "looks": [],
+        "note": "No horse corduroys, rugby or blue gingham: plain cords and pink gingham stand in."
+      },
+      "italianwinter": {
+        "status": "hidden_by_gate",
+        "looks": [],
+        "note": "No overcoat or labelled merino/cashmere: using shearling/suede/blazer over knits."
+      },
+      "rrl": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_2b6fao81vqrs",
+              "name": "Blue plaid flannel shirt"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "score": 36.5
+          },
+          {
+            "top": {
+              "id": "g_yo7mwga1xi3m",
+              "name": "Light blue denim shirt"
+            },
+            "bottom": {
+              "id": "g_lg5qftegw0qo",
+              "name": "Brown frayed-hem pants"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "score": 31.35
+          },
+          {
+            "top": {
+              "id": "g_1zteshjh31ac",
+              "name": "Light Blue denim shirt"
+            },
+            "bottom": {
+              "id": "g_cfm8n594jea7",
+              "name": "Burgundy corduroy pants"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "score": 31.15
+          }
+        ]
+      },
+      "purple": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_xowln4uos3ug",
+              "name": "Beige knit sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 50.2
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_dscxzk8inlx2",
+              "name": "Navy pinstripe trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 37.85
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_bee1dg9rnfe5",
+              "name": "Grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 36.85
+          }
+        ]
+      },
+      "ald": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_mpvyy87tse1c",
+              "name": "Cream flag sweatshirt"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_nq7il0e0glnn",
+              "name": "White leather sneakers"
+            },
+            "score": 43.2
+          },
+          {
+            "top": {
+              "id": "g_6qz38nwsrupx",
+              "name": "Cream Polo Bear sweatshirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_fzekzikyrf50",
+              "name": "Navy suede sneakers"
+            },
+            "score": 38.4
+          },
+          {
+            "top": {
+              "id": "g_d1awqw83gd3c",
+              "name": "Navy R sweater"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_08shegj8gqie",
+              "name": "Grey and white low-top sneakers"
+            },
+            "score": 35.3
+          }
+        ]
+      },
+      "545": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_z8gvd1zvrcif",
+              "name": "Brown knit zip sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 48.65
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 47.55
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 46.15
+          }
+        ]
+      },
+      "faloni": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_wymz2j18s6wh",
+              "name": "Brown suede mules"
+            },
+            "score": 41.8
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_s5d2t696vryw",
+              "name": "Cream trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "score": 39.15
+          },
+          {
+            "top": {
+              "id": "g_xbt3gpjuo1p4",
+              "name": "Burgundy collared sweater"
+            },
+            "bottom": {
+              "id": "g_66xj06nllgf2",
+              "name": "Sage pleated trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "score": 26.9
+          }
+        ]
+      },
+      "italiansummer": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 50.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_s5d2t696vryw",
+              "name": "Cream trousers"
+            },
+            "shoe": {
+              "id": "g_wymz2j18s6wh",
+              "name": "Brown suede mules"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 39.4
+          },
+          {
+            "top": {
+              "id": "g_xbt3gpjuo1p4",
+              "name": "Burgundy collared sweater"
+            },
+            "bottom": {
+              "id": "g_66xj06nllgf2",
+              "name": "Sage pleated trousers"
+            },
+            "shoe": {
+              "id": "g_upni66uiqtgb",
+              "name": "Cream leather sneakers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 38.65
+          }
+        ]
+      },
+      "polo": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_salzdhuswyd3",
+              "name": "Brown cable-knit sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_5josnvyoi4z9",
+              "name": "Navy blazer"
+            },
+            "score": 44.0
+          },
+          {
+            "top": {
+              "id": "g_pa7kfg14rtzl",
+              "name": "White button-up shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_upni66uiqtgb",
+              "name": "Cream leather sneakers"
+            },
+            "score": 40.25
+          },
+          {
+            "top": {
+              "id": "g_i80zb0yen5gn",
+              "name": "Sage striped shirt"
+            },
+            "bottom": {
+              "id": "g_dscxzk8inlx2",
+              "name": "Navy pinstripe trousers"
+            },
+            "shoe": {
+              "id": "g_wgarjdurj7yp",
+              "name": "Brown leather sneakers"
+            },
+            "score": 40.2
+          }
+        ]
+      }
+    },
+    "weekday/winter": {
+      "sweetstable": {
+        "status": "hidden_by_gate",
+        "looks": [],
+        "note": "No horse corduroys, rugby or blue gingham: plain cords and pink gingham stand in."
+      },
+      "italiansummer": {
+        "status": "hidden_by_gate",
+        "looks": [],
+        "note": "No white-sole Summer Walk or linen jacket: taupe/ivory blazers + suede loafers stand in."
+      },
+      "rrl": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_2b6fao81vqrs",
+              "name": "Blue plaid flannel shirt"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_qnmo5yzgl50b",
+              "name": "Navy field jacket"
+            },
+            "score": 50.5
+          },
+          {
+            "top": {
+              "id": "g_yo7mwga1xi3m",
+              "name": "Light blue denim shirt"
+            },
+            "bottom": {
+              "id": "g_lg5qftegw0qo",
+              "name": "Brown frayed-hem pants"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_sb0mc7s7v346",
+              "name": "Olive field jacket"
+            },
+            "score": 46.75
+          },
+          {
+            "top": {
+              "id": "g_1zteshjh31ac",
+              "name": "Light Blue denim shirt"
+            },
+            "bottom": {
+              "id": "g_vf28ktbdhmtz",
+              "name": "Dark brown chinos"
+            },
+            "shoe": {
+              "id": "g_b4zsf3dfrhdv",
+              "name": "Brown leather boots"
+            },
+            "outer": {
+              "id": "g_8qqqzpwxuwti",
+              "name": "Brown chore jacket"
+            },
+            "score": 46.35
+          }
+        ]
+      },
+      "purple": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_xowln4uos3ug",
+              "name": "Beige knit sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_98p2sivflrxg",
+              "name": "Ivory double-breasted blazer"
+            },
+            "score": 50.2
+          },
+          {
+            "top": {
+              "id": "g_qrx875pbmh6n",
+              "name": "Beige textured sweater"
+            },
+            "bottom": {
+              "id": "g_dscxzk8inlx2",
+              "name": "Navy pinstripe trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_whgv0gu6m08l",
+              "name": "Beige corduroy blazer"
+            },
+            "score": 37.85
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_bee1dg9rnfe5",
+              "name": "Grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_juk45cokjxxy",
+              "name": "Taupe blazer"
+            },
+            "score": 36.9
+          }
+        ]
+      },
+      "italianwinter": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_xowln4uos3ug",
+              "name": "Beige knit sweater"
+            },
+            "bottom": {
+              "id": "g_bee1dg9rnfe5",
+              "name": "Grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.35
+          },
+          {
+            "top": {
+              "id": "g_qrx875pbmh6n",
+              "name": "Beige textured sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_8nrtffa2s13s",
+              "name": "Brown suede tassel loafers"
+            },
+            "outer": {
+              "id": "g_5josnvyoi4z9",
+              "name": "Navy blazer"
+            },
+            "score": 49.85
+          },
+          {
+            "top": {
+              "id": "g_v2gxktsmsoov",
+              "name": "Beige crewneck sweater"
+            },
+            "bottom": {
+              "id": "g_k75fdfdsnak0",
+              "name": "Light grey pleated trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 37.45
+          }
+        ]
+      },
+      "faloni": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_wymz2j18s6wh",
+              "name": "Brown suede mules"
+            },
+            "score": 41.8
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_s5d2t696vryw",
+              "name": "Cream trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "score": 39.15
+          },
+          {
+            "top": {
+              "id": "g_xbt3gpjuo1p4",
+              "name": "Burgundy collared sweater"
+            },
+            "bottom": {
+              "id": "g_66xj06nllgf2",
+              "name": "Sage pleated trousers"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "score": 25.65
+          }
+        ]
+      },
+      "545": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_z8gvd1zvrcif",
+              "name": "Brown knit zip sweater"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_5g4fqg77s4rw",
+              "name": "Black woven loafers"
+            },
+            "outer": {
+              "id": "g_1pg9y05mlkek",
+              "name": "Brown suede jacket"
+            },
+            "score": 50.8
+          },
+          {
+            "top": {
+              "id": "g_zh2l854ghu1t",
+              "name": "Green herringbone knit shirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_om0dh5nps1ke",
+              "name": "Brown leather loafers"
+            },
+            "outer": {
+              "id": "g_py2swfwot1ed",
+              "name": "Brown suede jacket"
+            },
+            "score": 49.2
+          },
+          {
+            "top": {
+              "id": "g_bq9qnaa1vkon",
+              "name": "Brown knit polo"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_2wf48xbqlgcv",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8od90wk1sl9k",
+              "name": "Brown suede bomber jacket"
+            },
+            "score": 47.75
+          }
+        ]
+      },
+      "ald": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_mpvyy87tse1c",
+              "name": "Cream flag sweatshirt"
+            },
+            "bottom": {
+              "id": "g_fvc535elt23d",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_nq7il0e0glnn",
+              "name": "White leather sneakers"
+            },
+            "outer": {
+              "id": "g_8qqqzpwxuwti",
+              "name": "Brown chore jacket"
+            },
+            "score": 55.6
+          },
+          {
+            "top": {
+              "id": "g_6qz38nwsrupx",
+              "name": "Cream Polo Bear sweatshirt"
+            },
+            "bottom": {
+              "id": "g_rvrs9hibr981",
+              "name": "Light blue jeans"
+            },
+            "shoe": {
+              "id": "g_fzekzikyrf50",
+              "name": "Navy suede sneakers"
+            },
+            "outer": {
+              "id": "g_5gfabeezh485",
+              "name": "White beige toggle jacket"
+            },
+            "score": 50.75
+          },
+          {
+            "top": {
+              "id": "g_d1awqw83gd3c",
+              "name": "Navy R sweater"
+            },
+            "bottom": {
+              "id": "g_dzsh3qh7v6sb",
+              "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+            },
+            "shoe": {
+              "id": "g_08shegj8gqie",
+              "name": "Grey and white low-top sneakers"
+            },
+            "outer": {
+              "id": "g_vtbi91noucd3",
+              "name": "Light Blue denim jacket"
+            },
+            "score": 48.15
+          }
+        ]
+      },
+      "polo": {
+        "status": "ok",
+        "looks": [
+          {
+            "top": {
+              "id": "g_salzdhuswyd3",
+              "name": "Brown cable-knit sweater"
+            },
+            "bottom": {
+              "id": "g_x1vivoqz2ixd",
+              "name": "Maroon/brown trousers"
+            },
+            "shoe": {
+              "id": "g_yae8h1k9pjm1",
+              "name": "Brown leather tassel loafers"
+            },
+            "outer": {
+              "id": "g_qnmo5yzgl50b",
+              "name": "Navy field jacket"
+            },
+            "score": 44.5
+          },
+          {
+            "top": {
+              "id": "g_pa7kfg14rtzl",
+              "name": "White button-up shirt"
+            },
+            "bottom": {
+              "id": "g_6xkkzn06sbdm",
+              "name": "Beige trousers"
+            },
+            "shoe": {
+              "id": "g_8ukg5mi9r3fc",
+              "name": "Brown suede loafers"
+            },
+            "outer": {
+              "id": "g_5josnvyoi4z9",
+              "name": "Navy blazer"
+            },
+            "score": 44.05
+          },
+          {
+            "top": {
+              "id": "g_i80zb0yen5gn",
+              "name": "Sage striped shirt"
+            },
+            "bottom": {
+              "id": "g_dscxzk8inlx2",
+              "name": "Navy pinstripe trousers"
+            },
+            "shoe": {
+              "id": "g_8nrtffa2s13s",
+              "name": "Brown suede tassel loafers"
+            },
+            "outer": {
+              "id": "g_oyyiaxx6rls7",
+              "name": "Mint green field jacket"
+            },
+            "score": 43.6
+          }
+        ]
+      }
+    }
+  },
+  "contexts": [
+    {
+      "occasion": "weekday",
+      "season": "fall"
+    },
+    {
+      "occasion": "weekend",
+      "season": "fall"
+    },
+    {
+      "occasion": "out",
+      "season": "fall"
+    },
+    {
+      "occasion": "weekend",
+      "season": "summer"
+    },
+    {
+      "occasion": "weekday",
+      "season": "winter"
+    }
+  ]
+}

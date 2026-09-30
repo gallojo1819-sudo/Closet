@@ -1,4 +1,4 @@
-import type { Garment, Moment, Occasion, WeatherSnap } from "./types.ts";
+import type { Garment, Moment, Occasion, Season, WeatherSnap } from "./types.ts";
 import { colorLine } from "./color.ts";
 import {
   HOUSE_LABEL,
@@ -10,6 +10,7 @@ import {
   lookHouses,
   slotOf,
 } from "./style.ts";
+import { houseFingerprintOk, type House } from "./houses.ts";
 
 const ORDER: Garment["category"][] = [
   "top",
@@ -89,16 +90,25 @@ export function layersForOnMe(pieces: Garment[]): Garment[] {
   return [top, bottom, shoe, outer].filter((g): g is Garment => Boolean(g)).slice(0, 4);
 }
 
-/** Kit tiles: one top, one bottom, one blazer, one shoe. No stack. */
+/** Band for a plate already chosen for the look. Category wins over a jacket-ish name. */
+export function kitBand(g: Garment): "top" | "jacket" | "bottom" | "shoe" | null {
+  if (g.category === "top" || g.category === "dress") return "top";
+  if (g.category === "bottom") return "bottom";
+  if (g.category === "footwear") return "shoe";
+  const s = slotOf(g);
+  if (s === "top" || s === "dress") return "top";
+  if (s === "bottom") return "bottom";
+  if (s === "footwear") return "shoe";
+  if (s === "outerwear" || g.category === "outerwear") return "jacket";
+  return null;
+}
+
+/** One band each for the top, bottom, shoe, and the outer when the look has one. */
 export function kitCells(pieces: Garment[]): Garment[] {
-  const layers = layersForOnMe(pieces);
-  const top = layers.find((g) => {
-    const s = slotOf(g);
-    return s === "top" || s === "dress" || isHoodiePiece(g);
-  });
-  const bottom = layers.find((g) => slotOf(g) === "bottom");
-  const outer = layers.find((g) => slotOf(g) === "outerwear" && !isHoodiePiece(g));
-  const shoe = layers.find((g) => slotOf(g) === "footwear");
+  const top = pieces.find((g) => kitBand(g) === "top");
+  const bottom = pieces.find((g) => kitBand(g) === "bottom");
+  const outer = pieces.find((g) => kitBand(g) === "jacket");
+  const shoe = pieces.find((g) => kitBand(g) === "shoe");
   return [top, bottom, outer, shoe].filter((g): g is Garment => Boolean(g));
 }
 
@@ -109,9 +119,14 @@ export function nameLook(pieces: Garment[]): string {
   return `${sorted[0]!.name} · ${sorted[1]!.name}`;
 }
 
-/** Editorial card title — palette + house, or a short occasion line. Not a SKU dump. */
-export function spreadTitle(pieces: Garment[], occasion?: Occasion): string {
-  const note = dropNote(pieces, undefined, occasion).replace(/\.$/, "");
+/** Editorial card title — palette + the chip's house, or a short occasion line. Not a SKU dump. */
+export function spreadTitle(
+  pieces: Garment[],
+  occasion?: Occasion,
+  house?: House | "all" | null,
+  season?: Season,
+): string {
+  const note = dropNote(pieces, undefined, occasion, undefined, house, season).replace(/\.$/, "");
   if (note) return note;
   if (occasion === "weekend") return "Saturday market";
   if (occasion === "weekday") return "Quiet office";
@@ -145,12 +160,19 @@ export function dropNote(
   weather?: WeatherSnap,
   occasion?: Occasion,
   moment?: Moment,
+  house?: House | "all" | null,
+  season?: Season,
 ): string {
   void weather;
-  void occasion;
   void moment;
-  const house = lookHouses(pieces)[0];
-  const label = house ? HOUSE_LABEL[house] : "";
+  const occ = occasion ?? "weekday";
+  let label = "";
+  if (house && house !== "all") {
+    label = HOUSE_LABEL[house];
+  } else {
+    const named = lookHouses(pieces, occ, season)[0];
+    if (named && houseFingerprintOk(pieces, named, occ, undefined, season)) label = HOUSE_LABEL[named];
+  }
   return colorLine(pieces, label) || (label ? label : "From the closet.");
 }
 

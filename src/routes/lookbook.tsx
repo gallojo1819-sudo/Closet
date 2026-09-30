@@ -138,6 +138,7 @@ function LookCard({
   chip,
   note,
   named,
+  houseChip,
 }: {
   look: Look;
   pieces: Garment[];
@@ -145,11 +146,12 @@ function LookCard({
   index: number;
   onOpen: () => void;
   cardRef: (el: HTMLElement | null) => void;
-  season: string;
+  season: Season;
   houseLabel: string;
   chip: string;
   note?: string | null;
   named: boolean;
+  houseChip: "all" | House;
 }) {
   const dots = pieceDots(pieces);
   return (
@@ -178,7 +180,7 @@ function LookCard({
           named={named}
         />
       </IdleMount>
-      <p className="mt-3">{spreadTitle(pieces, look.occasion as Occasion)}</p>
+      <p className="mt-3">{spreadTitle(pieces, look.occasion as Occasion, houseChip, season)}</p>
       {dots.length > 0 && (
         <div className="mt-2 flex gap-1.5" aria-hidden="true">
           {dots.map((dot) => (
@@ -308,7 +310,7 @@ function LookbookPage() {
     setHeroLooks(looksForHero(g, garments));
   };
 
-  const getAnchor = useCallback(() => lastAnchor.current, [heroId, openId]);
+  const getAnchor = useCallback(() => lastAnchor.current, []);
 
   const getOpenCard = useCallback(() => {
     if (lastAnchor.current) return lastAnchor.current;
@@ -526,16 +528,20 @@ function LookbookPage() {
         <>
       <section className="mt-10">
         <p className="micro text-ink-soft">This week</p>
-        {visible.length === 0 ? (
+        {colorOpen && !color ? (
+          <p className="mt-3 text-sm text-ink-soft">Pick a colour.</p>
+        ) : visible.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">
-            {emptyFilterCopy(
-              chapterLabel,
-              seasonLabel,
-              seasonChip,
-              houseChip,
-              color,
-              canBuild,
-            ) ?? "Need a top, a bottom, and shoes."}
+            {houseChip !== "all" || color
+              ? "Needs pieces from this closet."
+              : (emptyFilterCopy(
+                  chapterLabel,
+                  seasonLabel,
+                  seasonChip,
+                  houseChip,
+                  color,
+                  canBuild,
+                ) ?? "Need a top, a bottom, and shoes.")}
           </p>
         ) : (
           <ul
@@ -547,8 +553,33 @@ function LookbookPage() {
           >
             {cards.map((card, i) => {
               const look = card.look;
+              if (look.gate || look.needsPieces) {
+                const gate = look.gate;
+                return (
+                  <li key={look.id} id={`look-${look.id}`}>
+                    <div className="border border-hairline bg-paper px-4 py-6">
+                      <p className="text-sm text-ink">{gate?.text ?? look.gap ?? look.name}</p>
+                      {gate ? (
+                        <button
+                          type="button"
+                          className="micro mt-4 border border-hairline px-3 py-2 text-ink"
+                          onClick={() => {
+                            const nextOcc = gate.occasion as Occasion;
+                            const nextSea = gate.season as Season;
+                            if (OCCASIONS.some((o) => o.id === nextOcc)) setOccasion(nextOcc);
+                            if (SEASONS.some((s) => s.id === nextSea)) setSeasonChip(nextSea);
+                          }}
+                        >
+                          {`Switch to ${gate.occasion} · ${gate.season}`}
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              }
               const pieces = piecesFor(look);
               if (pieces.length < 3) return null;
+              const lead = houseChip === "all" ? leadHouse(pieces, occasion, season) : houseChip;
               return (
                 <LookCard
                   key={look.id}
@@ -557,11 +588,8 @@ function LookbookPage() {
                   index={i}
                   season={season}
                   chip={occasion}
-                  houseLabel={
-                    houseChip === "all"
-                      ? HOUSE_LABEL[leadHouse(pieces, occasion)]
-                      : HOUSE_LABEL[houseChip]
-                  }
+                  houseChip={houseChip}
+                  houseLabel={lead ? HOUSE_LABEL[lead] : "All"}
                   note={card.why}
                   named={openId === look.id}
                   highlight={highlightId === look.id}
@@ -661,7 +689,7 @@ function LookbookPage() {
                       onClick={() => setOpenId(look.id)}
                     >
                       <LookKit pieces={pieces} className="pointer-events-none aspect-[4/5]" />
-                      <p className="mt-2 text-sm">{spreadTitle(pieces, look.occasion as Occasion)}</p>
+                      <p className="mt-2 text-sm">{spreadTitle(pieces, look.occasion as Occasion, houseChip, season)}</p>
                       <p className="micro text-ink-soft">{look.occasion}</p>
                     </button>
                   </li>

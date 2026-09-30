@@ -1,10 +1,19 @@
 /**
- * Hard house fingerprints. Tokens from name/subtype/notes/colors — never a shop.
- * PoloDefault is last for All. A selected house never falls back to oxford+chino+penny.
+ * House chips. Legality is the approved profile evaluator, not a phrase list.
+ * Look-print axes below are for variety only. They do not decide a house.
  */
-import { HOUSE_PROFILES, type HouseProfile } from "./house-profiles/index.ts";
+import { APPROVED } from "./house-profiles/load.ts";
+import {
+  assignSlots,
+  evaluatePlates,
+  pieceBanned,
+  scorePlates,
+  sig,
+  slotOfPlate,
+  type Plate,
+} from "./house-profiles/evaluate.ts";
 import { resolveTuck } from "./tuck.ts";
-import type { Garment, Occasion } from "./types.ts";
+import type { Garment, Occasion, Season } from "./types.ts";
 
 export type House =
   | "polo"
@@ -192,7 +201,7 @@ export function topType(g: Garment): TopType {
 
 export function shoeFamily(g: Garment): ShoeFamily {
   const b = garmentBlob(g);
-  if (/\b990\b|\b991\b|\b993\b|new balance/.test(b)) return "nb990";
+  if (/\b990\b|\b991\b|\b993\b|new balance/.test(b) || /new balance/i.test(g.brand ?? "")) return "nb990";
   if (/summer walk/.test(b) || (/loafer/.test(b) && /white[- ]sole/.test(b))) return "summer_walk";
   if (/mule|driving/.test(b)) return "driving_mule";
   if (/chelsea/.test(b)) return "chelsea";
@@ -211,8 +220,8 @@ export function shoeFamily(g: Garment): ShoeFamily {
 
 export function bottomType(g: Garment): BottomType {
   const b = garmentBlob(g);
-  if (/drawstring|gurkha/.test(b)) return "drawstring";
   if (/cord/.test(b)) return "cord";
+  if (/drawstring/.test(b)) return "drawstring";
   if (/flannel/.test(b)) return "flannel";
   if (/linen/.test(b)) return "linen";
   if (/\bjeans?\b|denim|selvedge/.test(b)) return "jean";
@@ -307,345 +316,109 @@ export function axesDiffer(a: LookPrint, b: LookPrint): number {
   return n;
 }
 
-export function houseProfile(house: House): HouseProfile {
-  return HOUSE_PROFILES[house];
+export type HouseBrief = {
+  signals: string[];
+  shoes: string[];
+  jackets: string[];
+  requireOwned: string[];
+  gap?: string;
+  cardNote?: string;
+  gap_note?: string;
+  card_note?: string;
+};
+
+function asPlate(g: Garment): Plate {
+  const category = g.category === "dress" ? "top" : g.category;
+  return {
+    id: g.id,
+    name: g.name,
+    category,
+    subtype: g.subtype,
+    material: g.material,
+    colors: g.colors,
+    brand: g.brand,
+    fit: g.fit,
+    warmth: g.warmth,
+  };
 }
 
-/** One profile phrase. "a or b" hits if either side hits. The words are the JSON, not a second rule list. */
+function ctxOf(occasion?: string, season?: string) {
+  return { occasion, season };
+}
+
+function profile(house: House) {
+  return APPROVED[house];
+}
+
+/** Approved profile for a chip. Callers that still read gap/card notes use the JSON fields. */
+export function houseProfile(house: House): HouseBrief {
+  const p = profile(house) as {
+    gap_note?: string;
+    card_note?: string;
+    allowed?: { shoe?: string[]; outer?: string[] };
+  };
+  return {
+    signals: [],
+    shoes: p?.allowed?.shoe ?? [],
+    jackets: p?.allowed?.outer ?? [],
+    requireOwned: [],
+    gap: p?.gap_note,
+    cardNote: p?.card_note,
+    gap_note: p?.gap_note,
+    card_note: p?.card_note,
+  };
+}
+
+/** Phrase matching is gone. House legality is evaluate(). */
 export function profilePhraseHits(
-  pieces: Garment[],
-  phrase: string,
-  occasion?: Occasion,
-  print: LookPrint = lookPrint(pieces, occasion),
+  _pieces: Garment[],
+  _phrase: string,
+  _occasion?: Occasion,
+  _print?: LookPrint,
 ): boolean {
-  const raw = phrase.trim().toLowerCase();
-  if (!raw) return false;
-  if (raw === "pink polo as the only top") return atomHits(raw, print, pieces);
-  if (raw.includes(" and ")) {
-    return raw.split(" and ").every((part) => profilePhraseHits(pieces, part.trim(), occasion, print));
-  }
-  return raw.split(" or ").some((part) => atomHits(part.trim(), print, pieces));
+  return false;
 }
 
-function atomHits(phrase: string, print: LookPrint, pieces: Garment[]): boolean {
-  const tops = topsOf(pieces);
-  const shoes = shoesOf(pieces);
-  const outers = pieces.filter((g) => slotOf(g) === "outerwear");
-  const outerBlob = outers.map(garmentBlob).join(" ");
-  const blob = pieces.map(garmentBlob).join(" ");
-  switch (phrase) {
-    case "oxford":
-      return print.top_type === "oxford";
-    case "polo":
-    case "pique polo":
-      return print.top_type === "pique_polo";
-    case "cable":
-      return print.top_type === "cable";
-    case "rugby":
-      return print.top_type === "rugby";
-    case "oversized oxford":
-      return print.top_type === "oversized_oxford";
-    case "camp":
-      return print.top_type === "camp";
-    case "portofino":
-      return print.top_type === "linen_portofino";
-    case "italian knit polo":
-      return print.top_type === "italian_knit_polo";
-    case "sangallo":
-      return print.top_type === "sangallo";
-    case "serafino":
-      return print.top_type === "serafino";
-    case "bowling":
-      return print.top_type === "bowling";
-    case "light cashmere tee":
-      return print.top_type === "light_cashmere_tee";
-    case "fair isle":
-      return print.top_type === "fair_isle";
-    case "gingham":
-      return print.top_type === "gingham";
-    case "work shirt":
-      return tops.some((g) => /work shirt|western|pearl\s*snap/.test(garmentBlob(g)));
-    case "western":
-      return /western|cowboy/.test(blob);
-    case "pearl-snap":
-    case "pearl snap":
-      return /pearl\s*snap/.test(blob);
-    case "chambray":
-      return /chambray/.test(blob);
-    case "flannel shirt":
-      return tops.some((g) => /flannel/.test(garmentBlob(g)));
-    case "selvedge":
-      return /selvedge/.test(blob);
-    case "jean":
-    case "jeans":
-      return pieces.some(
-        (g) => slotOf(g) === "bottom" && (bottomType(g) === "jean" || /jean|denim|selvedge/.test(garmentBlob(g))),
-      );
-    case "denim":
-      return pieces.some((g) => slotOf(g) === "bottom" && /denim|selvedge|\bjeans?\b/.test(garmentBlob(g)));
-    case "cord":
-      return pieces.some((g) => slotOf(g) === "bottom" && bottomType(g) === "cord");
-    case "chino":
-      return print.bottom_type === "chino" || print.bottom_type === "khaki";
-    case "linen":
-      return print.bottom_type === "linen" || (print.top_type === "linen_portofino");
-    case "drawstring":
-      return print.bottom_type === "drawstring";
-    case "flannel":
-      return print.bottom_type === "flannel" || /flannel/.test(blob);
-    case "trouser":
-      return print.bottom_type === "trouser" || print.bottom_type === "flannel";
-    case "pleated dress trousers":
-    case "pleated trousers":
-      return pieces.some(
-        (g) => /pleat/.test(garmentBlob(g)) && /trouser/.test(garmentBlob(g)) && bottomType(g) !== "jean",
-      );
-    case "penny loafer":
-      return shoes.some((g) => shoeFamily(g) === "penny_loafer");
-    case "tassel loafer":
-      return /tassel/.test(blob) && /loafer/.test(blob);
-    case "suede loafer":
-      return shoes.some((g) => shoeFamily(g) === "suede_loafer");
-    case "loafer":
-      return shoes.some((g) => {
-        const fam = shoeFamily(g);
-        return fam === "penny_loafer" || fam === "suede_loafer";
-      });
-    case "driving mule":
-      return shoes.some((g) => shoeFamily(g) === "driving_mule");
-    case "boot":
-      return shoes.some((g) => shoeFamily(g) === "boot");
-    case "chelsea":
-      return shoes.some((g) => shoeFamily(g) === "chelsea");
-    case "990":
-      return shoes.some((g) => shoeFamily(g) === "nb990");
-    case "leather sneaker":
-      return shoes.some((g) => shoeFamily(g) === "leather_sneaker");
-    case "boat":
-      return shoes.some((g) => shoeFamily(g) === "boat");
-    case "white court":
-    case "court sneaker":
-      return shoes.some((g) => shoeFamily(g) === "white_court" || /court/.test(garmentBlob(g)));
-    case "fashion sneaker":
-      return shoes.some((g) => {
-        const b = garmentBlob(g);
-        if (!/sneaker/.test(b)) return false;
-        if (/court|\b990\b|\bboot/.test(b)) return false;
-        const fam = shoeFamily(g);
-        return fam === "leather_sneaker" || fam === "suede_sneaker" || /fashion/.test(b);
-      });
-    case "not summer shoe":
-      return print.shoe_family !== "summer_walk" && print.shoe_family !== "suede_loafer";
-    case "summer walk":
-      return shoes.some((g) => shoeFamily(g) === "summer_walk");
-    case "derby":
-      return shoes.some((g) => shoeFamily(g) === "derby");
-    case "suede sneaker":
-      return shoes.some((g) => shoeFamily(g) === "suede_sneaker");
-    case "chore jacket":
-    case "chore":
-      return print.outer_attitude === "chore" || /\bchore\b/.test(outerBlob);
-    case "denim jacket":
-      return print.outer_attitude === "denim" || /denim jacket|trucker/.test(outerBlob);
-    case "suede jacket":
-      return print.outer_attitude === "suede" || (/suede|shearling/.test(outerBlob) && /jacket|coat/.test(outerBlob));
-    case "field jacket":
-    case "field":
-      return print.outer_attitude === "field" || /\bfield\b/.test(outerBlob);
-    case "navy blazer":
-      return print.outer_attitude === "navy_blazer" || (/navy/.test(outerBlob) && /blazer/.test(outerBlob));
-    case "blazer":
-      return /blazer/.test(outerBlob);
-    case "unconstructed":
-      return print.outer_attitude === "unconstructed";
-    case "no jacket":
-      return print.outer_attitude === "none";
-    case "overcoat":
-      return print.outer_attitude === "overcoat" || /overcoat|topcoat/.test(outerBlob);
-    case "camel jacket":
-      return print.outer_attitude === "camel_jacket";
-    case "cashmere":
-      return print.top_type === "cashmere_top" || /cashmere/.test(blob);
-    case "merino":
-      return print.top_type === "merino";
-    case "turtleneck":
-      return print.top_type === "turtleneck";
-    case "untucked":
-      return print.tuck === "out";
-    case "tucked oxford":
-      return print.top_type === "oxford" && print.tuck === "in";
-    case "camel":
-    case "charcoal":
-    case "loden":
-    case "beige":
-    case "ivory":
-    case "tobacco":
-    case "sand":
-    case "cream":
-    case "ocean":
-      return new RegExp(`\\b${phrase}\\b`).test(blob);
-    case "pink polo as the only top": {
-      if (tops.length !== 1) return false;
-      const only = tops[0]!;
-      return topType(only) === "pique_polo" && /pink/.test(garmentBlob(only));
-    }
-    default:
-      return new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(blob);
-  }
-}
-
-function scoreProfile(
+export function houseKill(
   pieces: Garment[],
   house: House,
-  occasion: Occasion | undefined,
-  print: LookPrint,
-): { required: number; forbidden: number } {
-  const profile = HOUSE_PROFILES[house];
-  let required = 0;
-  let forbidden = 0;
-  for (const signal of profile.signals) {
-    if (profilePhraseHits(pieces, signal, occasion, print)) required += 1;
-  }
-  for (const ban of profile.banned) {
-    if (profilePhraseHits(pieces, ban, occasion, print)) forbidden += 1;
-  }
-  if (
-    profile.anchors.length > 0 &&
-    !profile.anchors.some((anchor) => profilePhraseHits(pieces, anchor, occasion, print))
-  ) {
-    forbidden += 1;
-  }
-  return { required, forbidden };
+  occasion: Occasion,
+  _pool?: Garment[],
+  season?: Season,
+): string | null {
+  const ev = evaluatePlates(profile(house) as never, assignSlots(pieces.map(asPlate)), ctxOf(occasion, season));
+  return ev.passed ? null : ev.hardFails[0] ?? "fail";
 }
 
-function hits(pieces: Garment[], house: House, occasion?: Occasion): { required: number; forbidden: number } {
-  return scoreProfile(pieces, house, occasion, lookPrint(pieces, occasion));
+export function housePieceBanned(pieces: Garment[], house: House, occasion?: Occasion, season?: Season): boolean {
+  const p = profile(house);
+  return pieces.some((g) => pieceBanned(asPlate(g), p as never, ctxOf(occasion, season)));
 }
-
-function westernCount(pieces: Garment[]): number {
-  return pieces.filter((g) => /western|cowboy|bolo|pearl\s*snap/.test(garmentBlob(g))).length;
-}
-
-function killWhen(when: string, pieces: Garment[], occasion: Occasion): boolean {
-  const print = lookPrint(pieces, occasion);
-  const top = topsOf(pieces)[0];
-  const shoe = shoesOf(pieces)[0];
-  const topB = top ? garmentBlob(top) : "";
-  const shoeB = shoe ? garmentBlob(shoe) : "";
-  const khaki = print.bottom_type === "khaki" || print.bottom_type === "chino";
-  switch (when) {
-    case "gym-sneaker":
-      return Boolean(shoe && /990|jordan|\baj4\b|gym|runner/.test(shoeB));
-    case "polo-default":
-      return isPoloDefaultSilhouette(print);
-    case "blue-ocbd":
-      return (
-        print.top_type === "oxford" &&
-        /navy|blue/.test(topB) &&
-        khaki &&
-        print.shoe_family === "penny_loafer"
-      );
-    case "navy-polo-chino-boat":
-      return (
-        print.top_type === "pique_polo" &&
-        khaki &&
-        (print.shoe_family === "boat" || print.shoe_family === "penny_loafer")
-      );
-    case "faloni-twin":
-      return (
-        (print.top_type === "camp" || print.top_type === "linen_portofino") &&
-        print.shoe_family === "driving_mule"
-      );
-    case "needs-sangallo-or-court":
-      return (
-        print.top_type !== "sangallo" &&
-        print.top_type !== "serafino" &&
-        print.top_type !== "bowling" &&
-        print.top_type !== "light_cashmere_tee" &&
-        print.shoe_family !== "white_court"
-      );
-    case "cable-jean-sneaker":
-      return print.top_type === "cable" && print.bottom_type === "jean" && /sneaker/.test(shoeB);
-    case "navy-blazer-chino-penny":
-      return print.outer_attitude === "navy_blazer" && khaki && print.shoe_family === "penny_loafer";
-    case "overcoat-tee-court":
-      return print.outer_attitude === "overcoat" && print.shoe_family === "white_court" && print.top_type === "tee";
-    case "rugby-blazer":
-      return (
-        pieces.some((g) => /rugby/.test(garmentBlob(g))) &&
-        pieces.some((g) => /blazer/.test(garmentBlob(g)))
-      );
-    case "western-max":
-      return westernCount(pieces) > 1;
-    case "unless-summer-shoe":
-      return print.shoe_family !== "summer_walk" && print.shoe_family !== "suede_loafer";
-    default:
-      return false;
-  }
-}
-
-/** Kill rules live on the profile. The closet supplies which `when` applies. */
-export function houseKill(pieces: Garment[], house: House, occasion: Occasion, _pool?: Garment[]): string | null {
-  for (const kill of HOUSE_PROFILES[house].kills) {
-    if (killWhen(kill.when, pieces, occasion)) return kill.message;
-  }
-  return null;
-}
-
-export function housePieceBanned(pieces: Garment[], house: House, occasion?: Occasion): boolean {
-  return HOUSE_PROFILES[house].banned.some((ban) => profilePhraseHits(pieces, ban, occasion));
-}
-
-const fingerprintCache = new Map<string, boolean>();
 
 export function houseFingerprintOk(
   pieces: Garment[],
   house: House,
   occasion: Occasion,
-  pool?: Garment[],
+  _pool?: Garment[],
+  season?: Season,
 ): boolean {
-  const key = `${house}|${occasion}|${pieces.map((p) => p.id).sort().join("\0")}`;
-  const cached = fingerprintCache.get(key);
-  if (cached !== undefined) return cached;
-  const profile = HOUSE_PROFILES[house];
-  const { required, forbidden } = hits(pieces, house, occasion);
-  const ok =
-    forbidden === 0 &&
-    required >= profile.minSignals &&
-    !houseKill(pieces, house, occasion, pool);
-  if (fingerprintCache.size > 20000) fingerprintCache.clear();
-  fingerprintCache.set(key, ok);
-  return ok;
+  const ev = evaluatePlates(profile(house) as never, assignSlots(pieces.map(asPlate)), ctxOf(occasion, season));
+  return ev.passed;
 }
 
-/** Hard row look: fingerprint, and every requireOwned token the closet actually has. */
 export function isHardHouseLook(
   pieces: Garment[],
   house: House,
   occasion: Occasion,
   pool?: Garment[],
+  season?: Season,
 ): boolean {
-  if (!houseFingerprintOk(pieces, house, occasion, pool)) return false;
-  const profile = HOUSE_PROFILES[house];
-  const rack = pool ?? pieces;
-  for (const token of profile.requireOwned) {
-    if (!profilePhraseHits(rack, token, occasion)) return false;
-    if (!profilePhraseHits(pieces, token, occasion)) return false;
-  }
-  return true;
+  return houseFingerprintOk(pieces, house, occasion, pool, season);
 }
 
 export function stylistHouseBrief(house: House): string {
-  const profile = HOUSE_PROFILES[house];
-  return [
-    `HOUSE ${HOUSE_LABEL[house]}`,
-    `Signals: ${profile.signals.join("; ")}`,
-    `Banned: ${profile.banned.join("; ")}`,
-    `Jackets: ${profile.jackets.join(", ") || "none"}`,
-    `Shoes: ${profile.shoes.join(", ")}`,
-    profile.cardNote ? `Card: ${profile.cardNote}` : "",
-    profile.gap ? `GAP: ${profile.gap}` : "",
-  ]
+  const p = profile(house) as { card_note?: string; gap_note?: string; label?: string };
+  return [`HOUSE ${HOUSE_LABEL[house]}`, p?.card_note ? `Card: ${p.card_note}` : "", p?.gap_note ? `GAP: ${p.gap_note}` : ""]
     .filter(Boolean)
     .join("\n");
 }
@@ -664,45 +437,39 @@ export function appendHouseGap(
   return `${text}\nMISSING: ${gap}`;
 }
 
-/** Polo last. Never PoloDefault when another house claims the look. */
-export function leadHouse(pieces: Garment[], occasion: Occasion = "weekday"): House {
+/** Highest-scoring house whose approved profile passes. Polo is last. Null when none pass. */
+export function leadHouse(pieces: Garment[], occasion: Occasion = "weekday", season?: Season): House | null {
   let best: House | null = null;
-  let bestN = 0;
+  let bestN = Number.NEGATIVE_INFINITY;
   for (const h of HOUSES) {
-    if (h === "polo") continue;
-    if (houseKill(pieces, h, occasion)) continue;
-    const { required, forbidden } = hits(pieces, h, occasion);
-    if (forbidden > 0 || required < HOUSE_PROFILES[h].minSignals) continue;
-    if (required > bestN) {
+    const scored = scorePlates(profile(h) as never, assignSlots(pieces.map(asPlate)), ctxOf(occasion, season));
+    if (!scored.eval.passed) continue;
+    const n = h === "polo" ? scored.score - 0.01 : scored.score;
+    if (n > bestN) {
       best = h;
-      bestN = required;
+      bestN = n;
     }
   }
-  if (best) return best;
-  return "polo";
+  return best;
 }
 
-const housesOfCache = new Map<string, House[]>();
-
 export function housesOf(g: Garment): House[] {
-  const key = `${g.id}|${g.name}|${g.subtype}|${g.notes ?? ""}|${g.colors.join(",")}|${g.material}`;
-  const cached = housesOfCache.get(key);
-  if (cached) return cached;
-  const fake: Garment[] = [g];
-  const print = lookPrint(fake);
+  const plate = asPlate(g);
+  const slot = slotOfPlate(plate);
   const out: House[] = [];
   for (const h of HOUSES) {
-    const { required, forbidden } = scoreProfile(fake, h, undefined, print);
-    if (forbidden === 0 && required >= 1) out.push(h);
+    const p = profile(h) as unknown as { keywords: Record<string, never>; allowed?: Record<string, string[]> };
+    const allowed = p.allowed?.[slot];
+    if (!allowed?.length) continue;
+    if (pieceBanned(plate, p as never, {})) continue;
+    if (allowed.some((sid) => sig(plate, sid, p.keywords))) out.push(h);
   }
-  if (housesOfCache.size > 4000) housesOfCache.clear();
-  housesOfCache.set(key, out);
   return out;
 }
 
-export function lookHouses(pieces: Garment[], occasion: Occasion = "weekday"): House[] {
-  const h = leadHouse(pieces, occasion);
-  return [h];
+export function lookHouses(pieces: Garment[], occasion: Occasion = "weekday", season?: Season): House[] {
+  const h = leadHouse(pieces, occasion, season);
+  return h ? [h] : [];
 }
 
 export function houseFromPrompt(prompt: string): House | null {
@@ -720,13 +487,9 @@ export function houseFromPrompt(prompt: string): House | null {
   return null;
 }
 
-export function houseGapNote(house: House, garments: Garment[], occasion?: Occasion): string | null {
-  const profile = HOUSE_PROFILES[house];
-  if (occasion === "weekday" && profile.occasionNote) return profile.occasionNote;
-  for (const hole of profile.holes) {
-    if (!profilePhraseHits(garments, hole.missing, occasion)) return hole.note;
-  }
-  return null;
+export function houseGapNote(house: House, _garments: Garment[], _occasion?: Occasion): string | null {
+  const note = (profile(house) as { gap_note?: string }).gap_note;
+  return note?.trim() ? note : null;
 }
 
 export function houseLegalCombo(
@@ -735,29 +498,14 @@ export function houseLegalCombo(
   occasion: Occasion,
   previous?: Garment[],
   pool?: Garment[],
+  season?: Season,
 ): boolean {
-  if (!house || house === "all") {
-    const h = leadHouse(pieces, occasion);
-    if (h !== "polo" && !houseFingerprintOk(pieces, h, occasion, pool)) {
-      return houseFingerprintOk(pieces, "polo", occasion, pool);
-    }
-    return true;
-  }
-  if (!houseFingerprintOk(pieces, house, occasion, pool)) return false;
+  if (!house || house === "all") return true;
+  if (!houseFingerprintOk(pieces, house, occasion, pool, season)) return false;
   if (previous && previous.length >= 3) {
     const a = lookPrint(previous, occasion);
     const b = lookPrint(pieces, occasion);
     if (axesDiffer(a, b) < 3) return false;
-    if (house !== "polo" && axesDiffer(b, {
-      top_type: "oxford",
-      bottom_type: "chino",
-      shoe_family: "penny_loafer",
-      tuck: "in",
-      palette_lane: "navy_blue",
-      outer_attitude: "none",
-    }) < 3) {
-      return false;
-    }
   }
   return true;
 }

@@ -1,0 +1,2391 @@
+{
+ "source": "closet_meta SELECT-only snapshot closet_meta_garments_2026-09-30.json (fetched 2026-09-30 12:51 PM ET). Test fixture for the house-profile and stylist-rule ports. 142 live plates + 5 tombstones (deleted_garments).",
+ "deleted_garments": [
+  "g_37e5eqjwgd3d",
+  "g_c6qdv5c3gkor",
+  "g_x0ro1mg2gu0a",
+  "g_67pciqid8k2b",
+  "g_oh9f64t8kvor"
+ ],
+ "plates": [
+  {
+   "id": "g_oimadifuvalb",
+   "name": "Cream long-sleeve polo",
+   "category": "top",
+   "subtype": "polo",
+   "material": "cotton",
+   "colors": [
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_j4qu90fgv347",
+   "name": "Light Blue plaid flannel",
+   "category": "top",
+   "subtype": "flannel shirt",
+   "material": "flannel",
+   "colors": [
+    "light blue",
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_v3ovns4bv344",
+   "name": "Navy corduroy trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "corduroy",
+   "colors": [
+    "navy",
+    "black"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_sb0mc7s7v346",
+   "name": "Olive field jacket",
+   "category": "outerwear",
+   "subtype": "field jacket",
+   "material": "cotton",
+   "colors": [
+    "olive",
+    "chocolate"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_1zteshjh31ac",
+   "name": "Light Blue denim shirt",
+   "category": "top",
+   "subtype": "denim shirt",
+   "material": "denim",
+   "colors": [
+    "light blue",
+    "grey"
+   ],
+   "brand": "Obey",
+   "fit": "relaxed",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_zzrq3j5n2njk",
+   "name": "Pink gingham shirt",
+   "category": "top",
+   "subtype": "dress shirt",
+   "material": "cotton",
+   "colors": [
+    "pink",
+    "cream"
+   ],
+   "brand": "Robert Graham",
+   "fit": "slim",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_x1vivoqz2ixd",
+   "name": "Maroon/brown trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "wool",
+   "colors": [
+    "maroon/brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_m6ri2fgg2hmd",
+   "name": "Light Blue trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "woven",
+   "colors": [
+    "light blue",
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_mq1ob9uc1npn",
+   "name": "Rust button-down",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "cotton",
+   "colors": [
+    "rust",
+    "cream"
+   ],
+   "brand": "Ferrari",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_0pfc8ytc1sbb",
+   "name": "Light Blue striped trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "cotton",
+   "colors": [
+    "light blue",
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_teatot7o1lst",
+   "name": "Grey plaid shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "flannel",
+   "colors": [
+    "grey",
+    "cream"
+   ],
+   "brand": "Frank & Oak",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_q3e47jxb10wb",
+   "name": "Charcoal button-up",
+   "category": "top",
+   "subtype": "button-up",
+   "material": "cotton",
+   "colors": [
+    "charcoal",
+    "cream"
+   ],
+   "brand": "Theory",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_9t24uvtl10wd",
+   "name": "Pink linen shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "linen",
+   "colors": [
+    "pink",
+    "cream"
+   ],
+   "brand": "Massimo Dutti",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_m7bg5j5z10wc",
+   "name": "Light Blue henley",
+   "category": "top",
+   "subtype": "henley",
+   "material": "cotton",
+   "colors": [
+    "light blue",
+    "cream"
+   ],
+   "brand": "M&S Autograph",
+   "fit": "relaxed",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_21b6d3qcohmu",
+   "name": "Brown blue plaid shirt",
+   "category": "top",
+   "subtype": "button-down shirt",
+   "material": "cotton",
+   "colors": [
+    "brown",
+    "cream"
+   ],
+   "brand": "Façonnable",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_ayfv9c97ohmv",
+   "name": "Brown corduroy trousers",
+   "category": "bottom",
+   "subtype": "gurkha",
+   "material": "corduroy",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_gp53xkrmem9b",
+   "name": "Grey knit sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "wool",
+   "colors": [
+    "grey",
+    "cream"
+   ],
+   "brand": "Acne Studios",
+   "fit": "relaxed",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_vtbi91noucd3",
+   "name": "Light Blue denim jacket",
+   "category": "outerwear",
+   "subtype": "jacket",
+   "material": "denim",
+   "colors": [
+    "light blue",
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_7z48xpoqh5tx",
+   "name": "Grey shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "",
+   "colors": [
+    "grey"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_j5og5jmzh5tx",
+   "name": "Khaki varsity",
+   "category": "top",
+   "subtype": "",
+   "material": "",
+   "colors": [
+    "khaki",
+    "beige"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_salzdhuswyd3",
+   "name": "Brown cable-knit sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "cotton",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_80sz9s08xpw1",
+   "name": "Cream trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "cotton",
+   "colors": [
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_xc4gr022xmvm",
+   "name": "Cream cable-knit cardigan",
+   "category": "outerwear",
+   "subtype": "cardigan",
+   "material": "knit",
+   "colors": [
+    "cream"
+   ],
+   "brand": "KITH",
+   "fit": "relaxed",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_yo7mwga1xi3m",
+   "name": "Light blue denim shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "denim",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_mqjsmpqgwwvm",
+   "name": "Cream cable-knit sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "knit",
+   "colors": [
+    "cream",
+    "navy",
+    "green"
+   ],
+   "brand": "sho",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_1khiworawkt7",
+   "name": "Light blue quarter-zip sweatshirt",
+   "category": "top",
+   "subtype": "quarter-zip sweatshirt",
+   "material": "cotton",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "Rhude",
+   "fit": "relaxed",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_ef0u3ljnwa09",
+   "name": "Grey herringbone puffer vest",
+   "category": "outerwear",
+   "subtype": "vest",
+   "material": "wool",
+   "colors": [
+    "grey"
+   ],
+   "brand": "Axel Arigato",
+   "fit": "regular",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_3qjmw7n4wj2a",
+   "name": "Navy brown plaid jacket",
+   "category": "outerwear",
+   "subtype": "jacket",
+   "material": "wool",
+   "colors": [
+    "navy",
+    "brown",
+    "beige"
+   ],
+   "brand": "ART EAFH",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_lg5qftegw0qo",
+   "name": "Brown frayed-hem pants",
+   "category": "bottom",
+   "subtype": "pants",
+   "material": "cotton",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_ttw2m97ww8z5",
+   "name": "Light pink polo",
+   "category": "top",
+   "subtype": "polo",
+   "material": "cotton",
+   "colors": [
+    "pink"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_jhyr10t2vo13",
+   "name": "Beige cable-knit half-zip sweater",
+   "category": "top",
+   "subtype": "half-zip sweater",
+   "material": "knit",
+   "colors": [
+    "beige"
+   ],
+   "brand": "Stamina",
+   "fit": "regular",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_kp1ps7qww1ar",
+   "name": "Beige quarter-zip sweatshirt",
+   "category": "top",
+   "subtype": "sweatshirt",
+   "material": "cotton",
+   "colors": [
+    "beige"
+   ],
+   "brand": "Fortela",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_s5d2t696vryw",
+   "name": "Cream trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "cotton",
+   "colors": [
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_bq9qnaa1vkon",
+   "name": "Brown knit polo",
+   "category": "top",
+   "subtype": "polo",
+   "material": "knit",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_2b6fao81vqrs",
+   "name": "Blue plaid flannel shirt",
+   "category": "top",
+   "subtype": "flannel shirt",
+   "material": "flannel",
+   "colors": [
+    "blue",
+    "white",
+    "grey",
+    "tan"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_v5ov6nhyvlun",
+   "name": "Silver rectangular sunglasses",
+   "category": "accessory",
+   "subtype": "sunglasses",
+   "material": "metal",
+   "colors": [
+    "silver",
+    "grey",
+    "black"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 1,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_dzsh3qh7v6sb",
+   "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "denim",
+   "colors": [
+    "navy blue/brown. match original"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_j1n1vh1wvbo4",
+   "name": "Grey half-zip fleece",
+   "category": "top",
+   "subtype": "half-zip sweatshirt",
+   "material": "fleece",
+   "colors": [
+    "grey",
+    "pink"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_n955igwlvcl4",
+   "name": "Beige gradient sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "knit",
+   "colors": [
+    "beige",
+    "tan"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_lqf1mrlsure9",
+   "name": "Ivory camp collar shirt",
+   "category": "top",
+   "subtype": "camp shirt",
+   "material": "cotton",
+   "colors": [
+    "ivory",
+    "light blue"
+   ],
+   "brand": "Weyoungers",
+   "fit": "relaxed",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_8qqqzpwxuwti",
+   "name": "Brown chore jacket",
+   "category": "outerwear",
+   "subtype": "chore jacket",
+   "material": "cotton",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_3821acdhupu9",
+   "name": "Cream ribbed half-zip sweater",
+   "category": "top",
+   "subtype": "half-zip sweater",
+   "material": "ribbed knit",
+   "colors": [
+    "cream"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_491tzu2suiv7",
+   "name": "Blue plaid shearling jacket",
+   "category": "outerwear",
+   "subtype": "jacket",
+   "material": "denim",
+   "colors": [
+    "blue",
+    "cream",
+    "beige"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_k0mfejxiu5f8",
+   "name": "Cream printed fleece pullover",
+   "category": "outerwear",
+   "subtype": "fleece pullover",
+   "material": "fleece",
+   "colors": [
+    "cream",
+    "multicolor"
+   ],
+   "brand": "ARLADAR",
+   "fit": "relaxed",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_x4adkv9zu9yu",
+   "name": "Navy/black corduroy jacket",
+   "category": "outerwear",
+   "subtype": "jacket",
+   "material": "corduroy",
+   "colors": [
+    "navy/black"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_ko7zz8iktplc",
+   "name": "Grey long-sleeve polo",
+   "category": "top",
+   "subtype": "polo",
+   "material": "cotton",
+   "colors": [
+    "grey"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_8m17f0l0tss9",
+   "name": "Light blue half-zip fleece",
+   "category": "top",
+   "subtype": "half-zip pullover",
+   "material": "fleece",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_vzqle7zdtpis",
+   "name": "Blue ivory diamond knit sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "knit",
+   "colors": [
+    "blue",
+    "ivory"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_o739106dt8ym",
+   "name": "Cream abstract fleece half-zip",
+   "category": "top",
+   "subtype": "fleece pullover",
+   "material": "fleece",
+   "colors": [
+    "cream",
+    "navy",
+    "blue",
+    "burgundy"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_nffskb5hta4l",
+   "name": "Cream ribbed pants",
+   "category": "bottom",
+   "subtype": "pants",
+   "material": "ribbed knit",
+   "colors": [
+    "cream"
+   ],
+   "brand": "",
+   "fit": "slim",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_dsqnx6ckt81v",
+   "name": "Beige quarter-zip sweatshirt",
+   "category": "top",
+   "subtype": "quarter-zip",
+   "material": "cotton",
+   "colors": [
+    "beige"
+   ],
+   "brand": "Rhude",
+   "fit": "relaxed",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_9eip7wdtsxzd",
+   "name": "Pale yellow ribbed polo",
+   "category": "top",
+   "subtype": "polo",
+   "material": "knit",
+   "colors": [
+    "yellow"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_py2swfwot1ed",
+   "name": "Brown suede jacket",
+   "category": "outerwear",
+   "subtype": "jacket",
+   "material": "suede",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_fvc535elt23d",
+   "name": "Light blue jeans",
+   "category": "bottom",
+   "subtype": "jeans",
+   "material": "denim",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_v2gxktsmsoov",
+   "name": "Beige crewneck sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "knit",
+   "colors": [
+    "beige",
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_zw51yaqdsx0q",
+   "name": "White distressed jeans",
+   "category": "bottom",
+   "subtype": "jeans",
+   "material": "denim",
+   "colors": [
+    "white"
+   ],
+   "brand": "",
+   "fit": "slim",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_ri78lj9vspyj",
+   "name": "Beige ribbed sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "knit",
+   "colors": [
+    "beige"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_8od90wk1sl9k",
+   "name": "Brown suede bomber jacket",
+   "category": "outerwear",
+   "subtype": "bomber jacket",
+   "material": "suede",
+   "colors": [
+    "brown",
+    "black"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_u1ujhidqsibg",
+   "name": "Cream hoodie",
+   "category": "top",
+   "subtype": "hoodie",
+   "material": "cotton",
+   "colors": [
+    "cream"
+   ],
+   "brand": "Rhude",
+   "fit": "relaxed",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_wwy9b2pusds3",
+   "name": "Brown shearling bomber jacket",
+   "category": "outerwear",
+   "subtype": "bomber jacket",
+   "material": "suede",
+   "colors": [
+    "brown",
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_mpvyy87tse1c",
+   "name": "Cream flag sweatshirt",
+   "category": "top",
+   "subtype": "sweatshirt",
+   "material": "cotton",
+   "colors": [
+    "cream",
+    "red",
+    "navy",
+    "white"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_6xkkzn06sbdm",
+   "name": "Beige trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "cotton",
+   "colors": [
+    "beige"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_8nrtffa2s13s",
+   "name": "Brown suede tassel loafers",
+   "category": "footwear",
+   "subtype": "loafers",
+   "material": "suede",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_wymz2j18s6wh",
+   "name": "Brown suede mules",
+   "category": "footwear",
+   "subtype": "mules",
+   "material": "suede",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_5g4fqg77s4rw",
+   "name": "Black woven loafers",
+   "category": "footwear",
+   "subtype": "loafers",
+   "material": "leather",
+   "colors": [
+    "black"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_om0dh5nps1ke",
+   "name": "Brown leather loafers",
+   "category": "footwear",
+   "subtype": "loafers",
+   "material": "leather",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_xowln4uos3ug",
+   "name": "Beige knit sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "knit",
+   "colors": [
+    "beige"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_pa7kfg14rtzl",
+   "name": "White button-up shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "cotton",
+   "colors": [
+    "white"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_oyyiaxx6rls7",
+   "name": "Mint green field jacket",
+   "category": "outerwear",
+   "subtype": "jacket",
+   "material": "cotton",
+   "colors": [
+    "mint",
+    "tan"
+   ],
+   "brand": "Polo Ralph Lauren",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_6qz38nwsrupx",
+   "name": "Cream Polo Bear sweatshirt",
+   "category": "top",
+   "subtype": "sweatshirt",
+   "material": "cotton",
+   "colors": [
+    "cream",
+    "white"
+   ],
+   "brand": "Ralph Lauren",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_reesb6nbrmm4",
+   "name": "Navy long-sleeve polo",
+   "category": "top",
+   "subtype": "polo",
+   "material": "cotton",
+   "colors": [
+    "navy"
+   ],
+   "brand": "AMI",
+   "fit": "relaxed",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_b4zsf3dfrhdv",
+   "name": "Brown leather boots",
+   "category": "footwear",
+   "subtype": "boots",
+   "material": "leather",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_fzekzikyrf50",
+   "name": "Navy suede sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "suede",
+   "colors": [
+    "navy",
+    "white"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_z8gvd1zvrcif",
+   "name": "Brown knit zip sweater",
+   "category": "top",
+   "subtype": "zip sweater",
+   "material": "knit",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_939onlwfrg9j",
+   "name": "Light blue long-sleeve polo",
+   "category": "top",
+   "subtype": "polo",
+   "material": "",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "Thom Browne",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_01xaga54r12h",
+   "name": "White leather sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "leather",
+   "colors": [
+    "white",
+    "blue"
+   ],
+   "brand": "Adidas",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_rvrs9hibr981",
+   "name": "Light blue jeans",
+   "category": "bottom",
+   "subtype": "jeans",
+   "material": "denim",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_8ukg5mi9r3fc",
+   "name": "Brown suede loafers",
+   "category": "footwear",
+   "subtype": "loafers",
+   "material": "suede",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_kh5r3xy9r1i5",
+   "name": "Light blue striped shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "cotton",
+   "colors": [
+    "light blue",
+    "white"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_2djvq6l9qxbb",
+   "name": "Navy leather tassel loafers",
+   "category": "footwear",
+   "subtype": "loafers",
+   "material": "leather",
+   "colors": [
+    "navy"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_upni66uiqtgb",
+   "name": "Cream leather sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "leather",
+   "colors": [
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_lxqx9egrqg14",
+   "name": "Light blue striped jeans",
+   "category": "bottom",
+   "subtype": "jeans",
+   "material": "denim",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "",
+   "fit": "slim",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_rxglifsoqobm",
+   "name": "Pink suede star sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "suede",
+   "colors": [
+    "pink",
+    "green",
+    "white"
+   ],
+   "brand": "Golden Goose",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_kde45hmnqie9",
+   "name": "Light blue leather sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "leather",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "Gucci",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_ugyaieefqcxe",
+   "name": "White knit cardigan",
+   "category": "top",
+   "subtype": "cardigan",
+   "material": "knit",
+   "colors": [
+    "white"
+   ],
+   "brand": "Casablanca",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_ed0ga2v0q2yo",
+   "name": "Beige zip jacket",
+   "category": "outerwear",
+   "subtype": "jacket",
+   "material": "cotton",
+   "colors": [
+    "beige",
+    "brown"
+   ],
+   "brand": "NEOGOO",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_zc85ll18q9kn",
+   "name": "Cream printed shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "cotton",
+   "colors": [
+    "cream",
+    "white"
+   ],
+   "brand": "MM6",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_teitg9jmpwxa",
+   "name": "Black cable-knit sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "wool",
+   "colors": [
+    "black"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_ap5v0s67pg9d",
+   "name": "Dark brown button-up shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "cotton",
+   "colors": [
+    "brown"
+   ],
+   "brand": "Tom Ford",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_mjno2x20podx",
+   "name": "Black fleece track pants",
+   "category": "bottom",
+   "subtype": "track pants",
+   "material": "fleece",
+   "colors": [
+    "black"
+   ],
+   "brand": "Supreme x The North Face",
+   "fit": "regular",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_jkj2nzfzpf1o",
+   "name": "Black bowling shirt",
+   "category": "top",
+   "subtype": "bowling shirt",
+   "material": "polyester",
+   "colors": [
+    "black",
+    "white"
+   ],
+   "brand": "Palm Springs",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_yae8h1k9pjm1",
+   "name": "Brown leather tassel loafers",
+   "category": "footwear",
+   "subtype": "loafers",
+   "material": "leather",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_u0f8e90jp3ez",
+   "name": "Cream button-up shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "cotton",
+   "colors": [
+    "cream"
+   ],
+   "brand": "Miu Miu",
+   "fit": "relaxed",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_6uhygeskozw8",
+   "name": "Black color-block hoodie",
+   "category": "top",
+   "subtype": "hoodie",
+   "material": "cotton",
+   "colors": [
+    "black",
+    "white"
+   ],
+   "brand": "CAT",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_upplq59rp8lp",
+   "name": "White logo t-shirt",
+   "category": "top",
+   "subtype": "t-shirt",
+   "material": "cotton",
+   "colors": [
+    "white"
+   ],
+   "brand": "Martine Rose",
+   "fit": "regular",
+   "warmth": 1,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_xuqvrfy5ocv4",
+   "name": "Olive zip-up knit sweater",
+   "category": "top",
+   "subtype": "zip sweater",
+   "material": "knit",
+   "colors": [
+    "olive"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_sxxi5soxomf3",
+   "name": "Black 90s hoodie",
+   "category": "top",
+   "subtype": "hoodie",
+   "material": "cotton",
+   "colors": [
+    "black",
+    "grey"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_7iyagp6doqqz",
+   "name": "Black hoodie",
+   "category": "top",
+   "subtype": "hoodie",
+   "material": "cotton",
+   "colors": [
+    "black"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_f7a1ienioi31",
+   "name": "Navy baseball cap",
+   "category": "accessory",
+   "subtype": "baseball cap",
+   "material": "wool",
+   "colors": [
+    "navy",
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_xbt3gpjuo1p4",
+   "name": "Burgundy collared sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "knit",
+   "colors": [
+    "burgundy"
+   ],
+   "brand": "AMI",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_lad85rg9nxs3",
+   "name": "Ivory pleated trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "woven",
+   "colors": [
+    "ivory"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_j2id379jo424",
+   "name": "Blue zip-up knit jacket",
+   "category": "outerwear",
+   "subtype": "zip jacket",
+   "material": "knit",
+   "colors": [
+    "blue"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_dscxzk8inlx2",
+   "name": "Navy pinstripe trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "wool",
+   "colors": [
+    "navy"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_bee1dg9rnfe5",
+   "name": "Grey pleated trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "wool",
+   "colors": [
+    "grey"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_k75fdfdsnak0",
+   "name": "Light grey pleated trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "",
+   "colors": [
+    "light grey"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_i80zb0yen5gn",
+   "name": "Sage striped shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "cotton",
+   "colors": [
+    "green",
+    "white"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_tqnnde1xmp0p",
+   "name": "Mauve button-up shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "cotton",
+   "colors": [
+    "mauve"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_0re8nrx2mpdy",
+   "name": "Cream pleated trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "linen",
+   "colors": [
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_qrx875pbmh6n",
+   "name": "Beige textured sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "knit",
+   "colors": [
+    "beige"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_2wf48xbqlgcv",
+   "name": "White leather sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "leather",
+   "colors": [
+    "white",
+    "blue"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_hslm9n4nmc79",
+   "name": "Beige mock-neck sweatshirt",
+   "category": "top",
+   "subtype": "sweatshirt",
+   "material": "cotton",
+   "colors": [
+    "beige"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_whgv0gu6m08l",
+   "name": "Beige corduroy blazer",
+   "category": "outerwear",
+   "subtype": "blazer",
+   "material": "corduroy",
+   "colors": [
+    "beige"
+   ],
+   "brand": "THE ROW",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_98p2sivflrxg",
+   "name": "Ivory double-breasted blazer",
+   "category": "outerwear",
+   "subtype": "blazer",
+   "material": "wool",
+   "colors": [
+    "ivory"
+   ],
+   "brand": "Todd Snyder",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_9q0j6ksxlgcv",
+   "name": "White leather sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "leather",
+   "colors": [
+    "white",
+    "navy"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_66xj06nllgf2",
+   "name": "Sage pleated trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "",
+   "colors": [
+    "sage"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_j994h3k9l8ot",
+   "name": "Cream straight-leg jeans",
+   "category": "bottom",
+   "subtype": "jeans",
+   "material": "denim",
+   "colors": [
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_juk45cokjxxy",
+   "name": "Taupe blazer",
+   "category": "outerwear",
+   "subtype": "blazer",
+   "material": "wool",
+   "colors": [
+    "taupe"
+   ],
+   "brand": "Todd Snyder",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_ulv8tgkujvjh",
+   "name": "Light blue denim jacket",
+   "category": "outerwear",
+   "subtype": "jacket",
+   "material": "denim",
+   "colors": [
+    "blue"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_dk92xcrfjmq8",
+   "name": "White long-sleeve polo",
+   "category": "top",
+   "subtype": "polo",
+   "material": "cotton",
+   "colors": [
+    "white"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_hhbz4ghpjmd1",
+   "name": "Navy ribbed zip sweater",
+   "category": "outerwear",
+   "subtype": "zip sweater",
+   "material": "knit",
+   "colors": [
+    "navy",
+    "blue",
+    "black",
+    "white"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_cfm8n594jea7",
+   "name": "Burgundy corduroy pants",
+   "category": "bottom",
+   "subtype": "pants",
+   "material": "corduroy",
+   "colors": [
+    "burgundy"
+   ],
+   "brand": "",
+   "fit": "slim",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_wgarjdurj7yp",
+   "name": "Brown leather sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "leather",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_rpjfgscii90r",
+   "name": "Cream fair isle half-zip sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "knit",
+   "colors": [
+    "cream",
+    "red",
+    "green",
+    "blue"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 4,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_yfkavdj5irwe",
+   "name": "Light grey pleated trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "woven",
+   "colors": [
+    "light grey"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_b8n14erlispm",
+   "name": "Grey distressed sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "suede",
+   "colors": [
+    "grey",
+    "cream",
+    "beige"
+   ],
+   "brand": "Golden Goose",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_gyc76ur3ikb9",
+   "name": "Beige trousers",
+   "category": "bottom",
+   "subtype": "trousers",
+   "material": "",
+   "colors": [
+    "beige"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_z7nhuz8vidky",
+   "name": "Cream hoodie",
+   "category": "top",
+   "subtype": "hoodie",
+   "material": "cotton",
+   "colors": [
+    "cream"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_5josnvyoi4z9",
+   "name": "Navy blazer",
+   "category": "outerwear",
+   "subtype": "blazer",
+   "material": "wool",
+   "colors": [
+    "navy"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_zh2l854ghu1t",
+   "name": "Green herringbone knit shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "knit",
+   "colors": [
+    "green"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_vf28ktbdhmtz",
+   "name": "Dark brown chinos",
+   "category": "bottom",
+   "subtype": "chinos",
+   "material": "cotton",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "fit": "slim",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_mir3akjyhwnr",
+   "name": "Light blue t-shirt",
+   "category": "top",
+   "subtype": "t-shirt",
+   "material": "cotton",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "rag & bone",
+   "fit": "relaxed",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_2rtuat7aheik",
+   "name": "Light blue dress shirt",
+   "category": "top",
+   "subtype": "dress shirt",
+   "material": "cotton",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 1,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_szj91ziihfpw",
+   "name": "Blue linen shirt",
+   "category": "top",
+   "subtype": "shirt",
+   "material": "linen",
+   "colors": [
+    "blue"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_1gb6slz8h71n",
+   "name": "Cream embroidered shirt",
+   "category": "top",
+   "subtype": "button-up",
+   "material": "cotton",
+   "colors": [
+    "cream",
+    "blue"
+   ],
+   "brand": "Kith",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_5gfabeezh485",
+   "name": "White beige toggle jacket",
+   "category": "outerwear",
+   "subtype": "jacket",
+   "material": "",
+   "colors": [
+    "white",
+    "beige"
+   ],
+   "brand": "The North Face",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_v7uvadckh79p",
+   "name": "Light blue denim overshirt",
+   "category": "top",
+   "subtype": "overshirt",
+   "material": "denim",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_h7dy95xdgnh8",
+   "name": "Black hoodie",
+   "category": "top",
+   "subtype": "hoodie",
+   "material": "cotton",
+   "colors": [
+    "black"
+   ],
+   "brand": "",
+   "fit": "relaxed",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_08shegj8gqie",
+   "name": "Grey and white low-top sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "suede",
+   "colors": [
+    "grey",
+    "white",
+    "cream"
+   ],
+   "brand": "Nike",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_nq7il0e0glnn",
+   "name": "White leather sneakers",
+   "category": "footwear",
+   "subtype": "sneakers",
+   "material": "leather",
+   "colors": [
+    "white",
+    "green",
+    "beige"
+   ],
+   "brand": "New Balance",
+   "fit": "regular",
+   "warmth": 2,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_d1awqw83gd3c",
+   "name": "Navy R sweater",
+   "category": "top",
+   "subtype": "sweater",
+   "material": "knit",
+   "colors": [
+    "navy",
+    "red"
+   ],
+   "brand": "Polo Ralph Lauren",
+   "fit": "regular",
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_1pg9y05mlkek",
+   "name": "Brown suede jacket",
+   "category": "outerwear",
+   "subtype": "field jacket",
+   "material": "suede",
+   "colors": [
+    "brown"
+   ],
+   "brand": "REISS",
+   "fit": null,
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_qnmo5yzgl50b",
+   "name": "Navy field jacket",
+   "category": "outerwear",
+   "subtype": "field jacket",
+   "material": "cotton",
+   "colors": [
+    "navy"
+   ],
+   "brand": "Double RL Supply Company",
+   "fit": null,
+   "warmth": 3,
+   "archived": false,
+   "demo": false,
+   "tombstone": false
+  },
+  {
+   "id": "g_37e5eqjwgd3d",
+   "name": null,
+   "archived": true,
+   "tombstone": true,
+   "demo": false
+  },
+  {
+   "id": "g_c6qdv5c3gkor",
+   "name": null,
+   "archived": true,
+   "tombstone": true,
+   "demo": false
+  },
+  {
+   "id": "g_x0ro1mg2gu0a",
+   "name": null,
+   "archived": true,
+   "tombstone": true,
+   "demo": false
+  },
+  {
+   "id": "g_67pciqid8k2b",
+   "name": null,
+   "archived": true,
+   "tombstone": true,
+   "demo": false
+  },
+  {
+   "id": "g_oh9f64t8kvor",
+   "name": null,
+   "archived": true,
+   "tombstone": true,
+   "demo": false
+  }
+ ]
+}
