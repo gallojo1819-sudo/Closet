@@ -1,16 +1,23 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   chipLabel,
   collectKnownHashes,
+  coverRejected,
   filenameLooksLikeSkip,
+  findThisHref,
+  HAND_COVER_MESSAGE,
+  isHeldGarment,
   looksInventedExtra,
   parseCropBox,
   parseScanClass,
   pieceFileHash,
+  placeHeldGarment,
   sanitizeScanPieces,
   sanitizeWornBoxes,
   slotFitsCategory,
+  writtenCutout,
 } from "./scan.ts";
 
 describe("parseScanClass", () => {
@@ -74,6 +81,7 @@ describe("parseScanClass", () => {
     const got = parseScanClass(
       '{"kind":"worn","boxes":[{"name":"Cream varsity","category":"outerwear","x":0.1,"y":0.1,"w":0.8,"h":0.7}]}',
     );
+    assert.equal(got.kind, "garment");
     assert.equal(got.boxes.length, 1);
     assert.equal(got.boxes[0]?.chip, "Varsity");
     assert.ok(!got.boxes.some((b) => b.slot === "footwear"));
@@ -83,11 +91,91 @@ describe("parseScanClass", () => {
     const got = parseScanClass(
       '{"kind":"rail","pieces":[{"slot":"top","label":"Piece"},{"slot":"bottom","label":"Olive chinos"}]}',
     );
-    assert.equal(got.kind, "worn");
+    assert.equal(got.kind, "garment");
     assert.deepEqual(
       got.pieces.map((p) => p.label),
       ["Olive chinos"],
     );
+  });
+
+  it("a frame described as one jacket plus a hand is a garment, not worn", () => {
+    const got = parseScanClass(
+      JSON.stringify({
+        kind: "worn",
+        reason: "one jacket plus a hand",
+        boxes: [
+          { name: "Brown jacket", category: "outerwear", x: 0.15, y: 0.08, w: 0.7, h: 0.8 },
+          { name: "Hand", category: "accessory", x: 0.02, y: 0.4, w: 0.2, h: 0.35 },
+        ],
+      }),
+    );
+    assert.equal(got.kind, "garment");
+    assert.equal(got.boxes.length, 1);
+    assert.match(got.boxes[0]?.name ?? "", /jacket/i);
+    assert.ok(!got.boxes.some((b) => /\bhand\b/i.test(b.name)));
+    assert.equal(isHeldGarment(got), true);
+  });
+
+  it("a jacket on a hanger is one garment", () => {
+    const got = parseScanClass(
+      JSON.stringify({
+        kind: "worn",
+        reason: "jacket on a hanger",
+        boxes: [
+          { name: "Suede jacket", category: "outerwear", x: 0.2, y: 0.1, w: 0.6, h: 0.75 },
+          { name: "Hanger", category: "accessory", x: 0.35, y: 0.02, w: 0.3, h: 0.2 },
+        ],
+      }),
+    );
+    assert.equal(got.kind, "garment");
+    assert.equal(got.boxes.length, 1);
+    assert.equal(isHeldGarment(got), true);
+  });
+
+  it("a person wearing a jacket stays worn", () => {
+    const got = parseScanClass(
+      JSON.stringify({
+        kind: "worn",
+        reason: "person wearing a jacket",
+        boxes: [
+          { name: "Brown jacket", category: "outerwear", x: 0.2, y: 0.2, w: 0.55, h: 0.5 },
+        ],
+      }),
+    );
+    assert.equal(got.kind, "worn");
+    assert.equal(isHeldGarment(got), false);
+  });
+
+  it("two garments plus a hand stay worn", () => {
+    const got = parseScanClass(
+      JSON.stringify({
+        kind: "worn",
+        reason: "jacket and trousers plus a hand",
+        boxes: [
+          { name: "Brown jacket", category: "outerwear", x: 0.1, y: 0.1, w: 0.4, h: 0.5 },
+          { name: "Olive chinos", category: "bottom", x: 0.45, y: 0.4, w: 0.4, h: 0.45 },
+          { name: "Hand", category: "accessory", x: 0.02, y: 0.5, w: 0.15, h: 0.3 },
+        ],
+      }),
+    );
+    assert.equal(got.kind, "worn");
+    assert.equal(got.boxes.length, 2);
+    assert.equal(isHeldGarment(got), false);
+  });
+
+  it("does not treat a tote handle as a hand", () => {
+    const got = parseScanClass(
+      JSON.stringify({
+        kind: "worn",
+        reason: "jacket and a tote",
+        boxes: [
+          { name: "Canvas jacket", category: "outerwear", x: 0.1, y: 0.1, w: 0.45, h: 0.6 },
+          { name: "Tote handle", category: "accessory", x: 0.6, y: 0.2, w: 0.25, h: 0.4 },
+        ],
+      }),
+    );
+    assert.equal(got.kind, "worn");
+    assert.equal(got.boxes.length, 2);
   });
 });
 
@@ -184,6 +272,121 @@ describe("slotFitsCategory", () => {
     assert.equal(slotFitsCategory("top", "top"), true);
     assert.equal(slotFitsCategory("bottom", "footwear"), false);
     assert.equal(slotFitsCategory("footwear", "footwear"), true);
+  });
+});
+
+describe("held garment cover", () => {
+  it("calls printGarment before the tile is shown", async () => {
+    const order: string[] = [];
+    const fetched: string[] = [];
+    const orig = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      fetched.push(String(input));
+      throw new Error("shop fetch");
+    }) as typeof fetch;
+    try {
+      const written = await placeHeldGarment({
+        photo: "photo://jacket",
+        print: async () => {
+          order.push("print");
+          return { ok: true, image: "plate://clean" };
+        },
+        check: async () => {
+          order.push("check");
+          return "suede jacket";
+        },
+        showTile: () => {
+          order.push("tile");
+        },
+        save: () => {
+          order.push("save");
+        },
+      });
+      assert.deepEqual(order, ["print", "check", "tile", "save"]);
+      assert.equal(written.imageSrc, "photo://jacket");
+      assert.equal(written.cutoutSrc, "plate://clean");
+      assert.equal(written.message, null);
+      assert.deepEqual(fetched, []);
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
+
+  it("does not write a cover the checker still calls hand", async () => {
+    let savedCutout = "";
+    const written = await placeHeldGarment({
+      photo: "photo://jacket",
+      print: async () => ({ ok: true, image: "plate://hand" }),
+      check: async () => "hand",
+      showTile: () => {},
+      save: (w) => {
+        savedCutout = w.cutoutSrc;
+      },
+    });
+    assert.equal(coverRejected("hand"), true);
+    assert.equal(coverRejected("hanger"), true);
+    assert.equal(coverRejected("no hand"), false);
+    assert.equal(written.imageSrc, "photo://jacket");
+    assert.equal(written.cutoutSrc, "photo://jacket");
+    assert.notEqual(written.cutoutSrc, "plate://hand");
+    assert.equal(savedCutout, "photo://jacket");
+    assert.equal(written.message, HAND_COVER_MESSAGE);
+    assert.equal(written.message, "Cover still has the hand — try again.");
+    const direct = writtenCutout({
+      photo: "photo://jacket",
+      plate: "plate://hand",
+      checker: "hand",
+    });
+    assert.equal(direct.cutoutSrc, "photo://jacket");
+    assert.notEqual(direct.cutoutSrc, "plate://hand");
+  });
+
+  it("does not fetch a shop image URL", () => {
+    const href = findThisHref("Rhude", "Brown suede jacket");
+    assert.equal(
+      href,
+      `https://www.google.com/search?tbm=isch&q=${encodeURIComponent("Rhude Brown suede jacket")}`,
+    );
+    assert.equal(/farfetch|ssense|cdn\.|shopify|productimage/i.test(href), false);
+    const scanSrc = readFileSync(new URL("./scan.ts", import.meta.url), "utf8");
+    const fn = scanSrc.slice(
+      scanSrc.indexOf("export async function placeHeldGarment"),
+      scanSrc.indexOf("export function findThisHref"),
+    );
+    assert.equal(fn.includes("fetch("), false);
+    const detail = readFileSync(
+      new URL("../components/closet/detail.tsx", import.meta.url),
+      "utf8",
+    );
+    const linkAt = detail.indexOf("href={findThisHref");
+    assert.ok(linkAt > 0);
+    const link = detail.slice(linkAt, linkAt + 360);
+    assert.match(link, /Find this/);
+    assert.match(link, /target="_blank"/);
+    assert.match(link, /rel="noreferrer noopener"/);
+    assert.equal(link.includes("fetch("), false);
+    assert.equal(link.includes("cutoutSrc"), false);
+    const studio = readFileSync(
+      new URL("../components/add/studio.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.match(studio, /placeHeldGarment\(/);
+    assert.match(studio, /printGarment\(/);
+    const held = studio.slice(
+      studio.indexOf("const commitHeldPhoto"),
+      studio.indexOf("const processScanFile"),
+    );
+    assert.equal(held.includes("fetch("), false);
+    assert.equal(/farfetch|ssense|searchOfficial|addFromUrl/.test(held), false);
+    const ai = readFileSync(new URL("./ai.ts", import.meta.url), "utf8");
+    assert.match(
+      ai,
+      /Remove the arm, the hand, the sleeve holding it, the hanger, the wall, and the floor\./,
+    );
+    assert.match(ai, /Keep this exact jacket: suede or canvas, pockets, zipper, collar, color\./);
+    assert.match(ai, /Lay it on #F4EFE6\./);
+    assert.match(ai, /one garment in a hand, on a hanger, or held up to the camera/);
+    assert.match(ai, /A hand and a hanger are not a second garment/);
   });
 });
 

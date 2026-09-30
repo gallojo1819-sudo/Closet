@@ -1,10 +1,11 @@
-import { printGarment, tagGarment } from "./ai.ts";
+import { classifyScan, printGarment, tagGarment } from "./ai.ts";
 import { CAMERA_TAG_MS, decideCameraTag } from "./camera-tag.ts";
 import { getAccount } from "./cloud/account.ts";
 import { getSupabase } from "./cloud/client.ts";
 import { garmentV2Fields, garmentWriter, mirrorGarmentFields } from "./data/mirror.ts";
 import { dataUrlToBlob, imageKey, putImage, putThumb } from "./images.ts";
 import { PRINT_TIMEOUT_MS, withTimeout } from "./ingest.ts";
+import { coverRejected, scanCheckerText } from "./scan.ts";
 import { useCloset } from "./store.ts";
 import { guessTuck } from "./tuck.ts";
 
@@ -101,6 +102,11 @@ export function enqueuePrint(id: string, original: string): void {
       );
       if (!print?.ok) return;
       if (!useCloset.getState().garments.some((g) => g.id === id)) return;
+      const look = await withTimeout(
+        classifyScan({ data: { image: print.image } }).catch(() => null),
+        4000,
+      );
+      if (coverRejected(scanCheckerText(look))) return;
       const cutout = await shrinkJpeg(await toLocalDataUrl(print.image), 900, 0.85);
       await putImage(imageKey(id, "c"), dataUrlToBlob(cutout));
       await putThumb(id, cutout).catch(() => {});

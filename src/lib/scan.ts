@@ -25,6 +25,8 @@ export type ScanClass = {
   reason: string;
   pieces: ScanPiece[];
   boxes: WornBox[];
+  /** Hand, hanger, arm, or sleeve labels dropped so they are not garments. */
+  holders?: string[];
 };
 
 const KINDS = new Set<ScanKind>(["skip", "garment", "worn"]);
@@ -38,6 +40,12 @@ const KIND_ALIAS: Record<string, ScanKind> = {
 };
 
 const PERSON = /\b(person|people|selfie|face|portrait|body|mannequin|model|head|human)\b/i;
+/** A hand or a hanger is not a second garment. "handle" does not match. */
+const HOLDER_LABEL = /\b(hands?|hangers?|arms?|sleeves?|fingers?)\b/i;
+const HELD_CUE = /\b(hands?|hangers?|held|holding|arms?|sleeves?)\b/i;
+const WORN_PERSON = /\b(person|people|selfie|wearing)\b/i;
+
+export const HAND_COVER_MESSAGE = "Cover still has the hand — try again.";
 const SKIP_FILE =
   /\b(pizza|food|receipt|screenshot|menu|landscape|meme|invoice|document)\b/i;
 
@@ -86,6 +94,25 @@ function coerceCategory(raw: string, slot: ScanSlot | null): Category {
 
 function cleanLabel(raw: string): string {
   return raw.replace(/\s+/g, " ").trim().slice(0, 48);
+}
+
+export function isHolderLabel(name: string): boolean {
+  return HOLDER_LABEL.test(name);
+}
+
+function reasonSaysPersonWearing(reason: string): boolean {
+  return WORN_PERSON.test(reason);
+}
+
+/**
+ * Worn is only a person wearing clothes, or two or more garments.
+ * One real garment — including one the model called worn because of a hand — is garment.
+ */
+function settleScanKind(kind: ScanKind, reason: string, realCount: number): ScanKind {
+  if (kind === "skip") return "skip";
+  if (realCount >= 2) return "worn";
+  if (reasonSaysPersonWearing(reason)) return "worn";
+  return "garment";
 }
 
 export function chipLabel(name: string, category: Category): string {
@@ -182,7 +209,7 @@ function boxFromUnknown(raw: unknown, index: number): WornBox | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   const name = cleanLabel(String(o.name ?? o.label ?? o.chip ?? ""));
-  if (!name || isFakeName(name)) return null;
+  if (!name || isFakeName(name) || isHolderLabel(name)) return null;
   const slot =
     coerceSlot(String(o.slot ?? o.category ?? "")) ??
     (CATEGORY_SET.has(String(o.category ?? "") as Category)
@@ -211,7 +238,7 @@ function pieceFromUnknown(raw: unknown): ScanPiece | null {
     coerceSlot(String(o.category ?? ""));
   const label = cleanLabel(String(o.label ?? o.name ?? ""));
   if (!slot || !label) return null;
-  if (PERSON.test(label) || isFakeName(label)) return null;
+  if (PERSON.test(label) || isFakeName(label) || isHolderLabel(label)) return null;
   return { slot, label };
 }
 
@@ -283,10 +310,124 @@ export function parseScanClass(text: string): ScanClass {
       rawPieces.map(pieceFromUnknown).filter((p): p is ScanPiece => Boolean(p)),
     );
     const pieces = boxes.length ? boxesToPieces(boxes) : fromPieces;
-    return { kind, reason, pieces, boxes };
+    const holders = [...rawBoxes, ...rawPieces]
+      .map(rawHolderName)
+      .filter((name): name is string => Boolean(name));
+    const realCount = boxes.length || pieces.length;
+    const settled = settleScanKind(kind, reason, realCount);
+    return {
+      kind: settled,
+      reason,
+      pieces: settled === "garment" ? pieces.slice(0, 1) : pieces,
+      boxes: settled === "garment" ? boxes.slice(0, 1) : boxes,
+      holders,
+    };
   } catch {
     return { kind: "garment", reason: "", pieces: [], boxes: [] };
   }
+}
+
+function rawHolderName(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const name = cleanLabel(String(o.name ?? o.label ?? o.chip ?? ""));
+  return name && isHolderLabel(name) ? name : null;
+}
+
+/** One garment in a hand, on a hanger, or held up — not a clean product plate. */
+export function isHeldGarment(scan: {
+  kind: ScanKind;
+  reason: string;
+  holders?: string[];
+  pieces?: ScanPiece[];
+  boxes?: WornBox[];
+}): boolean {
+  if (scan.kind !== "garment") return false;
+  const blob = [
+    scan.reason,
+    ...(scan.holders ?? []),
+    ...(scan.pieces ?? []).map((p) => p.label),
+    ...(scan.boxes ?? []).map((b) => b.name),
+  ].join(" ");
+  return HELD_CUE.test(blob);
+}
+
+/** Positive hand or hanger. "no hand" and "handle" do not count. */
+export function coverRejected(checker: string): boolean {
+  const raw = checker.trim().toLowerCase();
+  if (!raw) return false;
+  const negated = raw
+    .replace(/\b(?:no|not|without|removed|gone)\s+(?:a\s+|the\s+)?(?:hands?|hangers?)\b/g, " ")
+    .replace(/\b(?:hands?|hangers?)\s+(?:removed|gone|absent)\b/g, " ");
+  return /\b(?:hands?|hangers?)\b/.test(negated);
+}
+
+export function scanCheckerText(scan: {
+  ok?: boolean;
+  reason?: string;
+  holders?: string[];
+  boxes?: { name: string }[];
+  pieces?: { label: string }[];
+} | null): string {
+  if (!scan || scan.ok === false) return "";
+  return [
+    scan.reason ?? "",
+    ...(scan.holders ?? []),
+    ...(scan.boxes ?? []).map((b) => b.name),
+    ...(scan.pieces ?? []).map((p) => p.label),
+  ].join(" ");
+}
+
+export type CutoutWrite = {
+  imageSrc: string;
+  cutoutSrc: string;
+  message: string | null;
+};
+
+/** The photo stays imageSrc. A plate the checker still calls "hand" is not cutoutSrc. */
+export function writtenCutout(input: {
+  photo: string;
+  plate: string | null;
+  checker: string;
+}): CutoutWrite {
+  const reject = Boolean(input.plate) && coverRejected(input.checker);
+  if (!input.plate || reject) {
+    return {
+      imageSrc: input.photo,
+      cutoutSrc: input.photo,
+      message: reject ? HAND_COVER_MESSAGE : null,
+    };
+  }
+  return { imageSrc: input.photo, cutoutSrc: input.plate, message: null };
+}
+
+/**
+ * Held garment only. print runs before the tile. No shop-image fetch.
+ * imageSrc is always the photo. cutoutSrc is the plate only when the checker accepts it.
+ */
+export async function placeHeldGarment(opts: {
+  photo: string;
+  print: (photo: string) => Promise<{ ok: boolean; image?: string }>;
+  check: (plate: string) => Promise<string>;
+  showTile: (cover: string) => void;
+  save: (written: CutoutWrite) => void | Promise<void>;
+}): Promise<CutoutWrite> {
+  const printed = await opts.print(opts.photo);
+  const plate = printed.ok && printed.image ? printed.image : null;
+  const checker = plate ? await opts.check(plate) : "";
+  const written = writtenCutout({ photo: opts.photo, plate, checker });
+  opts.showTile(written.cutoutSrc);
+  await opts.save(written);
+  return written;
+}
+
+/** New tab. Google image search of brand + name. Does not fetch a picture. */
+export function findThisHref(brand: string, name: string): string {
+  const q = [brand, name]
+    .map((s) => s.trim())
+    .filter((s) => s && !/^(unknown|n\/a|none|null|unbranded)$/i.test(s))
+    .join(" ");
+  return `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}`;
 }
 
 export function slotFitsCategory(slot: ScanSlot, category: Category): boolean {

@@ -272,7 +272,7 @@ export const printGarment = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<EditResult> => {
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Set XAI_API_KEY for catalog covers." };
     return imagineEdit(
-      "Product photograph of the SINGLE garment only. Keep the exact garment: color, fabric, stitching, hardware, logos, wear. Remove floor, walls, hangers, people, webpage chrome, prices, IDs, buttons, color swatches, text. Lay the garment (or pair of shoes) neatly on a solid #F4EFE6 paper, 4:5, garment filling ~80% of the frame, even light, no shadow theater. Do not invent a different item, brand, or color.",
+      "Product photograph of the SINGLE garment only. Keep the exact garment: color, fabric, stitching, hardware, logos, wear. Remove floor, walls, hangers, people, webpage chrome, prices, IDs, buttons, color swatches, text. Remove the arm, the hand, the sleeve holding it, the hanger, the wall, and the floor. Keep this exact jacket: suede or canvas, pockets, zipper, collar, color. Lay it on #F4EFE6. Lay the garment (or pair of shoes) neatly on a solid #F4EFE6 paper, 4:5, garment filling ~80% of the frame, even light, no shadow theater. Do not invent a different item, brand, or color.",
       data.image,
     );
   });
@@ -280,9 +280,9 @@ export const printGarment = createServerFn({ method: "POST" })
 const CLASSIFY_PROMPT =
   'Return ONLY JSON: {"kind":"skip|garment|worn","reason":"short","boxes":[{"name":"Polo","category":"top","x":0.2,"y":0.12,"w":0.55,"h":0.32}]}. ' +
   "skip: food, pizza, meal, receipt, landscape, document, screenshot chrome with no clothing product, meme, pet as the subject, nothing wearable. " +
-  "garment: exactly ONE clothing item or one pair of shoes — product plate, floor or chair flat-lay, or a single hung piece. No person as the subject. boxes empty. " +
-  "worn: a PERSON wearing clothes, OR 2+ distinct garments in one frame (laid look, rail, pile). Return 2-6 boxes. Each box is one garment: short chip name (Polo, Cords, Loafers), category top|bottom|outerwear|footwear|accessory, and x,y,w,h as fractions of the image (0-1). " +
-  "NEVER a face, head, or the person as a box. NEVER invent shoes, white mules, or extras that are not clearly visible. If only ONE garment is clearly visible, kind=garment with no boxes — do not invent a second. Never \"Piece\".";
+  "garment: exactly ONE clothing item or one pair of shoes — a product plate, a floor or chair flat-lay, a single hung piece, OR one garment in a hand, on a hanger, or held up to the camera. A hand and a hanger are not a second garment. No person wearing the clothes. boxes empty. When the one garment is in a hand, on a hanger, or held up, kind is garment and the reason must say hand or hanger. " +
+  "worn: ONLY a person wearing clothes, OR two or more distinct garments in one frame (laid look, rail, pile). A hand and a hanger are not a garment. Return 2-6 boxes of real garments only. Each box is one garment: short chip name (Polo, Cords, Loafers), category top|bottom|outerwear|footwear|accessory, and x,y,w,h as fractions of the image (0-1). " +
+  "NEVER a face, head, hand, arm, sleeve, hanger, or the person as a box. NEVER invent shoes, white mules, or extras that are not clearly visible. If only ONE garment is clearly visible, kind=garment with no boxes — do not invent a second. Never \"Piece\".";
 
 export type ClassifyScanResult =
   | ({ ok: true } & ScanClass)

@@ -28,7 +28,7 @@ import {
 import { matteToPaper, readAsImageSrc } from "@/lib/matte";
 import { enqueuePrint, enqueueTag } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
-import { classifyScan, readAiStatus, tagGarment } from "@/lib/ai";
+import { classifyScan, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
 import { CAMERA_TAG_MS, decideCameraTag } from "@/lib/camera-tag";
 import { getAccount } from "@/lib/cloud/account";
 import { getSupabase } from "@/lib/cloud/client";
@@ -38,9 +38,12 @@ import { isFakeName } from "@/lib/rack";
 import {
   collectKnownHashes,
   filenameLooksLikeSkip,
+  isHeldGarment,
   looksLikeFace,
   padBox,
   pieceFileHash,
+  placeHeldGarment,
+  scanCheckerText,
   type ScanKind,
   type WornBox,
 } from "@/lib/scan";
@@ -277,6 +280,171 @@ export function Studio() {
     [landMatte],
   );
 
+  const nameCameraPiece = useCallback(
+    async (pieceId: string, jpeg: Blob, hash: string) => {
+      try {
+        const image = await blobToDataUrl(jpeg);
+        const tag = await withTimeout(tagGarment({ data: { image } }), CAMERA_TAG_MS);
+        if (!useCloset.getState().garments.some((g) => g.id === pieceId)) return;
+        const decision = decideCameraTag(tag);
+        if (decision.action === "worn") {
+          const scan = await withTimeout(classifyScan({ data: { image } }), CAMERA_TAG_MS);
+          const boxes =
+            scan && "ok" in scan && scan.ok
+              ? scan.boxes.filter((b) => !looksLikeFace(b.name, b.category, b.box))
+              : [];
+          if (boxes.length >= 2) {
+            removeGarment(pieceId);
+            setSaved((cur) => cur.filter((s) => s.id !== pieceId));
+            setWornQueue((q) => [
+              ...q,
+              { id: uid("w"), original: image, hash, boxes, done: [] },
+            ]);
+            return;
+          }
+          const fallback = decision.fallback;
+          if (!fallback) return;
+          useCloset.getState().updateGarment(pieceId, {
+            name: fallback.name,
+            category: fallback.category,
+            subtype: fallback.subtype,
+            colors: fallback.colors,
+            material: fallback.material,
+            ...(fallback.brand ? { brand: fallback.brand } : {}),
+          });
+          void mirrorGarmentFields(
+            garmentWriter(getSupabase()),
+            getAccount().user?.id ?? null,
+            garmentV2Fields({
+              id: pieceId,
+              name: fallback.name,
+              category: fallback.category,
+              subtype: fallback.subtype,
+              colors: fallback.colors,
+              material: fallback.material,
+              brand: fallback.brand,
+            }),
+          ).catch(() => false);
+          setSaved((cur) =>
+            cur.map((s) =>
+              s.id === pieceId ? { ...s, name: fallback.name, category: fallback.category } : s,
+            ),
+          );
+          return;
+        }
+        if (decision.action !== "update") return;
+        const patch = decision.patch;
+        useCloset.getState().updateGarment(pieceId, {
+          name: patch.name,
+          category: patch.category,
+          subtype: patch.subtype,
+          colors: patch.colors,
+          material: patch.material,
+          ...(patch.brand ? { brand: patch.brand } : {}),
+        });
+        setSaved((cur) =>
+          cur.map((s) =>
+            s.id === pieceId ? { ...s, name: patch.name, category: patch.category } : s,
+          ),
+        );
+        void mirrorGarmentFields(
+          garmentWriter(getSupabase()),
+          getAccount().user?.id ?? null,
+          garmentV2Fields({
+            id: pieceId,
+            name: patch.name,
+            category: patch.category,
+            subtype: patch.subtype,
+            colors: patch.colors,
+            material: patch.material,
+            brand: patch.brand,
+          }),
+        ).catch(() => false);
+      } catch {
+        /* New piece */
+      }
+    },
+    [removeGarment],
+  );
+
+  const commitHeldPhoto = useCallback(
+    async (opts: {
+      id: string;
+      photoDataUrl: string;
+      photoBlob: Blob;
+      hash: string;
+      notes: string;
+      show: (cover: string) => void;
+    }): Promise<Saved> => {
+      const photoKey = imageKey(opts.id, "o");
+      const plateKey = imageKey(opts.id, "c");
+      let tile = opts.photoDataUrl;
+      await placeHeldGarment({
+        photo: opts.photoDataUrl,
+        print: async (photo) => {
+          try {
+            const image = await shrinkDataUrl(photo, 1024);
+            return await printGarment({ data: { image } });
+          } catch {
+            return { ok: false, error: "print" };
+          }
+        },
+        check: async (plate) => {
+          try {
+            const image = await shrinkDataUrl(plate, 768).catch(() => plate);
+            const scan = await withTimeout(
+              classifyScan({ data: { image } }).catch(() => null),
+              4000,
+            );
+            return scanCheckerText(scan);
+          } catch {
+            return "";
+          }
+        },
+        showTile: (cover) => {
+          tile = cover;
+          opts.show(cover);
+        },
+        save: async (w) => {
+          const usePlate = w.cutoutSrc !== w.imageSrc && w.cutoutSrc.startsWith("data:");
+          await putImage(photoKey, opts.photoBlob);
+          if (usePlate) {
+            await putImage(plateKey, dataUrlToBlob(w.cutoutSrc)).catch(() => {});
+            await putThumb(opts.id, w.cutoutSrc).catch(() => {});
+          } else {
+            await putThumb(opts.id, opts.photoDataUrl).catch(() => {});
+          }
+          addGarment(
+            {
+              id: opts.id,
+              name: NEW_PIECE_NAME,
+              category: "other",
+              subtype: "",
+              colors: [],
+              material: "",
+              brand: "",
+              notes: opts.notes,
+              formality: 3,
+              warmth: 3,
+              seasons: [],
+              imageSrc: photoKey,
+              cutoutSrc: usePlate ? plateKey : photoKey,
+              imageSource: usePlate ? "cutout" : "photo",
+              matteQuality: usePlate ? "clean" : "ok",
+              fileHash: opts.hash,
+              tuck: guessTuck({ name: NEW_PIECE_NAME, subtype: "", notes: opts.notes }),
+            },
+            { quiet: true },
+          );
+          if (w.message) setError(w.message);
+        },
+      });
+      void nameCameraPiece(opts.id, opts.photoBlob, opts.hash).catch(() => {});
+      return { id: opts.id, name: NEW_PIECE_NAME, category: "other", cutout: tile };
+    },
+    [addGarment, nameCameraPiece],
+  );
+
   const processScanFile = useCallback(
     async (
       file: File,
@@ -293,13 +461,6 @@ export function Studio() {
       let saved = false;
       try {
         const shrunk = await shrinkFile(file);
-        onPreview({
-          id,
-          name: ADDING_NAME,
-          category: "other",
-          cutout: shrunk.objectUrl,
-        });
-
         const matteP = matteToPaper(shrunk.dataUrl);
         const classP = fromCamera
           ? Promise.resolve(null)
@@ -309,7 +470,7 @@ export function Studio() {
               }).catch(() => null),
               4000,
             );
-        const [matte, classRes] = await Promise.all([matteP, classP]);
+        const classRes = await classP;
 
         let kind: ScanKind = "garment";
         let boxes: WornBox[] = [];
@@ -321,6 +482,32 @@ export function Studio() {
         if (kind === "skip" || filenameLooksLikeSkip(file.name)) {
           throw new NotClothes();
         }
+
+        if (classRes && "ok" in classRes && classRes.ok && isHeldGarment(classRes)) {
+          void matteP.catch(() => {});
+          const blob = shrunk.blob ?? dataUrlToBlob(shrunk.dataUrl);
+          const piece = await commitHeldPhoto({
+            id,
+            photoDataUrl: shrunk.dataUrl,
+            photoBlob: blob,
+            hash,
+            notes: "held",
+            show: (cover) =>
+              onPreview({ id, name: NEW_PIECE_NAME, category: "other", cutout: cover }),
+          });
+          saved = true;
+          onPiece(piece);
+          return { type: "pieces", pieces: [piece] };
+        }
+
+        onPreview({
+          id,
+          name: ADDING_NAME,
+          category: "other",
+          cutout: shrunk.objectUrl,
+        });
+
+        const matte = await matteP;
 
         if (kind === "worn" && boxes.length >= 2) {
           return {
@@ -357,7 +544,7 @@ export function Studio() {
         throw e;
       }
     },
-    [landMatte],
+    [commitHeldPhoto, landMatte],
   );
 
   const scanFiles = useCallback(
@@ -449,93 +636,6 @@ export function Studio() {
     [processScanFile],
   );
 
-  const nameCameraPiece = useCallback(
-    async (pieceId: string, jpeg: Blob, hash: string) => {
-      try {
-        const image = await blobToDataUrl(jpeg);
-        const tag = await withTimeout(tagGarment({ data: { image } }), CAMERA_TAG_MS);
-        if (!useCloset.getState().garments.some((g) => g.id === pieceId)) return;
-        const decision = decideCameraTag(tag);
-        if (decision.action === "worn") {
-          const scan = await withTimeout(classifyScan({ data: { image } }), CAMERA_TAG_MS);
-          const boxes =
-            scan && "ok" in scan && scan.ok
-              ? scan.boxes.filter((b) => !looksLikeFace(b.name, b.category, b.box))
-              : [];
-          if (boxes.length >= 2) {
-            removeGarment(pieceId);
-            setSaved((cur) => cur.filter((s) => s.id !== pieceId));
-            setWornQueue((q) => [
-              ...q,
-              { id: uid("w"), original: image, hash, boxes, done: [] },
-            ]);
-            return;
-          }
-          const fallback = decision.fallback;
-          if (!fallback) return;
-          useCloset.getState().updateGarment(pieceId, {
-            name: fallback.name,
-            category: fallback.category,
-            subtype: fallback.subtype,
-            colors: fallback.colors,
-            material: fallback.material,
-            ...(fallback.brand ? { brand: fallback.brand } : {}),
-          });
-          void mirrorGarmentFields(
-            garmentWriter(getSupabase()),
-            getAccount().user?.id ?? null,
-            garmentV2Fields({
-              id: pieceId,
-              name: fallback.name,
-              category: fallback.category,
-              subtype: fallback.subtype,
-              colors: fallback.colors,
-              material: fallback.material,
-              brand: fallback.brand,
-            }),
-          ).catch(() => false);
-          setSaved((cur) =>
-            cur.map((s) =>
-              s.id === pieceId ? { ...s, name: fallback.name, category: fallback.category } : s,
-            ),
-          );
-          return;
-        }
-        if (decision.action !== "update") return;
-        const patch = decision.patch;
-        useCloset.getState().updateGarment(pieceId, {
-          name: patch.name,
-          category: patch.category,
-          subtype: patch.subtype,
-          colors: patch.colors,
-          material: patch.material,
-          ...(patch.brand ? { brand: patch.brand } : {}),
-        });
-        setSaved((cur) =>
-          cur.map((s) =>
-            s.id === pieceId ? { ...s, name: patch.name, category: patch.category } : s,
-          ),
-        );
-        void mirrorGarmentFields(
-          garmentWriter(getSupabase()),
-          getAccount().user?.id ?? null,
-          garmentV2Fields({
-            id: pieceId,
-            name: patch.name,
-            category: patch.category,
-            subtype: patch.subtype,
-            colors: patch.colors,
-            material: patch.material,
-            brand: patch.brand,
-          }),
-        ).catch(() => false);
-      } catch {
-        /* New piece */
-      }
-    },
-    [removeGarment],
-  );
-
   const takeCameraShot = useCallback(
     async (file: File) => {
       setError(null);
@@ -551,6 +651,53 @@ export function Studio() {
         await writeOne("t", blob);
       };
       try {
+        const probe = await shrinkFile(file, CAMERA_EDGE, CAMERA_JPEG, true);
+        const tiny = await shrinkDataUrl(probe.dataUrl, 768).catch(() => probe.dataUrl);
+        const classRes = await withTimeout(
+          classifyScan({ data: { image: tiny } }).catch(() => null),
+          4000,
+        );
+        if (classRes && "ok" in classRes && classRes.ok && isHeldGarment(classRes)) {
+          const hash = probe.blob ? await cameraBytesHash(probe.blob) : "";
+          const known = collectKnownHashes(
+            useCloset.getState().garments.map((g) => g.fileHash),
+          );
+          if (hash && known.has(hash)) return;
+          if (probe.blob) {
+            void withTimeout(putImage(PENDING_CAMERA_KEY, probe.blob), 3000)
+              .then(() => {
+                try {
+                  sessionStorage.setItem(PENDING_CAMERA_FLAG, "1");
+                } catch {
+                  /* private mode */
+                }
+              })
+              .catch(() => {});
+          }
+          const blob = probe.blob ?? dataUrlToBlob(probe.dataUrl);
+          await commitHeldPhoto({
+            id,
+            photoDataUrl: probe.dataUrl,
+            photoBlob: blob,
+            hash,
+            notes: "camera",
+            show: (cover) => {
+              setSaved((cur) => [
+                { id, name: NEW_PIECE_NAME, category: "other", cutout: cover },
+                ...cur.filter((s) => s.id !== id),
+              ]);
+              setProgress("");
+              setBusy(false);
+            },
+          });
+          await deleteImage(PENDING_CAMERA_KEY).catch(() => {});
+          try {
+            sessionStorage.removeItem(PENDING_CAMERA_FLAG);
+          } catch {
+            /* */
+          }
+          return;
+        }
         await ingestCameraShot(file, {
           putPending: async (blob) => {
             await withTimeout(putImage(PENDING_CAMERA_KEY, blob), 3000);
@@ -570,7 +717,7 @@ export function Studio() {
               /* */
             }
           },
-          shrink: (f) => shrinkFile(f, CAMERA_EDGE, CAMERA_JPEG, false),
+          shrink: async () => probe,
           matte: async (dataUrl) => {
             const matte = await matteToPaper(dataUrl);
             return { cutoutSrc: matte.cutoutSrc };
@@ -638,7 +785,7 @@ export function Studio() {
         setBusy(false);
       }
     },
-    [addGarment, nameCameraPiece],
+    [addGarment, commitHeldPhoto, nameCameraPiece],
   );
 
   useEffect(() => {

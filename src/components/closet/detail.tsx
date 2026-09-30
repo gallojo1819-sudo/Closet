@@ -25,6 +25,7 @@ import { PALETTE, nameWithColor } from "@/lib/color";
 import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
 import { CATEGORIES, SEASONS, type Category, type Garment } from "@/lib/types";
 import { seasonsOf } from "@/lib/season";
+import { findThisHref } from "@/lib/scan";
 import { guessTuck, tuckOf } from "@/lib/tuck";
 import { fetchCloudBlob } from "@/lib/cloud/blobs";
 import { useCloset } from "@/lib/store";
@@ -432,6 +433,14 @@ export function GarmentDetail({
             aria-label="Name"
             className="font-editorial text-3xl tracking-tight bg-transparent border-b border-transparent hover:border-hairline focus:border-hairline-strong focus:outline-none w-full"
           />
+          <a
+            href={findThisHref(garment.brand, name)}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="micro self-start text-ink-soft underline underline-offset-2"
+          >
+            Find this
+          </a>
           {garment.demo && (
             <p className="text-sm text-ink-soft">
               Sample piece — not from your closet. Add a photo of the real thing

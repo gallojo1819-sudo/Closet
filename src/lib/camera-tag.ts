@@ -9,7 +9,7 @@ export const CAMERA_TAG_MS = 12_000;
  * rename a camera shot.
  */
 export const CAMERA_TAG_RULES =
-  "A jacket, blazer, coat, chore coat, field jacket, bomber, trucker, overshirt, or trench is outerwear, never a top. A hoodie or sweatshirt stays a top. A shirt, polo, tee, or knit is a top. Trousers are a bottom. Shoes are footwear. Name the garment in the photo, not the room. One clear jacket is that jacket, outerwear, person false, count 1. If a person is wearing the clothes, set person true and count to the garments you can see. Do not name the person. Do not invent a garment that is not in the photo. If several garments are visible, set count to how many and do not save the frame as one top.";
+  "A jacket, blazer, coat, chore coat, field jacket, bomber, trucker, overshirt, or trench is outerwear, never a top. A hoodie or sweatshirt stays a top. A shirt, polo, tee, or knit is a top. Trousers are a bottom. Shoes are footwear. Name the garment in the photo, not the room. One clear jacket is that jacket, outerwear, person false, count 1. If a person is wearing the clothes, set person true and count to the garments you can see. Do not name the person. Do not invent a garment that is not in the photo. If several garments are visible, set count to how many and do not save the frame as one top. If the inside label is readable, set brand to the word printed on it. If it is not readable, brand is empty. Do not invent a brand.";
 
 const OUTER_WORDS = ["jacket", "blazer", "coat", "bomber", "chore", "field", "trucker", "trench", "overshirt"];
 

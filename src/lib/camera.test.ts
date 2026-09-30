@@ -308,6 +308,41 @@ describe("camera tag", () => {
     assert.deepEqual(shot?.colors, ["brown"]);
     assert.equal(decision.patch.material, "cotton");
     assert.equal(decision.patch.brand, "RRL");
+    assert.match(CAMERA_TAG_RULES, /inside label is readable/);
+    assert.match(CAMERA_TAG_RULES, /Do not invent a brand/);
+    const rhude = decideCameraTag({
+      ok: true,
+      name: "Brown jacket",
+      category: "outerwear",
+      subtype: "jacket",
+      brand: "Rhude",
+      count: 1,
+      person: false,
+    });
+    assert.equal(rhude.action, "update");
+    if (rhude.action === "update") assert.equal(rhude.patch.brand, "Rhude");
+    const blank = decideCameraTag({
+      ok: true,
+      name: "Brown jacket",
+      category: "outerwear",
+      subtype: "jacket",
+      brand: "",
+      count: 1,
+      person: false,
+    });
+    assert.equal(blank.action, "update");
+    if (blank.action === "update") assert.equal(blank.patch.brand, "");
+    const invented = decideCameraTag({
+      ok: true,
+      name: "Brown jacket",
+      category: "outerwear",
+      subtype: "jacket",
+      brand: "unknown",
+      count: 1,
+      person: false,
+    });
+    assert.equal(invented.action, "update");
+    if (invented.action === "update") assert.equal(invented.patch.brand, "");
     assert.equal(keep?.name, "Navy oxford");
     assert.equal(keep?.category, "top");
     assert.equal(rack[0]?.name, "New piece");
