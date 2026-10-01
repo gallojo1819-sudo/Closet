@@ -64,6 +64,7 @@ import { addLookTombstone, addTombstone, readTombstones } from "./cloud/tombston
 import { allowSampleRack } from "./cloud/home";
 import { EMPTY_ACCOUNT_CONFIRM } from "./cloud/copy";
 import { dressThisPiece } from "./dress";
+import { notifyGarmentRemoved, notifyLookRemoved, notifyLookSaved } from "./data/v2-port";
 import { todayISO, uid } from "./utils";
 
 export { mergeClosetPersist, openPersistGate, persistGate };
@@ -334,6 +335,7 @@ export const useCloset = create<ClosetState>()(
             : s.drop,
         }));
         noteUserEdit();
+        notifyGarmentRemoved(id);
       },
       wearToday: (ids) => {
         const day = todayISO();
@@ -395,20 +397,24 @@ export const useCloset = create<ClosetState>()(
       saveLook: (look) => {
         const id = uid("l");
         const occasion = mapOccasion(look.occasion);
-        set((s) => ({
-          looks: [
-            {
-              ...look,
-              id,
-              occasion,
-              source: look.source ?? "manual",
-              lookbook: look.lookbook ?? true,
-              createdAt: new Date().toISOString(),
-            },
-            ...s.looks,
-          ],
-        }));
+        const saved = {
+          ...look,
+          id,
+          occasion,
+          source: look.source ?? "manual",
+          lookbook: look.lookbook ?? true,
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ looks: [saved, ...s.looks] }));
         noteUserEdit();
+        notifyLookSaved({
+          id: saved.id,
+          name: saved.name,
+          occasion: saved.occasion,
+          source: saved.source,
+          lookbook: saved.lookbook ?? true,
+          garmentIds: saved.garmentIds,
+        });
         return id;
       },
       outfitWith: (lockedIds, occasion, house) => {
@@ -458,6 +464,7 @@ export const useCloset = create<ClosetState>()(
         addLookTombstone(id);
         set((s) => ({ looks: s.looks.filter((l) => l.id !== id) }));
         noteUserEdit();
+        notifyLookRemoved(id);
       },
       setDrop: (drop) => set({ drop }),
       rerollDrop: (weather, occasion, previousIds) => {

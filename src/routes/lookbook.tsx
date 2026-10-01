@@ -21,6 +21,7 @@ import {
 import { seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { spreadTitle } from "@/lib/look";
+import { pieceLabel } from "@/lib/piece-label";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
@@ -620,7 +621,7 @@ function LookbookPage() {
                     onClick={(e) => openHero(g, e.currentTarget)}
                     className="micro px-3 py-2 text-ink hover:text-ink"
                   >
-                    {g.name}
+                    {pieceLabel(g, garments)}
                   </button>
                   <button
                     type="button"

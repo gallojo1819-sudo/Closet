@@ -8,6 +8,7 @@ import {
   buildReshuffleRow,
   buildWeek,
   todayStripLooks,
+  weekStripDays,
   CHAPTER_CAP,
   chapterVisible,
   comboKey,
@@ -30,6 +31,7 @@ import { lookFitsSeason } from "./season.ts";
 import { isButtonDown, isCreamCable } from "./recipes.ts";
 import { isBrownSuedeOuter, isTrueOuter, isWeekendSoftJacket, pickLook, slotOf, trendScore } from "./style.ts";
 import type { Garment, Look } from "./types.ts";
+import { lastDays, todayISO } from "./utils.ts";
 
 function piece(
   partial: Pick<Garment, "id" | "name" | "category" | "subtype"> & Partial<Garment>,
@@ -1299,6 +1301,43 @@ describe("reshuffle row", () => {
       const n = l.garmentIds.filter((id) => g.some((x) => x.id === id)).length;
       assert.ok(n >= 2, l.id);
     }
+  });
+
+  it("today's strip cell is the drop even when the list is shorter than 7", () => {
+    const g = [
+      piece({ id: "a", name: "Oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "b", name: "Trouser", category: "bottom", subtype: "trouser" }),
+      piece({ id: "c", name: "Loafer", category: "footwear", subtype: "loafer" }),
+    ];
+    const today = todayISO();
+    const days = lastDays(7, today);
+    assert.equal(days[6], today);
+    const thisWeek: Look[] = Array.from({ length: 6 }, (_, i) => ({
+      id: `w${i}`,
+      name: `Week ${i}`,
+      occasion: "weekday",
+      garmentIds: ["a", "b", `ghost-${i}`],
+      source: "ai" as const,
+      lookbook: false,
+      createdAt: today,
+    }));
+    const dense = todayStripLooks(thisWeek, [], g, 7);
+    assert.equal(dense.length, 6);
+    assert.equal(dense[6], undefined);
+    const cells = weekStripDays({
+      days,
+      today,
+      drop: { date: today, garmentIds: ["a", "b"] },
+      journal: [],
+      thisWeek,
+      garments: g,
+    });
+    assert.equal(cells.length, 7);
+    assert.equal(cells[6]?.iso, today);
+    assert.deepEqual(cells.find((cell) => cell.iso === today)?.look?.garmentIds, ["a", "b"]);
+    assert.ok(cells[6]?.look);
+    const past = cells.filter((cell) => cell.iso !== today);
+    assert.equal(past.filter((cell) => cell.look).length, 6);
   });
 
   it("20× Reshuffle does not grow looks.length", () => {

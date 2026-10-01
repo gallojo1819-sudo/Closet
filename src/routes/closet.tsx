@@ -15,6 +15,7 @@ import {
   stashDataUrl,
 } from "@/lib/images";
 import { rackNotes } from "@/lib/gaps";
+import { pieceLabel } from "@/lib/piece-label";
 import { daysIdle } from "@/lib/style";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
@@ -360,7 +361,7 @@ function ClosetPage() {
                 placeholder={
                   <div>
                     <div className="aspect-page border border-hairline paper-shimmer" />
-                    <p className="mt-2 text-sm leading-snug">{g.name}</p>
+                    <p className="mt-2 text-sm leading-snug">{pieceLabel(g, garmentsAll)}</p>
                   </div>
                 }
               >

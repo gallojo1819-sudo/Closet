@@ -1,6 +1,9 @@
 import { useEffect } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { useAccount } from "@/lib/cloud/account";
+import { bindLiveCopies, reconcileAccountCopies } from "@/lib/data/copies-live";
+import { setCopyParity } from "@/lib/data/copies";
+import { setV2Port } from "@/lib/data/v2-port";
 import { accountPool } from "@/lib/cloud/merge";
 import { stillOnPhoneCopy } from "@/lib/cloud/copy";
 import { backupRemaining, idbCount, shouldShowBackupBanner } from "@/lib/cloud/src";
@@ -110,6 +113,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       stopSync();
     };
   }, []);
+
+  const userId = account.user?.id ?? null;
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!userId) {
+      setV2Port(null);
+      setCopyParity(null);
+      return;
+    }
+    bindLiveCopies(userId);
+    void reconcileAccountCopies(userId, {
+      looks: () => useCloset.getState().looks,
+      drop: () => useCloset.getState().drop,
+      removeLook: (id) => useCloset.getState().removeLook(id),
+      metaGarments: () => useCloset.getState().garments.filter((g) => g.demo !== true).length,
+      metaLooks: () => useCloset.getState().looks.length,
+    }).catch(() => {});
+  }, [hydrated, userId]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("vt-night", night);

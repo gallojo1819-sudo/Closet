@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import {
   closeAccountDialog,
   openAccountDialog,
@@ -9,10 +9,12 @@ import {
 } from "@/lib/cloud/account";
 import { backupPhotos, retryCloudSave } from "@/lib/cloud/sync";
 import { LOCAL_ONLY_CAPTION, SAVE_RETRY, SIGN_IN_PROMPT, savedAccountCopy } from "@/lib/cloud/copy";
+import { getCopyParity, subscribeCopyParity } from "@/lib/data/copies";
 import { cn } from "@/lib/utils";
 
 export function AccountChip({ night, count }: { night: boolean; count: number }) {
   const account = useAccount();
+  const parity = useSyncExternalStore(subscribeCopyParity, getCopyParity, () => null);
   const quiet = night ? "text-champagne/70" : "text-ink-soft";
 
   if (!account.configured) return null;
@@ -21,6 +23,7 @@ export function AccountChip({ night, count }: { night: boolean; count: number })
   let label = SIGN_IN_PROMPT;
   if (account.progress) label = account.progress;
   else if (account.user && account.localOnly) label = LOCAL_ONLY_CAPTION;
+  else if (account.user && parity) label = parity;
   else if (account.user) label = savedAccountCopy(count);
 
   return (
@@ -36,7 +39,7 @@ export function AccountChip({ night, count }: { night: boolean; count: number })
         }}
         className={cn(
           "micro text-left hover:opacity-80",
-          account.user ? "max-w-[14rem] truncate sm:max-w-none" : "",
+          account.user && !parity ? "max-w-[14rem] truncate sm:max-w-none" : "",
           quiet,
         )}
       >

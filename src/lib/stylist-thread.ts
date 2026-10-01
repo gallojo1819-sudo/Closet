@@ -29,6 +29,22 @@ export function recordStylistQuestion<T extends { looks: readonly unknown[]; dro
   return { looks: state.looks.length, drop: state.drop };
 }
 
+/**
+ * Asking must leave the look count and Today where they were.
+ * An explicit Save or Wear during the request is left alone.
+ * Returns the snapshot to put back, or null when nothing changed.
+ */
+export function restoreIfAskWrote<L, D>(
+  staged: { looks: number; drop: D },
+  snap: { looks: L; drop: D },
+  now: { looks: readonly unknown[]; drop: D },
+  explicitWrite: boolean,
+): { looks: L; drop: D } | null {
+  if (explicitWrite) return null;
+  if (now.looks.length === staged.looks && now.drop === staged.drop) return null;
+  return snap;
+}
+
 /** Save is the only write. Source is ai, and nothing already saved is removed. */
 export function stylistLookToSave(draft: StylistDraft): {
   name: string;

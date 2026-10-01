@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { lookMissing, rackLine, rackNotes } from "./gaps.ts";
 import type { Garment } from "./types.ts";
+import { todayISO } from "./utils.ts";
 
 function piece(
   partial: Pick<Garment, "id" | "name" | "category" | "subtype"> & Partial<Garment>,
@@ -305,6 +306,7 @@ describe("rackNotes", () => {
         colors: ["white"],
       }),
     ];
+    for (const item of g) item.wornOn = [todayISO()];
     const notes = rackNotes(g);
     assert.equal(notes.length, 1);
     assert.equal(notes[0]!.title, "The rack is even");

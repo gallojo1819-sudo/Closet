@@ -1366,6 +1366,67 @@ export function todayStripLooks(
   return out;
 }
 
+export type WeekStripCell = { iso: string; look: Look | null };
+
+function resolvingIds(ids: readonly string[], byId: Map<string, Garment>): number {
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id) || !byId.has(id)) continue;
+    seen.add(id);
+  }
+  return seen.size;
+}
+
+function stripLook(id: string, garmentIds: string[], iso: string): Look {
+  return {
+    id,
+    name: "",
+    occasion: "weekday",
+    garmentIds,
+    source: "manual",
+    lookbook: false,
+    createdAt: iso,
+  };
+}
+
+/**
+ * One cell per day. Today is the drop when that drop still has two real pieces.
+ * Other days use a worn journal entry, then thisWeek. A past day may stay empty.
+ */
+export function weekStripDays(input: {
+  days: readonly string[];
+  today: string;
+  drop: { date: string; garmentIds: readonly string[] } | null;
+  journal: readonly { date: string; garmentIds: readonly string[]; verdict: string }[];
+  thisWeek: readonly Look[];
+  garments: Garment[];
+}): WeekStripCell[] {
+  const byId = new Map(lookbookPool(input.garments).map((g) => [g.id, g]));
+  const enough = (ids: readonly string[]) => resolvingIds(ids, byId) >= 2;
+  const queued = input.thisWeek.filter((look) => enough(look.garmentIds));
+  let nextWeek = 0;
+  return input.days.map((iso) => {
+    if (
+      iso === input.today &&
+      input.drop &&
+      input.drop.date === input.today &&
+      enough(input.drop.garmentIds)
+    ) {
+      return { iso, look: stripLook(`drop-${iso}`, [...input.drop.garmentIds], iso) };
+    }
+    const worn = input.journal.find(
+      (entry) => entry.date === iso && entry.verdict === "worn" && enough(entry.garmentIds),
+    );
+    if (worn) return { iso, look: stripLook(`worn-${iso}`, [...worn.garmentIds], iso) };
+    const look = queued[nextWeek];
+    if (look) {
+      nextWeek += 1;
+      return { iso, look };
+    }
+    return { iso, look: null };
+  });
+}
+
 export function rackCanDress(garments: Garment[]): boolean {
   const pool = lookbookPool(garments);
   const top = pool.some((g) => {

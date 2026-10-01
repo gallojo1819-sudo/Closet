@@ -7,7 +7,8 @@ import { LookSheet } from "@/components/closet/look-sheet";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, kitCells, nameLook, neglectedPiece, sortLook } from "@/lib/look";
-import { rackCanDress, todayStripLooks } from "@/lib/lookbook";
+import { pieceLabel } from "@/lib/piece-label";
+import { rackCanDress, weekStripDays } from "@/lib/lookbook";
 import { seasonFromWeather } from "@/lib/season";
 import { useAccount } from "@/lib/cloud/account";
 import { persistGate } from "@/lib/store-persist";
@@ -154,10 +155,18 @@ function Today() {
     [journal, drop, garments],
   );
   const houses = lookHouses(pieces, drop?.occasion ?? "weekday", dropSeason);
-  const week = lastDays(7);
-  const strip = useMemo(
-    () => todayStripLooks(thisWeek, looksAll.filter((l) => l.lookbook), garments, 7),
-    [thisWeek, looksAll, garments],
+  const today = todayISO();
+  const weekCells = useMemo(
+    () =>
+      weekStripDays({
+        days: lastDays(7, today),
+        today,
+        drop,
+        journal,
+        thisWeek,
+        garments,
+      }),
+    [today, drop, journal, thisWeek, garments],
   );
   const done = drop?.worn || drop?.verdict === "worn";
 
@@ -247,25 +256,25 @@ function Today() {
       </div>
 
       <ol className="mt-8 grid grid-cols-7 gap-1">
-        {week.map((iso, i) => {
-          const look = strip[i];
-          const plates = look
-            ? kitCells(
-                look.garmentIds
-                  .map((id) => garments.find((g) => g.id === id))
-                  .filter((g): g is Garment => Boolean(g)),
-              )
+        {weekCells.map((cell) => {
+          const look = cell.look;
+          const resolved = look
+            ? look.garmentIds
+                .map((id) => garments.find((g) => g.id === id))
+                .filter((g): g is Garment => Boolean(g))
             : [];
-          const isToday = iso === todayISO();
+          const bands = kitCells(resolved);
+          const plates = bands.length >= 2 ? bands : resolved;
+          const isToday = cell.iso === today;
           return (
             <li
-              key={iso}
+              key={cell.iso}
               className={cn(
                 "border aspect-square flex flex-col items-center justify-center gap-1",
                 isToday ? "border-ink" : "border-hairline",
               )}
             >
-              <span className="micro text-ink-soft">{weekdayLetter(iso)}</span>
+              <span className="micro text-ink-soft">{weekdayLetter(cell.iso)}</span>
               {plates.length >= 2 ? (
                 <div className="grid grid-cols-2 size-10">
                   {plates.map((g) => (
@@ -359,7 +368,7 @@ function Today() {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p>{g.name}</p>
+                    <p>{pieceLabel(g, garments)}</p>
                     <p className="micro text-ink-soft">
                       {g.subtype || g.category}
                       {idle >= 21 ? ` · sat ${idle}d` : ""}

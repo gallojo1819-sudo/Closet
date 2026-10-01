@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { FlatLay } from "@/components/closet/flat-lay";
@@ -12,7 +12,7 @@ import {
   occasionFromDressPrompt,
   resolvePiecesFromText,
 } from "@/lib/dress";
-import { draftFromMessage, recordStylistQuestion, stylistLookToSave } from "@/lib/stylist-thread";
+import { draftFromMessage, recordStylistQuestion, restoreIfAskWrote, stylistLookToSave } from "@/lib/stylist-thread";
 import { appendHouseGap, houseFromPrompt } from "@/lib/houses";
 import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
@@ -76,19 +76,23 @@ function StylistPage() {
   const looks = useCloset((s) => s.looks);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const explicitWrite = useRef(false);
 
   const send = async (prompt: string) => {
     const q = prompt.trim();
     if (!q || busy || owned.length === 0) return;
-    recordStylistQuestion(useCloset.getState(), q);
+    explicitWrite.current = false;
+    const before = useCloset.getState();
+    const staged = recordStylistQuestion(before, q);
+    const snap = { looks: before.looks, drop: before.drop };
     pushMessage({ role: "user", text: q });
     setText("");
     setBusy(true);
+    try {
     const named = resolvePiecesFromText(q, owned);
     const houseHint = houseFromPrompt(q);
     if (named.length === 0 && looksLikePieceAsk(q) && !houseHint) {
       pushMessage({ role: "stylist", text: "Tap the piece on Closet." });
-      setBusy(false);
       return;
     }
     if (named.length > 0 || houseHint) {
@@ -121,7 +125,6 @@ function StylistPage() {
       } else {
         pushMessage({ role: "stylist", text: WHICH_PIECE });
       }
-      setBusy(false);
       return;
     }
     const closet = forStylist
@@ -188,13 +191,18 @@ function StylistPage() {
         text: res.ok ? res.text : res.error,
       });
     }
-    setBusy(false);
+    } finally {
+      const undo = restoreIfAskWrote(staged, snap, useCloset.getState(), explicitWrite.current);
+      if (undo) useCloset.setState(undo);
+      setBusy(false);
+    }
   };
 
   const wearDraft = (messageId: string) => {
     const message = messages.find((m) => m.id === messageId);
     const draft = message ? draftFromMessage(message) : null;
     if (!draft) return;
+    explicitWrite.current = true;
     setDrop({
       date: todayISO(),
       garmentIds: draft.garmentIds,
@@ -210,6 +218,7 @@ function StylistPage() {
     const message = messages.find((m) => m.id === messageId);
     const draft = message ? draftFromMessage(message) : null;
     if (!draft || message?.lookId) return;
+    explicitWrite.current = true;
     const id = saveLook(stylistLookToSave(draft));
     stampMessage(messageId, { lookId: id });
   };

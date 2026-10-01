@@ -7,6 +7,7 @@ import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { colorLine } from "@/lib/color";
 import { nameLook, spreadTitle } from "@/lib/look";
+import { pieceLabel } from "@/lib/piece-label";
 import { moreOutfitsForLook } from "@/lib/dress";
 import type { House } from "@/lib/houses";
 import { comboKey } from "@/lib/lookbook";
@@ -198,7 +199,7 @@ export function LookSheet({
             <p className="micro text-ink-soft">
               {activePieces
                 .filter((g) => !look.name.toLowerCase().includes(g.name.toLowerCase()))
-                .map((g) => g.name)
+                .map((g) => pieceLabel(g, closet))
                 .join(" · ") || colorLine(activePieces).replace(/\.$/, "") || look.occasion}
             </p>
           </div>
@@ -288,7 +289,7 @@ export function LookSheet({
                       "relative aspect-page w-full border border-hairline bg-paper overflow-hidden",
                       !on && "opacity-40",
                     )}
-                    aria-label={on ? `Remove ${g.name}` : `Add ${g.name}`}
+                    aria-label={on ? `Remove ${pieceLabel(g, closet)}` : `Add ${pieceLabel(g, closet)}`}
                   >
                     <GarmentImg
                       garment={g}
@@ -357,7 +358,7 @@ export function LookSheet({
                       setShowMe(false);
                     }}
                     className="w-14 shrink-0"
-                    aria-label={g.name}
+                    aria-label={pieceLabel(g, closet)}
                   >
                     <div className="aspect-page border border-hairline bg-paper overflow-hidden">
                       <GarmentImg garment={g} className="h-full w-full object-contain p-[8%]" />

@@ -1,5 +1,7 @@
 import type { MouseEvent } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
+import { pieceLabel } from "@/lib/piece-label";
+import { useCloset } from "@/lib/store";
 import type { Garment } from "@/lib/types";
 import { daysIdle } from "@/lib/style";
 import { cn } from "@/lib/utils";
@@ -17,6 +19,7 @@ export function GarmentTile({
   selecting?: boolean;
   eager?: boolean;
 }) {
+  const pool = useCloset((s) => s.garments);
   return (
     <button
       type="button"
@@ -57,7 +60,7 @@ export function GarmentTile({
         )}
       </div>
       <div className="mt-2 flex items-baseline justify-between gap-2">
-        <p className="text-sm leading-snug">{garment.name}</p>
+        <p className="text-sm leading-snug">{pieceLabel(garment, pool)}</p>
         <span className="micro text-ink-soft shrink-0">{garment.category}</span>
       </div>
     </button>

@@ -8,7 +8,9 @@ register(new URL("../../scripts/ts-ext.mjs", import.meta.url), {
   parentURL: import.meta.url,
 });
 
-const { draftFromMessage, recordStylistQuestion, stylistLookToSave } = await import("./stylist-thread.ts");
+const { draftFromMessage, recordStylistQuestion, restoreIfAskWrote, stylistLookToSave } = await import(
+  "./stylist-thread.ts",
+);
 const { useCloset } = await import("./store.ts");
 const { clearPendingEdit, peekPendingEdit } = await import("./cloud/edit.ts");
 
@@ -64,9 +66,21 @@ describe("stylist ask", () => {
     assert.equal(send.includes("saveLook"), false);
     assert.equal(send.includes("setDrop"), false);
     assert.equal(send.includes("outfitWith"), false);
+    assert.equal(send.includes("restoreIfAskWrote"), true);
     assert.equal(src.includes("stylistLookToSave"), true);
     assert.equal(src.includes("draftFromMessage"), true);
     assert.equal(src.includes("setDrafts"), false);
+
+    const snap = { looks: [olive()], drop };
+    const stagedAsk = { looks: snap.looks.length, drop };
+    assert.equal(restoreIfAskWrote(stagedAsk, snap, snap, false), null);
+    const grown = { looks: [...snap.looks, { ...olive(), id: "l_new" }], drop };
+    const undone = restoreIfAskWrote(stagedAsk, snap, grown, false);
+    assert.equal(undone?.looks.length, before.looks.length);
+    assert.equal(undone?.drop, drop);
+    const moved = { looks: snap.looks, drop: { ...drop, garmentIds: ["g_other", "g_shoe"] } };
+    assert.equal(restoreIfAskWrote(stagedAsk, snap, moved, false)?.drop, drop);
+    assert.equal(restoreIfAskWrote(stagedAsk, snap, grown, true), null);
   });
 
   it("outfitWith does not change Today or the lookbook rev until Save", () => {

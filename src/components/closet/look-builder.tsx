@@ -4,6 +4,7 @@ import { GarmentImg } from "@/components/closet/gimg";
 import { OnMeButton } from "@/components/closet/on-me";
 import { lookbookPool } from "@/lib/lookbook";
 import { nameLook } from "@/lib/look";
+import { pieceLabel } from "@/lib/piece-label";
 import { defaultOccasion, slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { mapOccasion, type Garment } from "@/lib/types";
@@ -117,7 +118,7 @@ export function LookBuilder({ onClose }: { onClose?: () => void }) {
                 )}
               </div>
               <p className="micro px-1 py-1 text-ink-soft truncate">
-                {g ? g.name : s.label}
+                {g ? pieceLabel(g, pool) : s.label}
               </p>
             </button>
           );
@@ -146,7 +147,7 @@ export function LookBuilder({ onClose }: { onClose?: () => void }) {
                     <div className="bg-paper-deep aspect-page">
                       <GarmentImg garment={g} className="h-full w-full object-contain p-[8%]" />
                     </div>
-                    <p className="micro px-1 py-1 truncate">{g.name}</p>
+                    <p className="micro px-1 py-1 truncate">{pieceLabel(g, pool)}</p>
                   </button>
                 </li>
               ))}
