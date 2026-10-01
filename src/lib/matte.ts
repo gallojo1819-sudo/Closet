@@ -124,6 +124,15 @@ function sampleBorder(data: Uint8ClampedArray, w: number, h: number) {
 
 /** A studio/product shot: border is uniform, near-white and near-achromatic.
  *  A cream wall or wood floor fails at least one leg and gets the flood. */
+export function borderIsCleanStudio(
+  bg: { r: number; g: number; b: number },
+  frac: number,
+  mad: number,
+  page = false,
+): boolean {
+  return looksStudio(bg, frac, mad) && !page;
+}
+
 function looksStudio(
   bg: { r: number; g: number; b: number },
   frac: number,
@@ -323,6 +332,20 @@ function compositePaper(
   return out.toDataURL("image/jpeg", 0.85);
 }
 
+/** True only when the frame border is already a clean studio ground. A room, hand, or floor is false. */
+export async function imageBorderIsCleanStudio(src: string): Promise<boolean> {
+  try {
+    const img = await loadImage(src);
+    const { canvas, ctx } = drawFit(img);
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const { bg, frac, mad } = sampleBorder(image.data, canvas.width, canvas.height);
+    const page = looksPage(image.data, canvas.width, canvas.height);
+    return borderIsCleanStudio(bg, frac, mad, page);
+  } catch {
+    return false;
+  }
+}
+
 export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
   const img = await loadImage(imageSrc);
   const { canvas, ctx } = drawFit(img);
@@ -330,7 +353,7 @@ export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
   const { bg, frac, mad, floodTol } = sampleBorder(image.data, canvas.width, canvas.height);
 
   const page = looksPage(image.data, canvas.width, canvas.height);
-  if (looksStudio(bg, frac, mad) && !page) {
+  if (borderIsCleanStudio(bg, frac, mad, page)) {
     // Clean product shot: crop to the garment so it fills the page.
     const box = contentBounds(image.data, canvas.width, canvas.height, bg, floodTol);
     return {

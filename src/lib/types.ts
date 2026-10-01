@@ -37,6 +37,8 @@ export type Garment = {
   cutoutSrc: string;
   imageSource: ImageSource;
   matteQuality: "clean" | "ok" | "busy";
+  /** Plate was refused. The grid shows paper, not the phone photo. Absent on old rows. */
+  reprint?: boolean;
   demo: boolean;
   wornOn: string[];
   paid?: number;

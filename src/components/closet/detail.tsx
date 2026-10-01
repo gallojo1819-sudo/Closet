@@ -4,6 +4,8 @@ import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { describeCover, readAiStatus, recolorCover } from "@/lib/ai";
+import { makePlate } from "@/lib/plate-pass";
+import { coverIsOriginal, needsReprintTile, REPRINT_CAPTION } from "@/lib/plate";
 import {
   coversSameSilhouette,
   notesWantGurkha,
@@ -140,6 +142,7 @@ export function GarmentDetail({
   const [coverTick, setCoverTick] = useState(0);
   const [coverNote, setCoverNote] = useState<string | null>(null);
   const [coverError, setCoverError] = useState<string | null>(null);
+  const [plating, setPlating] = useState(false);
   const originalSrc = useImageSrc(garment.imageSrc);
   const usingOriginal = garment.cutoutSrc === garment.imageSrc;
   const cpw = costPerWear(garment);
@@ -346,7 +349,12 @@ export function GarmentDetail({
               className="bg-paper-deep aspect-page"
               style={{ viewTransitionName: `piece-${garment.id}` }}
             >
-              {view === "print" ? (
+              {view === "print" && needsReprintTile(garment) ? (
+                <div className="flex h-full w-full flex-col items-center justify-center bg-paper-deep px-6 text-center">
+                  <p className="font-editorial text-2xl tracking-tight">{garment.name}</p>
+                  <p className="micro mt-3 text-ink-soft">{REPRINT_CAPTION}</p>
+                </div>
+              ) : view === "print" ? (
                 <GarmentImg
                   key={`cover-${garment.id}-${coverTick}`}
                   garment={garment}
@@ -392,11 +400,36 @@ export function GarmentDetail({
               </button>
             )}
           </div>
+          {coverIsOriginal(garment) && view !== "me" && (
+            <button
+              type="button"
+              disabled={plating}
+              onClick={() => {
+                setPlating(true);
+                setCoverError(null);
+                void makePlate(garment.id)
+                  .then(() => {
+                    const next = useCloset.getState().garments.find((item) => item.id === garment.id);
+                    if (next?.reprint) setCoverError(REPRINT_CAPTION);
+                    else setCoverNote("Cover updated — original photo unchanged.");
+                    setView("print");
+                  })
+                  .finally(() => setPlating(false));
+              }}
+              className="micro w-full py-2 text-ink border-t border-hairline hover:text-ink disabled:text-ink-soft"
+            >
+              {plating ? "Making a plate…" : "Make a plate"}
+            </button>
+          )}
           {!usingOriginal && view !== "me" && (
             <button
               type="button"
               onClick={() => {
-                updateGarment(garment.id, { cutoutSrc: garment.imageSrc });
+                updateGarment(garment.id, {
+                  cutoutSrc: garment.imageSrc,
+                  imageSource: "photo",
+                  reprint: false,
+                });
                 setView("original");
               }}
               className="micro w-full py-2 text-ink-soft border-t border-hairline hover:text-ink"

@@ -45,7 +45,7 @@ const HOLDER_LABEL = /\b(hands?|hangers?|arms?|sleeves?|fingers?)\b/i;
 const HELD_CUE = /\b(hands?|hangers?|held|holding|arms?|sleeves?)\b/i;
 const WORN_PERSON = /\b(person|people|selfie|wearing)\b/i;
 
-export const HAND_COVER_MESSAGE = "Cover still has the hand — try again.";
+export const HAND_COVER_MESSAGE = "Cover still has the hand — tap Reprint.";
 const SKIP_FILE =
   /\b(pizza|food|receipt|screenshot|menu|landscape|meme|invoice|document)\b/i;
 
@@ -352,14 +352,20 @@ export function isHeldGarment(scan: {
   return HELD_CUE.test(blob);
 }
 
-/** Positive hand or hanger. "no hand" and "handle" do not count. */
+const COVER_HIT = "hands?|arms?|skins?|hangers?|floors?|walls?";
+
+/** Hand, arm, skin, hanger, floor, or wall. "no hand" and "handle" do not count. */
 export function coverRejected(checker: string): boolean {
   const raw = checker.trim().toLowerCase();
   if (!raw) return false;
-  const negated = raw
-    .replace(/\b(?:no|not|without|removed|gone)\s+(?:a\s+|the\s+)?(?:hands?|hangers?)\b/g, " ")
-    .replace(/\b(?:hands?|hangers?)\s+(?:removed|gone|absent)\b/g, " ");
-  return /\b(?:hands?|hangers?)\b/.test(negated);
+  const masked = raw.replace(/\bhandles?\b/g, " ");
+  const negated = masked
+    .replace(
+      new RegExp(`\\b(?:no|not|without|removed|gone)\\s+(?:a\\s+|the\\s+|any\\s+)?(?:${COVER_HIT})\\b`, "g"),
+      " ",
+    )
+    .replace(new RegExp(`\\b(?:${COVER_HIT})\\s+(?:removed|gone|absent|remains)\\b`, "g"), " ");
+  return new RegExp(`\\b(?:${COVER_HIT})\\b`).test(negated);
 }
 
 export function scanCheckerText(scan: {
@@ -382,41 +388,62 @@ export type CutoutWrite = {
   imageSrc: string;
   cutoutSrc: string;
   message: string | null;
+  /** True when the plate was refused. The grid must not paint the phone photo. */
+  reprint: boolean;
 };
 
-/** The photo stays imageSrc. A plate the checker still calls "hand" is not cutoutSrc. */
+/** The photo stays imageSrc. A refused plate is not cutoutSrc. */
 export function writtenCutout(input: {
   photo: string;
   plate: string | null;
   checker: string;
 }): CutoutWrite {
-  const reject = Boolean(input.plate) && coverRejected(input.checker);
-  if (!input.plate || reject) {
+  const reject = !input.plate || coverRejected(input.checker);
+  if (reject) {
     return {
       imageSrc: input.photo,
       cutoutSrc: input.photo,
-      message: reject ? HAND_COVER_MESSAGE : null,
+      message: HAND_COVER_MESSAGE,
+      reprint: true,
     };
   }
-  return { imageSrc: input.photo, cutoutSrc: input.plate, message: null };
+  return { imageSrc: input.photo, cutoutSrc: input.plate!, message: null, reprint: false };
 }
+
+export type PlatePrintAttempt = { retry: boolean };
 
 /**
  * Held garment only. print runs before the tile. No shop-image fetch.
- * imageSrc is always the photo. cutoutSrc is the plate only when the checker accepts it.
+ * A dirty plate is printed once more. imageSrc is always the photo.
+ * cutoutSrc is the plate only when the checker accepts it.
  */
 export async function placeHeldGarment(opts: {
   photo: string;
-  print: (photo: string) => Promise<{ ok: boolean; image?: string }>;
+  print: (photo: string, attempt?: PlatePrintAttempt) => Promise<{ ok: boolean; image?: string }>;
   check: (plate: string) => Promise<string>;
+  /** Empty string when the plate was refused — do not paint the phone photo. */
   showTile: (cover: string) => void;
   save: (written: CutoutWrite) => void | Promise<void>;
 }): Promise<CutoutWrite> {
-  const printed = await opts.print(opts.photo);
-  const plate = printed.ok && printed.image ? printed.image : null;
-  const checker = plate ? await opts.check(plate) : "";
+  const once = async (retry: boolean) => {
+    const printed = await opts.print(opts.photo, { retry });
+    const plate = printed.ok && printed.image ? printed.image : null;
+    const checker = plate ? await opts.check(plate) : "";
+    return { plate, checker };
+  };
+  let { plate, checker } = await once(false);
+  if (!plate || coverRejected(checker)) {
+    const again = await once(true);
+    if (again.plate && !coverRejected(again.checker)) {
+      plate = again.plate;
+      checker = again.checker;
+    } else {
+      plate = null;
+      checker = again.checker || checker || "hand";
+    }
+  }
   const written = writtenCutout({ photo: opts.photo, plate, checker });
-  opts.showTile(written.cutoutSrc);
+  opts.showTile(written.reprint ? "" : written.cutoutSrc);
   await opts.save(written);
   return written;
 }

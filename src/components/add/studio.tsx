@@ -25,7 +25,7 @@ import {
   shrinkFile,
   withTimeout,
 } from "@/lib/ingest";
-import { matteToPaper, readAsImageSrc } from "@/lib/matte";
+import { imageBorderIsCleanStudio, matteToPaper, readAsImageSrc } from "@/lib/matte";
 import { enqueuePrint, enqueueTag } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
 import { classifyScan, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
@@ -53,6 +53,7 @@ import {
   searchOfficial,
   type OfficialHit,
 } from "@/lib/listing";
+import { REPRINT_CAPTION } from "@/lib/plate";
 import { savedFlashCopy } from "@/lib/cloud/copy";
 import { useCloset } from "@/lib/store";
 import type { Category, ImageSource, Tuck } from "@/lib/types";
@@ -74,6 +75,7 @@ type Saved = {
   name: string;
   category: Category;
   cutout: string;
+  reprint?: boolean;
   matches?: OfficialHit[];
   query?: string;
 };
@@ -378,13 +380,15 @@ export function Studio() {
     }): Promise<Saved> => {
       const photoKey = imageKey(opts.id, "o");
       const plateKey = imageKey(opts.id, "c");
-      let tile = opts.photoDataUrl;
+      let tile = "";
       await placeHeldGarment({
         photo: opts.photoDataUrl,
-        print: async (photo) => {
+        print: async (photo, attempt) => {
           try {
             const image = await shrinkDataUrl(photo, 1024);
-            return await printGarment({ data: { image } });
+            return await printGarment({
+              data: { image, held: true, retry: Boolean(attempt?.retry) },
+            });
           } catch {
             return { ok: false, error: "print" };
           }
@@ -406,13 +410,11 @@ export function Studio() {
           opts.show(cover);
         },
         save: async (w) => {
-          const usePlate = w.cutoutSrc !== w.imageSrc && w.cutoutSrc.startsWith("data:");
+          const usePlate = !w.reprint && w.cutoutSrc.startsWith("data:");
           await putImage(photoKey, opts.photoBlob);
           if (usePlate) {
             await putImage(plateKey, dataUrlToBlob(w.cutoutSrc)).catch(() => {});
             await putThumb(opts.id, w.cutoutSrc).catch(() => {});
-          } else {
-            await putThumb(opts.id, opts.photoDataUrl).catch(() => {});
           }
           addGarment(
             {
@@ -430,7 +432,8 @@ export function Studio() {
               imageSrc: photoKey,
               cutoutSrc: usePlate ? plateKey : photoKey,
               imageSource: usePlate ? "cutout" : "photo",
-              matteQuality: usePlate ? "clean" : "ok",
+              matteQuality: usePlate ? "clean" : "busy",
+              reprint: !usePlate,
               fileHash: opts.hash,
               tuck: guessTuck({ name: NEW_PIECE_NAME, subtype: "", notes: opts.notes }),
             },
@@ -440,7 +443,13 @@ export function Studio() {
         },
       });
       void nameCameraPiece(opts.id, opts.photoBlob, opts.hash).catch(() => {});
-      return { id: opts.id, name: NEW_PIECE_NAME, category: "other", cutout: tile };
+      return {
+        id: opts.id,
+        name: NEW_PIECE_NAME,
+        category: "other",
+        cutout: tile,
+        reprint: tile === "",
+      };
     },
     [addGarment, nameCameraPiece],
   );
@@ -461,6 +470,30 @@ export function Studio() {
       let saved = false;
       try {
         const shrunk = await shrinkFile(file);
+        if (fromCamera) {
+          const studioGround = await imageBorderIsCleanStudio(shrunk.dataUrl).catch(() => false);
+          if (!studioGround) {
+            const blob = shrunk.blob ?? dataUrlToBlob(shrunk.dataUrl);
+            const piece = await commitHeldPhoto({
+              id,
+              photoDataUrl: shrunk.dataUrl,
+              photoBlob: blob,
+              hash,
+              notes: "camera",
+              show: (cover) =>
+                onPreview({
+                  id,
+                  name: NEW_PIECE_NAME,
+                  category: "other",
+                  cutout: cover,
+                  reprint: cover === "",
+                }),
+            });
+            saved = true;
+            onPiece(piece);
+            return { type: "pieces", pieces: [piece] };
+          }
+        }
         const matteP = matteToPaper(shrunk.dataUrl);
         const classP = fromCamera
           ? Promise.resolve(null)
@@ -493,7 +526,13 @@ export function Studio() {
             hash,
             notes: "held",
             show: (cover) =>
-              onPreview({ id, name: NEW_PIECE_NAME, category: "other", cutout: cover }),
+              onPreview({
+                id,
+                name: NEW_PIECE_NAME,
+                category: "other",
+                cutout: cover,
+                reprint: cover === "",
+              }),
           });
           saved = true;
           onPiece(piece);
@@ -652,12 +691,8 @@ export function Studio() {
       };
       try {
         const probe = await shrinkFile(file, CAMERA_EDGE, CAMERA_JPEG, true);
-        const tiny = await shrinkDataUrl(probe.dataUrl, 768).catch(() => probe.dataUrl);
-        const classRes = await withTimeout(
-          classifyScan({ data: { image: tiny } }).catch(() => null),
-          4000,
-        );
-        if (classRes && "ok" in classRes && classRes.ok && isHeldGarment(classRes)) {
+        const studioGround = await imageBorderIsCleanStudio(probe.dataUrl).catch(() => false);
+        if (!studioGround) {
           const hash = probe.blob ? await cameraBytesHash(probe.blob) : "";
           const known = collectKnownHashes(
             useCloset.getState().garments.map((g) => g.fileHash),
@@ -683,7 +718,13 @@ export function Studio() {
             notes: "camera",
             show: (cover) => {
               setSaved((cur) => [
-                { id, name: NEW_PIECE_NAME, category: "other", cutout: cover },
+                {
+                  id,
+                  name: NEW_PIECE_NAME,
+                  category: "other",
+                  cutout: cover,
+                  reprint: cover === "",
+                },
                 ...cur.filter((s) => s.id !== id),
               ]);
               setProgress("");
@@ -1319,11 +1360,19 @@ export function Studio() {
             {saved.map((g) => (
               <li key={g.id} className="w-36 shrink-0 space-y-2">
                 <div className="border border-hairline bg-paper-deep aspect-page">
-                  <img
-                    src={g.cutout}
-                    alt={g.name}
-                    className="h-full w-full object-contain p-[8%]"
-                  />
+                  {g.reprint || !g.cutout ? (
+                    <div className="flex h-full w-full flex-col items-center justify-center px-2 text-center">
+                      <p className="text-sm leading-snug">{g.name}</p>
+                      <p className="micro mt-2">Reprint</p>
+                      <p className="micro mt-1 text-ink-soft">{REPRINT_CAPTION}</p>
+                    </div>
+                  ) : (
+                    <img
+                      src={g.cutout}
+                      alt={g.name}
+                      className="h-full w-full object-contain p-[8%]"
+                    />
+                  )}
                 </div>
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="text-sm leading-snug">{g.name}</p>

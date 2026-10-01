@@ -16,6 +16,8 @@ import {
 } from "@/lib/images";
 import { rackNotes } from "@/lib/gaps";
 import { pieceLabel } from "@/lib/piece-label";
+import { rawOuterwearCovers } from "@/lib/plate";
+import { scheduleOuterwearPlates } from "@/lib/plate-pass";
 import { daysIdle } from "@/lib/style";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
@@ -39,6 +41,13 @@ async function embedSrc(src: string): Promise<string> {
 function ClosetPage() {
   const hydrated = useCloset((s) => s.hydrated);
   const garmentsAll = useCloset((s) => s.garments);
+  const rawOuterIds = rawOuterwearCovers(garmentsAll)
+    .map((g) => g.id)
+    .join(",");
+  useEffect(() => {
+    if (!hydrated || !rawOuterIds) return;
+    scheduleOuterwearPlates();
+  }, [hydrated, rawOuterIds]);
   const account = useAccount();
   const importCloset = useCloset((s) => s.importCloset);
   const setRefPhoto = useCloset((s) => s.setRefPhoto);

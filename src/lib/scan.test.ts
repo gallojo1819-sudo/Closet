@@ -325,20 +325,74 @@ describe("held garment cover", () => {
     });
     assert.equal(coverRejected("hand"), true);
     assert.equal(coverRejected("hanger"), true);
+    assert.equal(coverRejected("arm"), true);
+    assert.equal(coverRejected("skin"), true);
+    assert.equal(coverRejected("floor"), true);
+    assert.equal(coverRejected("wall"), true);
     assert.equal(coverRejected("no hand"), false);
+    assert.equal(coverRejected("no skin"), false);
+    assert.equal(coverRejected("without a wall"), false);
+    assert.equal(coverRejected("floor removed"), false);
+    assert.equal(coverRejected("handle"), false);
+    assert.equal(coverRejected("suede jacket on paper"), false);
     assert.equal(written.imageSrc, "photo://jacket");
     assert.equal(written.cutoutSrc, "photo://jacket");
+    assert.equal(written.reprint, true);
     assert.notEqual(written.cutoutSrc, "plate://hand");
     assert.equal(savedCutout, "photo://jacket");
     assert.equal(written.message, HAND_COVER_MESSAGE);
-    assert.equal(written.message, "Cover still has the hand — try again.");
+    assert.equal(written.message, "Cover still has the hand — tap Reprint.");
     const direct = writtenCutout({
       photo: "photo://jacket",
       plate: "plate://hand",
       checker: "hand",
     });
     assert.equal(direct.cutoutSrc, "photo://jacket");
+    assert.equal(direct.reprint, true);
     assert.notEqual(direct.cutoutSrc, "plate://hand");
+  });
+
+  it("retries once and keeps a clean plate", async () => {
+    const retries: boolean[] = [];
+    let shown = "unset";
+    const written = await placeHeldGarment({
+      photo: "photo://jacket",
+      print: async (_photo, attempt) => {
+        retries.push(Boolean(attempt?.retry));
+        return attempt?.retry
+          ? { ok: true, image: "data:image/jpeg;base64,clean" }
+          : { ok: true, image: "data:image/jpeg;base64,hand" };
+      },
+      check: async (plate) => (plate.includes("hand") ? "hand and skin on the wall" : "closed jacket"),
+      showTile: (cover) => {
+        shown = cover;
+      },
+      save: () => {},
+    });
+    assert.deepEqual(retries, [false, true]);
+    assert.equal(written.imageSrc, "photo://jacket");
+    assert.equal(written.cutoutSrc, "data:image/jpeg;base64,clean");
+    assert.equal(written.reprint, false);
+    assert.equal(written.message, null);
+    assert.equal(shown, "data:image/jpeg;base64,clean");
+  });
+
+  it("a dirty retry does not paint the phone photo", async () => {
+    let shown = "unset";
+    const written = await placeHeldGarment({
+      photo: "photo://jacket",
+      print: async () => ({ ok: true, image: "plate://hand" }),
+      check: async () => "arm and floor",
+      showTile: (cover) => {
+        shown = cover;
+      },
+      save: () => {},
+    });
+    assert.equal(shown, "");
+    assert.notEqual(shown, "photo://jacket");
+    assert.notEqual(written.cutoutSrc, "plate://hand");
+    assert.equal(written.reprint, true);
+    assert.equal(written.imageSrc, "photo://jacket");
   });
 
   it("does not fetch a shop image URL", () => {
@@ -385,8 +439,31 @@ describe("held garment cover", () => {
     );
     assert.match(ai, /Keep this exact jacket: suede or canvas, pockets, zipper, collar, color\./);
     assert.match(ai, /Lay it on #F4EFE6\./);
+    assert.match(ai, /Closed front, sleeves at the sides, as if on an invisible form\./);
+    assert.match(ai, /Not held open\./);
+    assert.match(ai, /Not a flat ghost of the lining\./);
+    assert.match(ai, /No second garment, no model, no text\./);
+    assert.match(ai, /The last plate still showed a person\. Fail if any skin remains\./);
     assert.match(ai, /one garment in a hand, on a hanger, or held up to the camera/);
     assert.match(ai, /A hand and a hanger are not a second garment/);
+    const shotAt = studio.indexOf("const takeCameraShot");
+    const shot = studio.slice(shotAt, studio.indexOf("useEffect", shotAt));
+    assert.match(shot, /imageBorderIsCleanStudio/);
+    assert.match(shot, /commitHeldPhoto/);
+    assert.equal(shot.includes("isHeldGarment"), false);
+    assert.equal(shot.includes("classifyScan"), false);
+    const detailBtn = detail.indexOf("Make a plate");
+    assert.ok(detailBtn > 0);
+    const tile = readFileSync(
+      new URL("../components/closet/tile.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.match(tile, /Reprint/);
+    assert.match(tile, /REPRINT_CAPTION/);
+    const pass = readFileSync(new URL("./plate-pass.ts", import.meta.url), "utf8");
+    assert.equal(pass.includes("sync.ts"), false);
+    assert.match(pass, /runPlatePass/);
+    assert.match(pass, /, 2\)/);
   });
 });
 
