@@ -29,6 +29,7 @@ import { imageBorderIsCleanStudio, matteToPaper, readAsImageSrc } from "@/lib/ma
 import { enqueuePrint, enqueueTag } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
 import { classifyScan, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
+import { judgeHeldPlate } from "@/lib/packshot-search";
 import { CAMERA_TAG_MS, decideCameraTag } from "@/lib/camera-tag";
 import { getAccount } from "@/lib/cloud/account";
 import { getSupabase } from "@/lib/cloud/client";
@@ -42,8 +43,8 @@ import {
   looksLikeFace,
   padBox,
   pieceFileHash,
+  holderCheckerText,
   placeHeldGarment,
-  scanCheckerText,
   type ScanKind,
   type WornBox,
 } from "@/lib/scan";
@@ -396,11 +397,11 @@ export function Studio() {
         check: async (plate) => {
           try {
             const image = await shrinkDataUrl(plate, 768).catch(() => plate);
-            const scan = await withTimeout(
-              classifyScan({ data: { image } }).catch(() => null),
+            const verdict = await withTimeout(
+              judgeHeldPlate({ data: { image } }).catch(() => null),
               4000,
             );
-            return scanCheckerText(scan);
+            return holderCheckerText(verdict);
           } catch {
             return "";
           }

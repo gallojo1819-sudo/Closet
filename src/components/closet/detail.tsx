@@ -4,7 +4,8 @@ import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
 import { describeCover, readAiStatus, recolorCover } from "@/lib/ai";
-import { makePlate } from "@/lib/plate-pass";
+import { findRealPhoto, makePlate } from "@/lib/plate-pass";
+import { maySearchOfficial } from "@/lib/packshot";
 import { coverIsOriginal, needsReprintTile, REPRINT_CAPTION } from "@/lib/plate";
 import {
   coversSameSilhouette,
@@ -143,6 +144,7 @@ export function GarmentDetail({
   const [coverNote, setCoverNote] = useState<string | null>(null);
   const [coverError, setCoverError] = useState<string | null>(null);
   const [plating, setPlating] = useState(false);
+  const [finding, setFinding] = useState(false);
   const originalSrc = useImageSrc(garment.imageSrc);
   const usingOriginal = garment.cutoutSrc === garment.imageSrc;
   const cpw = costPerWear(garment);
@@ -400,10 +402,32 @@ export function GarmentDetail({
               </button>
             )}
           </div>
+          {coverIsOriginal(garment) && view !== "me" && maySearchOfficial(garment.id, garment.brand) && (
+            <button
+              type="button"
+              disabled={finding || plating}
+              onClick={() => {
+                setFinding(true);
+                setCoverError(null);
+                void findRealPhoto(garment.id)
+                  .then(() => {
+                    const next = useCloset.getState().garments.find((item) => item.id === garment.id);
+                    if (next?.reprint) setCoverError(REPRINT_CAPTION);
+                    else setCoverNote("Cover updated — original photo unchanged.");
+                    setCoverTick((n) => n + 1);
+                    setView("print");
+                  })
+                  .finally(() => setFinding(false));
+              }}
+              className="micro w-full py-2 text-ink border-t border-hairline hover:text-ink disabled:text-ink-soft"
+            >
+              {finding ? "Finding the real photo…" : "Find the real photo"}
+            </button>
+          )}
           {coverIsOriginal(garment) && view !== "me" && (
             <button
               type="button"
-              disabled={plating}
+              disabled={plating || finding}
               onClick={() => {
                 setPlating(true);
                 setCoverError(null);
@@ -412,6 +436,7 @@ export function GarmentDetail({
                     const next = useCloset.getState().garments.find((item) => item.id === garment.id);
                     if (next?.reprint) setCoverError(REPRINT_CAPTION);
                     else setCoverNote("Cover updated — original photo unchanged.");
+                    setCoverTick((n) => n + 1);
                     setView("print");
                   })
                   .finally(() => setPlating(false));

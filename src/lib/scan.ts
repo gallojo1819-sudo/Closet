@@ -352,20 +352,68 @@ export function isHeldGarment(scan: {
   return HELD_CUE.test(blob);
 }
 
-const COVER_HIT = "hands?|arms?|skins?|hangers?|floors?|walls?";
+const SIGHTING =
+  /\b(?:hands?|arms?|hangers?) is (?!removed|gone|absent|not)\b|\b(?:a|an|the) (?:hands?|arms?|hangers?) is (?!removed|gone|absent)\b|\b(?:visible|shows?|showing|sees|saw|still has) (?:a |an |the )?(?:hands?|arms?|hangers?)\b|\b(?:hands?|arms?|hangers?) (?:visible|present|in the (?:picture|photo|image|frame))\b/i;
 
-/** Hand, arm, skin, hanger, floor, or wall. "no hand" and "handle" do not count. */
+function parseHolderFlags(raw: string): { hand: boolean; arm: boolean; hanger: boolean } | null {
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const o = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+    if (!("hand" in o) && !("arm" in o) && !("hanger" in o)) return null;
+    return {
+      hand: o.hand === true,
+      arm: o.arm === true,
+      hanger: o.hanger === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** A hand, arm, or hanger the checker says is actually in the picture. The prompt's own word is not enough. */
+function holderSighting(checker: string): boolean {
+  let text = checker.toLowerCase();
+  text = text.replace(/\bhandles?\b/g, " ");
+  text = text.replace(
+    /\b(?:no|not|without|never|removed|gone|absent)\b(?:\s+\w+){0,5}\s+\b(?:hands?|arms?|hangers?)\b/g,
+    " ",
+  );
+  text = text.replace(
+    /\b(?:hands?|arms?|hangers?)\b(?:\s+\w+){0,4}\s+\b(?:removed|gone|absent)\b/g,
+    " ",
+  );
+  text = text.replace(
+    /\b(?:remove|removing|drop|erase)\b(?:\s+\w+){0,6}\s+\b(?:hands?|arms?|hangers?)\b/g,
+    " ",
+  );
+  return SIGHTING.test(text);
+}
+
+/**
+ * Reject only when a hand, an arm, or a hanger is actually in the picture.
+ * Floor, wall, skin, and the prompt word "hand" do not drop a closed plate.
+ * An empty or unreadable checker keeps the plate.
+ */
 export function coverRejected(checker: string): boolean {
-  const raw = checker.trim().toLowerCase();
+  const raw = checker.trim();
   if (!raw) return false;
-  const masked = raw.replace(/\bhandles?\b/g, " ");
-  const negated = masked
-    .replace(
-      new RegExp(`\\b(?:no|not|without|removed|gone)\\s+(?:a\\s+|the\\s+|any\\s+)?(?:${COVER_HIT})\\b`, "g"),
-      " ",
-    )
-    .replace(new RegExp(`\\b(?:${COVER_HIT})\\s+(?:removed|gone|absent|remains)\\b`, "g"), " ");
-  return new RegExp(`\\b(?:${COVER_HIT})\\b`).test(negated);
+  const flags = parseHolderFlags(raw);
+  if (flags) return flags.hand || flags.arm || flags.hanger;
+  return holderSighting(raw);
+}
+
+/** Checker string for a plate. Null keeps the plate. Booleans, not the prompt. */
+export function holderCheckerText(
+  verdict: { hand?: boolean; arm?: boolean; hanger?: boolean } | null | undefined,
+): string {
+  if (!verdict) return "";
+  return JSON.stringify({
+    hand: verdict.hand === true,
+    arm: verdict.arm === true,
+    hanger: verdict.hanger === true,
+  });
 }
 
 export function scanCheckerText(scan: {

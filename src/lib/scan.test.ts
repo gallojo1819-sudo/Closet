@@ -317,22 +317,35 @@ describe("held garment cover", () => {
     const written = await placeHeldGarment({
       photo: "photo://jacket",
       print: async () => ({ ok: true, image: "plate://hand" }),
-      check: async () => "hand",
+      check: async () => "a hand is in the picture",
       showTile: () => {},
       save: (w) => {
         savedCutout = w.cutoutSrc;
       },
     });
-    assert.equal(coverRejected("hand"), true);
-    assert.equal(coverRejected("hanger"), true);
-    assert.equal(coverRejected("arm"), true);
-    assert.equal(coverRejected("skin"), true);
-    assert.equal(coverRejected("floor"), true);
-    assert.equal(coverRejected("wall"), true);
+    assert.equal(coverRejected("a hand is in the picture"), true);
+    assert.equal(coverRejected("a hanger is visible"), true);
+    assert.equal(coverRejected("an arm is visible"), true);
+    assert.equal(coverRejected('{"hand":true,"arm":false,"hanger":false}'), true);
+    assert.equal(coverRejected('{"hand":false,"arm":false,"hanger":false}'), false);
+    assert.equal(coverRejected("hand"), false);
+    assert.equal(coverRejected("hanger"), false);
+    assert.equal(coverRejected("arm"), false);
+    assert.equal(coverRejected("skin"), false);
+    assert.equal(coverRejected("floor"), false);
+    assert.equal(coverRejected("wall"), false);
     assert.equal(coverRejected("no hand"), false);
     assert.equal(coverRejected("no skin"), false);
     assert.equal(coverRejected("without a wall"), false);
     assert.equal(coverRejected("floor removed"), false);
+    assert.equal(coverRejected("not held in a hand"), false);
+    assert.equal(coverRejected("the hand was removed"), false);
+    assert.equal(
+      coverRejected(
+        "Remove the arm, the hand, the sleeve holding it, the hanger, the wall, and the floor.",
+      ),
+      false,
+    );
     assert.equal(coverRejected("handle"), false);
     assert.equal(coverRejected("suede jacket on paper"), false);
     assert.equal(written.imageSrc, "photo://jacket");
@@ -345,11 +358,20 @@ describe("held garment cover", () => {
     const direct = writtenCutout({
       photo: "photo://jacket",
       plate: "plate://hand",
-      checker: "hand",
+      checker: "a hand is in the picture",
     });
     assert.equal(direct.cutoutSrc, "photo://jacket");
     assert.equal(direct.reprint, true);
     assert.notEqual(direct.cutoutSrc, "plate://hand");
+    const kept = writtenCutout({
+      photo: "photo://jacket",
+      plate: "data:image/jpeg;base64,clean",
+      checker:
+        "Remove the arm, the hand, the sleeve holding it, the hanger, the wall, and the floor.",
+    });
+    assert.equal(kept.reprint, false);
+    assert.equal(kept.cutoutSrc, "data:image/jpeg;base64,clean");
+    assert.equal(kept.imageSrc, "photo://jacket");
   });
 
   it("retries once and keeps a clean plate", async () => {
@@ -363,7 +385,10 @@ describe("held garment cover", () => {
           ? { ok: true, image: "data:image/jpeg;base64,clean" }
           : { ok: true, image: "data:image/jpeg;base64,hand" };
       },
-      check: async (plate) => (plate.includes("hand") ? "hand and skin on the wall" : "closed jacket"),
+      check: async (plate) =>
+        plate.includes("hand")
+          ? '{"hand":true,"arm":false,"hanger":false}'
+          : '{"hand":false,"arm":false,"hanger":false}',
       showTile: (cover) => {
         shown = cover;
       },
@@ -382,7 +407,7 @@ describe("held garment cover", () => {
     const written = await placeHeldGarment({
       photo: "photo://jacket",
       print: async () => ({ ok: true, image: "plate://hand" }),
-      check: async () => "arm and floor",
+      check: async () => "an arm is visible",
       showTile: (cover) => {
         shown = cover;
       },

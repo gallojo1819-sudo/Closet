@@ -1,4 +1,4 @@
-import { classifyScan, printGarment } from "./ai.ts";
+import { printGarment } from "./ai.ts";
 import { fetchCloudBlob } from "./cloud/blobs.ts";
 import { isCloudSrc, parseCloudSrc } from "./cloud/src.ts";
 import { withTimeout } from "./ingest.ts";
@@ -12,11 +12,14 @@ import {
   putImage,
   putThumb,
 } from "./images.ts";
+import { findOfficialCover, judgeHeldPlate } from "./packshot-search.ts";
+import { coverPassAction, maySearchOfficial, officialCoverPatch } from "./packshot.ts";
 import { coverIsOriginal, plateResultPatch, rawOuterwearCovers, runPlatePass } from "./plate.ts";
-import { placeHeldGarment, scanCheckerText } from "./scan.ts";
+import { holderCheckerText, placeHeldGarment } from "./scan.ts";
 import { useCloset } from "./store.ts";
 
 const autoStarted = new Set<string>();
+const searched = new Set<string>();
 const inflight = new Map<string, Promise<void>>();
 
 async function shrinkForPrint(src: string, max: number): Promise<string> {
@@ -60,15 +63,32 @@ async function readPhoto(id: string, src: string): Promise<string | null> {
   }
 }
 
-/** Same held-jacket print as a camera shot. imageSrc is not written. */
-export function makePlate(id: string): Promise<void> {
+function startCoverJob(id: string, run: () => Promise<void>): Promise<void> {
   const existing = inflight.get(id);
   if (existing) return existing;
-  const job = printOnePlate(id).finally(() => {
+  const job = run().finally(() => {
     inflight.delete(id);
   });
   inflight.set(id, job);
   return job;
+}
+
+/** Same held-jacket print as a camera shot. imageSrc is not written. */
+export function makePlate(id: string): Promise<void> {
+  return startCoverJob(id, () => printOnePlate(id));
+}
+
+async function heldChecker(plate: string): Promise<string> {
+  try {
+    const image = await shrinkForPrint(plate, 768);
+    const verdict = await withTimeout(
+      judgeHeldPlate({ data: { image } }).catch(() => null),
+      4000,
+    );
+    return holderCheckerText(verdict);
+  } catch {
+    return "";
+  }
 }
 
 async function printOnePlate(id: string): Promise<void> {
@@ -93,18 +113,7 @@ async function printOnePlate(id: string): Promise<void> {
           return { ok: false, error: "print" };
         }
       },
-      check: async (plate) => {
-        try {
-          const image = await shrinkForPrint(plate, 768);
-          const scan = await withTimeout(
-            classifyScan({ data: { image } }).catch(() => null),
-            4000,
-          );
-          return scanCheckerText(scan);
-        } catch {
-          return "";
-        }
-      },
+      check: (plate) => heldChecker(plate),
       showTile: () => {},
       save: () => {},
     });
@@ -123,6 +132,60 @@ async function printOnePlate(id: string): Promise<void> {
   }
 }
 
+/**
+ * One search, then the plate if nothing matched. imageSrc is not written.
+ * A 403 or a rejected download falls through. It does not fail the tile.
+ */
+export function findRealPhoto(id: string): Promise<void> {
+  return startCoverJob(id, () => searchThenPlate(id));
+}
+
+async function searchThenPlate(id: string): Promise<void> {
+  const g = useCloset.getState().garments.find((item) => item.id === id);
+  if (!g || g.archived) return;
+  if (!maySearchOfficial(g.id, g.brand)) {
+    await printOnePlate(id);
+    return;
+  }
+  if (searched.has(id)) return;
+  searched.add(id);
+  try {
+    const photo = await readPhoto(g.id, g.imageSrc);
+    if (photo) {
+      const shrunk = await shrinkForPrint(photo, 1024);
+      const hit = await findOfficialCover({
+        data: {
+          id: g.id,
+          brand: g.brand,
+          name: g.name,
+          color: (g.colors ?? []).join(" "),
+          subtype: g.subtype ?? "",
+          material: g.material ?? "",
+          photo: shrunk,
+        },
+      }).catch(() => null);
+      if (hit?.ok && hit.image) {
+        const jpeg = await shrinkForPrint(hit.image, 1280).catch(() => "");
+        const stored = jpeg.startsWith("data:image/jpeg")
+          ? jpeg
+          : hit.image.startsWith("data:image/jpeg")
+            ? hit.image
+            : "";
+        if (stored && useCloset.getState().garments.some((item) => item.id === id)) {
+          const plateKey = imageKey(id, "c");
+          await putImage(plateKey, dataUrlToBlob(stored));
+          await putThumb(id, stored).catch(() => {});
+          useCloset.getState().updateGarment(id, officialCoverPatch(plateKey, hit.pageUrl));
+          return;
+        }
+      }
+    }
+  } catch {
+    /* the plate pass below */
+  }
+  await printOnePlate(id);
+}
+
 /** Fire-and-forget. Does not wait, and does not reprint an id twice this session. */
 export function scheduleOuterwearPlates(): void {
   const items = rawOuterwearCovers(useCloset.getState().garments).filter(
@@ -132,5 +195,8 @@ export function scheduleOuterwearPlates(): void {
     if (g.id) autoStarted.add(g.id);
   }
   if (!items.length) return;
-  void runPlatePass(items, (g) => makePlate(g.id!), 2);
+  void runPlatePass(items, (g) => {
+    if (coverPassAction(g) === "search") return findRealPhoto(g.id!);
+    return makePlate(g.id!);
+  }, 2);
 }
