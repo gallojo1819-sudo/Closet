@@ -14,6 +14,7 @@ import {
 } from "./house-profiles/evaluate.ts";
 import { resolveTuck } from "./tuck.ts";
 import type { Garment, Occasion, Season } from "./types.ts";
+import { wearSlot } from "./stylist/jackets.ts";
 
 export type House =
   | "polo"
@@ -151,6 +152,11 @@ export function garmentBlob(g: Garment): string {
 }
 
 function slotOf(g: Garment): string {
+  const worn = wearSlot(g);
+  if (worn === "outer") return "outerwear";
+  if (worn === "mid" || worn === "top") return "top";
+  if (worn === "bottom") return "bottom";
+  if (worn === "shoe") return "footwear";
   const b = garmentBlob(g);
   if (/loafer|mule|sneaker|boot|derby|chelsea|boat|990|991|993/.test(b) || g.category === "footwear") {
     if (g.category === "bottom" && /trouser|chino|jean|cord/.test(b) && !/loafer|sneaker|boot/.test(b)) {

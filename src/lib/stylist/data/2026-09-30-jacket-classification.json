@@ -1,0 +1,1300 @@
+{
+ "file": "2026-09-30-jacket-classification.json",
+ "status": "PROPOSED classification (read-only analysis of closet_meta snapshot 2026-09-30 16:51:00.360093+00, 147 rows, 142 live).",
+ "counts": {
+  "a) tailored sport coat/blazer": 4,
+  "b) casual jacket": 17,
+  "MID layer (not a jacket)": 5
+ },
+ "outer_coats": "none (no overcoat/topcoat/peacoat/parka in the closet; TNF toggle jacket is the closest, treated as casual)",
+ "misfiled": [
+  {
+   "id": "g_j5og5jmzh5tx",
+   "name": "Khaki varsity",
+   "filed": "top/",
+   "should_be": "b) casual jacket - varsity jacket"
+  },
+  {
+   "id": "g_j2id379jo424",
+   "name": "Blue zip-up knit jacket",
+   "filed": "outerwear/zip jacket",
+   "should_be": "MID layer (not a jacket) - full-zip knit (MID, filed as \"zip jacket\")"
+  },
+  {
+   "id": "g_xc4gr022xmvm",
+   "name": "Cream cable-knit cardigan",
+   "filed": "outerwear/cardigan",
+   "should_be": "MID layer (not a jacket) - chunky cable cardigan (MID)"
+  },
+  {
+   "id": "g_k0mfejxiu5f8",
+   "name": "Cream printed fleece pullover",
+   "filed": "outerwear/fleece pullover",
+   "should_be": "MID layer (not a jacket) - printed fleece pullover (MID)"
+  },
+  {
+   "id": "g_ef0u3ljnwa09",
+   "name": "Grey herringbone puffer vest",
+   "filed": "outerwear/vest",
+   "should_be": "MID layer (not a jacket) - puffer vest / gilet (MID)"
+  },
+  {
+   "id": "g_hhbz4ghpjmd1",
+   "name": "Navy ribbed zip sweater",
+   "filed": "outerwear/zip sweater",
+   "should_be": "MID layer (not a jacket) - ribbed zip knit (MID)"
+  }
+ ],
+ "brown_suede_family": [
+  {
+   "id": "g_1pg9y05mlkek",
+   "name": "Brown suede jacket"
+  },
+  {
+   "id": "g_py2swfwot1ed",
+   "name": "Brown suede jacket"
+  },
+  {
+   "id": "g_8od90wk1sl9k",
+   "name": "Brown suede bomber jacket"
+  }
+ ],
+ "fields": {
+  "class": "a tailored / b casual / c outer coat / MID",
+  "cut": "tailored | roomy | waist | close_light (drives JKT-LAY-5)",
+  "weight": "light/mid/heavy",
+  "seasons": "seasons the picker may use the plate in",
+  "houses_now": "allowed_jackets.joe_plate_ids today",
+  "houses_after": "with the proposed per-house additions",
+  "over_chunky_knit_ok": "JKT-LAY-5 verdict",
+  "formality": "1..5 (JKT-FORM-1)"
+ },
+ "plates": [
+  {
+   "id": "g_whgv0gu6m08l",
+   "name": "Beige corduroy blazer",
+   "filed_category": "outerwear",
+   "filed_subtype": "blazer",
+   "material": "corduroy",
+   "colors": [
+    "beige"
+   ],
+   "brand": "THE ROW",
+   "warmth": 2,
+   "fit": "regular",
+   "class": "a) tailored sport coat/blazer",
+   "subclass": "soft/unstructured corduroy sport coat",
+   "cut": "tailored",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 4,
+   "houses_now": [
+    "polo",
+    "purple",
+    "faloni",
+    "545",
+    "italiansummer",
+    "italianwinter"
+   ],
+   "houses_after": [
+    "polo",
+    "purple",
+    "faloni",
+    "545",
+    "italiansummer",
+    "italianwinter"
+   ],
+   "over_chunky_knit_ok": "no",
+   "tee_under_ok": "weekend/travel only (-5)",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "THE ROW corduroy: softest tailoring Joe owns; plain tee OK on Weekend/Travel (-5)."
+  },
+  {
+   "id": "g_98p2sivflrxg",
+   "name": "Ivory double-breasted blazer",
+   "filed_category": "outerwear",
+   "filed_subtype": "blazer",
+   "material": "wool",
+   "colors": [
+    "ivory"
+   ],
+   "brand": "Todd Snyder",
+   "warmth": 2,
+   "fit": "regular",
+   "class": "a) tailored sport coat/blazer",
+   "subclass": "structured sport coat (double-breasted)",
+   "cut": "tailored",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "summer",
+    "fall",
+    "winter"
+   ],
+   "formality": 5,
+   "houses_now": [
+    "polo",
+    "purple",
+    "faloni",
+    "545",
+    "italiansummer",
+    "italianwinter"
+   ],
+   "houses_after": [
+    "polo",
+    "purple",
+    "faloni",
+    "545",
+    "italiansummer",
+    "italianwinter"
+   ],
+   "over_chunky_knit_ok": "no",
+   "tee_under_ok": "no",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "DB = structured, never a tee; winter only as winter-white on Out/Weekday."
+  },
+  {
+   "id": "g_5josnvyoi4z9",
+   "name": "Navy blazer",
+   "filed_category": "outerwear",
+   "filed_subtype": "blazer",
+   "material": "wool",
+   "colors": [
+    "navy"
+   ],
+   "brand": "",
+   "warmth": 2,
+   "fit": "regular",
+   "class": "a) tailored sport coat/blazer",
+   "subclass": "structured sport coat (navy blazer)",
+   "cut": "tailored",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 5,
+   "houses_now": [
+    "polo",
+    "italianwinter"
+   ],
+   "houses_after": [
+    "polo",
+    "italianwinter"
+   ],
+   "over_chunky_knit_ok": "no",
+   "tee_under_ok": "no",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "Structured; shirts, polos, fine knits only."
+  },
+  {
+   "id": "g_juk45cokjxxy",
+   "name": "Taupe blazer",
+   "filed_category": "outerwear",
+   "filed_subtype": "blazer",
+   "material": "wool",
+   "colors": [
+    "taupe"
+   ],
+   "brand": "Todd Snyder",
+   "warmth": 2,
+   "fit": "regular",
+   "class": "a) tailored sport coat/blazer",
+   "subclass": "soft/unstructured sport coat",
+   "cut": "tailored",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 4,
+   "houses_now": [
+    "polo",
+    "purple",
+    "faloni",
+    "545",
+    "italiansummer",
+    "italianwinter"
+   ],
+   "houses_after": [
+    "polo",
+    "purple",
+    "faloni",
+    "545",
+    "italiansummer",
+    "italianwinter"
+   ],
+   "over_chunky_knit_ok": "no",
+   "tee_under_ok": "weekend/travel only (-5)",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "Card 1 jacket. Approved profiles treat it as blazer_soft. Plain tee only on Weekend/Travel (-5)."
+  },
+  {
+   "id": "g_ed0ga2v0q2yo",
+   "name": "Beige zip jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "jacket",
+   "material": "cotton",
+   "colors": [
+    "beige",
+    "brown"
+   ],
+   "brand": "NEOGOO",
+   "warmth": 2,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "light zip blouson/harrington",
+   "cut": "close_light",
+   "weight": "light",
+   "seasons": [
+    "spring",
+    "summer",
+    "fall"
+   ],
+   "formality": 2,
+   "houses_now": [
+    "polo",
+    "faloni",
+    "italiansummer"
+   ],
+   "houses_after": [
+    "polo",
+    "faloni",
+    "italiansummer"
+   ],
+   "over_chunky_knit_ok": "no",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "warmth 2, light shell; never over a chunky knit; not a winter jacket."
+  },
+  {
+   "id": "g_491tzu2suiv7",
+   "name": "Blue plaid shearling jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "jacket",
+   "material": "denim",
+   "colors": [
+    "blue",
+    "cream",
+    "beige"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "sherpa/shearling-lined plaid denim jacket (trucker cut assumed)",
+   "cut": "waist",
+   "weight": "heavy",
+   "seasons": [
+    "fall",
+    "winter"
+   ],
+   "formality": 2,
+   "houses_now": [
+    "rrl",
+    "polo",
+    "purple",
+    "ald",
+    "sweetstable",
+    "italianwinter"
+   ],
+   "houses_after": [
+    "rrl",
+    "polo",
+    "purple",
+    "ald",
+    "sweetstable",
+    "italianwinter"
+   ],
+   "over_chunky_knit_ok": "no (yes only if the knit is regular fit)",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "Filed material=denim, warmth 3 but sherpa-lined: treated as heavy for season; waist cut, so over a chunky knit only when the knit is regular fit."
+  },
+  {
+   "id": "g_8qqqzpwxuwti",
+   "name": "Brown chore jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "chore jacket",
+   "material": "cotton",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "chore coat",
+   "cut": "roomy",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 2,
+   "houses_now": [
+    "rrl",
+    "polo",
+    "ald",
+    "sweetstable"
+   ],
+   "houses_after": [
+    "rrl",
+    "polo",
+    "ald",
+    "sweetstable"
+   ],
+   "over_chunky_knit_ok": "yes",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": ""
+  },
+  {
+   "id": "g_wwy9b2pusds3",
+   "name": "Brown shearling bomber jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "bomber jacket",
+   "material": "suede",
+   "colors": [
+    "brown",
+    "cream"
+   ],
+   "brand": "",
+   "warmth": 4,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "shearling bomber",
+   "cut": "roomy",
+   "weight": "heavy",
+   "seasons": [
+    "fall",
+    "winter"
+   ],
+   "formality": 3,
+   "houses_now": [
+    "rrl",
+    "polo",
+    "purple",
+    "ald",
+    "sweetstable",
+    "italianwinter"
+   ],
+   "houses_after": [
+    "rrl",
+    "polo",
+    "purple",
+    "ald",
+    "faloni (winter only)",
+    "545 (winter only)",
+    "sweetstable",
+    "italianwinter"
+   ],
+   "over_chunky_knit_ok": "yes",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "Heavy; Joe's best winter piece (no overcoat). Soft -5 in fall (late-fall piece). Counted separately from the brown-suede family."
+  },
+  {
+   "id": "g_8od90wk1sl9k",
+   "name": "Brown suede bomber jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "bomber jacket",
+   "material": "suede",
+   "colors": [
+    "brown",
+    "black"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "suede bomber",
+   "cut": "waist",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 3,
+   "houses_now": [
+    "rrl",
+    "polo",
+    "ald",
+    "faloni",
+    "545",
+    "sweetstable",
+    "italianwinter"
+   ],
+   "houses_after": [
+    "rrl",
+    "polo",
+    "ald",
+    "faloni",
+    "545",
+    "sweetstable",
+    "italianwinter"
+   ],
+   "over_chunky_knit_ok": "no (yes only if the knit is regular fit)",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": true,
+   "misfiled": false,
+   "notes": "Brown-suede family (T17 cap). Bomber rib hem: chunky knit only if regular fit."
+  },
+  {
+   "id": "g_py2swfwot1ed",
+   "name": "Brown suede jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "jacket",
+   "material": "suede",
+   "colors": [
+    "brown"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "suede jacket (cut unknown; treated as waist-length)",
+   "cut": "waist",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 3,
+   "houses_now": [
+    "rrl",
+    "polo",
+    "purple",
+    "faloni",
+    "545",
+    "sweetstable",
+    "italiansummer",
+    "italianwinter"
+   ],
+   "houses_after": [
+    "rrl",
+    "polo",
+    "purple",
+    "faloni",
+    "545",
+    "sweetstable",
+    "italiansummer",
+    "italianwinter"
+   ],
+   "over_chunky_knit_ok": "no (yes only if the knit is regular fit)",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": true,
+   "misfiled": false,
+   "notes": "Brown-suede family (T17 cap)."
+  },
+  {
+   "id": "g_1pg9y05mlkek",
+   "name": "Brown suede jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "field jacket",
+   "material": "suede",
+   "colors": [
+    "brown"
+   ],
+   "brand": "REISS",
+   "warmth": 3,
+   "fit": null,
+   "class": "b) casual jacket",
+   "subclass": "suede field jacket (REISS)",
+   "cut": "roomy",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 3,
+   "houses_now": [
+    "rrl",
+    "polo",
+    "purple",
+    "faloni",
+    "545",
+    "sweetstable",
+    "italiansummer",
+    "italianwinter"
+   ],
+   "houses_after": [
+    "rrl",
+    "polo",
+    "purple",
+    "faloni",
+    "545",
+    "sweetstable",
+    "italiansummer",
+    "italianwinter"
+   ],
+   "over_chunky_knit_ok": "yes",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": true,
+   "misfiled": false,
+   "notes": "Brown-suede family (T17 cap). Field cut = roomy: the one suede jacket that goes over a chunky knit."
+  },
+  {
+   "id": "g_j5og5jmzh5tx",
+   "name": "Khaki varsity",
+   "filed_category": "top",
+   "filed_subtype": "",
+   "material": "",
+   "colors": [
+    "khaki",
+    "beige"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "varsity jacket",
+   "cut": "waist",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 2,
+   "houses_now": [],
+   "houses_after": [
+    "polo",
+    "ald"
+   ],
+   "over_chunky_knit_ok": "no (yes only if the knit is regular fit)",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": true,
+   "notes": "MISFILED as top (blank subtype/material). Recategorise to outerwear / varsity jacket. Prod ships it as the top on PURPLE Weekend #2 with no shirt under it."
+  },
+  {
+   "id": "g_vtbi91noucd3",
+   "name": "Light Blue denim jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "jacket",
+   "material": "denim",
+   "colors": [
+    "light blue",
+    "cream"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "denim trucker",
+   "cut": "waist",
+   "weight": "light",
+   "seasons": [
+    "spring",
+    "summer",
+    "fall"
+   ],
+   "formality": 2,
+   "houses_now": [
+    "rrl",
+    "ald",
+    "sweetstable"
+   ],
+   "houses_after": [
+    "rrl",
+    "ald",
+    "sweetstable"
+   ],
+   "over_chunky_knit_ok": "no (yes only if the knit is regular fit)",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": ""
+  },
+  {
+   "id": "g_ulv8tgkujvjh",
+   "name": "Light blue denim jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "jacket",
+   "material": "denim",
+   "colors": [
+    "blue"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "denim trucker",
+   "cut": "waist",
+   "weight": "light",
+   "seasons": [
+    "spring",
+    "summer",
+    "fall"
+   ],
+   "formality": 2,
+   "houses_now": [
+    "rrl",
+    "ald",
+    "sweetstable"
+   ],
+   "houses_after": [
+    "rrl",
+    "ald",
+    "sweetstable"
+   ],
+   "over_chunky_knit_ok": "no (yes only if the knit is regular fit)",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": ""
+  },
+  {
+   "id": "g_v7uvadckh79p",
+   "name": "Light blue denim overshirt",
+   "filed_category": "top",
+   "filed_subtype": "overshirt",
+   "material": "denim",
+   "colors": [
+    "light blue"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "denim overshirt / shirt-jacket (dual use)",
+   "cut": "close_light",
+   "weight": "light",
+   "seasons": [
+    "spring",
+    "summer",
+    "fall"
+   ],
+   "formality": 2,
+   "houses_now": [],
+   "houses_after": [
+    "rrl",
+    "ald"
+   ],
+   "over_chunky_knit_ok": "no",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "Filed as top/overshirt (correct); allow as a light outer over a tee/henley/fine knit. Never over a chunky knit. Denim wash rules (XC-DEN-1) apply."
+  },
+  {
+   "id": "g_oyyiaxx6rls7",
+   "name": "Mint green field jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "jacket",
+   "material": "cotton",
+   "colors": [
+    "mint",
+    "tan"
+   ],
+   "brand": "Polo Ralph Lauren",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "field jacket (Polo RL, pastel)",
+   "cut": "roomy",
+   "weight": "light",
+   "seasons": [
+    "spring",
+    "summer",
+    "fall"
+   ],
+   "formality": 2,
+   "houses_now": [
+    "polo"
+   ],
+   "houses_after": [
+    "polo"
+   ],
+   "over_chunky_knit_ok": "yes",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "Pastel: spring/summer/early fall; counts in pastel budgets."
+  },
+  {
+   "id": "g_3qjmw7n4wj2a",
+   "name": "Navy brown plaid jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "jacket",
+   "material": "wool",
+   "colors": [
+    "navy",
+    "brown",
+    "beige"
+   ],
+   "brand": "ART EAFH",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "wool plaid jacket (shirt-jacket/shacket cut assumed)",
+   "cut": "roomy",
+   "weight": "mid",
+   "seasons": [
+    "fall",
+    "winter"
+   ],
+   "formality": 3,
+   "houses_now": [
+    "rrl",
+    "polo",
+    "ald",
+    "sweetstable"
+   ],
+   "houses_after": [
+    "rrl",
+    "polo",
+    "ald",
+    "sweetstable"
+   ],
+   "over_chunky_knit_ok": "yes",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "If this is actually a tailored tweed sport coat, move it to class a (then no chunky knits under it)."
+  },
+  {
+   "id": "g_qnmo5yzgl50b",
+   "name": "Navy field jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "field jacket",
+   "material": "cotton",
+   "colors": [
+    "navy"
+   ],
+   "brand": "Double RL Supply Company",
+   "warmth": 3,
+   "fit": null,
+   "class": "b) casual jacket",
+   "subclass": "field jacket (Double RL)",
+   "cut": "roomy",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 2,
+   "houses_now": [
+    "rrl",
+    "polo",
+    "ald",
+    "sweetstable",
+    "italiansummer"
+   ],
+   "houses_after": [
+    "rrl",
+    "polo",
+    "ald",
+    "sweetstable",
+    "italiansummer"
+   ],
+   "over_chunky_knit_ok": "yes",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": ""
+  },
+  {
+   "id": "g_x4adkv9zu9yu",
+   "name": "Navy/black corduroy jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "jacket",
+   "material": "corduroy",
+   "colors": [
+    "navy/black"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "corduroy jacket (trucker cut assumed)",
+   "cut": "waist",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 3,
+   "houses_now": [
+    "rrl",
+    "polo",
+    "purple",
+    "ald",
+    "sweetstable",
+    "italianwinter"
+   ],
+   "houses_after": [
+    "rrl",
+    "polo",
+    "purple",
+    "ald",
+    "545",
+    "sweetstable",
+    "italianwinter"
+   ],
+   "over_chunky_knit_ok": "no (yes only if the knit is regular fit)",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": ""
+  },
+  {
+   "id": "g_sb0mc7s7v346",
+   "name": "Olive field jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "field jacket",
+   "material": "cotton",
+   "colors": [
+    "olive",
+    "chocolate"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "field jacket",
+   "cut": "roomy",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "formality": 2,
+   "houses_now": [
+    "rrl",
+    "polo",
+    "ald",
+    "sweetstable",
+    "italiansummer"
+   ],
+   "houses_after": [
+    "rrl",
+    "polo",
+    "ald",
+    "sweetstable",
+    "italiansummer"
+   ],
+   "over_chunky_knit_ok": "yes",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": ""
+  },
+  {
+   "id": "g_5gfabeezh485",
+   "name": "White beige toggle jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "jacket",
+   "material": "",
+   "colors": [
+    "white",
+    "beige"
+   ],
+   "brand": "The North Face",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "b) casual jacket",
+   "subclass": "toggle jacket (The North Face; outdoor/fleece-style assumed)",
+   "cut": "roomy",
+   "weight": "mid",
+   "seasons": [
+    "fall",
+    "winter"
+   ],
+   "formality": 1,
+   "houses_now": [
+    "ald"
+   ],
+   "houses_after": [
+    "ald"
+   ],
+   "over_chunky_knit_ok": "yes",
+   "tee_under_ok": "yes",
+   "counts_as_jacket": true,
+   "brown_suede_family": false,
+   "misfiled": false,
+   "notes": "Name/brand suggest a sherpa or fleece toggle jacket; if it is a hip-length duffle coat it becomes Joe's only outer coat (class c)."
+  },
+  {
+   "id": "g_j2id379jo424",
+   "name": "Blue zip-up knit jacket",
+   "filed_category": "outerwear",
+   "filed_subtype": "zip jacket",
+   "material": "knit",
+   "colors": [
+    "blue"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "MID layer (not a jacket)",
+   "subclass": "full-zip knit (MID, filed as \"zip jacket\")",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "houses_now": [],
+   "houses_after": [],
+   "over_chunky_knit_ok": "n/a (mid layer)",
+   "counts_as_jacket": false,
+   "chunky": false,
+   "athletic": false,
+   "outerwear_weight_mid": false,
+   "misfiled": true,
+   "notes": "Filed outerwear/\"zip jacket\" but it is a knit: MID. Prod ships it as the ONLY upper layer (ALD #4, ALL #7, RRL Out #5, ALL Out #3, screenshot card 3): fine as the top layer, never counts as the jacket."
+  },
+  {
+   "id": "g_xc4gr022xmvm",
+   "name": "Cream cable-knit cardigan",
+   "filed_category": "outerwear",
+   "filed_subtype": "cardigan",
+   "material": "knit",
+   "colors": [
+    "cream"
+   ],
+   "brand": "KITH",
+   "warmth": 4,
+   "fit": "relaxed",
+   "class": "MID layer (not a jacket)",
+   "subclass": "chunky cable cardigan (MID)",
+   "weight": "heavy",
+   "seasons": [
+    "fall",
+    "winter"
+   ],
+   "houses_now": [],
+   "houses_after": [],
+   "over_chunky_knit_ok": "n/a (mid layer)",
+   "counts_as_jacket": false,
+   "chunky": true,
+   "athletic": false,
+   "outerwear_weight_mid": true,
+   "misfiled": true,
+   "notes": "Outerwear-weight MID (warmth 4): waives the Weekend/Fall jacket penalty; chunky, so never under a sport coat or a waist-length jacket."
+  },
+  {
+   "id": "g_k0mfejxiu5f8",
+   "name": "Cream printed fleece pullover",
+   "filed_category": "outerwear",
+   "filed_subtype": "fleece pullover",
+   "material": "fleece",
+   "colors": [
+    "cream",
+    "multicolor"
+   ],
+   "brand": "ARLADAR",
+   "warmth": 4,
+   "fit": "relaxed",
+   "class": "MID layer (not a jacket)",
+   "subclass": "printed fleece pullover (MID)",
+   "weight": "heavy",
+   "seasons": [
+    "fall",
+    "winter"
+   ],
+   "houses_now": [],
+   "houses_after": [],
+   "over_chunky_knit_ok": "n/a (mid layer)",
+   "counts_as_jacket": false,
+   "chunky": false,
+   "athletic": true,
+   "outerwear_weight_mid": true,
+   "misfiled": true,
+   "notes": "Fleece: athletic layer, never under tailoring; outerwear-weight on Weekend/Fall."
+  },
+  {
+   "id": "g_ef0u3ljnwa09",
+   "name": "Grey herringbone puffer vest",
+   "filed_category": "outerwear",
+   "filed_subtype": "vest",
+   "material": "wool",
+   "colors": [
+    "grey"
+   ],
+   "brand": "Axel Arigato",
+   "warmth": 4,
+   "fit": "regular",
+   "class": "MID layer (not a jacket)",
+   "subclass": "puffer vest / gilet (MID)",
+   "weight": "heavy",
+   "seasons": [
+    "fall",
+    "winter"
+   ],
+   "houses_now": [],
+   "houses_after": [],
+   "over_chunky_knit_ok": "n/a (mid layer)",
+   "counts_as_jacket": false,
+   "chunky": false,
+   "athletic": true,
+   "outerwear_weight_mid": true,
+   "misfiled": true,
+   "notes": "Vest: under chore/field/trucker/cord jackets; never under a sport coat."
+  },
+  {
+   "id": "g_hhbz4ghpjmd1",
+   "name": "Navy ribbed zip sweater",
+   "filed_category": "outerwear",
+   "filed_subtype": "zip sweater",
+   "material": "knit",
+   "colors": [
+    "navy",
+    "blue",
+    "black",
+    "white"
+   ],
+   "brand": "",
+   "warmth": 3,
+   "fit": "regular",
+   "class": "MID layer (not a jacket)",
+   "subclass": "ribbed zip knit (MID)",
+   "weight": "mid",
+   "seasons": [
+    "spring",
+    "fall",
+    "winter"
+   ],
+   "houses_now": [],
+   "houses_after": [],
+   "over_chunky_knit_ok": "n/a (mid layer)",
+   "counts_as_jacket": false,
+   "chunky": false,
+   "athletic": false,
+   "outerwear_weight_mid": false,
+   "misfiled": true,
+   "notes": "Filed outerwear; knit MID. Prod ships it as the only upper layer (Faloni/IS/IW/ALL #4-#7)."
+  }
+ ],
+ "tops_scanned_for_jacket_names": [
+  {
+   "id": "g_ugyaieefqcxe",
+   "name": "White knit cardigan",
+   "subtype": "cardigan",
+   "verdict": "MID knit (cardigan-as-outer): top layer only, never counts as a jacket"
+  },
+  {
+   "id": "g_j5og5jmzh5tx",
+   "name": "Khaki varsity",
+   "subtype": "",
+   "verdict": "casual jacket (misfiled)"
+  },
+  {
+   "id": "g_v7uvadckh79p",
+   "name": "Light blue denim overshirt",
+   "subtype": "overshirt",
+   "verdict": "dual: top or light outer"
+  },
+  {
+   "id": "g_1khiworawkt7",
+   "name": "Light blue quarter-zip sweatshirt",
+   "subtype": "quarter-zip sweatshirt",
+   "verdict": "fleece/sweat top: not a jacket; athletic layer"
+  },
+  {
+   "id": "g_kp1ps7qww1ar",
+   "name": "Beige quarter-zip sweatshirt",
+   "subtype": "sweatshirt",
+   "verdict": "fleece/sweat top: not a jacket; athletic layer"
+  },
+  {
+   "id": "g_j1n1vh1wvbo4",
+   "name": "Grey half-zip fleece",
+   "subtype": "half-zip sweatshirt",
+   "verdict": "fleece/sweat top: not a jacket; athletic layer"
+  },
+  {
+   "id": "g_8m17f0l0tss9",
+   "name": "Light blue half-zip fleece",
+   "subtype": "half-zip pullover",
+   "verdict": "fleece/sweat top: not a jacket; athletic layer"
+  },
+  {
+   "id": "g_o739106dt8ym",
+   "name": "Cream abstract fleece half-zip",
+   "subtype": "fleece pullover",
+   "verdict": "fleece/sweat top: not a jacket; athletic layer"
+  },
+  {
+   "id": "g_dsqnx6ckt81v",
+   "name": "Beige quarter-zip sweatshirt",
+   "subtype": "quarter-zip",
+   "verdict": "fleece/sweat top: not a jacket; athletic layer"
+  },
+  {
+   "id": "g_jhyr10t2vo13",
+   "name": "Beige cable-knit half-zip sweater",
+   "subtype": "half-zip sweater",
+   "verdict": "zip knit: top layer, not a jacket"
+  },
+  {
+   "id": "g_3821acdhupu9",
+   "name": "Cream ribbed half-zip sweater",
+   "subtype": "half-zip sweater",
+   "verdict": "zip knit: top layer, not a jacket"
+  },
+  {
+   "id": "g_z8gvd1zvrcif",
+   "name": "Brown knit zip sweater",
+   "subtype": "zip sweater",
+   "verdict": "zip knit: top layer, not a jacket"
+  },
+  {
+   "id": "g_xuqvrfy5ocv4",
+   "name": "Olive zip-up knit sweater",
+   "subtype": "zip sweater",
+   "verdict": "zip knit: top layer, not a jacket"
+  },
+  {
+   "id": "g_rpjfgscii90r",
+   "name": "Cream fair isle half-zip sweater",
+   "subtype": "sweater",
+   "verdict": "zip knit: top layer, not a jacket"
+  }
+ ],
+ "chunky_knit_tops": [
+  {
+   "id": "g_gp53xkrmem9b",
+   "name": "Grey knit sweater",
+   "fit": "relaxed",
+   "warmth": 4
+  },
+  {
+   "id": "g_salzdhuswyd3",
+   "name": "Brown cable-knit sweater",
+   "fit": "regular",
+   "warmth": 3
+  },
+  {
+   "id": "g_xc4gr022xmvm",
+   "name": "Cream cable-knit cardigan",
+   "fit": "relaxed",
+   "warmth": 4
+  },
+  {
+   "id": "g_mqjsmpqgwwvm",
+   "name": "Cream cable-knit sweater",
+   "fit": "regular",
+   "warmth": 3
+  },
+  {
+   "id": "g_jhyr10t2vo13",
+   "name": "Beige cable-knit half-zip sweater",
+   "fit": "regular",
+   "warmth": 4
+  },
+  {
+   "id": "g_3821acdhupu9",
+   "name": "Cream ribbed half-zip sweater",
+   "fit": "relaxed",
+   "warmth": 3
+  },
+  {
+   "id": "g_vzqle7zdtpis",
+   "name": "Blue ivory diamond knit sweater",
+   "fit": "relaxed",
+   "warmth": 3
+  },
+  {
+   "id": "g_ri78lj9vspyj",
+   "name": "Beige ribbed sweater",
+   "fit": "regular",
+   "warmth": 4
+  },
+  {
+   "id": "g_teitg9jmpwxa",
+   "name": "Black cable-knit sweater",
+   "fit": "relaxed",
+   "warmth": 4
+  },
+  {
+   "id": "g_qrx875pbmh6n",
+   "name": "Beige textured sweater",
+   "fit": "regular",
+   "warmth": 4
+  },
+  {
+   "id": "g_rpjfgscii90r",
+   "name": "Cream fair isle half-zip sweater",
+   "fit": "regular",
+   "warmth": 4
+  }
+ ],
+ "fine_knit_tops": [
+  {
+   "id": "g_bq9qnaa1vkon",
+   "name": "Brown knit polo"
+  },
+  {
+   "id": "g_n955igwlvcl4",
+   "name": "Beige gradient sweater"
+  },
+  {
+   "id": "g_9eip7wdtsxzd",
+   "name": "Pale yellow ribbed polo"
+  },
+  {
+   "id": "g_v2gxktsmsoov",
+   "name": "Beige crewneck sweater"
+  },
+  {
+   "id": "g_xowln4uos3ug",
+   "name": "Beige knit sweater"
+  },
+  {
+   "id": "g_xbt3gpjuo1p4",
+   "name": "Burgundy collared sweater"
+  },
+  {
+   "id": "g_zh2l854ghu1t",
+   "name": "Green herringbone knit shirt"
+  },
+  {
+   "id": "g_d1awqw83gd3c",
+   "name": "Navy R sweater"
+  }
+ ]
+}

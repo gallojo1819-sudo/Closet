@@ -108,7 +108,12 @@ describe("fixture matrix", () => {
             .filter((id): id is string => Boolean(id))
             .map((id) => by.get(id))
             .filter((g): g is Garment => Boolean(g));
-          expect(isLegal(pieces, { house: house as House, occasion: occ, season }), key).toBe(true);
+          if (look.demoted) {
+            expect(look.demoted, key).toBe("JKT-COV-1");
+            expect(look.outer, key).toBeUndefined();
+          } else {
+            expect(isLegal(pieces, { house: house as House, occasion: occ, season }), key).toBe(true);
+          }
           expect(DELETED.some((id) => pieces.some((g) => g.id === id))).toBe(false);
           const bands = kitCells(pieces);
           const slots = pieces.filter((g) => ["top", "bottom", "footwear", "outerwear", "dress"].includes(g.category));

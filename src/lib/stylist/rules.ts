@@ -88,7 +88,7 @@ function texture(g: Plate): string {
   return "smooth_woven";
 }
 
-function wash(g: Plate): number {
+export function wash(g: Plate): number {
   const name = (g.name ?? "").toLowerCase();
   const nk = cmap.denim_wash.name_keywords_first as Record<string, string[]>;
   const scale = cmap.denim_wash.scale as Record<string, number>;

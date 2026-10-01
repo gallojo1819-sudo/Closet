@@ -299,7 +299,7 @@ describe("buildLookbook", () => {
     }
   });
 
-  it("strips a repeated blazer off extra Out rows", () => {
+  it("demotes a repeated blazer instead of leaving the card bare (JKT-COV-1)", () => {
     const g = [
       ...closet(3, 3, 3),
       piece({
@@ -322,7 +322,9 @@ describe("buildLookbook", () => {
     const trimmed = stripRepeatBlazers(bloated, g);
     const withJ = trimmed.filter((l) => l.garmentIds.includes("j1"));
     assert.equal(withJ.length, 1);
-    assert.ok(trimmed.filter((l) => l.garmentIds.length === 3).length >= 7);
+    const demoted = trimmed.filter((l) => !l.garmentIds.includes("j1"));
+    assert.ok(demoted.length >= 7);
+    for (const look of demoted) assert.equal(look.demoted, "JKT-COV-1");
   });
 
   it("shuffle never repeats a combo key; saved look stays", () => {

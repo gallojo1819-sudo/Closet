@@ -41,6 +41,7 @@ import {
 } from "./houses.ts";
 import { buildHouseMatrix, type MatrixLook } from "./stylist/matrix.ts";
 import { isLegal } from "./stylist/legal.ts";
+import { houseCode, jacketHits, jacketRequired, slotPieces, wearSlot as jacketWearSlot } from "./stylist/jackets.ts";
 import { rep3Fails, repCaps, recipeOuterIssue } from "./stylist/row.ts";
 import { APPROVED } from "./house-profiles/load.ts";
 import { evaluateColor, colorEmptyCopy } from "./stylist/colorChip.ts";
@@ -126,8 +127,22 @@ function beigePlateCount(pieces: Garment[]): number {
   ).length;
 }
 
-/** Jacket only when the house wants one. Default look is three pieces. */
-export function lookAllowsBlazer(core: Garment[], jacket: Garment, occasion?: Occasion): boolean {
+function jacketBlocked(pieces: Garment[], occasion: Occasion | undefined, season?: Season, house?: House | null): boolean {
+  return jacketHits(slotPieces(pieces), {
+    occasion: occasion ?? "weekday",
+    season: season ?? "fall",
+    house: house ? houseCode(house) : undefined,
+  }).some((hit) => hit.severity === "hard");
+}
+
+/** Jacket only when the layering rules allow it. Default look is three pieces. */
+export function lookAllowsBlazer(
+  core: Garment[],
+  jacket: Garment,
+  occasion?: Occasion,
+  season?: Season,
+  house?: House | null,
+): boolean {
   if (!isBlazer(jacket)) return false;
   if (core.some((g) => slotOf(g) === "outerwear")) return false;
   if (occasion === "comfy") return false;
@@ -149,13 +164,14 @@ export function lookAllowsBlazer(core: Garment[], jacket: Garment, occasion?: Oc
       !isHeavyCable(top) &&
       !/fair\s*isle/.test(tb));
   if (!shirt) return false;
-  const house = leadHouse(core);
-  if (house === "polo" && isHeavyCable(top)) return false;
+  const lead = leadHouse(core);
+  if (lead === "polo" && isHeavyCable(top)) return false;
   if (occasion === "weekend" && isFairIsle(top)) return false;
   if (bottom && isSandPiece(top) && isSandPiece(bottom) && isSandPiece(jacket)) {
     return false;
   }
   if (beigePlateCount([...core, jacket]) >= 3) return false;
+  if (jacketBlocked([...core, jacket], occasion, season, house)) return false;
   return true;
 }
 
@@ -200,7 +216,7 @@ function maybeAttachBlazer(
     if (usedBlazers.has(o.id)) return null;
     if (atCap(o)) return null;
     if (blazerLooks >= max) return null;
-    if (!lookAllowsBlazer(core, o, occasion)) return null;
+    if (!lookAllowsBlazer(core, o, occasion, season)) return null;
     if (season === "summer" && o.warmth >= 4) return null;
     const next = [...core, o];
     if (lookClashes(next)) return null;
@@ -213,6 +229,7 @@ function maybeAttachBlazer(
     for (const o of rank(outers.filter((x) => isWeekendSoftJacket(x) && !atCap(x)), today)) {
       if (core.some((g) => g.id === o.id) || usedBlazers.has(o.id)) continue;
       const next = [...core, o];
+      if (jacketBlocked(next, occasion, season)) continue;
       if (lookClashes(next)) continue;
       if (season && !lookFitsSeason(next, season)) continue;
       if (harmony(next, { occasion, f: season ? undefined : 64 }) < 0) continue;
@@ -226,6 +243,7 @@ function maybeAttachBlazer(
     )) {
       if (core.some((g) => g.id === o.id) || atCap(o)) continue;
       const next = [...core, o];
+      if (jacketBlocked(next, occasion, season)) continue;
       if (lookClashes(next)) continue;
       if (season && !lookFitsSeason(next, season)) continue;
       return next;
@@ -242,6 +260,7 @@ function maybeAttachBlazer(
   for (const o of rank(rest, today)) {
     if (core.some((g) => g.id === o.id) || atCap(o) || usedBlazers.has(o.id)) continue;
     const next = [...core, o];
+    if (jacketBlocked(next, occasion, season)) continue;
     if (lookClashes(next)) continue;
     if (season && !lookFitsSeason(next, season)) continue;
     if (harmony(next, { occasion, f: season ? undefined : 58 }) < 0) continue;
@@ -286,6 +305,7 @@ function repairJacketQuotas(
     );
     if (!o) return l;
     const next = [...core, o];
+    if (jacketBlocked(next, occasion, season, house)) return l;
     if (lookClashes(next)) return l;
     if (season && !lookFitsSeason(next, season)) return l;
     usedBlazers.add(o.id);
@@ -338,7 +358,7 @@ function preferSingleBrownSuede(looks: Look[], pool: Garment[]): Look[] {
     for (const outer of others) {
       if (pieces.some((p) => p.id === outer.id)) continue;
       const next = pieces.filter((p) => p.id !== suede.id).concat(outer);
-      if (next.length < 3 || lookClashes(next)) continue;
+      if (next.length < 3 || lookClashes(next) || jacketBlocked(next, "weekday")) continue;
       return {
         ...look,
         garmentIds: next.map((g) => g.id),
@@ -594,6 +614,11 @@ export function pieceLookCap(slotCount: number): number {
 }
 
 function wearCapSlot(g: Garment): "top" | "bottom" | "footwear" | "outerwear" | null {
+  const worn = jacketWearSlot(g);
+  if (worn === "outer") return "outerwear";
+  if (worn === "mid" || worn === "top") return "top";
+  if (worn === "bottom") return "bottom";
+  if (worn === "shoe") return "footwear";
   const s = slotOf(g);
   if (s === "top" || s === "dress") return "top";
   if (s === "bottom") return "bottom";
@@ -642,11 +667,29 @@ export function stripRepeatBlazers(looks: Look[], garments: Garment[]): Look[] {
     }
     const ids = l.garmentIds.filter((id) => !strip.includes(id));
     if (ids.length < 3) return l;
+    const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    const replacement = byId.size
+      ? [...byId.values()].find(
+          (g) =>
+            isBlazer(g) &&
+            !ids.includes(g.id) &&
+            !seen.has(g.id) &&
+            !jacketBlocked([...pieces, g], occ),
+        )
+      : undefined;
+    if (replacement) {
+      const next = [...pieces, replacement];
+      seen.add(replacement.id);
+      keptJacket.set(occ, seen);
+      blazerLooks.set(occ, count + keep.size + 1);
+      for (const id of keep) seen.add(id);
+      return { ...l, garmentIds: next.map((g) => g.id), name: nameOf(next) };
+    }
     for (const id of keep) seen.add(id);
     keptJacket.set(occ, seen);
     blazerLooks.set(occ, count + keep.size);
-    const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
-    return { ...l, garmentIds: ids, name: nameOf(pieces) };
+    // JKT-COV-1: do not leave a required card bare. Mark it demoted.
+    return { ...l, garmentIds: ids, name: nameOf(pieces), demoted: "JKT-COV-1" };
   });
 }
 
@@ -1762,7 +1805,7 @@ function finishStyled(
         }))), color, tag);
         if (!col.passed) continue;
       }
-      out.push(lookFromPieces(pieces, occasion, out.length, tag));
+      out.push(lookFromPieces(pieces, occasion, out.length, tag, look.demoted ? { demoted: look.demoted } : undefined));
       if (out.length >= cap) break;
     }
     return out;
@@ -1904,9 +1947,6 @@ export function buildReshuffleRow(
   const topSrc = prefer(tops);
   const botSrc = prefer(bottoms);
   const shoeSrc = prefer(shoes);
-  const rugged = Boolean(
-    profile && profile.jackets.some((name) => name !== "blazer" && name !== "overcoat"),
-  );
   const jackets = shuffle(
     profile
       ? pool.filter((g) => profile.jackets.some((name) => jacketNameHits(g, name)))
@@ -1926,24 +1966,32 @@ export function buildReshuffleRow(
     if (house && !isLegal(pieces, { house, occasion, season: season ?? "fall", color: color || null })) return false;
     return true;
   };
-  const acceptJacket = (core: Garment[], jacket: Garment): Garment[] | null => {
+  const withJacket = (core: Garment[], jacket: Garment): Garment[] | null => {
     if (core.some((p) => p.id === jacket.id)) return null;
     const next = [...core, jacket];
     if (isBlazerPiece(jacket)) {
-      if (!lookAllowsBlazer(core, jacket, occasion)) return null;
-      if (house && !isLegal(next, { house, occasion, season: season ?? "fall" })) return null;
-      return next;
-    }
+      if (!lookAllowsBlazer(core, jacket, occasion, season, house)) return null;
+    } else if (jacketBlocked(next, occasion, season, house)) return null;
+    return next;
+  };
+  const acceptJacket = (core: Garment[], jacket: Garment): Garment[] | null => {
+    const next = withJacket(core, jacket);
+    if (!next) return null;
     if (lookClashes(next)) return null;
     if (!lookFitsOccasion(next, occasion, pool, house)) return null;
     if (house && !isLegal(next, { house, occasion, season: season ?? "fall" })) return null;
     return next;
   };
-  const withJacket = (core: Garment[], i: number): Garment[] | null => {
-    if (!jackets.length || i % 4 !== 3) return null;
-    const jacket = jackets[i % jackets.length];
-    if (!jacket) return null;
-    return acceptJacket(core, jacket);
+  const pushJackets = (core: Garment[]) => {
+    if (draws.length >= drawLimit) return;
+    for (const jacket of jackets) {
+      if (draws.length >= drawLimit) break;
+      const next = withJacket(core, jacket);
+      if (next) pushDraw(next);
+    }
+    // Bare cores stay in the pool. If a jacket is required, pack() marks them demoted.
+    if (draws.length >= drawLimit) return;
+    pushDraw(core);
   };
   const draws: Garment[][] = [];
   const seenDraw = new Set<string>();
@@ -1980,8 +2028,8 @@ export function buildReshuffleRow(
       if (!top || !bot || !shoe) continue;
       const core = [top, bot, shoe];
       if (slot === "outerwear") {
-        if (!lookAllowsBlazer(core, star, occasion)) continue;
-        pushDraw([...core, star]);
+        const next = acceptJacket(core, star);
+        if (next) pushDraw(next);
       } else if (slot === "top" || slot === "dress" || slot === "bottom" || slot === "footwear") {
         pushDraw(core);
       }
@@ -1996,18 +2044,7 @@ export function buildReshuffleRow(
     const shoe = shoeSrc[(i * 5 + salt0 * 2) % Math.max(shoeSrc.length, 1)];
     if (!top || !bot || !shoe) continue;
     const core = [top, bot, shoe];
-    pushDraw(core);
-    if (rugged) {
-      for (let j = 0; j < Math.min(jackets.length, 4); j++) {
-        const jacket = jackets[(i + j) % jackets.length];
-        if (!jacket) continue;
-        const next = acceptJacket(core, jacket);
-        if (next) pushDraw(next);
-      }
-    } else {
-      const jacketed = withJacket(core, i);
-      if (jacketed) pushDraw(jacketed);
-    }
+    pushJackets(core);
   }
   if (house) {
     const shoeList = shoeSrc.length ? shoeSrc : shoes;
@@ -2021,11 +2058,7 @@ export function buildReshuffleRow(
       if (!top || !bot || !shoe) continue;
       if (new Set([top.id, bot.id, shoe.id]).size < 3) continue;
       const core = [top, bot, shoe];
-      pushDraw(core);
-      for (const jacket of jackets) {
-        const next = acceptJacket(core, jacket);
-        if (next) pushDraw(next);
-      }
+      pushJackets(core);
     }
   }
   if (house) {
@@ -2088,7 +2121,7 @@ export function buildReshuffleRow(
       for (const p of pieces) {
         if (exemptRepeat.has(p.id)) continue;
         const slot = wearCapSlot(p);
-        if (!slot) continue;
+        if (!slot || slot === "outerwear") continue;
         if (slotOwned[slot] >= 8 && (seen.get(p.id) ?? 0) >= 1) return true;
       }
       return false;
@@ -2133,6 +2166,8 @@ export function buildReshuffleRow(
       for (const p of pieces) seen.set(p.id, (seen.get(p.id) ?? 0) + 1);
       if (top && isCreamCable(top)) cable = true;
       noteChapterLook(track, pieces, recipeId, occasion);
+      const jacketOn = pieces.some((g) => jacketWearSlot(g) === "outer");
+      const demoted = season != null && jacketRequired(occasion, season) && !jacketOn ? ("JKT-COV-1" as const) : undefined;
       row.push({
         id: `reshuffle_${occasion}_${row.length}_${key.replace(/\|/g, "_")}`,
         name: nameOf(pieces),
@@ -2142,13 +2177,14 @@ export function buildReshuffleRow(
         lookbook: false,
         recipeId,
         createdAt: `${todayISO()}T00:00:00.000Z`,
+        demoted,
       });
     }
     return row;
   };
 
   const spreadJackets = (row: Look[]): Look[] => {
-    if (!house || !rugged || jackets.length < 4 || row.length < 4) return row;
+    if (!house || jackets.length < 2 || row.length < 2) return row;
     const next = row.map((look) => ({ ...look, garmentIds: [...look.garmentIds] }));
     const limit = Math.min(6, next.length);
     const claimed = new Set<string>();
@@ -2165,14 +2201,7 @@ export function buildReshuffleRow(
       }
       const want = jackets.find((j) => !claimed.has(j.id));
       if (!want) continue;
-      if (outerOnce) {
-        for (const other of next) {
-          if (other === look || !other.garmentIds.includes(want.id)) continue;
-          other.garmentIds = other.garmentIds.filter((id) => id !== want.id);
-          const otherKey = comboKey(other.garmentIds);
-          other.id = `reshuffle_${occasion}_j_${otherKey.replace(/\|/g, "_")}`;
-        }
-      }
+      if (outerOnce && next.some((other) => other !== look && other.garmentIds.includes(want.id))) continue;
       const core = pieces.filter((g) => !jackets.some((j) => j.id === g.id));
       const combined = acceptJacket(core, want);
       if (!combined) continue;

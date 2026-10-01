@@ -8,7 +8,9 @@ import { gateOff, primaryKey } from "../house-profiles/evaluate.ts";
 import { HOUSES, type House } from "../houses.ts";
 import type { Garment, Occasion, Season } from "../types.ts";
 import { canonTokens } from "./colorChip.ts";
-import { isLegal, rankLook, DELETED_SNEAKERS } from "./legal.ts";
+import { clashes } from "../style.ts";
+import { isLegal, missingJacketOnly, rankLook, DELETED_SNEAKERS } from "./legal.ts";
+import { allowedJackets, fwEligibleJackets, houseCode, jacketRequired, wearSlot, SUEDE_FAMILY } from "./jackets.ts";
 import { DOMINANT, rep1Fails, violatesMustDiffer } from "./row.ts";
 
 export type MatrixLook = {
@@ -17,6 +19,8 @@ export type MatrixLook = {
   shoe: string;
   outer?: string;
   score: number;
+  /** Set when a required jacket had no uncapped legal outer. */
+  demoted?: "JKT-COV-1";
 };
 
 export type GateInfo = { occasion: string; season: string; text: string; ruleId: string };
@@ -37,6 +41,13 @@ export type Matrix = {
 
 const DELETED = new Set<string>(DELETED_SNEAKERS);
 const CACHE = new Map<string, Matrix>();
+const JACKET_USES = new Map<string, number>();
+const SUEDE = new Set<string>(SUEDE_FAMILY);
+
+function timesWorn(id?: string): number {
+  if (!id) return 1000;
+  return JACKET_USES.get(id) ?? 0;
+}
 
 type ProfileBits = {
   chip_id?: string;
@@ -47,7 +58,7 @@ type ProfileBits = {
   joe_fill?: { slot_whitelist?: Record<string, { id: string }[] | undefined> };
 };
 
-type Opt = { outer?: string; score: number; doms: string[] };
+type Opt = { outer?: string; score: number; doms: string[]; demoted?: boolean };
 type Core = { top: string; bottom: string; shoe: string; best: number; options: Opt[] };
 type Pick = { core: Core; opt: Opt };
 
@@ -90,8 +101,12 @@ function enumerateHouse(house: House, garments: Garment[], occasion: string, sea
     (profile.joe_fill?.slot_whitelist?.[slot] ?? [])
       .map((row) => by.get(row.id))
       .filter((g): g is Garment => Boolean(g && !g.archived && !DELETED.has(g.id)));
-  let tops = take("top");
-  let outers = take("outer");
+  let tops = take("top").filter((g) => {
+    const worn = wearSlot(g);
+    return worn !== "outer" && worn !== "mid";
+  });
+  const allowed = new Set(allowedJackets(houseCode(house), season));
+  let outers = garments.filter((g) => allowed.has(g.id) && !g.archived && !DELETED.has(g.id));
   const bottoms = take("bottom");
   const shoes = take("shoe");
   if (season === "summer") {
@@ -103,22 +118,15 @@ function enumerateHouse(house: House, garments: Garment[], occasion: string, sea
   tops = plainFirst(tops);
   const orderedBottoms = plainFirst(bottoms);
   const orderedShoes = plainFirst(shoes);
-  const needOuter = (profile.pairing_rules ?? []).some(
-    (pr) =>
-      pr.type === "requires_outer" &&
-      (pr.severity ?? "hard") === "hard" &&
-      (pr.seasons ?? []).includes(season) &&
-      (pr.occasions ?? []).includes(occasion),
-  );
+  const needOuter = jacketRequired(occasion, season);
   const ctx = { house, occasion, season };
   const cores: Core[] = [];
   const perShoe = new Map<string, number>();
   const tryOpt = (pieces: Garment[], outer: Garment | undefined, into: Opt[]) => {
-    if (into.length >= 4) return;
-    if (into.some((opt) => opt.outer === outer?.id)) return;
+    if (into.some((opt) => opt.outer === outer?.id && !opt.demoted)) return;
     if (outer && pieces.some((g) => g.id === outer.id)) return;
     const all = outer ? [...pieces, outer] : pieces;
-    if (!isLegal(all, ctx)) return;
+    if (clashes(all)) return;
     const score = rankLook(all, ctx);
     if (!Number.isFinite(score)) return;
     into.push({ outer: outer?.id, score, doms: domsOf(all.map((g) => g.id)) });
@@ -128,14 +136,19 @@ function enumerateHouse(house: House, garments: Garment[], occasion: string, sea
     const base = [top, bottom, shoe];
     const options: Opt[] = [];
     if (!needOuter) tryOpt(base, undefined, options);
-    for (const outer of outers) {
-      if (options.length >= 4) break;
-      tryOpt(base, outer, options);
-      if (!needOuter && options.length >= 3) break;
+    for (const outer of outers) tryOpt(base, outer, options);
+    if (!options.length) {
+      if (needOuter && missingJacketOnly(base, ctx)) {
+        cores.push({ top: top.id, bottom: bottom.id, shoe: shoe.id, best: -1e12, options: [] });
+        perShoe.set(shoe.id, (perShoe.get(shoe.id) ?? 0) + 1);
+      }
+      return;
     }
-    if (!options.length) return;
-    options.sort((a, b) => b.score - a.score || (a.outer ?? "").localeCompare(b.outer ?? ""));
-    cores.push({ top: top.id, bottom: bottom.id, shoe: shoe.id, best: options[0]!.score, options });
+    const best = Math.max(...options.map((opt) => opt.score));
+    options.sort(
+      (a, b) => timesWorn(a.outer) - timesWorn(b.outer) || b.score - a.score || (a.outer ?? "").localeCompare(b.outer ?? ""),
+    );
+    cores.push({ top: top.id, bottom: bottom.id, shoe: shoe.id, best, options });
     perShoe.set(shoe.id, (perShoe.get(shoe.id) ?? 0) + 1);
   };
   for (const shoe of orderedShoes) {
@@ -167,6 +180,7 @@ type State = {
   top: Map<string, number>;
   bottom: Map<string, number>;
   shoe: Map<string, number>;
+  outer: Map<string, number>;
   dom: Map<string, number>;
   rows: Map<string, Pick[]>;
 };
@@ -178,6 +192,7 @@ function emptyState(): State {
     top: new Map(),
     bottom: new Map(),
     shoe: new Map(),
+    outer: new Map(),
     dom: new Map(),
     rows: new Map(),
   };
@@ -206,6 +221,7 @@ function commit(state: State, chip: string, picks: Pick[], dir: 1 | -1) {
     bots.add(pick.core.bottom);
     shoes.add(pick.core.shoe);
     for (const d of pick.opt.doms) bump(state.dom, d, dir);
+    if (pick.opt.outer && !pick.opt.demoted) bump(state.outer, pick.opt.outer, dir);
   }
   for (const id of tops) bump(state.top, id, dir);
   for (const id of bots) bump(state.bottom, id, dir);
@@ -258,6 +274,11 @@ function rejectReason(cores: Core[], state: State, chip: string): string {
   return [...why.entries()].map(([k, n]) => `${k}:${n}`).join(" ");
 }
 
+function outerLoad(state: State, id?: string): number {
+  if (!id) return 1000;
+  return timesWorn(id) + (state.outer.get(id) ?? 0);
+}
+
 function fillHouse(
   cores: Core[],
   state: State,
@@ -266,6 +287,7 @@ function fillHouse(
   allowOuterRepeat: boolean,
   forbid: string | null,
   banFirst: Set<string>,
+  required: boolean,
 ): Pick[] {
   const bag: Pick[] = [];
   const usedTop = new Set<string>();
@@ -274,19 +296,35 @@ function fillHouse(
   const usedOuter = new Set<string>();
   let domIn = 0;
   const nonDom = cores.some((c) => c.options.some((o) => o.doms.length === 0));
+  const blocked = (core: Core): boolean => {
+    if (state.cores.has(coreOf(core)) || state.tb.has(`${core.top}|${core.bottom}`)) return true;
+    if (usedTop.has(core.top) || usedBot.has(core.bottom)) return true;
+    if (!singleShoe && usedShoe.has(core.shoe)) return true;
+    if (rep1Fails(core.top, (state.top.get(core.top) ?? 0) + 1, "top")) return true;
+    if (rep1Fails(core.bottom, (state.bottom.get(core.bottom) ?? 0) + 1, "bottom")) return true;
+    if (rep1Fails(core.shoe, (state.shoe.get(core.shoe) ?? 0) + 1, "shoe")) return true;
+    if (mustClash(state, chip, core)) return true;
+    return false;
+  };
+  const take = (core: Core, opt: Opt) => {
+    bag.push({ core, opt });
+    usedTop.add(core.top);
+    usedBot.add(core.bottom);
+    usedShoe.add(core.shoe);
+    if (opt.outer && !opt.demoted) usedOuter.add(opt.outer);
+    if (opt.doms.length) domIn += 1;
+  };
   for (const core of cores) {
     if (bag.length === 3) break;
     if (bag.length === 0 && banFirst.has(coreOf(core))) continue;
-    if (state.cores.has(coreOf(core)) || state.tb.has(`${core.top}|${core.bottom}`)) continue;
-    if (usedTop.has(core.top) || usedBot.has(core.bottom)) continue;
-    if (!singleShoe && usedShoe.has(core.shoe)) continue;
-    if (rep1Fails(core.top, (state.top.get(core.top) ?? 0) + 1, "top")) continue;
-    if (rep1Fails(core.bottom, (state.bottom.get(core.bottom) ?? 0) + 1, "bottom")) continue;
-    if (rep1Fails(core.shoe, (state.shoe.get(core.shoe) ?? 0) + 1, "shoe")) continue;
-    if (mustClash(state, chip, core)) continue;
+    if (blocked(core)) continue;
+    const ranked = [...core.options].sort(
+      (a, b) => outerLoad(state, a.outer) - outerLoad(state, b.outer) || b.score - a.score,
+    );
     let opt: Opt | undefined;
-    for (const candidate of core.options) {
-      if (!allowOuterRepeat && candidate.outer && usedOuter.has(candidate.outer)) continue;
+    for (const candidate of ranked) {
+      if (candidate.demoted || !candidate.outer) continue;
+      if (!allowOuterRepeat && usedOuter.has(candidate.outer)) continue;
       if (candidate.doms.length > 1) continue;
       if (candidate.doms.length && domIn >= 1) continue;
       if (bag.length === 0 && candidate.doms.length && nonDom) continue;
@@ -294,18 +332,39 @@ function fillHouse(
       opt = candidate;
       break;
     }
+    if (!opt && !required) {
+      const bare = ranked.find((candidate) => !candidate.outer && !candidate.demoted);
+      if (
+        bare &&
+        !(bare.doms.length > 1) &&
+        !(bare.doms.length && domIn >= 1) &&
+        !(bag.length === 0 && bare.doms.length && nonDom) &&
+        !bare.doms.some((d) => (state.dom.get(d) ?? 0) >= 2)
+      ) {
+        opt = bare;
+      }
+    }
     if (!opt) continue;
-    bag.push({ core, opt });
-    usedTop.add(core.top);
-    usedBot.add(core.bottom);
-    usedShoe.add(core.shoe);
-    if (opt.outer) usedOuter.add(opt.outer);
-    if (opt.doms.length) domIn += 1;
+    take(core, opt);
+  }
+  if (bag.length < 3) {
+    for (const core of cores) {
+      if (bag.length === 3) break;
+      if (bag.some((pick) => coreOf(pick.core) === coreOf(core))) continue;
+      if (bag.length === 0 && banFirst.has(coreOf(core))) continue;
+      if (blocked(core)) continue;
+      if (required) {
+        take(core, { outer: undefined, score: core.best, doms: [], demoted: true });
+        continue;
+      }
+      const bare = core.options.find((candidate) => !candidate.outer && !candidate.demoted);
+      if (bare) take(core, bare);
+    }
   }
   if (bag.length === 3 && forbid && bag.map((p) => coreOf(p.core)).join("||") === forbid && banFirst.size < 6) {
     const next = new Set(banFirst);
     next.add(coreOf(bag[0]!.core));
-    const alt = fillHouse(cores, state, chip, singleShoe, allowOuterRepeat, forbid, next);
+    const alt = fillHouse(cores, state, chip, singleShoe, allowOuterRepeat, forbid, next, required);
     if (alt.length === 3 && alt.map((p) => coreOf(p.core)).join("||") !== forbid) return alt;
   }
   return bag;
@@ -338,7 +397,10 @@ function reserveShoes(open: { id: House; cores: Core[]; singleShoe: boolean }[])
   return reserved;
 }
 
-function assignTop3(open: { id: House; chip: string; cores: Core[]; singleShoe: boolean; forbid: string | null }[]): Map<House, Pick[]> {
+function assignTop3(
+  open: { id: House; chip: string; cores: Core[]; singleShoe: boolean; forbid: string | null }[],
+  required: boolean,
+): Map<House, Pick[]> {
   const reserved = reserveShoes(open);
   const narrowed = open.map((house) => {
     const shoes = reserved.get(house.id) ?? new Set<string>();
@@ -362,7 +424,7 @@ function assignTop3(open: { id: House; chip: string; cores: Core[]; singleShoe: 
     const ban = new Set<string>();
     for (let alt = 0; alt < 8; alt++) {
       const outerIds = new Set(house.cores.flatMap((core) => core.options.map((opt) => opt.outer).filter((id): id is string => Boolean(id))));
-      const picks = fillHouse(house.cores, state, house.chip, house.singleShoe, outerIds.size < 3, house.forbid, ban);
+      const picks = fillHouse(house.cores, state, house.chip, house.singleShoe, outerIds.size < 3, house.forbid, ban, required);
       if (picks.length < 3) {
         if (process.env.DEBUG_MATRIX && !LOGGED.has(house.id)) {
           LOGGED.add(house.id);
@@ -391,9 +453,138 @@ function toLook(pick: Pick): MatrixLook {
     top: pick.core.top,
     bottom: pick.core.bottom,
     shoe: pick.core.shoe,
-    outer: pick.opt.outer,
+    outer: pick.opt.demoted ? undefined : pick.opt.outer,
     score: pick.opt.score,
+    demoted: pick.opt.demoted ? "JKT-COV-1" : undefined,
   };
+}
+
+function isSuede(id?: string): boolean {
+  return Boolean(id && SUEDE.has(id));
+}
+
+/** Swap a jacket that breaks ROT-1 or ROT-2. Demote when a required card has no uncapped jacket. */
+function rebalance(
+  open: { id: House; chip: string; cores: Core[]; singleShoe: boolean }[],
+  assigned: Map<House, Pick[]>,
+  season: string,
+): Map<House, Pick[]> {
+  const rows = new Map<House, Pick[]>();
+  for (const house of open) {
+    rows.set(
+      house.id,
+      (assigned.get(house.id) ?? []).map((pick) => ({ core: pick.core, opt: { ...pick.opt } })),
+    );
+  }
+  const order = [...open].sort((a, b) => a.cores.length - b.cores.length || a.id.localeCompare(b.id));
+  const fw = new Set(season === "fall" || season === "winter" ? fwEligibleJackets() : []);
+
+  const houseSet = (id: string, ignoreHouse?: House, ignoreIndex?: number): Set<House> => {
+    const found = new Set<House>();
+    for (const [house, picks] of rows) {
+      picks.forEach((pick, index) => {
+        if (house === ignoreHouse && index === ignoreIndex) return;
+        if (!pick.opt.demoted && pick.opt.outer === id) found.add(house);
+      });
+    }
+    return found;
+  };
+  const suedeHouses = (ignoreHouse?: House, ignoreIndex?: number): Set<House> => {
+    const found = new Set<House>();
+    for (const [house, picks] of rows) {
+      if (picks.some((pick, index) => !(house === ignoreHouse && index === ignoreIndex) && !pick.opt.demoted && isSuede(pick.opt.outer))) {
+        found.add(house);
+      }
+    }
+    return found;
+  };
+  const violates = (house: House, index: number, outer?: string): boolean => {
+    if (!outer) return false;
+    const row = rows.get(house) ?? [];
+    for (let i = 0; i < row.length; i++) {
+      if (i === index) continue;
+      const other = row[i]!.opt;
+      if (other.demoted || !other.outer) continue;
+      if (other.outer === outer) return true;
+      if (isSuede(outer) && isSuede(other.outer)) return true;
+    }
+    if (houseSet(outer, house, index).size >= 2) return true;
+    if (isSuede(outer) && suedeHouses(house, index).size >= 3) return true;
+    return false;
+  };
+  const appearances = (id: string): number => {
+    let n = JACKET_USES.get(id) ?? 0;
+    for (const picks of rows.values()) {
+      for (const pick of picks) if (!pick.opt.demoted && pick.opt.outer === id) n += 1;
+    }
+    return n;
+  };
+  const choose = (core: Core, house: House, index: number): Opt | null => {
+    const opts = core.options.filter((opt) => opt.outer && !opt.demoted && !violates(house, index, opt.outer));
+    opts.sort((a, b) => timesWorn(a.outer) - timesWorn(b.outer) || b.score - a.score);
+    return opts[0] ?? null;
+  };
+
+  for (const house of order) {
+    const picks = rows.get(house.id) ?? [];
+    for (let i = 0; i < picks.length; i++) {
+      const pick = picks[i]!;
+      if (pick.opt.demoted || !pick.opt.outer || !violates(house.id, i, pick.opt.outer)) continue;
+      const alt = choose(pick.core, house.id, i);
+      if (alt) {
+        pick.opt = alt;
+        continue;
+      }
+      const bare = pick.core.options.find((opt) => !opt.outer && !opt.demoted);
+      if (bare) {
+        pick.opt = bare;
+        continue;
+      }
+      let replaced = false;
+      for (const core of house.cores) {
+        if (coreOf(core) === coreOf(pick.core)) continue;
+        if (picks.some((other, index) => index !== i && (coreOf(other.core) === coreOf(core) || other.core.top === core.top || other.core.bottom === core.bottom || (!house.singleShoe && other.core.shoe === core.shoe)))) {
+          continue;
+        }
+        let elsewhere = false;
+        for (const [otherHouse, otherPicks] of rows) {
+          if (otherHouse === house.id) continue;
+          if (otherPicks.some((other) => coreOf(other.core) === coreOf(core) || `${other.core.top}|${other.core.bottom}` === `${core.top}|${core.bottom}`)) {
+            elsewhere = true;
+          }
+        }
+        if (elsewhere) continue;
+        const altOpt = choose(core, house.id, i);
+        if (!altOpt) continue;
+        picks[i] = { core, opt: altOpt };
+        replaced = true;
+        break;
+      }
+      if (!replaced) pick.opt = { outer: undefined, score: pick.opt.score, doms: [], demoted: true };
+    }
+  }
+
+  if (fw.size) {
+    const missing = [...fw].filter((id) => appearances(id) === 0);
+    for (const id of missing) {
+      let placed = false;
+      for (const house of order) {
+        if (placed) break;
+        if (!allowedJackets(houseCode(house.id), season).includes(id)) continue;
+        const picks = rows.get(house.id) ?? [];
+        for (let i = 0; i < picks.length; i++) {
+          const opt = picks[i]!.core.options.find((candidate) => candidate.outer === id);
+          if (!opt || violates(house.id, i, id)) continue;
+          const current = picks[i]!.opt.demoted ? undefined : picks[i]!.opt.outer;
+          if (current && fw.has(current) && appearances(current) <= 1) continue;
+          picks[i] = { core: picks[i]!.core, opt };
+          placed = true;
+          break;
+        }
+      }
+    }
+  }
+  return rows;
 }
 
 function leadsBrown(g: Garment | undefined): boolean {
@@ -486,11 +677,15 @@ export function buildHouseMatrix(garments: Garment[], occasion: Occasion | strin
       gap: profile.gap_note ?? null,
     });
   }
-  const assigned = assignTop3(open);
+  const required = jacketRequired(occasion, season);
+  const assigned = rebalance(open, assignTop3(open, required), season);
   const usedCores = new Set<string>();
   for (const house of open) {
     const picks = assigned.get(house.id) ?? [];
     const looks = picks.map(toLook);
+    for (const look of looks) {
+      if (look.outer && !look.demoted) JACKET_USES.set(look.outer, (JACKET_USES.get(look.outer) ?? 0) + 1);
+    }
     for (const look of looks) usedCores.add(coreOf(look));
     cells[house.id] = {
       gate: null,
@@ -521,4 +716,5 @@ export function buildHouseMatrix(garments: Garment[], occasion: Occasion | strin
 
 export function clearMatrixCache(): void {
   CACHE.clear();
+  JACKET_USES.clear();
 }

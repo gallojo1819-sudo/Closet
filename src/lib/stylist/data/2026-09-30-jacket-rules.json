@@ -1,0 +1,2780 @@
+{
+ "file": "2026-09-30-jacket-rules.json",
+ "status": "PROPOSED (not approved, not wired into the app). Jacket picking + layering + fall/winter coverage + rotation. Built on prod b03aa4d sim rows and the 2026-09-30 closet_meta snapshot.",
+ "depends_on": [
+  "2026-09-30-proposed-stylist-rules.json (shared_signals: tailored_trouser, athletic_or_fashion_sneaker, clean_leather_sneaker, sweat_fleece_top; denim_wash)",
+  "color-value-map.json",
+  "house-profiles/*.json allowed_jackets + keywords",
+  "2026-09-30-jacket-classification.json (per-plate class, cut, weight, seasons)"
+ ],
+ "conventions": {
+  "slots": "top, mid, outer, bottom, shoe. outer = class a/b/c only (jacket_class). Outerwear named cardigan/fleece/vest/gilet/zip sweater/zip-up knit = MID and never counts as a jacket. RECLASS (JKT-DATA-1) is applied before slotting (Khaki varsity = outer).",
+  "jacket_class": "a_tailored (signal tailored), c_outer_coat (signal outer_coat), mid (signal mid_layer), else b_casual",
+  "cut": "tailored | roomy (roomy_casual_jacket) | waist (waist_casual_jacket) | close_light (close_light_jacket or warmth <= 2)",
+  "weight": "heavy = warmth >= 4 or shearling/sherpa/parka/overcoat; light = warmth <= 2 or trucker/overshirt/zip blouson/linen or mint; tailored wool = mid; else mid",
+  "severity": "hard = look is illegal; soft = add delta to rank score (same semantics as house profiles)",
+  "match_blob": "keyword specs match name | subtype | material, word-start, case-insensitive (build.py match()). Extension keys used here: warmth_min, warmth_max, fit_none (closet_meta warmth/fit are already in the snapshot).",
+  "supersedes": {
+   "XC-TEX-2 pass test (g_gp53xkrmem9b + g_juk45cokjxxy)": "now FAILS (JKT-LAY-1): it is screenshot card 1",
+   "XC-TEX-2 clean_leather_sneaker -5": "replaced by JKT-LAY-4 (weekend/travel -5, weekday/out hard)",
+   "XC-TEX-8 (Out fall/winter soft -10)": "replaced by JKT-COV-1 hard",
+   "POLO-P7": "subsumed by JKT-COV-1",
+   "RRL-P7": "generalised by JKT-COV-2"
+  }
+ },
+ "shared_signals": {
+  "tailored": {
+   "slot": "outer",
+   "any": [
+    "blazer",
+    "sport coat",
+    "sportcoat"
+   ]
+  },
+  "tailored_soft": {
+   "slot": "outer",
+   "any": [
+    "blazer",
+    "sport coat",
+    "sportcoat"
+   ],
+   "colors_any": [
+    "taupe",
+    "beige",
+    "tan",
+    "brown",
+    "cream",
+    "camel"
+   ],
+   "none": [
+    "double-breasted",
+    "double breasted"
+   ],
+   "note": "Unstructured/soft sport coat (approved blazer_soft minus the DB). Joe: Taupe blazer, Beige corduroy blazer."
+  },
+  "tailored_structured": {
+   "slot": "outer",
+   "or": [
+    {
+     "any": [
+      "blazer",
+      "sport coat",
+      "sportcoat"
+     ],
+     "colors_any": [
+      "navy",
+      "black",
+      "charcoal",
+      "grey"
+     ]
+    },
+    {
+     "any": [
+      "double-breasted",
+      "double breasted"
+     ]
+    }
+   ],
+   "note": "Joe: Navy blazer, Ivory double-breasted blazer."
+  },
+  "outer_coat": {
+   "slot": "outer",
+   "any": [
+    "overcoat",
+    "topcoat",
+    "car coat",
+    "polo coat",
+    "peacoat",
+    "pea coat",
+    "trench",
+    "parka",
+    "duffle",
+    "greatcoat",
+    "chesterfield"
+   ]
+  },
+  "roomy_casual_jacket": {
+   "slot": "outer",
+   "or": [
+    {
+     "any": [
+      "chore",
+      "field jacket",
+      "plaid jacket",
+      "check jacket",
+      "tweed jacket",
+      "toggle",
+      "parka",
+      "shacket",
+      "anorak"
+     ]
+    },
+    {
+     "any": [
+      "shearling",
+      "sherpa"
+     ],
+     "material_none": [
+      "denim"
+     ]
+    }
+   ],
+   "note": "Hip-length / boxy cut with room in the body: goes over a bulky or relaxed knit."
+  },
+  "waist_casual_jacket": {
+   "slot": "outer",
+   "or": [
+    {
+     "any": [
+      "denim jacket",
+      "trucker",
+      "jean jacket",
+      "bomber",
+      "varsity",
+      "letterman",
+      "corduroy jacket",
+      "cord jacket"
+     ],
+     "none": [
+      "field jacket"
+     ]
+    },
+    {
+     "any": [
+      "suede",
+      "leather"
+     ],
+     "none": [
+      "field jacket",
+      "bomber",
+      "shearling",
+      "loafer",
+      "sneaker"
+     ]
+    },
+    {
+     "any": [
+      "shearling",
+      "sherpa"
+     ],
+     "material_any": [
+      "denim"
+     ]
+    }
+   ],
+   "note": "Waist-length, rib or band hem (trucker, bomber, varsity, cord/suede jacket of unknown cut, sherpa trucker): over a chunky knit only when the knit is regular fit."
+  },
+  "close_light_jacket": {
+   "slot": "outer",
+   "any": [
+    "zip jacket",
+    "harrington",
+    "blouson",
+    "overshirt",
+    "shirt-jacket",
+    "shirt jacket",
+    "coach jacket",
+    "windbreaker"
+   ],
+   "none": [
+    "knit"
+   ],
+   "note": "Light, close-cut shell or shirt-jacket: never over a chunky knit."
+  },
+  "mid_layer": {
+   "slot": "any",
+   "or": [
+    {
+     "any": [
+      "cardigan",
+      "fleece",
+      "vest",
+      "gilet",
+      "zip sweater",
+      "zip-up knit",
+      "zip jumper"
+     ]
+    }
+   ],
+   "note": "Knit/fleece/vest layers. Filed as outerwear they are still MID (slot_of), never count as a jacket."
+  },
+  "outerwear_weight_mid": {
+   "slot": "mid",
+   "or": [
+    {
+     "any": [
+      "cardigan",
+      "fleece",
+      "vest",
+      "gilet"
+     ],
+     "warmth_min": 4
+    }
+   ],
+   "note": "Cream cable-knit cardigan, Cream printed fleece pullover, Grey herringbone puffer vest."
+  },
+  "chunky_knit": {
+   "slot": "any",
+   "or": [
+    {
+     "any": [
+      "cable",
+      "chunky",
+      "fisherman",
+      "aran",
+      "oversized",
+      "shawl",
+      "heavy knit",
+      "heavyweight knit",
+      "boucle",
+      "bouclé",
+      "mohair",
+      "fair isle",
+      "fairisle",
+      "textured sweater",
+      "popcorn",
+      "waffle knit",
+      "lopi",
+      "nordic"
+     ],
+     "none": [
+      "polo",
+      "knit shirt"
+     ]
+    },
+    {
+     "any": [
+      "sweater",
+      "knit",
+      "cardigan",
+      "jumper"
+     ],
+     "warmth_min": 4,
+     "none": [
+      "polo",
+      "knit shirt",
+      "sweatshirt",
+      "fleece"
+     ]
+    },
+    {
+     "any": [
+      "sweater",
+      "cardigan",
+      "jumper",
+      "half-zip sweater"
+     ],
+     "fit_any": [
+      "relaxed",
+      "oversized"
+     ],
+     "none": [
+      "polo",
+      "sweatshirt",
+      "fleece"
+     ]
+    }
+   ],
+   "note": "Chunky = a chunky keyword, OR a knit rated warmth >= 4, OR a relaxed/oversized-fit sweater (bulk at the armhole/chest). Joe's live chunky tops: Grey knit sweater (Acne, relaxed, 4), Black/Brown/Cream cable-knit sweaters, Beige cable-knit half-zip, Cream fair isle half-zip, Beige ribbed (4), Beige textured (4), Blue ivory diamond knit (relaxed), Cream ribbed half-zip (relaxed), Cream cable-knit cardigan (mid)."
+  },
+  "fine_knit": {
+   "slot": "any",
+   "or": [
+    {
+     "any": [
+      "merino",
+      "cashmere",
+      "fine knit",
+      "fine-gauge",
+      "fine gauge",
+      "silk knit",
+      "turtleneck",
+      "rollneck",
+      "roll-neck",
+      "roll neck",
+      "mock neck",
+      "mock-neck sweater",
+      "knit polo",
+      "ribbed polo",
+      "collared sweater",
+      "polo sweater",
+      "knit shirt"
+     ],
+     "none": [
+      "sweatshirt",
+      "fleece",
+      "cable",
+      "chunky"
+     ]
+    },
+    {
+     "any": [
+      "polo"
+     ],
+     "material_any": [
+      "knit"
+     ],
+     "none": [
+      "polo bear"
+     ]
+    },
+    {
+     "any": [
+      "crewneck sweater",
+      "knit sweater",
+      "crew knit",
+      "v-neck",
+      "sweater",
+      "gradient"
+     ],
+     "warmth_max": 3,
+     "fit_none": [
+      "relaxed",
+      "oversized"
+     ],
+     "none": [
+      "cable",
+      "fair isle",
+      "diamond",
+      "zip",
+      "cardigan",
+      "sweatshirt",
+      "fleece",
+      "hoodie",
+      "shawl"
+     ]
+    }
+   ],
+   "note": "Fine/mid-gauge whitelist: fine-gauge keywords, knit polos/collared sweaters/knit shirts, or a plain crew/knit sweater that is regular fit and warmth <= 3 (Beige crewneck, Beige knit, Beige gradient, Navy R sweater, Burgundy collared sweater, Brown knit polo, Pale yellow ribbed polo, Green herringbone knit shirt)."
+  },
+  "zip_knit": {
+   "slot": "any",
+   "any": [
+    "zip sweater",
+    "zip-up knit",
+    "half-zip sweater",
+    "quarter-zip sweater",
+    "zip jumper",
+    "half-button",
+    "zip jacket"
+   ],
+   "material_any": [
+    "knit",
+    "ribbed knit",
+    "wool",
+    "cashmere",
+    "merino"
+   ],
+   "none": [
+    "fleece",
+    "sweatshirt"
+   ]
+  },
+  "athletic_layer": {
+   "slot": "any",
+   "any": [
+    "hoodie",
+    "sweatshirt",
+    "fleece",
+    "track",
+    "puffer",
+    "vest",
+    "gilet",
+    "quarter-zip",
+    "half-zip fleece",
+    "half-zip sweatshirt",
+    "jersey",
+    "windbreaker"
+   ],
+   "none": [
+    "quarter-zip sweater",
+    "half-zip sweater"
+   ],
+   "note": "Never under a sport coat: hoodie, sweatshirt (incl. quarter-zip sweatshirts), fleece, track top, puffer/vest/gilet."
+  },
+  "tee_plain": {
+   "slot": "top",
+   "any": [
+    "t-shirt",
+    "tee"
+   ],
+   "none": [
+    "logo",
+    "graphic",
+    "print",
+    "polo"
+   ]
+  },
+  "tee_graphic": {
+   "slot": "top",
+   "any": [
+    "logo t-shirt",
+    "logo tee",
+    "graphic",
+    "print tee",
+    "printed t-shirt",
+    "band tee"
+   ],
+   "none": [
+    "button",
+    "polo"
+   ]
+  },
+  "henley": {
+   "slot": "top",
+   "any": [
+    "henley",
+    "serafino",
+    "waffle"
+   ]
+  },
+  "cardigan": {
+   "slot": "any",
+   "any": [
+    "cardigan"
+   ]
+  },
+  "shirt_ok_under_tailoring": {
+   "slot": "top",
+   "or": [
+    {
+     "any": [
+      "shirt",
+      "button-up",
+      "button-down",
+      "oxford",
+      "dress shirt",
+      "gingham",
+      "chambray",
+      "denim shirt",
+      "flannel"
+     ],
+     "none": [
+      "t-shirt",
+      "sweatshirt",
+      "overshirt",
+      "camp",
+      "bowling",
+      "knit shirt"
+     ]
+    }
+   ]
+  },
+  "polo_any": {
+   "slot": "top",
+   "any": [
+    "polo"
+   ],
+   "none": [
+    "polo bear"
+   ]
+  },
+  "resort_shirt": {
+   "slot": "top",
+   "any": [
+    "camp",
+    "bowling",
+    "hawaiian",
+    "cuban"
+   ]
+  },
+  "denim_bottom": {
+   "slot": "bottom",
+   "or": [
+    {
+     "any": [
+      "jean",
+      "denim"
+     ]
+    },
+    {
+     "material_any": [
+      "denim"
+     ]
+    }
+   ]
+  },
+  "distressed_or_frayed": {
+   "slot": "bottom",
+   "any": [
+    "distressed",
+    "ripped",
+    "destroyed",
+    "frayed",
+    "raw hem",
+    "raw-hem"
+   ]
+  },
+  "knit_lounge_pant": {
+   "slot": "bottom",
+   "or": [
+    {
+     "any": [
+      "track",
+      "fleece",
+      "sweatpant",
+      "jogger",
+      "ribbed pants",
+      "knit pants",
+      "lounge"
+     ]
+    },
+    {
+     "material_any": [
+      "ribbed knit",
+      "fleece",
+      "jersey"
+     ]
+    }
+   ]
+  },
+  "dress_shoe_ok": {
+   "slot": "shoe",
+   "any": [
+    "loafer",
+    "moccasin",
+    "penny",
+    "derby",
+    "oxford",
+    "chukka",
+    "boot",
+    "monk",
+    "brogue"
+   ],
+   "none": [
+    "sneaker"
+   ]
+  },
+  "mule": {
+   "slot": "shoe",
+   "any": [
+    "mule",
+    "slide",
+    "slipper"
+   ]
+  }
+ },
+ "formality_scale": {
+  "outer": {
+   "5": "structured sport coat (navy, DB)",
+   "4": "soft sport coat (taupe, cord blazer); overcoat",
+   "3": "suede/leather, corduroy, wool plaid, shearling jacket",
+   "2": "field, chore, trucker, varsity, zip blouson, overshirt",
+   "1": "toggle/parka/fleece/vest"
+  },
+  "top": {
+   "4": "dress shirt",
+   "3": "button-up/oxford, knit polo, LS polo, fine/mid-gauge knit",
+   "2": "chunky or zip knit, flannel/denim/printed shirt, henley, camp/bowling, short-sleeve polo",
+   "1": "tee, sweatshirt, hoodie, fleece"
+  },
+  "bottom": {
+   "4": "tailored (pleated, pinstripe, wool/woven trouser)",
+   "3": "cotton trousers/chinos, cords",
+   "2": "jeans (dark, light, ecru)",
+   "1": "distressed/frayed/white jeans, track/ribbed pants"
+  },
+  "shoe": {
+   "4": "leather/tassel/woven loafer",
+   "3": "suede loafer",
+   "2": "boot, mule, clean leather sneaker",
+   "1": "athletic/fashion/suede sneaker"
+  }
+ },
+ "cross_chip_layering_rules": [
+  {
+   "id": "JKT-LAY-1",
+   "name": "no_chunky_or_athletic_under_sport_coat",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "A sport coat/blazer never goes over a chunky/oversized knit (signal chunky_knit: cable, chunky, fisherman, aran, oversized, shawl, heavy knit, boucle, mohair, fair isle, textured sweater; OR any knit with warmth >= 4; OR a relaxed/oversized-fit sweater) or an athletic layer (hoodie, sweatshirt incl. quarter-zip sweatshirts, fleece, track top, puffer/vest/gilet). Applies to top AND mid. Supersedes the XC-TEX-2 pass test (Grey knit sweater + Taupe blazer), which is exactly screenshot card 1.",
+   "logic": {
+    "if": {
+     "slot": "outer",
+     "signal": "tailored"
+    },
+    "any_of": [
+     {
+      "slot": "top|mid",
+      "signal": "chunky_knit"
+     },
+     {
+      "slot": "top|mid",
+      "signal": "athletic_layer"
+     },
+     {
+      "slot": "top|mid",
+      "signal": "sweat_fleece_top"
+     }
+    ]
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_rvrs9hibr981",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "SCREENSHOT CARD 1: Acne grey knit (relaxed, warmth 4) under the Taupe blazer",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-1 hard: chunky/oversized knit Grey knit sweater under sport coat Taupe blazer"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_teitg9jmpwxa",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "Black cable-knit under the navy blazer",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-1 hard: chunky/oversized knit Black cable-knit sweater under sport coat Navy blazer"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_vzqle7zdtpis",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "prod ITALIANWINTER #1: relaxed diamond knit under the taupe blazer",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-1 hard: chunky/oversized knit Blue ivory diamond knit sweater under sport coat Taupe blazer"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "mid": "g_ef0u3ljnwa09",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "puffer vest under a blazer",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-1 hard: Grey herringbone puffer vest (athletic/sweat/fleece/vest) under Navy blazer"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_dsqnx6ckt81v",
+      "outer": "g_whgv0gu6m08l",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "Rhude quarter-zip sweatshirt under the cord blazer",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-1 hard: Beige quarter-zip sweatshirt (athletic/sweat/fleece/vest) under Beige corduroy blazer"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_bq9qnaa1vkon",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "Brown knit polo (fine) under the taupe blazer",
+     "result": "PASS",
+     "hits": []
+    },
+    {
+     "look": {
+      "top": "g_v2gxktsmsoov",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "Beige crewneck sweater (regular, warmth 3) = mid-gauge whitelist",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  },
+  {
+   "id": "JKT-LAY-2",
+   "name": "sport_coat_underlayer_whitelist",
+   "type": "underlayer_whitelist",
+   "target_file": "_cross_chip.json",
+   "description": "Under a sport coat: collared woven shirts (dress/oxford/button-up/gingham/denim/chambray/flannel), polos and knit polos, fine/mid-gauge knits (fine_knit). Plain tee or henley only under a SOFT sport coat (tailored_soft: Taupe, Beige cord) and only on Weekend/Travel (-5); on Weekday/Out -15; under a STRUCTURED coat (Navy, Ivory DB) hard. Graphic/logo tee hard. Zip knit -10 (Weekend/Travel -5; 0 in IW/Purple/545, house exception JKT-HX-1). Non-chunky cardigan as mid -10. Camp/bowling shirt under a sport coat outside spring/summer -10. Anything unrated -5.",
+   "logic": {
+    "if": {
+     "slot": "outer",
+     "signal": "tailored"
+    },
+    "ok": [
+     "shirt_ok_under_tailoring",
+     "polo_any",
+     "fine_knit"
+    ],
+    "tee_plain|henley": {
+     "tailored_soft": {
+      "weekend": -5,
+      "travel": -5,
+      "weekday": -15,
+      "out": -15
+     },
+     "tailored_structured": "hard"
+    },
+    "tee_graphic": "hard",
+    "zip_knit": {
+     "weekday": -10,
+     "out": -10,
+     "weekend": -5,
+     "travel": -5,
+     "house_exempt": [
+      "italianwinter",
+      "purple",
+      "545"
+     ]
+    },
+    "cardigan": -10,
+    "resort_shirt_outside_spring_summer": -10,
+    "unrated": -5
+   },
+   "severity": "mixed",
+   "tests": [
+    {
+     "look": {
+      "top": "g_mir3akjyhwnr",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "plain tee under the structured navy blazer",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-2 hard: tee/henley Light blue t-shirt under structured Navy blazer"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_mir3akjyhwnr",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -5",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "plain tee under the soft taupe blazer on a weekend",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-2 soft -5: plain tee/henley Light blue t-shirt under soft Taupe blazer (weekend)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_upplq59rp8lp",
+      "outer": "g_whgv0gu6m08l",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "Martine Rose logo tee under the cord blazer",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-2 hard: graphic/logo tee White logo t-shirt under a sport coat"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_z8gvd1zvrcif",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -10",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "brown zip knit under the navy blazer",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-2 soft -10: zip knit Brown knit zip sweater under Navy blazer reads sporty on weekday"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_z8gvd1zvrcif",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "house": "italianwinter",
+     "why": "same look in Italian Winter (JKT-HX-1)",
+     "result": "PASS",
+     "hits": []
+    },
+    {
+     "look": {
+      "top": "g_2rtuat7aheik",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "card-1 fix A1: light blue dress shirt under taupe",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  },
+  {
+   "id": "JKT-LAY-3",
+   "name": "sport_coat_bottoms",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "With a sport coat: wool/flannel/pleated trousers, chinos/cotton trousers and cords are fine. Jeans only DARK and clean (denim_wash >= 3). Light-wash, white, striped, distressed/frayed jeans: hard. Ecru or mid-wash clean jeans: -10 on Weekend/Travel, hard on Weekday/Out. Track/fleece/ribbed-knit lounge pants: hard.",
+   "logic": {
+    "if": {
+     "slot": "outer",
+     "signal": "tailored"
+    },
+    "bottom": {
+     "knit_lounge_pant": "hard",
+     "distressed_or_frayed": "hard",
+     "denim_white_or_striped": "hard",
+     "denim_wash": {
+      "3_dark": "ok",
+      "2_mid": {
+       "weekend": -10,
+       "travel": -10,
+       "weekday": "hard",
+       "out": "hard"
+      },
+      "1_light": "hard",
+      "0_ecru": {
+       "weekend": -10,
+       "travel": -10,
+       "weekday": "hard",
+       "out": "hard"
+      }
+     }
+    }
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_rvrs9hibr981",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "SCREENSHOT CARD 1: light-wash jeans under the taupe blazer",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-3 hard: light-wash jean Light blue jeans with a sport coat"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_reesb6nbrmm4",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_j994h3k9l8ot",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "soft -10",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "navy blazer + cream straight-leg jean on a weekend",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-3 soft -10: ecru jean Cream straight-leg jeans with a sport coat (weekend)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_reesb6nbrmm4",
+      "outer": "g_98p2sivflrxg",
+      "bottom": "g_j994h3k9l8ot",
+      "shoe": "g_5g4fqg77s4rw"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "out",
+      "season": "fall"
+     },
+     "why": "OUT_IVORY_DB_DENIM on Out with ecru jeans",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-3 hard: ecru jean Cream straight-leg jeans with a sport coat on out"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_zw51yaqdsx0q",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "white distressed jeans",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-3 hard: distressed/frayed White distressed jeans with a sport coat"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_lg5qftegw0qo",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "frayed-hem pants",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-3 hard: distressed/frayed Brown frayed-hem pants with a sport coat"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "navy denim trousers (dark, clean)",
+     "result": "PASS",
+     "hits": []
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "cords",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  },
+  {
+   "id": "JKT-LAY-4",
+   "name": "sport_coat_shoes",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "With a sport coat: loafers, derbies, suede chukkas, dress boots OK. Athletic/fashion sneakers (GG, Gucci, NB, Nike, suede sneakers) hard (as XC-TEX-2). Clean white/cream leather sneaker: Weekend/Travel -5, Weekday/Out hard (tightens XC-TEX-2, which gave -5 everywhere). Mules -10 (-5 in summer).",
+   "logic": {
+    "if": {
+     "slot": "outer",
+     "signal": "tailored"
+    },
+    "shoe": {
+     "athletic_or_fashion_sneaker": "hard",
+     "clean_leather_sneaker": {
+      "weekend": -5,
+      "travel": -5,
+      "weekday": "hard",
+      "out": "hard"
+     },
+     "mule": {
+      "default": -10,
+      "summer": -5
+     }
+    }
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_9q0j6ksxlgcv"
+     },
+     "expected": "soft -5",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "navy blazer + clean white sneaker on a weekend",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-4 soft -5: clean leather sneaker White leather sneakers with a sport coat (weekend)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_9q0j6ksxlgcv"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "same on a weekday",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-4 hard: sneaker White leather sneakers with a sport coat on weekday"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_fzekzikyrf50"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "navy suede sneakers",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-4 hard: athletic/fashion sneaker Navy suede sneakers with a sport coat"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_wymz2j18s6wh"
+     },
+     "expected": "soft -10",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "mules under a sport coat in fall",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-4 soft -10: mule Brown suede mules with a sport coat"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "boots with a blazer + dark denim",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  },
+  {
+   "id": "JKT-LAY-5",
+   "name": "casual_jacket_over_chunky_knit",
+   "type": "fit_layering",
+   "target_file": "_cross_chip.json",
+   "description": "Over a chunky knit (top or mid): ROOMY casual jackets/coats (chore, field incl. the REISS suede field jacket, wool plaid jacket, shearling bomber, toggle, parka, any overcoat) = OK. WAIST-length jackets (denim trucker, bomber, varsity, corduroy jacket, suede jacket of unknown cut, sherpa trucker) = OK only when the knit is regular fit; over a relaxed/oversized chunky knit the knit hangs below the rib/band hem = hard. CLOSE/LIGHT jackets (zip blouson, overshirt/shirt-jacket, anything warmth <= 2) = hard over any chunky knit.",
+   "logic": {
+    "if": {
+     "slot": "outer",
+     "class": [
+      "b_casual",
+      "c_outer_coat"
+     ]
+    },
+    "under": {
+     "slot": "top|mid",
+     "signal": "chunky_knit"
+    },
+    "cut": {
+     "roomy_casual_jacket": "ok",
+     "waist_casual_jacket": {
+      "knit_fit_regular": "ok",
+      "knit_fit_relaxed_or_oversized": "hard"
+     },
+     "close_light_jacket_or_warmth_le_2": "hard"
+    }
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "outer": "g_8od90wk1sl9k",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "suede bomber over the relaxed Acne knit",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-5 hard: waist-length Brown suede bomber jacket over relaxed/oversized chunky Grey knit sweater (knit hangs below the hem)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_teitg9jmpwxa",
+      "outer": "g_py2swfwot1ed",
+      "bottom": "g_rvrs9hibr981",
+      "shoe": "g_yae8h1k9pjm1"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "prod ITALIANWINTER #5: waist-length suede jacket over a relaxed black cable",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-5 hard: waist-length Brown suede jacket over relaxed/oversized chunky Black cable-knit sweater (knit hangs below the hem)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_teitg9jmpwxa",
+      "outer": "g_ed0ga2v0q2yo",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "light zip blouson over a chunky cable",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-5 hard: light close-cut Beige zip jacket over chunky Black cable-knit sweater"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "outer": "g_1pg9y05mlkek",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "card-1 fix B1: REISS suede FIELD jacket (roomy) over the Acne knit",
+     "result": "PASS",
+     "hits": []
+    },
+    {
+     "look": {
+      "top": "g_salzdhuswyd3",
+      "outer": "g_vtbi91noucd3",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "regular-fit brown cable under a denim trucker",
+     "result": "PASS",
+     "hits": []
+    },
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "outer": "g_wwy9b2pusds3",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "winter"
+     },
+     "why": "shearling bomber over the Acne knit in winter",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  },
+  {
+   "id": "JKT-LAY-6",
+   "name": "mid_layers_are_not_jackets",
+   "type": "slot_rule",
+   "target_file": "_cross_chip.json",
+   "description": "Knits filed as outerwear (Cream cable-knit cardigan, Cream printed fleece pullover, Grey herringbone puffer vest, Blue zip-up knit jacket, Navy ribbed zip sweater) are MID layers: they may be the only upper layer, they go UNDER a jacket, and they never satisfy JKT-COV-1. Puffer vest / fleece never under tailoring (JKT-LAY-1). A vest or cardigan under a casual jacket is fine (chunky cardigan follows JKT-LAY-5).",
+   "logic": {
+    "mid_ids": [
+     "g_xc4gr022xmvm",
+     "g_k0mfejxiu5f8",
+     "g_ef0u3ljnwa09",
+     "g_j2id379jo424",
+     "g_hhbz4ghpjmd1"
+    ],
+    "signal": "mid_layer",
+    "counts_for_coverage": false
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "mid": "g_j2id379jo424",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "SCREENSHOT CARD 3: the blue zip knit is a mid, so the card has no jacket (checked via JKT-COV-1)",
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-1 hard: Weekday/fall: no jacket or coat (mid knits do not count)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_2b6fao81vqrs",
+      "mid": "g_ef0u3ljnwa09",
+      "outer": "g_8qqqzpwxuwti",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "winter"
+     },
+     "why": "flannel + puffer vest + chore coat",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  },
+  {
+   "id": "JKT-LAY-7",
+   "name": "faux_suit_casual",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "A casual jacket and trouser in the same fabric AND the same dominant colour (navy cord jacket + navy cords) read as an odd suit: -10.",
+   "logic": {
+    "outer_material_eq_bottom_material": [
+     "corduroy",
+     "cotton",
+     "wool",
+     "suede",
+     "linen"
+    ],
+    "dominant_colour_equal": true
+   },
+   "severity": "soft",
+   "delta": -10,
+   "tests": [
+    {
+     "look": {
+      "mid": "g_j2id379jo424",
+      "outer": "g_x4adkv9zu9yu",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "soft -10",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-7 soft -10: Navy/black corduroy jacket + Navy corduroy trousers: same fabric and colour reads as an odd suit"
+     ]
+    },
+    {
+     "look": {
+      "mid": "g_j2id379jo424",
+      "outer": "g_8qqqzpwxuwti",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "card-3 fix: brown chore over navy cords",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  }
+ ],
+ "cross_chip_formality_rules": [
+  {
+   "id": "JKT-FORM-1",
+   "name": "formality_spread_by_occasion",
+   "type": "formality",
+   "target_file": "_cross_chip.json",
+   "description": "Score every piece 1-5 (formality_scale). Max spread (max - min) per occasion: Weekday 2, Out 2, Weekend 3, Travel 3, Comfy 2. Spread = max+1: -10; spread >= max+2: hard. Occasion gates: no sport coat on Comfy (hard); on Out a technical jacket (score 1) -15 and a utility jacket (score 2) -5; on Weekday a technical jacket -10.",
+   "logic": {
+    "formality_scale": {
+     "outer": {
+      "5": "structured sport coat (navy, DB)",
+      "4": "soft sport coat (taupe, cord blazer); overcoat",
+      "3": "suede/leather, corduroy, wool plaid, shearling jacket",
+      "2": "field, chore, trucker, varsity, zip blouson, overshirt",
+      "1": "toggle/parka/fleece/vest"
+     },
+     "top": {
+      "4": "dress shirt",
+      "3": "button-up/oxford, knit polo, LS polo, fine/mid-gauge knit",
+      "2": "chunky or zip knit, flannel/denim/printed shirt, henley, camp/bowling, short-sleeve polo",
+      "1": "tee, sweatshirt, hoodie, fleece"
+     },
+     "bottom": {
+      "4": "tailored (pleated, pinstripe, wool/woven trouser)",
+      "3": "cotton trousers/chinos, cords",
+      "2": "jeans (dark, light, ecru)",
+      "1": "distressed/frayed/white jeans, track/ribbed pants"
+     },
+     "shoe": {
+      "4": "leather/tassel/woven loafer",
+      "3": "suede loafer",
+      "2": "boot, mule, clean leather sneaker",
+      "1": "athletic/fashion/suede sneaker"
+     }
+    },
+    "spread_max": {
+     "weekday": 2,
+     "out": 2,
+     "weekend": 3,
+     "travel": 3,
+     "comfy": 2
+    },
+    "over_by_1": -10,
+    "over_by_2_plus": "hard",
+    "comfy_tailored": "hard",
+    "out_outer_score_1": -15,
+    "out_outer_score_2": -5,
+    "weekday_outer_score_1": -10
+   },
+   "severity": "mixed",
+   "tests": [
+    {
+     "look": {
+      "top": "g_mir3akjyhwnr",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_nq7il0e0glnn"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "comfy",
+      "season": "fall"
+     },
+     "why": "sport coat on Comfy",
+     "result": "PASS",
+     "hits": [
+      "JKT-FORM-1 hard: sport coat on Comfy",
+      "JKT-FORM-1 soft -10: formality spread 3 (scores [4, 1, 2, 1]) > 2 on comfy"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_upplq59rp8lp",
+      "outer": "g_8qqqzpwxuwti",
+      "bottom": "g_dscxzk8inlx2",
+      "shoe": "g_yae8h1k9pjm1"
+     },
+     "expected": "soft -10",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "logo tee (1) + pinstripe (4) + tassel loafer (4): spread 3",
+     "result": "PASS",
+     "hits": [
+      "JKT-FORM-1 soft -10: formality spread 3 (scores [2, 1, 4, 4]) > 2 on weekday"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_5gfabeezh485",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "soft -25",
+     "context": {
+      "occasion": "out",
+      "season": "fall"
+     },
+     "why": "TNF toggle (1) with wool trousers and loafers (4) at dinner: spread 3 (-10) + technical outer (-15)",
+     "result": "PASS",
+     "hits": [
+      "JKT-FORM-1 soft -10: formality spread 3 (scores [1, 3, 4, 4]) > 2 on out",
+      "JKT-FORM-1 soft -15: technical/outdoor White beige toggle jacket at dinner"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "out",
+      "season": "fall"
+     },
+     "why": "white shirt / navy blazer / grey wool / loafers",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  },
+  {
+   "id": "JKT-FORM-2",
+   "name": "casual_jacket_trouser_coherence",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "A denim trucker, varsity or technical jacket over a tailored/pleated trouser mixes workwear with dress: -10.",
+   "logic": {
+    "if": {
+     "slot": "outer",
+     "any": [
+      "denim jacket",
+      "trucker",
+      "jean jacket",
+      "varsity",
+      "letterman",
+      "toggle",
+      "parka",
+      "anorak"
+     ],
+     "or_material": "denim"
+    },
+    "bottom_signal": "tailored_trouser"
+   },
+   "severity": "soft",
+   "delta": -10,
+   "tests": [
+    {
+     "look": {
+      "top": "g_xbt3gpjuo1p4",
+      "outer": "g_vtbi91noucd3",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -10",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "result": "PASS",
+     "hits": [
+      "JKT-FORM-2 soft -10: Light Blue denim jacket (trucker/varsity/technical) over dress trouser Light grey pleated trousers"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_xbt3gpjuo1p4",
+      "outer": "g_1pg9y05mlkek",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "card-2 fix: suede field jacket",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  }
+ ],
+ "cross_chip_coverage_rules": [
+  {
+   "id": "JKT-COV-1",
+   "name": "jacket_required_fall_winter",
+   "type": "requires_outer",
+   "target_file": "_cross_chip.json",
+   "description": "A jacket or coat (class a/b/c; MID knits do not count) is REQUIRED on Weekday and Out in Fall and Winter (hard; supersedes XC-TEX-8 soft branch and generalises POLO-P7/PL-P1/IW-P1). WEEKEND (decision): Winter hard; Fall soft -15 when missing, reduced to -5 when the top/mid is a heavy chunky knit (warmth >= 4), waived (0) when the look has an outerwear-weight MID (cable cardigan, fleece pullover, puffer vest). Travel: Winter hard, Fall -10. Comfy: optional. Spring/Summer: optional. Weather override (optional, if the app passes live temp): >= 72F turns the Weekday/Out hard into -10.",
+   "logic": {
+    "counts_as_outer": [
+     "a_tailored",
+     "b_casual",
+     "c_outer_coat"
+    ],
+    "weekday": {
+     "fall": "hard",
+     "winter": "hard"
+    },
+    "out": {
+     "fall": "hard",
+     "winter": "hard"
+    },
+    "weekend": {
+     "winter": "hard",
+     "fall": {
+      "default": -15,
+      "heavy_chunky_knit_warmth_ge_4": -5,
+      "outerwear_weight_mid": 0
+     }
+    },
+    "travel": {
+     "winter": "hard",
+     "fall": -10
+    },
+    "comfy": "optional",
+    "spring": "optional",
+    "summer": "optional",
+    "weather_override_f": {
+     "temp_ge": 72,
+     "weekday_out_becomes": -10
+    }
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_xbt3gpjuo1p4",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_rxglifsoqobm"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "SCREENSHOT CARD 2: burgundy collared sweater, no jacket",
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-1 hard: Weekday/fall: no jacket or coat (mid knits do not count)"
+     ]
+    },
+    {
+     "look": {
+      "mid": "g_j2id379jo424",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "SCREENSHOT CARD 3: blue zip knit (mid) + navy cords + boots, no jacket",
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-1 hard: Weekday/fall: no jacket or coat (mid knits do not count)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_xbt3gpjuo1p4",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_rxglifsoqobm"
+     },
+     "expected": "soft -15",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "card 2 if it was a weekend card",
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-1 soft -15: Weekend/fall: no jacket (strongly preferred)"
+     ]
+    },
+    {
+     "look": {
+      "mid": "g_j2id379jo424",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "out",
+      "season": "fall"
+     },
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-1 hard: Out/fall: no jacket or coat (mid knits do not count)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_reesb6nbrmm4",
+      "bottom": "g_gyc76ur3ikb9",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "out",
+      "season": "fall"
+     },
+     "why": "prod FALONI Out #1 (was XC-TEX-8 soft)",
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-1 hard: Out/fall: no jacket or coat (mid knits do not count)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -5",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "heavy Acne knit carries a fall weekend",
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-1 soft -5: Weekend/fall: no jacket, heavy knit (warmth 4) carries it"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "mid": "g_xc4gr022xmvm",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "white shirt under the cable cardigan (outerwear-weight mid)",
+     "result": "PASS",
+     "hits": []
+    },
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekend",
+      "season": "winter"
+     },
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-1 hard: Weekend/winter: no jacket or coat"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "travel",
+      "season": "winter"
+     },
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-1 hard: Travel/winter: no jacket or coat"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_7iyagp6doqqz",
+      "bottom": "g_mjno2x20podx",
+      "shoe": "g_9q0j6ksxlgcv"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "comfy",
+      "season": "winter"
+     },
+     "result": "PASS",
+     "hits": []
+    },
+    {
+     "look": {
+      "top": "g_xbt3gpjuo1p4",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8ukg5mi9r3fc",
+      "outer": "g_1pg9y05mlkek"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "card-2 fix",
+     "result": "PASS",
+     "hits": []
+    },
+    {
+     "look": {
+      "mid": "g_j2id379jo424",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_8qqqzpwxuwti"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "card-3 fix",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  },
+  {
+   "id": "JKT-COV-2",
+   "name": "winter_outer_weight",
+   "type": "winter_outer_weight",
+   "target_file": "_cross_chip.json",
+   "description": "Winter: a LIGHT outer (denim trucker, zip blouson, overshirt, mint field) with no mid = -15 (extends RRL-P7 to every house). A non-heavy outer with top+mid+outer warmth < 6 = -10 (Joe owns no overcoat; a blazer over a knit polo is under-dressed outdoors).",
+   "logic": {
+    "seasons": [
+     "winter"
+    ],
+    "light_outer_no_mid": -15,
+    "warmth_sum_min": 6,
+    "warmth_sum_delta": -10,
+    "heavy_outer_exempt": true
+   },
+   "severity": "soft",
+   "tests": [
+    {
+     "look": {
+      "top": "g_teatot7o1lst",
+      "outer": "g_vtbi91noucd3",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "soft -15",
+     "context": {
+      "occasion": "weekday",
+      "season": "winter"
+     },
+     "why": "prod RRL Weekday/Winter #1",
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-2 soft -15: light outer Light Blue denim jacket alone in winter (add a vest/cardigan/zip knit or use a heavier jacket)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_teatot7o1lst",
+      "outer": "g_wwy9b2pusds3",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_b4zsf3dfrhdv"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "winter"
+     },
+     "result": "PASS",
+     "hits": []
+    },
+    {
+     "look": {
+      "top": "g_bq9qnaa1vkon",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -10",
+     "context": {
+      "occasion": "weekday",
+      "season": "winter"
+     },
+     "why": "knit polo (3) + blazer (2) = 5",
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-2 soft -10: winter upper warmth 5 < 6 with Navy blazer (Joe owns no overcoat)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "JKT-COV-3",
+   "name": "jacket_season_eligibility",
+   "type": "season_piece",
+   "target_file": "_cross_chip.json",
+   "description": "Heavy outers (shearling/sherpa, warmth >= 4): hard in spring/summer, -5 in fall (late-fall piece). Pastel outer (mint) in winter -10. Per-plate seasons are in 2026-09-30-jacket-classification.json and are used by the picker.",
+   "logic": {
+    "heavy": {
+     "spring": "hard",
+     "summer": "hard",
+     "fall": -5
+    },
+    "pastel_outer_winter": -10,
+    "plate_seasons": "2026-09-30-jacket-classification.json"
+   },
+   "severity": "mixed",
+   "tests": [
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_wwy9b2pusds3",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekend",
+      "season": "summer"
+     },
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-3 hard: heavy Brown shearling bomber jacket in summer"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_wwy9b2pusds3",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "soft -5",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "result": "PASS",
+     "hits": [
+      "JKT-COV-3 soft -5: heavy Brown shearling bomber jacket in fall (late-fall piece)"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_pa7kfg14rtzl",
+      "outer": "g_sb0mc7s7v346",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  }
+ ],
+ "row_level_rules": [
+  {
+   "id": "JKT-ROT-1",
+   "target_file": "_cross_chip.json",
+   "type": "row_jacket_cap",
+   "description": "Inside one chip row: a jacket plate at most 2x per 8-card row and at most 1x in the top-3. Brown-suede family (g_1pg9y05mlkek, g_py2swfwot1ed, g_8od90wk1sl9k; T17 suede bridge cap) at most 1 per 6 consecutive looks (so <= 2 per 8-card row) and at most 1 in the top-3. Shearling bomber counts on its own.",
+   "logic": {
+    "per_plate_row_max": 2,
+    "per_plate_top3_max": 1,
+    "brown_suede_family": [
+     "g_1pg9y05mlkek",
+     "g_py2swfwot1ed",
+     "g_8od90wk1sl9k"
+    ],
+    "family_per_6_looks": 1,
+    "family_top3_max": 1
+   },
+   "severity": "hard (row builder demotes the later card to its next valid jacket)",
+   "tests": [
+    {
+     "context": "all sim contexts",
+     "check": "AFTER picker",
+     "expected": "no violations"
+    }
+   ]
+  },
+  {
+   "id": "JKT-ROT-2",
+   "target_file": "_cross_chip.json",
+   "type": "cross_chip_jacket_cap",
+   "description": "Across all house chips' top-3 in one context: one jacket plate in at most 2 chips (mirrors XC-REP-1); brown-suede family in at most 3 chips.",
+   "logic": {
+    "max_chips_per_jacket": 2,
+    "max_chips_brown_suede_family": 3,
+    "scope": "top-3 of every house chip, one occasion+season"
+   },
+   "severity": "hard (weaker chip re-picks)",
+   "tests": [
+    {
+     "context": "all sim contexts",
+     "check": "AFTER picker",
+     "expected": "no violations"
+    }
+   ]
+  },
+  {
+   "id": "JKT-ROT-3",
+   "target_file": "_cross_chip.json",
+   "type": "overuse_penalty",
+   "description": "Rotation: for each context, mean = jacket cards / season-eligible jackets. A jacket already used more than the mean takes -5 per use above the mean when ranking the next card; a never-used eligible jacket gets +4.",
+   "logic": {
+    "penalty_per_use_above_mean": -5,
+    "unused_bonus": 4
+   },
+   "severity": "soft",
+   "tests": [
+    {
+     "check": "simulation distinct jackets",
+     "expected": "every season-eligible jacket used at least once across fall/winter house rows"
+    }
+   ]
+  },
+  {
+   "id": "JKT-ROT-4",
+   "target_file": "_cross_chip.json",
+   "type": "coverage_release_check",
+   "description": "Release check: across the Fall and Winter house rows, every season-eligible jacket that is in at least one allowed_jackets list appears at least once. Missing plates are listed in the release report.",
+   "logic": {
+    "scope": "fall+winter contexts, house rows",
+    "min_uses_per_eligible_jacket": 1
+   },
+   "severity": "soft (release check)",
+   "tests": [
+    {
+     "check": "simulation",
+     "expected": "missing = []"
+    }
+   ]
+  },
+  {
+   "id": "JKT-DATA-1",
+   "target_file": "closet_meta (data fix, needs Joe OK)",
+   "type": "recategorise",
+   "description": "Recategorise Khaki varsity g_j5og5jmzh5tx top -> outerwear / subtype \"varsity jacket\". Keep Light blue denim overshirt g_v7uvadckh79p as top but flag outer_eligible. Blue zip-up knit jacket g_j2id379jo424: subtype \"zip jacket\" -> \"zip-up knit\" so no builder treats it as a jacket. Confirm the cut of Navy brown plaid jacket, Navy/black corduroy jacket, Brown suede jacket g_py2swfwot1ed and the TNF toggle jacket (fit field is blank or \"regular\").",
+   "logic": {
+    "recategorise": {
+     "g_j5og5jmzh5tx": {
+      "category": "outerwear",
+      "subtype": "varsity jacket",
+      "why": "Khaki varsity is a varsity jacket filed as a top (blank subtype/material)."
+     },
+     "g_v7uvadckh79p": {
+      "category": "top",
+      "subtype": "overshirt",
+      "outer_eligible": true,
+      "why": "Light blue denim overshirt: shirt-jacket, dual use (top, or a light outer over a tee/henley/fine knit)."
+     }
+    }
+   },
+   "severity": "info",
+   "tests": [
+    {
+     "look": {
+      "top": "g_j5og5jmzh5tx",
+      "bottom": "g_6xkkzn06sbdm",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "flag: jacket used as the only top (prod PURPLE Weekend #2)",
+     "result": "PASS"
+    }
+   ]
+  }
+ ],
+ "per_house_additions": [
+  {
+   "id": "JKT-HX-1",
+   "house": "italianwinter, purple, 545",
+   "type": "layering_exception",
+   "severity": "soft",
+   "description": "Italian zip-knit-under-blazer (Brunello/Cucinelli): a non-fleece, regular-fit zip knit under a sport coat is 0 instead of -10 in these houses.",
+   "tests": [
+    {
+     "look": {
+      "top": "g_z8gvd1zvrcif",
+      "outer": "g_5josnvyoi4z9",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "expected": "pass",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "house": "italianwinter",
+     "result": "PASS",
+     "hits": []
+    }
+   ]
+  },
+  {
+   "id": "RRL-JKT-A1",
+   "house": "rrl",
+   "type": "allowed_jackets_update",
+   "target_file": "house-profiles/rrl.json",
+   "add_joe_plate_ids": [
+    {
+     "id": "g_v7uvadckh79p",
+     "name": "Light blue denim overshirt"
+    }
+   ],
+   "description": "Light blue denim overshirt as a light work outer over a tee/henley (XC-DEN-1 applies). No ban conflict.",
+   "note": "No ban conflict."
+  },
+  {
+   "id": "POLO-JKT-A1",
+   "house": "polo",
+   "type": "allowed_jackets_update",
+   "target_file": "house-profiles/polo.json",
+   "add_joe_plate_ids": [
+    {
+     "id": "g_j5og5jmzh5tx",
+     "name": "Khaki varsity"
+    }
+   ],
+   "description": "Khaki varsity: collegiate prep jacket. No ban conflict.",
+   "note": "No ban conflict."
+  },
+  {
+   "id": "ALD-JKT-A1",
+   "house": "ald",
+   "type": "allowed_jackets_update",
+   "target_file": "house-profiles/ald.json",
+   "add_joe_plate_ids": [
+    {
+     "id": "g_j5og5jmzh5tx",
+     "name": "Khaki varsity"
+    },
+    {
+     "id": "g_v7uvadckh79p",
+     "name": "Light blue denim overshirt"
+    }
+   ],
+   "description": "Khaki varsity (collegiate street jacket, matches ALD collegiate_top) and Light blue denim overshirt as a light outer (XC-DEN-1 applies). No ban conflict.",
+   "note": "No ban conflict."
+  },
+  {
+   "id": "FALONI-JKT-A1",
+   "house": "faloni",
+   "type": "allowed_jackets_update",
+   "target_file": "house-profiles/faloni.json",
+   "add_joe_plate_ids": [
+    {
+     "id": "g_wwy9b2pusds3",
+     "name": "Brown shearling bomber jacket",
+     "seasons": [
+      "winter"
+     ]
+    }
+   ],
+   "description": "THIN in fall/winter: 7 jackets, 3 brown-suede family, 3 blazers, 1 light zip; nothing heavy. Add the Brown shearling bomber (brown/cream = Faloni palette) for winter only. Requires amending FAL-B4 (bans shearling) for winter only. Joe must approve.",
+   "note": "Requires amending FAL-B4 (bans shearling) for winter only. Joe must approve."
+  },
+  {
+   "id": "545-JKT-A1",
+   "house": "545",
+   "type": "allowed_jackets_update",
+   "target_file": "house-profiles/545.json",
+   "add_joe_plate_ids": [
+    {
+     "id": "g_x4adkv9zu9yu",
+     "name": "Navy/black corduroy jacket"
+    },
+    {
+     "id": "g_wwy9b2pusds3",
+     "name": "Brown shearling bomber jacket",
+     "seasons": [
+      "winter"
+     ]
+    }
+   ],
+   "description": "THIN: 6 jackets, 3 of them the brown-suede family (one cap) and none heavy, while 545 is primary in fall AND winter. Add the Navy/black corduroy jacket (the dark, relaxed 545 palette) and the Brown shearling bomber for winter only. Requires amending 545-B4 (bans cord_jacket and shearling). Joe must approve.",
+   "note": "Requires amending 545-B4 (bans cord_jacket and shearling). Joe must approve."
+  },
+  {
+   "id": "IS-JKT-N1",
+   "house": "italiansummer",
+   "type": "note",
+   "description": "Winter is off for Italian Summer; fall list (8) is adequate. Mint green field jacket stays Polo-only (IS-B4/FAL-B4/ALD-B2/RRL-B8/SS-B4 all ban field_mint)."
+  }
+ ],
+ "screenshot_cards": {
+  "card1": {
+   "look": {
+    "top": "g_gp53xkrmem9b",
+    "outer": "g_juk45cokjxxy",
+    "bottom": "g_rvrs9hibr981",
+    "shoe": "g_8ukg5mi9r3fc"
+   },
+   "identified": "Grey knit sweater (Acne Studios, relaxed, warmth 4) g_gp53xkrmem9b; Taupe blazer (Todd Snyder) g_juk45cokjxxy; Light blue jeans g_rvrs9hibr981 (twin plate g_fvc535elt23d is identical in data; same verdict); Brown suede loafers g_8ukg5mi9r3fc (espadrille-sole suede loafer in the image)",
+   "verdicts": [
+    {
+     "context": "weekday/fall",
+     "legal": false,
+     "soft": 0,
+     "hits": [
+      "JKT-LAY-1 hard: chunky/oversized knit Grey knit sweater under sport coat Taupe blazer",
+      "JKT-LAY-3 hard: light-wash jean Light blue jeans with a sport coat"
+     ]
+    },
+    {
+     "context": "weekend/fall",
+     "legal": false,
+     "soft": 0,
+     "hits": [
+      "JKT-LAY-1 hard: chunky/oversized knit Grey knit sweater under sport coat Taupe blazer",
+      "JKT-LAY-3 hard: light-wash jean Light blue jeans with a sport coat"
+     ]
+    }
+   ],
+   "alternatives": [
+    {
+     "title": "A1 keep the sport coat: shirt + dark denim",
+     "look": {
+      "top": "g_2rtuat7aheik",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "context": "weekday/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "545",
+      "faloni",
+      "italiansummer",
+      "italianwinter",
+      "polo",
+      "purple"
+     ]
+    },
+    {
+     "title": "A2 keep the sport coat: knit polo + grey wool (IW/Purple formula)",
+     "look": {
+      "top": "g_bq9qnaa1vkon",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_bee1dg9rnfe5",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "context": "weekday/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "545",
+      "faloni",
+      "italiansummer",
+      "italianwinter",
+      "polo",
+      "purple"
+     ]
+    },
+    {
+     "title": "A3 keep the sport coat: navy LS polo + dark chinos",
+     "look": {
+      "top": "g_reesb6nbrmm4",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_vf28ktbdhmtz",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "context": "weekday/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "545",
+      "faloni",
+      "italiansummer",
+      "italianwinter",
+      "polo",
+      "purple"
+     ]
+    },
+    {
+     "title": "B1 keep the chunky knit: REISS suede field jacket + dark denim",
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "outer": "g_1pg9y05mlkek",
+      "bottom": "g_dzsh3qh7v6sb",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "context": "weekday/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "545",
+      "faloni",
+      "italiansummer",
+      "italianwinter",
+      "polo",
+      "purple",
+      "rrl",
+      "sweetstable"
+     ]
+    },
+    {
+     "title": "B2 keep the chunky knit + light jeans (weekend): olive field jacket",
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "outer": "g_sb0mc7s7v346",
+      "bottom": "g_rvrs9hibr981",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "context": "weekend/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "ald",
+      "italiansummer",
+      "polo",
+      "rrl",
+      "sweetstable"
+     ]
+    },
+    {
+     "title": "B3 winter: shearling bomber + navy cords",
+     "look": {
+      "top": "g_gp53xkrmem9b",
+      "outer": "g_wwy9b2pusds3",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "context": "weekday/winter",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "545",
+      "ald",
+      "faloni",
+      "italianwinter",
+      "polo",
+      "purple",
+      "rrl",
+      "sweetstable"
+     ]
+    }
+   ]
+  },
+  "card2": {
+   "look": {
+    "top": "g_xbt3gpjuo1p4",
+    "bottom": "g_k75fdfdsnak0",
+    "shoe": "g_rxglifsoqobm"
+   },
+   "identified": "Burgundy collared sweater (AMI) g_xbt3gpjuo1p4; Light grey pleated trousers g_k75fdfdsnak0 (twin g_yfkavdj5irwe identical except material); Pink suede star sneakers (Golden Goose) g_rxglifsoqobm (pink suede, white star, green tab in the image; not a white sneaker)",
+   "verdicts": [
+    {
+     "context": "weekday/fall",
+     "legal": false,
+     "soft": -15,
+     "hits": [
+      "COL-9 soft -5: accents: red (Burgundy collared sweater); pink (Pink suede star sneakers) (one deep accent)",
+      "XC-TEX-3 hard: tailored Light grey pleated trousers + athletic/fashion Pink suede star sneakers",
+      "JKT-FORM-1 soft -10: formality spread 3 (scores [3, 4, 1]) > 2 on weekday",
+      "JKT-COV-1 hard: Weekday/fall: no jacket or coat (mid knits do not count)"
+     ]
+    },
+    {
+     "context": "weekend/fall",
+     "legal": true,
+     "soft": -30,
+     "hits": [
+      "COL-9 soft -5: accents: red (Burgundy collared sweater); pink (Pink suede star sneakers) (one deep accent)",
+      "XC-TEX-3 soft -10: tailored Light grey pleated trousers + athletic/fashion Pink suede star sneakers (weekend)",
+      "JKT-COV-1 soft -15: Weekend/fall: no jacket (strongly preferred)"
+     ]
+    }
+   ],
+   "alternatives": [
+    {
+     "title": "Add the REISS suede field jacket, swap GG for suede loafers",
+     "look": {
+      "top": "g_xbt3gpjuo1p4",
+      "outer": "g_1pg9y05mlkek",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8ukg5mi9r3fc"
+     },
+     "context": "weekday/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "545",
+      "faloni",
+      "italiansummer",
+      "italianwinter",
+      "polo",
+      "purple",
+      "rrl",
+      "sweetstable"
+     ]
+    },
+    {
+     "title": "Add the Taupe blazer + suede tassel loafers",
+     "look": {
+      "top": "g_xbt3gpjuo1p4",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_8nrtffa2s13s"
+     },
+     "context": "weekday/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "545",
+      "faloni",
+      "italiansummer",
+      "italianwinter",
+      "polo",
+      "purple"
+     ]
+    },
+    {
+     "title": "Add the Olive field jacket + brown leather loafers (Polo/IS)",
+     "look": {
+      "top": "g_xbt3gpjuo1p4",
+      "outer": "g_sb0mc7s7v346",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "context": "weekday/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "ald",
+      "italiansummer",
+      "polo",
+      "rrl",
+      "sweetstable"
+     ]
+    },
+    {
+     "title": "Weekend: keep the GG sneakers, add the olive field jacket",
+     "look": {
+      "top": "g_xbt3gpjuo1p4",
+      "outer": "g_sb0mc7s7v346",
+      "bottom": "g_k75fdfdsnak0",
+      "shoe": "g_rxglifsoqobm"
+     },
+     "context": "weekend/fall",
+     "legal": true,
+     "soft": -15,
+     "hits": [
+      "COL-9 soft -5: accents: red (Burgundy collared sweater); pink (Pink suede star sneakers) (one deep accent)",
+      "XC-TEX-3 soft -10: tailored Light grey pleated trousers + athletic/fashion Pink suede star sneakers (weekend)"
+     ],
+     "jacket_houses": [
+      "ald",
+      "italiansummer",
+      "polo",
+      "rrl",
+      "sweetstable"
+     ]
+    }
+   ]
+  },
+  "card3": {
+   "look": {
+    "mid": "g_j2id379jo424",
+    "bottom": "g_v3ovns4bv344",
+    "shoe": "g_b4zsf3dfrhdv"
+   },
+   "identified": "Blue zip-up knit jacket g_j2id379jo424 (filed outerwear/\"zip jacket\", really a knit MID); Navy corduroy trousers g_v3ovns4bv344 (plain navy, cord texture in the image); Brown leather boots g_b4zsf3dfrhdv (Joe's only boot, the dark lace-up in the image)",
+   "verdicts": [
+    {
+     "context": "weekday/fall",
+     "legal": false,
+     "soft": 0,
+     "hits": [
+      "JKT-COV-1 hard: Weekday/fall: no jacket or coat (mid knits do not count)"
+     ]
+    },
+    {
+     "context": "weekend/fall",
+     "legal": true,
+     "soft": -15,
+     "hits": [
+      "JKT-COV-1 soft -15: Weekend/fall: no jacket (strongly preferred)"
+     ]
+    }
+   ],
+   "alternatives": [
+    {
+     "title": "Add the Brown chore jacket (RRL/SS/Polo/ALD)",
+     "look": {
+      "mid": "g_j2id379jo424",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_8qqqzpwxuwti"
+     },
+     "context": "weekday/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "ald",
+      "polo",
+      "rrl",
+      "sweetstable"
+     ]
+    },
+    {
+     "title": "Add the REISS suede field jacket",
+     "look": {
+      "mid": "g_j2id379jo424",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_1pg9y05mlkek"
+     },
+     "context": "weekday/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "545",
+      "faloni",
+      "italiansummer",
+      "italianwinter",
+      "polo",
+      "purple",
+      "rrl",
+      "sweetstable"
+     ]
+    },
+    {
+     "title": "Add the Navy brown plaid jacket (SS/Polo/RRL)",
+     "look": {
+      "mid": "g_j2id379jo424",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_3qjmw7n4wj2a"
+     },
+     "context": "weekday/fall",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "ald",
+      "polo",
+      "rrl",
+      "sweetstable"
+     ]
+    },
+    {
+     "title": "Winter: Brown shearling bomber",
+     "look": {
+      "mid": "g_j2id379jo424",
+      "bottom": "g_v3ovns4bv344",
+      "shoe": "g_b4zsf3dfrhdv",
+      "outer": "g_wwy9b2pusds3"
+     },
+     "context": "weekday/winter",
+     "legal": true,
+     "soft": 0,
+     "hits": [],
+     "jacket_houses": [
+      "545",
+      "ald",
+      "faloni",
+      "italianwinter",
+      "polo",
+      "purple",
+      "rrl",
+      "sweetstable"
+     ]
+    }
+   ]
+  }
+ },
+ "thin_allowed_jackets": [
+  {
+   "house": "rrl",
+   "now": 12,
+   "after": 13,
+   "brown_suede_now": 3,
+   "fall_effective_now": 10,
+   "fall_effective_after": 11,
+   "winter_heavy_now": 2,
+   "winter_heavy_after": 2,
+   "winter_gate": "primary",
+   "thin_now": "ok",
+   "added": [
+    "Light blue denim overshirt"
+   ]
+  },
+  {
+   "house": "polo",
+   "now": 16,
+   "after": 17,
+   "brown_suede_now": 3,
+   "fall_effective_now": 14,
+   "fall_effective_after": 15,
+   "winter_heavy_now": 2,
+   "winter_heavy_after": 2,
+   "winter_gate": "allowed",
+   "thin_now": "ok",
+   "added": [
+    "Khaki varsity"
+   ]
+  },
+  {
+   "house": "purple",
+   "now": 8,
+   "after": 8,
+   "brown_suede_now": 2,
+   "fall_effective_now": 7,
+   "fall_effective_after": 7,
+   "winter_heavy_now": 2,
+   "winter_heavy_after": 2,
+   "winter_gate": "primary",
+   "thin_now": "ok",
+   "added": []
+  },
+  {
+   "house": "ald",
+   "now": 11,
+   "after": 13,
+   "brown_suede_now": 1,
+   "fall_effective_now": 11,
+   "fall_effective_after": 13,
+   "winter_heavy_now": 2,
+   "winter_heavy_after": 2,
+   "winter_gate": "primary",
+   "thin_now": "ok",
+   "added": [
+    "Khaki varsity",
+    "Light blue denim overshirt"
+   ]
+  },
+  {
+   "house": "faloni",
+   "now": 7,
+   "after": 8,
+   "brown_suede_now": 3,
+   "fall_effective_now": 5,
+   "fall_effective_after": 5,
+   "winter_heavy_now": 0,
+   "winter_heavy_after": 1,
+   "winter_gate": "allowed",
+   "thin_now": "only 5 effective fall jackets (brown-suede family counts once); no heavy jacket for winter",
+   "added": [
+    "Brown shearling bomber jacket (winter only)"
+   ]
+  },
+  {
+   "house": "545",
+   "now": 6,
+   "after": 8,
+   "brown_suede_now": 3,
+   "fall_effective_now": 4,
+   "fall_effective_after": 5,
+   "winter_heavy_now": 0,
+   "winter_heavy_after": 1,
+   "winter_gate": "primary",
+   "thin_now": "only 4 effective fall jackets (brown-suede family counts once); no heavy jacket for winter",
+   "added": [
+    "Navy/black corduroy jacket",
+    "Brown shearling bomber jacket (winter only)"
+   ]
+  },
+  {
+   "house": "sweetstable",
+   "now": 12,
+   "after": 12,
+   "brown_suede_now": 3,
+   "fall_effective_now": 10,
+   "fall_effective_after": 10,
+   "winter_heavy_now": 2,
+   "winter_heavy_after": 2,
+   "winter_gate": "primary",
+   "thin_now": "ok",
+   "added": []
+  },
+  {
+   "house": "italiansummer",
+   "now": 8,
+   "after": 8,
+   "brown_suede_now": 2,
+   "fall_effective_now": 7,
+   "fall_effective_after": 7,
+   "winter_heavy_now": 0,
+   "winter_heavy_after": 0,
+   "winter_gate": "off",
+   "thin_now": "ok",
+   "added": []
+  },
+  {
+   "house": "italianwinter",
+   "now": 10,
+   "after": 10,
+   "brown_suede_now": 3,
+   "fall_effective_now": 8,
+   "fall_effective_after": 8,
+   "winter_heavy_now": 2,
+   "winter_heavy_after": 2,
+   "winter_gate": "primary",
+   "thin_now": "ok",
+   "added": []
+  }
+ ],
+ "results_summary": {
+  "tests": {
+   "total": 60,
+   "passed": 60
+  },
+  "simulation": {
+   "before": {
+    "cards": 108,
+    "with_jacket": 15,
+    "no_jacket": 93,
+    "no_jacket_fw": 75,
+    "cards_fw": 87,
+    "no_jacket_required": 57,
+    "distinct": 6,
+    "distinct_fw": 6
+   },
+   "after": {
+    "cards": 108,
+    "with_jacket": 86,
+    "no_jacket": 22,
+    "no_jacket_fw": 4,
+    "cards_fw": 87,
+    "no_jacket_required": 3,
+    "distinct": 21,
+    "distinct_fw": 21
+   }
+  },
+  "still_missing_after": [
+   {
+    "ctx": "out/fall",
+    "chip": "545",
+    "pos": 3,
+    "core": "Navy long-sleeve polo + Cream straight-leg jeans + Black woven loafers",
+    "why": "compatible jackets exist but all are capped: Brown suede jacket, Brown suede jacket, Brown suede bomber jacket, Navy/black corduroy jacket"
+   },
+   {
+    "ctx": "weekday/winter",
+    "chip": "FALONI",
+    "pos": 3,
+    "core": "Cream long-sleeve polo + Light blue jeans + Brown leather sneakers",
+    "why": "compatible jackets exist but all are capped: Brown suede jacket, Brown suede jacket, Brown suede bomber jacket, Brown shearling bomber jacket"
+   },
+   {
+    "ctx": "weekday/winter",
+    "chip": "ITALIANSUMMER",
+    "pos": 3,
+    "core": "Grey knit sweater + Sage pleated trousers + Grey and white low-top sneakers",
+    "why": "compatible jackets exist but all are capped: Brown suede jacket, Navy field jacket, Olive field jacket"
+   }
+  ],
+  "caps_violations_after": []
+ }
+}

@@ -68,6 +68,8 @@ export type Look = {
   gate?: { occasion: string; season: string; text: string };
   /** Shown when a house has fewer than three legal looks. */
   needsPieces?: boolean;
+  /** Required jacket had no uncapped legal outer. The card stays, without a jacket. */
+  demoted?: "JKT-COV-1";
   createdAt: string;
 };
 

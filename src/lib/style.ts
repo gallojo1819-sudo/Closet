@@ -2,6 +2,7 @@ import { harmony } from "./color.ts";
 import type { Garment, Moment, Occasion, WearEntry, WeatherSnap } from "./types.ts";
 import { lastDays, todayISO } from "./utils.ts";
 import { isLinenCampPiece, isOvercoatPiece, seasonFromWeather } from "./season.ts";
+import { jacketHits, slotPieces, wearSlot } from "./stylist/jackets.ts";
 import { livePool } from "./rack.ts";
 import { onlyTopIsUntucked, resolveTuck } from "./tuck.ts";
 import {
@@ -459,6 +460,11 @@ export function trendScore(
 }
 
 export function slotOf(g: Garment): Slot | null {
+  const worn = wearSlot(g);
+  if (worn === "outer") return "outerwear";
+  if (worn === "mid" || worn === "top") return "top";
+  if (worn === "bottom") return "bottom";
+  if (worn === "shoe") return "footwear";
   const blob = `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
   const footwear = /\b(shoes?|loafers?|mules?|sneakers?|boots?|booties)\b/.test(blob);
   const bottom = /\b(pants?|chinos?|jeans?|trousers?|shorts?)\b/.test(blob);
@@ -724,6 +730,13 @@ export function pickTrueOuter(
       if (core.some(isRugbyPiece) || core.some(isHoodiePiece) || core.some(isHeavyCable)) continue;
     }
     if (opts.legalCombo && !opts.legalCombo(next)) continue;
+    const season = seasonFromWeather(opts.f);
+    const jacketHard = jacketHits(slotPieces(next), {
+      occasion: opts.occasion,
+      season,
+      house: opts.house && opts.house !== "all" ? opts.house : undefined,
+    }).some((h) => h.severity === "hard");
+    if (jacketHard) continue;
     if (opts.f > 78 && (o.warmth >= 5 || isOvercoatPiece(o))) continue;
     if (scoreOuterForRecipe(o, recipe, opts.house, opts.occasion) < -8) continue;
     return o;
@@ -996,6 +1009,16 @@ export function pickLook(
   let poolC = (ok.length ? ok : legal).sort((a, b) => b.s - a.s);
   const scaleOk = poolC.filter((c) => !sameScaleChecks(c.pieces));
   if (scaleOk.length) poolC = scaleOk;
+  const jacketSeason = seasonFromWeather(f);
+  const dressed = poolC.filter(
+    (c) =>
+      !jacketHits(slotPieces(c.pieces), {
+        occasion: opts.occasion,
+        season: jacketSeason,
+        house,
+      }).some((h) => h.severity === "hard"),
+  );
+  if (dressed.length) poolC = dressed;
   if ((house === "faloni" || house === "fiveFourFive") && f > 75) {
     const noMid = poolC.filter(
       (c) => !c.pieces.some((g) => isMidlayer(g) && !isHoodiePiece(g)),
