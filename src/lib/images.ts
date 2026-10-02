@@ -48,6 +48,7 @@ export async function putClosetMeta(meta: {
   refPhotoBackup?: unknown;
   messages?: unknown;
   seenLooks?: unknown;
+  taste?: unknown;
 }): Promise<void> {
   const blob = new Blob([JSON.stringify({ v: 6, ...meta })], {
     type: "application/json",
@@ -66,6 +67,7 @@ export async function getClosetMeta(): Promise<{
   refPhotoBackup?: unknown;
   messages?: unknown;
   seenLooks?: unknown;
+  taste?: unknown;
 } | null> {
   const blob = await getImage(CLOSET_META_KEY);
   if (!blob) return null;
@@ -79,6 +81,7 @@ export async function getClosetMeta(): Promise<{
       refPhoto?: unknown;
       refPhotoBackup?: unknown;
       messages?: unknown;
+      taste?: unknown;
       v?: number;
     };
     if (!Array.isArray(data.garments) || data.garments.length === 0) return null;

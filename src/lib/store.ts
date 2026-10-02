@@ -65,6 +65,14 @@ import { allowSampleRack } from "./cloud/home";
 import { EMPTY_ACCOUNT_CONFIRM } from "./cloud/copy";
 import { dressThisPiece } from "./dress";
 import { notifyGarmentRemoved, notifyLookRemoved, notifyLookSaved } from "./data/v2-port";
+import {
+  emptyTaste,
+  learnFromLock,
+  learnFromSkip,
+  logWear,
+  normalizeTaste,
+  type TasteMemory,
+} from "./taste";
 import { todayISO, uid } from "./utils";
 
 export { mergeClosetPersist, openPersistGate, persistGate };
@@ -74,6 +82,8 @@ type ClosetState = {
   garments: Garment[];
   looks: Look[];
   messages: StylistMessage[];
+  /** Learned on this account. Empty until the closet earns it. */
+  taste: TasteMemory;
   drop: DailyDrop | null;
   journal: WearEntry[];
   avoid: Record<string, number>;
@@ -104,7 +114,8 @@ type ClosetState = {
   removeDropPiece: (id: string) => void;
   toggleLock: (id: string) => void;
   pushMessage: (m: Omit<StylistMessage, "id" | "createdAt">) => string;
-  stampMessage: (id: string, patch: Partial<Pick<StylistMessage, "lookId" | "text" | "garmentIds" | "draftName" | "draftOccasion">>) => void;
+  stampMessage: (id: string, patch: Partial<Pick<StylistMessage, "lookId" | "text" | "garmentIds" | "draftName" | "draftOccasion" | "technique">>) => void;
+  setTaste: (taste: TasteMemory) => void;
   setRefPhoto: (key: string | null, backup?: string | null) => void;
   restoreRefPhoto: () => Promise<void>;
   restoreFromIdbMeta: () => Promise<void>;
@@ -259,6 +270,7 @@ export const useCloset = create<ClosetState>()(
       garments: seed?.garments ?? [],
       looks: seed?.looks ?? [],
       messages: seed?.messages ?? [],
+      taste: seed?.taste ? normalizeTaste(seed.taste) : emptyTaste(),
       drop: seed?.drop ?? null,
       journal: seed?.journal ?? [],
       avoid: seed?.avoid ?? {},
@@ -358,6 +370,7 @@ export const useCloset = create<ClosetState>()(
             drop: s.drop ? { ...s.drop, worn: true, verdict: "worn" } : s.drop,
             journal: [entry, ...s.journal.filter((j) => j.date !== day)].slice(0, 60),
             avoid,
+            taste: logWear(s.taste ?? emptyTaste(), s.garments, ids, Date.now()),
           };
         });
         noteUserEdit();
@@ -382,6 +395,7 @@ export const useCloset = create<ClosetState>()(
             avoid,
             journal: [entry, ...get().journal.filter((j) => j.date !== todayISO())].slice(0, 60),
             skipCount: get().skipCount + 1,
+            taste: learnFromSkip(get().taste ?? emptyTaste(), skipped, get().garments, Date.now()),
           });
           get().rerollDrop(drop.weather, drop.occasion, skipped);
           noteUserEdit();
@@ -542,10 +556,17 @@ export const useCloset = create<ClosetState>()(
         const drop = get().drop;
         if (!drop || !drop.garmentIds.includes(id)) return;
         const locked = new Set(drop.lockedIds ?? []);
-        if (locked.has(id)) locked.delete(id);
-        else locked.add(id);
+        const locking = !locked.has(id);
+        if (locking) locked.add(id);
+        else locked.delete(id);
+        const piece = get().garments.find((g) => g.id === id);
+        const taste =
+          locking && piece
+            ? learnFromLock(get().taste ?? emptyTaste(), piece, drop.garmentIds, get().garments, Date.now())
+            : get().taste;
         set({
           drop: { ...drop, lockedIds: [...locked], lockNote: drop.lockNote ?? null },
+          taste,
         });
         noteUserEdit();
       },
@@ -599,6 +620,12 @@ export const useCloset = create<ClosetState>()(
           messages: [...s.messages, { ...m, id, createdAt: new Date().toISOString() }],
         }));
         return id;
+      },
+      setTaste: (taste) => {
+        const next = normalizeTaste(taste);
+        if (JSON.stringify(next) === JSON.stringify(get().taste)) return;
+        set({ taste: next });
+        noteUserEdit();
       },
       stampMessage: (id, patch) => {
         set((s) => ({
@@ -848,6 +875,7 @@ export const useCloset = create<ClosetState>()(
           messages: Array.isArray(meta.messages)
             ? (meta.messages as StylistMessage[])
             : get().messages,
+          taste: meta.taste ? normalizeTaste(meta.taste) : get().taste,
         });
         get().purgeDemoRack();
       },
@@ -878,6 +906,7 @@ export const useCloset = create<ClosetState>()(
           garments: SEED_GARMENTS,
           looks: SEED_LOOKS,
           messages: [],
+          taste: emptyTaste(),
           drop: null,
           journal: [],
           avoid: {},
@@ -901,6 +930,7 @@ export const useCloset = create<ClosetState>()(
           garments: [],
           looks: [],
           messages: [],
+          taste: emptyTaste(),
           drop: null,
           journal: [],
           avoid: {},
@@ -947,6 +977,7 @@ export const useCloset = create<ClosetState>()(
         refPhotoBackup: s.refPhotoBackup,
         messages: s.messages,
         seenLooks: s.seenLooks,
+        taste: s.taste,
       }),
       merge: (persisted, current) => mergeClosetPersist(persisted, current),
       onRehydrateStorage: () => (_state, error) => {

@@ -5,6 +5,7 @@ import {
 } from "../images.ts";
 import { livePool, scrubRack } from "../rack.ts";
 import { useCloset } from "../store.ts";
+import { embedTasteAvoid } from "../taste.ts";
 import type { DailyDrop, Garment, Look, WearEntry } from "../types.ts";
 import { getAccount, patchAccount, setAccountProgress, setLocalOnly } from "./account.ts";
 import {
@@ -109,6 +110,7 @@ function snapshot(): CloudMeta {
     drop: s.drop,
     refPhoto: Boolean(s.refPhoto),
     v: 6,
+    taste: s.taste,
   };
 }
 
@@ -160,7 +162,7 @@ async function casWrite(
       p_garments: packed.garments,
       p_looks: packed.looks,
       p_journal: packed.journal,
-      p_avoid: packed.avoid,
+      p_avoid: embedTasteAvoid(packed.avoid, packed.taste),
       p_drop: packed.drop,
       p_ref_photo: packed.refPhoto,
       p_deleted_garments: packed.deletedGarments ?? [],
@@ -204,7 +206,7 @@ async function fallbackCas(
     garments: payload.garments,
     looks: payload.looks,
     journal: payload.journal,
-    avoid: payload.avoid,
+    avoid: embedTasteAvoid(payload.avoid, payload.taste),
     drop: payload.drop,
     ref_photo: payload.refPhoto,
     v: 6,
@@ -354,6 +356,7 @@ function applyMerged(next: CloudMeta) {
       avoid: next.avoid,
       drop: clean.drop,
       seenLooks: clean.seenLooks ?? current.seenLooks,
+      ...(next.taste ? { taste: next.taste } : {}),
     });
     if (next.refPhoto && !current.refPhoto) {
       useCloset.setState({ refPhoto: refImageKey() });
@@ -420,6 +423,7 @@ function baseAfterInFlight(
     refPhoto: keep(prev.refPhoto, written.refPhoto, started.refPhoto),
     deletedGarments: keep(prev.deletedGarments, written.deletedGarments, started.deletedGarments),
     deletedLooks: keep(prev.deletedLooks, written.deletedLooks, started.deletedLooks),
+    taste: keep(prev.taste, written.taste, started.taste),
   };
 }
 

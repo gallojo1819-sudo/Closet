@@ -1,4 +1,5 @@
 import { isCloudSrc } from "./src.ts";
+import { mergeTaste, type TasteMemory } from "../taste.ts";
 
 /**
  * Account merge. closet.v6 + IDB stay a cache.
@@ -45,6 +46,8 @@ export type CloudMeta = {
   /** Ids removed on purpose. Absence from the live array is not a delete. */
   deletedGarments?: string[];
   deletedLooks?: string[];
+  /** Stylist memory. Rides in the avoid jsonb. Empty on a new account. */
+  taste?: TasteMemory;
 };
 
 export type LinkAction = "push" | "pull" | "union" | "keep";
@@ -304,21 +307,25 @@ export function mergeAccount<T extends CloudMeta>(opts: {
   const avoid = mergeAvoid(opts.local.avoid, opts.cloud.avoid, allowed);
   const drop = mergeDrop(opts.local.drop, opts.cloud.drop, allowed);
   const refPhoto = opts.local.refPhoto || opts.cloud.refPhoto;
+  const taste = mergeTaste(opts.local.taste, opts.cloud.taste);
+  const next: T = {
+    ...stamped,
+    garments,
+    looks,
+    journal,
+    avoid,
+    drop,
+    refPhoto,
+    v: opts.cloud.v || opts.local.v || 6,
+    rev: typeof opts.cloud.rev === "number" ? opts.cloud.rev : opts.local.rev,
+    updatedAt: opts.cloud.updatedAt ?? opts.local.updatedAt,
+  };
+  if (taste) next.taste = taste;
+  else delete next.taste;
 
   return {
     action,
     appliedCloud: true,
-    next: {
-      ...stamped,
-      garments,
-      looks,
-      journal,
-      avoid,
-      drop,
-      refPhoto,
-      v: opts.cloud.v || opts.local.v || 6,
-      rev: typeof opts.cloud.rev === "number" ? opts.cloud.rev : opts.local.rev,
-      updatedAt: opts.cloud.updatedAt ?? opts.local.updatedAt,
-    },
+    next,
   };
 }

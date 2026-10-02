@@ -10,14 +10,7 @@ import {
 } from "./compose";
 import { livePool } from "./rack";
 import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
-import {
-  dressReply,
-  dressThisPiece,
-  occasionFromDressPrompt,
-  resolvePiecesFromText,
-} from "./dress";
-import { appendHouseGap, houseFromPrompt, stylistHouseBrief, type House } from "./houses";
-import { defaultOccasion, houseMixPenalty, momentOfDay, pickLook } from "./style";
+import { buildStylistSystem, composeAtlasLook, normalizeTaste, occasionFromPrompt, type TasteMemory } from "./taste";
 import type { Category, Garment, Occasion } from "./types";
 
 export type TagResult = {
@@ -426,16 +419,6 @@ ${data.tuck ?? ""}`;
     return got;
   });
 
-function occasionFromPrompt(prompt: string): Occasion {
-  const p = prompt.toLowerCase();
-  if (/client|dinner|\bout\b/.test(p)) return "out";
-  if (/comfy|couch|at home|off duty/.test(p)) return "comfy";
-  if (/saturday|weekend/.test(p)) return "weekend";
-  if (/travel/.test(p)) return "travel";
-  if (/weekday|work|office/.test(p)) return "weekday";
-  return defaultOccasion();
-}
-
 export function parseLookLine(text: string, valid: Set<string>): string[] {
   const m = text.match(/LOOK:\s*([^\n]+)/i);
   if (!m?.[1]) return [];
@@ -450,83 +433,21 @@ function resolveStylistLook(
   prompt: string,
   f: number,
   grokText?: string,
-  house?: House | null,
-): { text: string; garmentIds: string[]; occasion: Occasion } {
-  const active = house ?? houseFromPrompt(prompt);
-  const named = resolvePiecesFromText(prompt, garments);
-  const occasion = named.length
-    ? occasionFromDressPrompt(prompt)
-    : occasionFromPrompt(prompt);
-  const say = (pieces: Garment[], occ: Occasion, locked: string[]) =>
-    appendHouseGap(
-      grokText?.trim() ? grokText.trim() : dressReply(pieces, occ, locked),
-      active,
-      garments,
-      occ,
-    );
-  if (named.length) {
-    const dressed = dressThisPiece({
-      lockedIds: named.map((g) => g.id),
-      garments,
-      occasion,
-      weather: { f, label: "Fair", code: 2 },
-      house: active ?? undefined,
-    });
-    if (dressed) {
-      return {
-        text: say(dressed.pieces, dressed.occasion, dressed.lockedIds),
-        garmentIds: dressed.garmentIds,
-        occasion: dressed.occasion,
-      };
-    }
-  }
-  const skip = /skip/.test(prompt.toLowerCase());
-  const valid = new Set(garments.map((g) => g.id));
-  let ids = grokText ? parseLookLine(grokText, valid) : [];
-  let pieces = ids
-    .map((id) => garments.find((g) => g.id === id))
-    .filter((g): g is Garment => Boolean(g));
-  if (ids.length < 2 || houseMixPenalty(pieces) < -8) {
-    ids = pickLook(garments, {
-      occasion,
-      moment: momentOfDay(),
-      weather: { f, label: "Fair", code: 2 },
-      recentWorn: skip ? [] : undefined,
-      house: active ?? undefined,
-    });
-    pieces = ids
-      .map((id) => garments.find((g) => g.id === id))
-      .filter((g): g is Garment => Boolean(g));
-  }
-  return {
-    text: say(pieces, occasion, named.map((g) => g.id)),
-    garmentIds: ids,
-    occasion,
-  };
+  taste?: TasteMemory,
+  lockedIds?: string[],
+): { text: string; garmentIds: string[]; occasion: Occasion; technique: string | null } {
+  return composeAtlasLook({
+    garments,
+    prompt,
+    weatherF: f,
+    occasion: occasionFromPrompt(prompt),
+    taste: normalizeTaste(taste),
+    modelText: grokText,
+    lockedIds,
+  });
 }
 
 const CHAT_MODELS = ["grok-4.5", "grok-4.3", "grok-4"] as const;
-
-const STYLIST_SYSTEM = `You are Joe's master stylist. HIS houses only. Never invent a piece, layer, or shop.
-
-HOUSES (tight)
-- Ralph: oxford, polo, chino, cable, navy blazer, loafer. Clean tuck. No graphic hoodie.
-- ALD: rugby, oversized oxford, jean, 990 or loafer, graphic hoodie ONLY with jean/sneaker.
-- Faloni / Italian summer: linen, camp collar, light trouser, mule/loafer, no-show. Heat.
-- Italian winter: merino, flannel, cashmere, suede, overcoat.
-- FiveFourFive: linen, sangallo, light cashmere, tailored.
-- Sweet Stable: fair isle, gingham, cord, rugby. Not under a 90s hoodie.
-
-Never put a 90s hoodie with pleated trousers and loafers. Hoodie is not a coat.
-
-FORMAT
-Line 1: {House} × {House} — {occasion} {temp}°
-Then 2–5 lines: HIS exact names.
-Then MISSING: one hole if the look would be better with a type he does not own (e.g. "MISSING: white oxford — under the cream cable"). Omit MISSING if the look is complete from this closet.
-Last line MUST be exactly:
-LOOK: g_xxx,g_yyy,g_zzz
-IDs from the closet list only, in order top, bottom, footwear (outer optional). Never invent an id.
-Voice: quiet, sure, no emoji, no lecture. Pixels beat names. No invented layers.`;
 
 /** The stylist composes the chapter. grok-4.5, no images, no second model. */
 export const composeChapter = createServerFn({ method: "POST" })
@@ -610,40 +531,50 @@ export const askStylist = createServerFn({ method: "POST" })
   .validator(
     (input: {
       prompt: string;
-      closet: string;
+      closet?: string;
       context?: string;
       garments?: Garment[];
       weatherF?: number;
-      house?: House | null;
+      taste?: TasteMemory;
+      lockedIds?: string[];
+      thread?: { role: "user" | "stylist"; text: string }[];
     }) => input,
   )
   .handler(
     async ({
       data,
     }): Promise<
-      | { ok: true; text: string; garmentIds: string[]; occasion: Occasion }
+      | { ok: true; text: string; garmentIds: string[]; occasion: Occasion; technique: string | null }
       | { ok: false; error: string }
     > => {
     const rack = livePool(data.garments ?? []);
     const f = data.weatherF ?? 68;
-    const house = data.house ?? houseFromPrompt(data.prompt);
-    const brief = house ? `\n\n${stylistHouseBrief(house)}` : "";
+    const taste = normalizeTaste(data.taste);
     const fallback = () =>
       rack.length
-        ? { ok: true as const, ...resolveStylistLook(rack, data.prompt, f, undefined, house) }
+        ? { ok: true as const, ...resolveStylistLook(rack, data.prompt, f, undefined, taste, data.lockedIds) }
         : { ok: false as const, error: "The stylist has nothing to dress." };
 
     if (!process.env.XAI_API_KEY) return fallback();
 
+    const system = buildStylistSystem({
+      garments: rack,
+      taste,
+      weatherF: f,
+      occasion: occasionFromPrompt(data.prompt),
+      lockedIds: data.lockedIds,
+    });
+    const notes = data.context ? `\n\nNOTES\n${data.context}` : "";
+    const prior = (data.thread ?? [])
+      .slice(-8)
+      .filter((m) => m.text.trim())
+      .map((m) => ({
+        role: m.role === "user" ? "user" : "assistant",
+        content: m.text.slice(0, 1200),
+      }));
     const messages = [
-      {
-        role: "system",
-        content: `${STYLIST_SYSTEM}${brief}
-
-${data.context ? `TODAY\n${data.context}\n` : ""}
-CLOSET
-${data.closet.slice(0, 6000)}`,
-      },
+      { role: "system", content: `${system}${notes}` },
+      ...prior,
       { role: "user", content: data.prompt.slice(0, 1200) },
     ];
 
@@ -658,10 +589,35 @@ ${data.closet.slice(0, 6000)}`,
         const body = r.json as { choices?: { message?: { content?: string } }[] };
         const text = body.choices?.[0]?.message?.content ?? "";
         if (text.trim() && rack.length) {
-          return { ok: true, ...resolveStylistLook(rack, data.prompt, f, text, house) };
+          return { ok: true, ...resolveStylistLook(rack, data.prompt, f, text, taste, data.lockedIds) };
         }
       }
       if (rack.length) return fallback();
     }
     return fallback();
+  });
+
+/** One sentence about layering. Off the ask path. A missing key skips it. */
+export const trendLayer = createServerFn({ method: "POST" })
+  .validator((input: { now?: number }) => input)
+  .handler(async (): Promise<{ ok: true; sentence: string } | { ok: false; skipped?: boolean }> => {
+    if (!process.env.XAI_API_KEY) return { ok: false, skipped: true };
+    const r = await xaiFetch("https://api.x.ai/v1/chat/completions", {
+      model: "grok-4.5",
+      max_tokens: 60,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content:
+            "One short sentence about layering clothes right now. No brand names. No emoji. No list.",
+        },
+        { role: "user", content: "Layering right now." },
+      ],
+    });
+    if (!r.ok) return { ok: false };
+    const body = r.json as { choices?: { message?: { content?: string } }[] };
+    const sentence = (body.choices?.[0]?.message?.content ?? "").replace(/\s+/g, " ").trim();
+    if (!sentence) return { ok: false };
+    return { ok: true, sentence: sentence.slice(0, 180) };
   });

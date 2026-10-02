@@ -42,15 +42,16 @@ export function visibleCloudIntent(input: {
  * upsert it. Wear and Save change journal, garments, or looks, and those still push.
  */
 export function shouldPushClosetMeta(
-  prev: { garments: unknown; looks: unknown; journal: unknown; avoid: unknown; refPhoto: unknown },
-  next: { garments: unknown; looks: unknown; journal: unknown; avoid: unknown; refPhoto: unknown },
+  prev: { garments: unknown; looks: unknown; journal: unknown; avoid: unknown; refPhoto: unknown; taste?: unknown },
+  next: { garments: unknown; looks: unknown; journal: unknown; avoid: unknown; refPhoto: unknown; taste?: unknown },
 ): boolean {
   return (
     next.garments !== prev.garments ||
     next.looks !== prev.looks ||
     next.journal !== prev.journal ||
     next.avoid !== prev.avoid ||
-    next.refPhoto !== prev.refPhoto
+    next.refPhoto !== prev.refPhoto ||
+    next.taste !== prev.taste
   );
 }
 

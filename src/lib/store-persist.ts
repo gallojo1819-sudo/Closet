@@ -1,5 +1,6 @@
 import { readTombstones } from "./cloud/tombstone.ts";
 import { scrubRack } from "./rack.ts";
+import { normalizeTaste, type TasteMemory } from "./taste.ts";
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry } from "./types.ts";
 
 export type SeenLooks = Record<string, string[]>;
@@ -16,6 +17,8 @@ export type PersistedCloset = {
   messages: StylistMessage[];
   /** Combo keys (sorted garmentIds joined by |) already shown, per chapter. */
   seenLooks?: SeenLooks;
+  /** Account memory. Absent on an old closet.v6 until this phone learns. */
+  taste?: TasteMemory;
 };
 
 export type ClosetSnapshot = PersistedCloset & { hydrated: boolean };
@@ -88,6 +91,7 @@ export function mergeClosetPersist<T extends ClosetSnapshot>(
     refPhoto,
     refPhotoBackup,
     messages: Array.isArray(p.messages) ? p.messages : current.messages,
+    taste: p.taste && typeof p.taste === "object" ? normalizeTaste(p.taste) : current.taste,
     seenLooks:
       p.seenLooks && typeof p.seenLooks === "object" && !Array.isArray(p.seenLooks)
         ? p.seenLooks

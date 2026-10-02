@@ -84,6 +84,8 @@ export type StylistMessage = {
   /** Draft stays on the message so a reload still shows Save and Wear. */
   draftName?: string;
   draftOccasion?: Occasion;
+  /** Quiet technique name under the reply. Absent when none was used. */
+  technique?: string;
   createdAt: string;
 };
 

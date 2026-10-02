@@ -1,25 +1,38 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { Button } from "@/components/ui/button";
-import { askStylist } from "@/lib/ai";
+import { askStylist, trendLayer } from "@/lib/ai";
 import {
   WHICH_PIECE,
-  dressReply,
   dressThisPiece,
   looksLikePieceAsk,
   occasionFromDressPrompt,
   resolvePiecesFromText,
 } from "@/lib/dress";
 import { draftFromMessage, recordStylistQuestion, restoreIfAskWrote, stylistLookToSave } from "@/lib/stylist-thread";
-import { appendHouseGap, houseFromPrompt } from "@/lib/houses";
 import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
-import { daysIdle, defaultOccasion, HOUSE_LABEL, housesOf, momentOfDay } from "@/lib/style";
+import { daysIdle, defaultOccasion, momentOfDay } from "@/lib/style";
 import { useCloset } from "@/lib/store";
+import {
+  acceptTrend,
+  atlasText,
+  emptyTaste,
+  learnFromAsk,
+  learnFromSave,
+  logWear,
+  pieceVetoIds,
+  swapDraft,
+  swapSlot,
+  techniqueUsed,
+  trendDue,
+} from "@/lib/taste";
 import type { Garment, Occasion } from "@/lib/types";
 import { todayISO } from "@/lib/utils";
+
+let trendPassStarted = false;
 
 export const Route = createFileRoute("/stylist")({ component: StylistPage });
 
@@ -73,10 +86,27 @@ function StylistPage() {
   const stampMessage = useCloset((s) => s.stampMessage);
   const saveLook = useCloset((s) => s.saveLook);
   const setDrop = useCloset((s) => s.setDrop);
+  const setTaste = useCloset((s) => s.setTaste);
   const looks = useCloset((s) => s.looks);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const explicitWrite = useRef(false);
+
+  useEffect(() => {
+    if (!hydrated || trendPassStarted) return;
+    const taste = useCloset.getState().taste ?? emptyTaste();
+    if (!trendDue(taste, Date.now())) return;
+    trendPassStarted = true;
+    void trendLayer({ data: {} })
+      .then((res) => {
+        if (!res.ok) return;
+        const state = useCloset.getState();
+        const next = acceptTrend(state.taste ?? emptyTaste(), res.sentence, livePool(state.garments), Date.now());
+        if (!next) return;
+        setTaste(next);
+      })
+      .catch(() => {});
+  }, [hydrated, setTaste]);
 
   const send = async (prompt: string) => {
     const q = prompt.trim();
@@ -89,52 +119,74 @@ function StylistPage() {
     setText("");
     setBusy(true);
     try {
-    const named = resolvePiecesFromText(q, owned);
-    const houseHint = houseFromPrompt(q);
-    if (named.length === 0 && looksLikePieceAsk(q) && !houseHint) {
+    const previous = [...before.messages].reverse().find((m) => m.role === "stylist" && m.garmentIds?.length);
+    const taste = learnFromAsk(before.taste ?? emptyTaste(), {
+      text: q,
+      garments: owned,
+      previousIds: previous?.garmentIds ?? [],
+      now: Date.now(),
+    });
+    setTaste(taste);
+    const vetoed = pieceVetoIds(taste);
+    const slot = swapSlot(q);
+    if (slot && previous?.garmentIds?.length) {
+      const occasion = (previous.draftOccasion ?? drop?.occasion ?? defaultOccasion()) as Occasion;
+      const edited = swapDraft({
+        ids: previous.garmentIds,
+        slot,
+        garments: owned,
+        taste,
+        occasion,
+        weatherF: drop?.weather?.f ?? 68,
+      });
+      const garmentIds = edited?.garmentIds ?? previous.garmentIds;
+      const pieces = garmentIds
+        .map((id) => owned.find((g) => g.id === id))
+        .filter((g): g is Garment => Boolean(g));
+      const technique = edited?.technique ?? techniqueUsed(taste, pieces);
+      pushMessage({
+        role: "stylist",
+        text: edited?.text ?? atlasText({ technique, pieces, occasion, missing: null }),
+        garmentIds,
+        draftName: nameLook(pieces),
+        draftOccasion: occasion,
+        technique: technique ?? undefined,
+      });
+      return;
+    }
+    const askText = q.replace(/(?:\bnot the\b|\bdon't use\b|\bdo not use\b|\bdont use\b|\bwithout the\b|\bno\b)\s+[^.,\n]+/gi, " ");
+    const named = resolvePiecesFromText(askText, owned).filter((g) => !vetoed.has(g.id));
+    if (named.length === 0 && looksLikePieceAsk(q) && !vetoed.size && !slot) {
       pushMessage({ role: "stylist", text: "Tap the piece on Closet." });
       return;
     }
-    if (named.length > 0 || houseHint) {
+    if (named.length > 0) {
       const occasion = occasionFromDressPrompt(q, drop?.occasion);
-      const house = houseFromPrompt(q);
+      const pool = owned.filter((g) => !vetoed.has(g.id) || named.some((n) => n.id === g.id));
       const dressed = dressThisPiece({
         lockedIds: named.map((g) => g.id),
-        garments: owned,
+        garments: pool,
         looks,
         occasion,
         weather: drop?.weather,
         journal,
-        house: house ?? houseHint ?? undefined,
       });
       if (dressed) {
-        const pieces = dressed.pieces;
-        const activeHouse = house ?? houseHint ?? null;
+        const pieces = dressed.pieces.filter((g) => !vetoed.has(g.id) || named.some((n) => n.id === g.id));
+        const technique = techniqueUsed(taste, pieces);
         pushMessage({
           role: "stylist",
-          text: appendHouseGap(
-            dressReply(pieces, occasion, named.map((g) => g.id)),
-            activeHouse,
-            owned,
-            occasion,
-          ),
-          garmentIds: dressed.garmentIds,
+          text: atlasText({ technique, pieces, occasion: dressed.occasion, missing: null }),
+          garmentIds: pieces.map((g) => g.id),
           draftName: nameLook(pieces),
-          draftOccasion: occasion,
+          draftOccasion: dressed.occasion,
+          technique: technique ?? undefined,
         });
       } else {
         pushMessage({ role: "stylist", text: WHICH_PIECE });
       }
       return;
     }
-    const closet = forStylist
-      .map((g) => {
-        const idle = daysIdle(g);
-        const last = idle >= 120 ? "never worn" : `${idle}d idle`;
-        const house = housesOf(g).map((h) => HOUSE_LABEL[h]).join("/");
-        return `- ${g.name} [${g.id}] (${g.category}/${g.subtype || "—"}, ${g.colors.join(" ")}, ${g.material}, ${house}, ${last})${g.demo ? " SAMPLE" : ""}`;
-      })
-      .join("\n");
     const sitting = forStylist
       .filter((g) => daysIdle(g) >= 21)
       .sort((a, b) => daysIdle(b) - daysIdle(a))
@@ -163,27 +215,31 @@ function StylistPage() {
     ]
       .filter(Boolean)
       .join(" · ");
+    const thread = before.messages.slice(-8).map((m) => ({ role: m.role, text: m.text }));
     const res = await askStylist({
       data: {
         prompt: q,
-        closet,
         context,
         garments: forStylist,
         weatherF: drop?.weather?.f ?? 68,
-        house: houseFromPrompt(q),
+        taste,
+        lockedIds: named.map((g) => g.id),
+        thread,
       },
     });
     if (res.ok && res.garmentIds.length) {
       const pieces = res.garmentIds
         .map((id) => forStylist.find((g) => g.id === id))
         .filter((g): g is Garment => Boolean(g));
+      const ids = pieces.map((g) => g.id);
       const occasion = (res.occasion ?? defaultOccasion()) as Occasion;
       pushMessage({
         role: "stylist",
         text: res.text,
-        garmentIds: res.garmentIds,
+        garmentIds: ids,
         draftName: nameLook(pieces),
         draftOccasion: occasion,
+        technique: res.technique ?? undefined,
       });
     } else {
       pushMessage({
@@ -212,6 +268,8 @@ function StylistPage() {
       occasion: draft.occasion,
       moment: drop?.moment ?? momentOfDay(),
     });
+    const state = useCloset.getState();
+    setTaste(logWear(state.taste ?? emptyTaste(), state.garments, draft.garmentIds, Date.now()));
   };
 
   const saveDraft = (messageId: string) => {
@@ -219,18 +277,20 @@ function StylistPage() {
     const draft = message ? draftFromMessage(message) : null;
     if (!draft || message?.lookId) return;
     explicitWrite.current = true;
+    const state = useCloset.getState();
+    setTaste(learnFromSave(state.taste ?? emptyTaste(), draft.garmentIds, state.garments, Date.now()));
     const id = saveLook(stylistLookToSave(draft));
     stampMessage(messageId, { lookId: id });
   };
 
   return (
     <div className="mx-auto max-w-2xl px-4 md:px-6 py-8 md:py-12 rise">
-      <p className="micro text-champagne/60">The atelier</p>
+      <p className="micro text-champagne/60">Atlas</p>
       <h1 className="mt-2 font-editorial text-4xl md:text-5xl tracking-tight text-champagne">
-        Ralph. Italian. Street.
+        The stylist
       </h1>
       <p className="mt-3 text-champagne/70 text-sm">
-        Mixed from your closet. Never a garment you don’t own.
+        Dressed from this closet. It remembers what you wear, skip, and lock.
       </p>
 
       {!hydrated ? null : owned.length === 0 ? (
@@ -258,6 +318,9 @@ function StylistPage() {
               <StylistNote text={m.text} />
             ) : (
               <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</p>
+            )}
+            {m.role === "stylist" && m.technique && (
+              <p className="mt-2 text-xs text-champagne/50">{m.technique}</p>
             )}
             {m.role === "stylist" && m.garmentIds && m.garmentIds.length > 0 && (
               <FlatLay

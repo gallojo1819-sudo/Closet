@@ -10,6 +10,7 @@ import {
   type CloudMeta,
 } from "./merge.ts";
 import { shrinkGuard } from "./guard.ts";
+import { embedTasteAvoid, peelTasteAvoid } from "../taste.ts";
 
 export type SyncMemory = {
   pulled: boolean;
@@ -171,15 +172,13 @@ export function rowToCloud(data: {
     }
     looks.push(l);
   }
-  const avoid =
-    data.avoid && typeof data.avoid === "object" && !Array.isArray(data.avoid)
-      ? (data.avoid as Record<string, number>)
-      : {};
+  const peeled = peelTasteAvoid(data.avoid);
   return {
     garments,
     looks,
     journal: Array.isArray(data.journal) ? (data.journal as CloudMeta["journal"]) : [],
-    avoid,
+    avoid: peeled.avoid,
+    ...(peeled.taste ? { taste: peeled.taste } : {}),
     drop: (data.drop as CloudMeta["drop"]) ?? null,
     refPhoto: Boolean(data.ref_photo),
     v: typeof data.v === "number" ? data.v : 6,
@@ -317,7 +316,7 @@ export async function pushIfDirty(opts: {
         garments: payload.garments,
         looks: payload.looks,
         journal: payload.journal,
-        avoid: payload.avoid,
+        avoid: embedTasteAvoid(payload.avoid, payload.taste),
         drop: payload.drop,
         ref_photo: payload.refPhoto,
         v: 6,
