@@ -30,6 +30,7 @@ import { enqueuePrint, enqueueTag } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
 import { classifyScan, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
 import { judgeHeldPlate } from "@/lib/packshot-search";
+import { cropHeldPhoto } from "@/lib/plate-pass";
 import { CAMERA_TAG_MS, decideCameraTag } from "@/lib/camera-tag";
 import { getAccount } from "@/lib/cloud/account";
 import { getSupabase } from "@/lib/cloud/client";
@@ -384,6 +385,7 @@ export function Studio() {
       let tile = "";
       await placeHeldGarment({
         photo: opts.photoDataUrl,
+        crop: () => cropHeldPhoto(opts.photoDataUrl),
         print: async (photo, attempt) => {
           try {
             const image = await shrinkDataUrl(photo, 1024);
@@ -431,8 +433,8 @@ export function Studio() {
               warmth: 3,
               seasons: [],
               imageSrc: photoKey,
-              cutoutSrc: usePlate ? plateKey : photoKey,
-              imageSource: usePlate ? "cutout" : "photo",
+              cutoutSrc: usePlate ? plateKey : "",
+              imageSource: "cutout",
               matteQuality: usePlate ? "clean" : "busy",
               reprint: !usePlate,
               fileHash: opts.hash,

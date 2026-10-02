@@ -5,6 +5,7 @@ import { GarmentDetail } from "@/components/closet/detail";
 import { IdleMount } from "@/components/closet/idle-mount";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { LookSheet } from "@/components/closet/look-sheet";
+import { OutlineJacket } from "@/components/closet/outline";
 import { GarmentTile } from "@/components/closet/tile";
 import { looksForHero } from "@/lib/lookbook";
 import {
@@ -16,7 +17,7 @@ import {
 } from "@/lib/images";
 import { rackNotes } from "@/lib/gaps";
 import { pieceLabel } from "@/lib/piece-label";
-import { rawOuterwearCovers } from "@/lib/plate";
+import { needsReprintTile, rawOuterwearCovers } from "@/lib/plate";
 import { scheduleOuterwearPlates } from "@/lib/plate-pass";
 import { daysIdle } from "@/lib/style";
 import { useAccount } from "@/lib/cloud/account";
@@ -57,6 +58,7 @@ function ClosetPage() {
   const drop = useCloset((s) => s.drop);
   const [filter, setFilter] = useState<Filter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [outlineId, setOutlineId] = useState<string | null>(null);
   const [heroLooks, setHeroLooks] = useState<Look[]>([]);
   const [heroOpen, setHeroOpen] = useState<Look | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -149,6 +151,10 @@ function ClosetPage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (outlineId) {
+        setOutlineId(null);
+        return;
+      }
       if (openId) {
         setOpenPiece(null);
         return;
@@ -159,7 +165,7 @@ function ClosetPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selecting, openId]);
+  }, [selecting, openId, outlineId]);
 
   const getOpenTile = useCallback(
     () => (openId ? tileEls.current.get(openId) ?? null : null),
@@ -384,6 +390,10 @@ function ClosetPage() {
                     toggleSelected(g.id);
                     return;
                   }
+                  if (needsReprintTile(g)) {
+                    setOutlineId(g.id);
+                    return;
+                  }
                   setOpenPiece(openId === g.id ? null : g.id);
                 }}
               />
@@ -392,6 +402,12 @@ function ClosetPage() {
           ))}
         </ul>
       )}
+      {outlineId && garmentsAll.find((g) => g.id === outlineId) ? (
+        <OutlineJacket
+          garment={garmentsAll.find((g) => g.id === outlineId)!}
+          onClose={() => setOutlineId(null)}
+        />
+      ) : null}
       {open && (
         <GarmentDetail
           key={open.id}

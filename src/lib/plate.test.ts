@@ -5,6 +5,8 @@ import {
   coverIsOriginal,
   coverStillPhoto,
   needsReprintTile,
+  hasCleanCover,
+  jacketsNeedingPlate,
   plateResultPatch,
   rawOuterwearCovers,
   REPRINT_CAPTION,
@@ -79,9 +81,50 @@ describe("raw outerwear covers", () => {
     assert.equal(needsReprintTile(blazer), false);
     assert.equal(needsReprintTile(toggle), false);
     assert.equal(needsReprintTile({ ...jeans, reprint: true }), true);
-    assert.equal(needsReprintTile(chosen), false);
+    assert.equal(needsReprintTile(chosen), true);
+    assert.equal(hasCleanCover(chosen), false);
+    assert.equal(hasCleanCover(blazer), true);
     assert.equal(coverStillPhoto(chosen), false);
     assert.equal(coverIsOriginal(chosen), true);
+    const catalog = {
+      id: "cat",
+      category: "outerwear",
+      imageSrc: "/x.jpg",
+      cutoutSrc: "/x.jpg",
+      imageSource: "official",
+    };
+    const missing = {
+      id: "miss",
+      category: "outerwear",
+      imageSrc: "idb:miss:o",
+      cutoutSrc: "",
+      imageSource: "cutout",
+    };
+    const heldNote = {
+      id: "held",
+      category: "outerwear",
+      imageSrc: "idb:held:o",
+      cutoutSrc: "idb:held:c",
+      imageSource: "cutout",
+      notes: "held in a hand",
+    };
+    assert.equal(hasCleanCover(catalog), true);
+    assert.equal(hasCleanCover(heldNote), true);
+    const queued = jacketsNeedingPlate([
+      photo,
+      blazer,
+      toggle,
+      field,
+      jeans,
+      chosen,
+      catalog,
+      missing,
+      { ...heldNote, cutoutSrc: "idb:held:o" },
+    ]);
+    assert.deepEqual(
+      queued.map((g) => g.id),
+      ["suede", "field", "chosen", "miss", "held"],
+    );
   });
 });
 
@@ -101,10 +144,23 @@ describe("plate patch", () => {
       { reprint: true, cutoutSrc: "idb:suede:o" },
       "idb:suede:c",
     );
-    assert.equal(refused.cutoutSrc, "idb:suede:o");
+    assert.equal(refused.cutoutSrc, "");
+    assert.equal(refused.imageSource, "cutout");
+    assert.notEqual(refused.imageSource, "photo");
     assert.equal(refused.reprint, true);
+    assert.notEqual(refused.cutoutSrc, "idb:suede:o");
     assert.notEqual(refused.cutoutSrc, "idb:suede:c");
-    assert.equal(REPRINT_CAPTION, "Cover still has the hand — tap Reprint.");
+    assert.equal("imageSrc" in refused, false);
+    const kept = plateResultPatch(
+      "idb:suede:o",
+      { reprint: true, cutoutSrc: "" },
+      "idb:suede:c",
+      "idb:suede:c",
+    );
+    assert.equal(kept.cutoutSrc, "idb:suede:c");
+    assert.equal(kept.reprint, false);
+    assert.equal("imageSrc" in kept, false);
+    assert.equal(REPRINT_CAPTION, "Plate failed — outline the jacket.");
   });
 });
 

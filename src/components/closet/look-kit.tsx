@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { kitBand, kitCells } from "@/lib/look";
+import { hasCleanCover } from "@/lib/plate";
 import type { Garment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -63,11 +64,9 @@ export function LookKit({
               gridRow: spanFull ? "1 / -1" : spanRow && i === 1 ? "2 / 3" : undefined,
             }}
           >
-            <GarmentImg
+            <CoverArt
               garment={g}
               thumb={thumb}
-              eager={!thumb}
-              nudge={false}
               className="absolute inset-0 h-full w-full object-contain"
             />
           </div>
@@ -85,6 +84,33 @@ const SHARE_PLAIN: Record<BandRole, number> = { top: 46, jacket: 0, bottom: 34, 
 
 function bandRole(g: Garment): BandRole | null {
   return kitBand(g);
+}
+
+function CoverArt({
+  garment,
+  thumb,
+  className,
+}: {
+  garment: Garment;
+  thumb: boolean;
+  className: string;
+}) {
+  if (!hasCleanCover(garment)) {
+    return (
+      <div className={cn("flex h-full w-full items-center justify-center px-3 text-center", className)}>
+        <p className="text-sm leading-snug">{garment.name}</p>
+      </div>
+    );
+  }
+  return (
+    <GarmentImg
+      garment={garment}
+      thumb={thumb}
+      eager={!thumb}
+      nudge={false}
+      className={className}
+    />
+  );
 }
 
 function LookKitStack({
@@ -134,11 +160,9 @@ function LookKitStack({
           >
             <div className="look-kit-rise absolute inset-0">
               <div className="look-kit-plate absolute inset-0">
-                <GarmentImg
+                <CoverArt
                   garment={g}
                   thumb={thumb}
-                  eager={!thumb}
-                  nudge={false}
                   className="h-full w-full object-contain mix-blend-multiply"
                 />
               </div>

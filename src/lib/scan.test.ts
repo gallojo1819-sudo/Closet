@@ -332,6 +332,9 @@ describe("held garment cover", () => {
     assert.equal(coverRejected("hanger"), false);
     assert.equal(coverRejected("arm"), false);
     assert.equal(coverRejected("skin"), false);
+    assert.equal(coverRejected('{"clean":false,"why":"skin"}'), true);
+    assert.equal(coverRejected('{"clean":false,"why":"hand"}'), true);
+    assert.equal(coverRejected('{"clean":true,"why":"hand"}'), false);
     assert.equal(coverRejected("floor"), false);
     assert.equal(coverRejected("wall"), false);
     assert.equal(coverRejected("no hand"), false);
@@ -349,20 +352,31 @@ describe("held garment cover", () => {
     assert.equal(coverRejected("handle"), false);
     assert.equal(coverRejected("suede jacket on paper"), false);
     assert.equal(written.imageSrc, "photo://jacket");
-    assert.equal(written.cutoutSrc, "photo://jacket");
+    assert.equal(written.cutoutSrc, "");
     assert.equal(written.reprint, true);
     assert.notEqual(written.cutoutSrc, "plate://hand");
-    assert.equal(savedCutout, "photo://jacket");
+    assert.notEqual(written.cutoutSrc, "photo://jacket");
+    assert.equal(savedCutout, "");
     assert.equal(written.message, HAND_COVER_MESSAGE);
-    assert.equal(written.message, "Cover still has the hand — tap Reprint.");
+    assert.equal(written.message, "Plate failed — outline the jacket.");
     const direct = writtenCutout({
       photo: "photo://jacket",
       plate: "plate://hand",
       checker: "a hand is in the picture",
     });
-    assert.equal(direct.cutoutSrc, "photo://jacket");
+    assert.equal(direct.cutoutSrc, "");
     assert.equal(direct.reprint, true);
     assert.notEqual(direct.cutoutSrc, "plate://hand");
+    assert.notEqual(direct.cutoutSrc, "photo://jacket");
+    const keptPrev = writtenCutout({
+      photo: "photo://jacket",
+      plate: "plate://hand",
+      checker: '{"clean":false,"why":"hand"}',
+      previous: "idb:old:c",
+    });
+    assert.equal(keptPrev.cutoutSrc, "idb:old:c");
+    assert.equal(keptPrev.imageSrc, "photo://jacket");
+    assert.notEqual(keptPrev.cutoutSrc, "photo://jacket");
     const kept = writtenCutout({
       photo: "photo://jacket",
       plate: "data:image/jpeg;base64,clean",
@@ -415,9 +429,50 @@ describe("held garment cover", () => {
     });
     assert.equal(shown, "");
     assert.notEqual(shown, "photo://jacket");
+    assert.equal(written.cutoutSrc, "");
     assert.notEqual(written.cutoutSrc, "plate://hand");
+    assert.notEqual(written.cutoutSrc, "photo://jacket");
     assert.equal(written.reprint, true);
     assert.equal(written.imageSrc, "photo://jacket");
+  });
+
+  it("retries a dirty print on the garment crop, and a failed crop keeps the previous plate", async () => {
+    const printed: string[] = [];
+    let shown = "unset";
+    const clean = await placeHeldGarment({
+      photo: "photo://jacket",
+      crop: async () => "crop://jacket",
+      print: async (src) => {
+        printed.push(src);
+        return src.startsWith("crop:")
+          ? { ok: true, image: "data:image/jpeg;base64,clean" }
+          : { ok: true, image: "data:image/jpeg;base64,hand" };
+      },
+      check: async (plate) =>
+        plate.includes("hand") ? '{"clean":false,"why":"hand"}' : '{"clean":true,"why":""}',
+      showTile: (cover) => {
+        shown = cover;
+      },
+      save: () => {},
+    });
+    assert.deepEqual(printed, ["photo://jacket", "crop://jacket"]);
+    assert.equal(clean.imageSrc, "photo://jacket");
+    assert.equal(clean.cutoutSrc, "data:image/jpeg;base64,clean");
+    assert.equal(clean.reprint, false);
+    assert.equal(shown, "data:image/jpeg;base64,clean");
+    const kept = await placeHeldGarment({
+      photo: "photo://jacket",
+      previous: "idb:old:c",
+      crop: async () => "crop://jacket",
+      print: async () => ({ ok: true, image: "plate://hand" }),
+      check: async () => '{"clean":false,"why":"hanger"}',
+      showTile: () => {},
+      save: () => {},
+    });
+    assert.equal(kept.imageSrc, "photo://jacket");
+    assert.equal(kept.cutoutSrc, "idb:old:c");
+    assert.notEqual(kept.cutoutSrc, "photo://jacket");
+    assert.notEqual(kept.cutoutSrc, "plate://hand");
   });
 
   it("does not fetch a shop image URL", () => {

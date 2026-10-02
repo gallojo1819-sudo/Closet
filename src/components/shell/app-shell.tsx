@@ -8,6 +8,7 @@ import { accountPool } from "@/lib/cloud/merge";
 import { stillOnPhoneCopy } from "@/lib/cloud/copy";
 import { backupRemaining, idbCount, shouldShowBackupBanner } from "@/lib/cloud/src";
 import { backupPhotos, startCloudSync } from "@/lib/cloud/sync";
+import { scheduleOuterwearPlates, usePlatePassNote } from "@/lib/plate-pass";
 import { livePool } from "@/lib/rack";
 import { migrateImagesToIdb } from "@/lib/migrate";
 import { openPersistGate, useCloset } from "@/lib/store";
@@ -115,6 +116,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   const userId = account.user?.id ?? null;
+  const cleaning = usePlatePassNote();
+
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    scheduleOuterwearPlates();
+  }, [hydrated, userId, garments]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -171,6 +178,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <TopBar />
       <BackupBanner night={night} />
       <main className={cn("pb-20 md:pb-10", backupOpen ? "pt-24 md:pt-28" : "pt-12 md:pt-16")}>
+        {cleaning ? <p className="micro px-4 py-1 text-ink-soft md:px-6">{cleaning}</p> : null}
         {children}
       </main>
       <BottomNav />

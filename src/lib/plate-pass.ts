@@ -1,4 +1,5 @@
-import { printGarment } from "./ai.ts";
+import { useSyncExternalStore } from "react";
+import { classifyScan, printGarment } from "./ai.ts";
 import { fetchCloudBlob } from "./cloud/blobs.ts";
 import { isCloudSrc, parseCloudSrc } from "./cloud/src.ts";
 import { withTimeout } from "./ingest.ts";
@@ -12,10 +13,17 @@ import {
   putImage,
   putThumb,
 } from "./images.ts";
+import { getAccount } from "./cloud/account.ts";
 import { findOfficialCover, judgeHeldPlate } from "./packshot-search.ts";
-import { coverPassAction, maySearchOfficial, officialCoverPatch } from "./packshot.ts";
-import { coverIsOriginal, plateResultPatch, rawOuterwearCovers, runPlatePass } from "./plate.ts";
-import { holderCheckerText, placeHeldGarment } from "./scan.ts";
+import { maySearchOfficial, officialCoverPatch } from "./packshot.ts";
+import {
+  hasCleanCover,
+  jacketsNeedingPlate,
+  keptPlateKey,
+  plateResultPatch,
+  runPlatePass,
+} from "./plate.ts";
+import { cropToBox, holderCheckerText, placeHeldGarment } from "./scan.ts";
 import { useCloset } from "./store.ts";
 
 const autoStarted = new Set<string>();
@@ -39,7 +47,7 @@ async function shrinkForPrint(src: string, max: number): Promise<string> {
 }
 
 /** Original photo bytes. Does not change imageSrc. */
-async function readPhoto(id: string, src: string): Promise<string | null> {
+export async function readGarmentPhoto(id: string, src: string): Promise<string | null> {
   if (src.startsWith("data:")) return src;
   if (isIdbKey(src)) {
     const blob = await getImage(src);
@@ -91,18 +99,39 @@ async function heldChecker(plate: string): Promise<string> {
   }
 }
 
+export async function cropHeldPhoto(photo: string): Promise<string | null> {
+  try {
+    const image = await shrinkForPrint(photo, 1024);
+    const scan = await withTimeout(classifyScan({ data: { image } }).catch(() => null), 4000);
+    if (!scan || !("ok" in scan) || !scan.ok) return null;
+    const box = scan.boxes?.[0]?.box;
+    if (!box) return null;
+    return await cropToBox(photo, box);
+  } catch {
+    return null;
+  }
+}
+
 async function printOnePlate(id: string): Promise<void> {
   const g = useCloset.getState().garments.find((item) => item.id === id);
-  if (!g || g.archived) return;
-  if (!coverIsOriginal(g) && g.reprint !== true) return;
+  if (!g || g.archived || hasCleanCover(g)) return;
+  const previous = keptPlateKey(g);
   try {
-    const photo = await readPhoto(g.id, g.imageSrc);
+    const photo = await readGarmentPhoto(g.id, g.imageSrc);
     if (!photo) {
-      useCloset.getState().updateGarment(id, { reprint: true });
+      if (!previous && useCloset.getState().garments.some((item) => item.id === id)) {
+        useCloset.getState().updateGarment(id, {
+          cutoutSrc: "",
+          imageSource: "cutout",
+          reprint: true,
+        });
+      }
       return;
     }
     const written = await placeHeldGarment({
       photo,
+      previous,
+      crop: () => cropHeldPhoto(photo),
       print: async (src, attempt) => {
         try {
           const image = await shrinkForPrint(src, 1024);
@@ -118,16 +147,23 @@ async function printOnePlate(id: string): Promise<void> {
       save: () => {},
     });
     const plateKey = imageKey(id, "c");
-    const patch = plateResultPatch(g.imageSrc, written, plateKey);
-    if (patch.reprint === false && written.cutoutSrc.startsWith("data:")) {
+    const patch = plateResultPatch(g.imageSrc, written, plateKey, previous);
+    if (!written.reprint && written.cutoutSrc.startsWith("data:")) {
       await putImage(plateKey, dataUrlToBlob(written.cutoutSrc));
       await putThumb(id, written.cutoutSrc).catch(() => {});
     }
     if (!useCloset.getState().garments.some((item) => item.id === id)) return;
+    const current = useCloset.getState().garments.find((item) => item.id === id);
+    if (current && hasCleanCover(current) && written.reprint) return;
     useCloset.getState().updateGarment(id, patch);
   } catch {
-    if (useCloset.getState().garments.some((item) => item.id === id)) {
-      useCloset.getState().updateGarment(id, { reprint: true });
+    const current = useCloset.getState().garments.find((item) => item.id === id);
+    if (current && !hasCleanCover(current)) {
+      useCloset.getState().updateGarment(id, {
+        cutoutSrc: previous,
+        imageSource: "cutout",
+        reprint: previous ? false : true,
+      });
     }
   }
 }
@@ -150,7 +186,7 @@ async function searchThenPlate(id: string): Promise<void> {
   if (searched.has(id)) return;
   searched.add(id);
   try {
-    const photo = await readPhoto(g.id, g.imageSrc);
+    const photo = await readGarmentPhoto(g.id, g.imageSrc);
     if (photo) {
       const shrunk = await shrinkForPrint(photo, 1024);
       const hit = await findOfficialCover({
@@ -186,17 +222,41 @@ async function searchThenPlate(id: string): Promise<void> {
   await printOnePlate(id);
 }
 
-/** Fire-and-forget. Does not wait, and does not reprint an id twice this session. */
+let plateNote = "";
+let passDepth = 0;
+const noteListeners = new Set<() => void>();
+
+function setPlateNote(next: string) {
+  plateNote = next;
+  for (const fn of noteListeners) fn();
+}
+
+export function usePlatePassNote(): string {
+  return useSyncExternalStore(
+    (cb) => {
+      noteListeners.add(cb);
+      return () => noteListeners.delete(cb);
+    },
+    () => plateNote,
+    () => "",
+  );
+}
+
+/** Fire-and-forget. Once per id this session. Signed in only. Does not search the web. */
 export function scheduleOuterwearPlates(): void {
-  const items = rawOuterwearCovers(useCloset.getState().garments).filter(
+  if (!getAccount().user) return;
+  const items = jacketsNeedingPlate(useCloset.getState().garments).filter(
     (g) => g.id && !autoStarted.has(g.id),
   );
   for (const g of items) {
     if (g.id) autoStarted.add(g.id);
   }
   if (!items.length) return;
-  void runPlatePass(items, (g) => {
-    if (coverPassAction(g) === "search") return findRealPhoto(g.id!);
-    return makePlate(g.id!);
-  }, 2);
+  const n = items.length;
+  passDepth += 1;
+  setPlateNote(n === 1 ? "Cleaning 1 jacket." : `Cleaning ${n} jackets.`);
+  void runPlatePass(items, (g) => makePlate(g.id!), 2).finally(() => {
+    passDepth = Math.max(0, passDepth - 1);
+    if (passDepth === 0) setPlateNote("");
+  });
 }

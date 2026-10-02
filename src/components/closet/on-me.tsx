@@ -12,8 +12,8 @@ import {
 } from "@/lib/images";
 import { useCloset } from "@/lib/store";
 import type { Garment, Occasion } from "@/lib/types";
-import { layersForOnMe } from "@/lib/look";
-import { coverLoadError, loadLookCovers, liveCoverLoader } from "@/lib/cloud/cover";
+import { cutoutsForOnYou } from "@/lib/look";
+import { coverLoadError, loadPlateCovers, liveCoverLoader } from "@/lib/cloud/cover";
 import { livePool } from "@/lib/rack";
 import { slotOf } from "@/lib/style";
 import { tuckDressingLines } from "@/lib/tuck";
@@ -35,11 +35,13 @@ export async function dressLook(
   }
   const refImage = await jpegDataUrl(blob, 768, 0.8);
   const allowed = new Set(livePool(useCloset.getState().garments).map((g) => g.id));
-  const worn = layersForOnMe(pieces.filter((g) => allowed.has(g.id)));
+  const plan = cutoutsForOnYou(pieces.filter((g) => allowed.has(g.id)));
+  if (plan.blocked) throw new Error(`${plan.blocked} has no clean cover.`);
+  const worn = plan.layers;
   if (worn.length < 3) {
     throw new Error("Incomplete look — keeping the kit.");
   }
-  const loaded = await loadLookCovers(worn, liveCoverLoader());
+  const loaded = await loadPlateCovers(worn, liveCoverLoader());
   if (!loaded.ok) {
     throw new Error(coverLoadError(loaded.name));
   }
@@ -236,9 +238,11 @@ function useOnMe(pieces: Garment[], occasion?: Occasion) {
     setBusy(true);
     setError(null);
     try {
+      const plan = cutoutsForOnYou(pieces);
       const image = await dressLook(pieces, occasion);
       if (useCloset.getState().refPhoto !== refPhoto) return;
       setImage(image);
+      if (plan.skipped) setError(`${plan.skipped} has no clean cover.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview failed.");
     } finally {

@@ -1,7 +1,7 @@
 import type { ImageSource } from "./types.ts";
-import { HAND_COVER_MESSAGE } from "./scan.ts";
+import { PLATE_FAIL_MESSAGE } from "./scan.ts";
 
-export const REPRINT_CAPTION = HAND_COVER_MESSAGE;
+export const REPRINT_CAPTION = PLATE_FAIL_MESSAGE;
 
 type CoverFields = {
   imageSrc?: string;
@@ -11,6 +11,7 @@ type CoverFields = {
   category?: string;
   archived?: boolean;
   id?: string;
+  notes?: string;
 };
 
 const PLATE_SOURCES = new Set(["official", "cutout", "segmented"]);
@@ -34,11 +35,63 @@ export function coverStillPhoto(g: CoverFields): boolean {
   return coverIsOriginal(g);
 }
 
-/** Grid paper tile. A refused plate, or outerwear whose cover is still the photo. */
+export function notesSayHeld(notes?: string): boolean {
+  return /\bheld\b/i.test(notes ?? "");
+}
+
+/**
+ * A plate the grid, Lookbook, and On you may paint.
+ * Official and segmented catalog rows may store the same URL for image and cutout.
+ * A phone photo, an empty cover, a refused plate, or a held shot still pointing at itself is not.
+ */
+export function hasCleanCover(g: CoverFields): boolean {
+  const cutout = g.cutoutSrc?.trim() ?? "";
+  const image = g.imageSrc?.trim() ?? "";
+  if (!cutout) return false;
+  if (g.reprint === true) return false;
+  const source = g.imageSource ?? "";
+  if (source === "photo") return false;
+  if (!PLATE_SOURCES.has(source)) return false;
+  if (image && cutout === image) {
+    if (notesSayHeld(g.notes)) return false;
+    return source === "official" || source === "segmented";
+  }
+  return true;
+}
+
+/** The stored plate key when one already exists. Never the phone photo. */
+export function keptPlateKey(g: CoverFields): string {
+  if (hasCleanCover(g)) return g.cutoutSrc?.trim() ?? "";
+  const cutout = g.cutoutSrc?.trim() ?? "";
+  const image = g.imageSrc?.trim() ?? "";
+  if (!cutout || cutout === image || g.imageSource === "photo") return "";
+  if (!PLATE_SOURCES.has(g.imageSource ?? "")) return "";
+  return cutout;
+}
+
+/** Grid paper tile. A refused plate, or outerwear that still has no clean cover. */
 export function needsReprintTile(g: CoverFields): boolean {
+  if (hasCleanCover(g)) return false;
   if (g.reprint === true) return true;
-  if (g.reprint === false) return false;
-  return g.category === "outerwear" && coverStillPhoto(g);
+  return g.category === "outerwear";
+}
+
+/**
+ * One signed-in pass. Outerwear with no clean plate, when the cover is missing,
+ * the notes say held, imageSource is photo, or the cutout is still the original.
+ */
+export function jacketsNeedingPlate<T extends CoverFields>(garments: T[]): T[] {
+  return garments.filter((g) => {
+    if (g.archived || g.category !== "outerwear") return false;
+    if (hasCleanCover(g)) return false;
+    const cutout = g.cutoutSrc?.trim() ?? "";
+    const image = g.imageSrc?.trim() ?? "";
+    const missing = !cutout;
+    const held = notesSayHeld(g.notes);
+    const photo = g.imageSource === "photo";
+    const same = Boolean(image) && cutout === image;
+    return missing || held || photo || same;
+  });
 }
 
 /** One pass. Outerwear only. A plate (official, cutout, segmented) is not included. */
@@ -57,12 +110,14 @@ export type PlatePatch = {
 
 /**
  * imageSrc is not in the patch. A clean plate is stored at plateKey.
- * A refusal keeps cutoutSrc on the original photo key, never a data URL.
+ * A refusal does not point cutoutSrc at the phone photo.
+ * A previous clean plate is left in place.
  */
 export function plateResultPatch(
   garmentImageSrc: string,
   written: { reprint: boolean; cutoutSrc: string },
   plateKey: string,
+  previousCutout = "",
 ): PlatePatch {
   if (!written.reprint && written.cutoutSrc.startsWith("data:")) {
     return {
@@ -72,9 +127,33 @@ export function plateResultPatch(
       reprint: false,
     };
   }
+  const prev = previousCutout.trim();
+  const keepPrev = Boolean(prev) && prev !== garmentImageSrc && !prev.startsWith("data:");
+  if (keepPrev) {
+    return {
+      cutoutSrc: prev,
+      imageSource: "cutout",
+      matteQuality: "clean",
+      reprint: false,
+    };
+  }
+  const fromWritten = written.cutoutSrc.trim();
+  if (
+    !written.reprint &&
+    fromWritten &&
+    fromWritten !== garmentImageSrc &&
+    !fromWritten.startsWith("data:")
+  ) {
+    return {
+      cutoutSrc: fromWritten,
+      imageSource: "cutout",
+      matteQuality: "clean",
+      reprint: false,
+    };
+  }
   return {
-    cutoutSrc: garmentImageSrc,
-    imageSource: "photo",
+    cutoutSrc: "",
+    imageSource: "cutout",
     matteQuality: "busy",
     reprint: true,
   };

@@ -33,19 +33,20 @@ export type CoverLoader = {
 export function coverPathsForGarment(
   g: { id: string; cutoutSrc?: string; imageSrc?: string },
   userId?: string,
+  kinds: BlobKind[] = KINDS,
 ): { idbKeys: string[]; paths: string[] } {
-  const idbKeys = KINDS.map((k) => imageKey(g.id, k));
+  const idbKeys = kinds.map((k) => imageKey(g.id, k));
   const paths: string[] = [];
   for (const src of [g.cutoutSrc, g.imageSrc]) {
     const parsed = parseCloudSrc(src);
-    if (parsed) paths.push(parsed.path);
+    if (parsed && kinds.includes(parsed.kind)) paths.push(parsed.path);
   }
   const uid =
     userId ??
     parseCloudSrc(g.cutoutSrc)?.userId ??
     parseCloudSrc(g.imageSrc)?.userId;
   if (uid) {
-    for (const k of KINDS) paths.push(garmentObjectPath(uid, g.id, k));
+    for (const k of kinds) paths.push(garmentObjectPath(uid, g.id, k));
   }
   return { idbKeys, paths: [...new Set(paths)] };
 }
@@ -75,8 +76,9 @@ async function cacheCover(loader: CoverLoader, path: string, blob: Blob): Promis
 export async function loadCoverBlob(
   g: { id: string; name?: string; cutoutSrc?: string; imageSrc?: string },
   loader: CoverLoader,
+  kinds: BlobKind[] = KINDS,
 ): Promise<Blob | null> {
-  const { idbKeys, paths } = coverPathsForGarment(g, loader.userId);
+  const { idbKeys, paths } = coverPathsForGarment(g, loader.userId, kinds);
   for (const key of idbKeys) {
     try {
       const hit = await loader.getIdb(key);
@@ -86,7 +88,7 @@ export async function loadCoverBlob(
     }
   }
   if (loader.fetchKind) {
-    for (const kind of KINDS) {
+    for (const kind of kinds) {
       try {
         const hit = await loader.fetchKind(g.id, kind, srcHintFor(g, kind));
         if (hit && hit.size > 0) return hit;
@@ -124,17 +126,33 @@ export type LookCovers =
   | { ok: true; blobs: Blob[] }
   | { ok: false; name: string };
 
-export async function loadLookCovers(
+async function loadCovers(
   pieces: { id: string; name: string; cutoutSrc?: string; imageSrc?: string }[],
   loader: CoverLoader,
+  kinds: BlobKind[],
 ): Promise<LookCovers> {
   const blobs: Blob[] = [];
   for (const g of pieces) {
-    const blob = await loadCoverBlob(g, loader);
+    const blob = await loadCoverBlob(g, loader, kinds);
     if (!blob) return { ok: false, name: g.name };
     blobs.push(blob);
   }
   return { ok: true, blobs };
+}
+
+export async function loadLookCovers(
+  pieces: { id: string; name: string; cutoutSrc?: string; imageSrc?: string }[],
+  loader: CoverLoader,
+): Promise<LookCovers> {
+  return loadCovers(pieces, loader, KINDS);
+}
+
+/** Plate bytes only. Never the original phone photo (`o` / imageSrc). */
+export async function loadPlateCovers(
+  pieces: { id: string; name: string; cutoutSrc?: string; imageSrc?: string }[],
+  loader: CoverLoader,
+): Promise<LookCovers> {
+  return loadCovers(pieces, loader, ["c", "t"]);
 }
 
 async function defaultDownload(path: string): Promise<Blob | null> {

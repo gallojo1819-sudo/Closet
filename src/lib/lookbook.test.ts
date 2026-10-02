@@ -1518,6 +1518,7 @@ export function GarmentImg(props) {
       const specs = [
         ["@/components/closet/gimg", pathToFileURL(stub).href],
         ["@/lib/look", href("./look.ts")],
+        ["@/lib/plate", href("./plate.ts")],
         ["@/lib/style", href("./style.ts")],
         ["@/lib/utils", href("./utils.ts")],
       ];
@@ -1586,6 +1587,27 @@ export function GarmentImg(props) {
         [...withJacket.matchAll(/data-share="([^"]+)"/g)].map((m) => m[1]),
         ["34", "20", "28", "18"],
       );
+      const hanger = renderToStaticMarkup(
+        createElement(LookKit, {
+          layout: "stack",
+          pieces: [
+            ...pieces,
+            piece({
+              id: "hanger",
+              name: "Brown suede jacket",
+              category: "outerwear",
+              subtype: "jacket",
+              imageSrc: "photo://jacket",
+              cutoutSrc: "photo://jacket",
+              imageSource: "photo",
+            }),
+          ],
+        }),
+      );
+      assert.equal(hanger.includes('data-band="jacket"'), true);
+      assert.equal(hanger.includes("plate:hanger"), false);
+      assert.match(hanger, /Brown suede jacket/);
+      assert.equal(hanger.includes("photo://jacket"), false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

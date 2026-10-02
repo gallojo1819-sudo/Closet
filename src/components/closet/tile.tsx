@@ -1,7 +1,6 @@
 import type { MouseEvent } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
-import { makePlate } from "@/lib/plate-pass";
-import { needsReprintTile, REPRINT_CAPTION } from "@/lib/plate";
+import { hasCleanCover, needsReprintTile, REPRINT_CAPTION } from "@/lib/plate";
 import { pieceLabel } from "@/lib/piece-label";
 import { useCloset } from "@/lib/store";
 import type { Garment } from "@/lib/types";
@@ -23,6 +22,7 @@ export function GarmentTile({
 }) {
   const pool = useCloset((s) => s.garments);
   const reprint = needsReprintTile(garment);
+  const paper = !hasCleanCover(garment);
   return (
     <button
       type="button"
@@ -37,19 +37,10 @@ export function GarmentTile({
         className="relative bg-paper-deep border border-hairline overflow-hidden aspect-page transition-all duration-300 ease-[var(--ease-atelier)] group-hover:-translate-y-1.5 group-hover:shadow-[0_16px_36px_-14px_rgb(23_20_15/0.3)]"
         style={{ viewTransitionName: "none" }}
       >
-        {reprint ? (
+        {paper ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-paper-deep px-3 text-center">
             <p className="text-sm leading-snug">{garment.name}</p>
-            <span
-              className="micro mt-3 underline"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                void makePlate(garment.id);
-              }}
-            >
-              Reprint
-            </span>
+            {reprint ? <span className="micro mt-3 underline">Reprint</span> : null}
           </div>
         ) : (
           <GarmentImg

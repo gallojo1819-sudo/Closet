@@ -4,6 +4,7 @@ import {
   coverLoadError,
   coverPathsForGarment,
   loadLookCovers,
+  loadPlateCovers,
   type CoverLoader,
 } from "./cover.ts";
 
@@ -113,6 +114,21 @@ describe("loadLookCovers", () => {
     if (!res.ok) {
       assert.equal(coverLoadError(res.name).includes("Missing a cover plate"), false);
     }
+  });
+
+  it("a plate load does not accept the original photo", async () => {
+    const loader: CoverLoader = {
+      getIdb: async (key) => (key.endsWith(":o") ? new Blob(["phone"], { type: "image/jpeg" }) : null),
+      download: async (path) =>
+        path.endsWith("/o.jpg") ? new Blob(["phone"], { type: "image/jpeg" }) : null,
+      signedFetch: async () => null,
+      userId: UID,
+    };
+    const plate = await loadPlateCovers([piece("g1", "Brown suede jacket")], loader);
+    assert.equal(plate.ok, false);
+    if (!plate.ok) assert.equal(plate.name, "Brown suede jacket");
+    const full = await loadLookCovers([piece("g1", "Brown suede jacket")], loader);
+    assert.equal(full.ok, true);
   });
 
   it("fetchKind (fetchCloudBlob) fills after IDB miss without calling download", async () => {

@@ -3,6 +3,7 @@ import { requestCutout, requestThumb } from "@/lib/cloud/blobs";
 import { isCloudSrc } from "@/lib/cloud/src";
 import { backupPhotos } from "@/lib/cloud/sync";
 import { imageKey, isIdbKey } from "@/lib/images";
+import { hasCleanCover } from "@/lib/plate";
 import { useImageSrc } from "@/lib/use-image";
 import type { Garment } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -23,22 +24,24 @@ export function GarmentImg({
   eager?: boolean;
   nudge?: boolean;
 }) {
-  const fullKey = garment.cutoutSrc || garment.imageSrc;
-  const cloudSrc = isCloudSrc(garment.cutoutSrc)
-    ? garment.cutoutSrc
-    : isCloudSrc(garment.imageSrc)
-      ? garment.imageSrc
-      : "";
-  const thumbKey =
-    cloudSrc && !cloudSrc.endsWith("/o.jpg") ? cloudSrc : imageKey(garment.id, "t");
+  const clean = hasCleanCover(garment);
+  const fullKey = clean ? garment.cutoutSrc : "";
+  const cloudSrc = clean && isCloudSrc(garment.cutoutSrc) ? garment.cutoutSrc : "";
+  const thumbKey = !clean
+    ? ""
+    : cloudSrc && !cloudSrc.endsWith("/o.jpg")
+      ? cloudSrc
+      : imageKey(garment.id, "t");
   const thumbSrc = useImageSrc(thumbKey);
   const fullSrc = useImageSrc(thumb ? "" : fullKey);
-  const src = thumb ? thumbSrc : fullSrc || thumbSrc;
+  const src = !clean ? "" : thumb ? thumbSrc : fullSrc || thumbSrc;
   const node = useRef<HTMLElement | null>(null);
   const phoneOnly = isIdbKey(garment.cutoutSrc) || isIdbKey(garment.imageSrc);
-  const showChip = nudge && phoneOnly && !isCloudSrc(garment.cutoutSrc) && !isCloudSrc(garment.imageSrc);
+  const showChip =
+    clean && nudge && phoneOnly && !isCloudSrc(garment.cutoutSrc) && !isCloudSrc(garment.imageSrc);
 
   useEffect(() => {
+    if (!clean) return;
     if (!thumb) {
       requestCutout(garment.id, garment.cutoutSrc);
       return;
@@ -57,7 +60,7 @@ export function GarmentImg({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [garment.id, garment.cutoutSrc, thumb, eager, thumbSrc]);
+  }, [clean, garment.id, garment.cutoutSrc, thumb, eager, thumbSrc]);
 
   return (
     <div

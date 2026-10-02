@@ -4,9 +4,11 @@ import { getAccount } from "./cloud/account.ts";
 import { getSupabase } from "./cloud/client.ts";
 import { garmentV2Fields, garmentWriter, mirrorGarmentFields } from "./data/mirror.ts";
 import { dataUrlToBlob, imageKey, putImage, putThumb } from "./images.ts";
-import { PRINT_TIMEOUT_MS, withTimeout } from "./ingest.ts";
+import { withTimeout } from "./ingest.ts";
 import { judgeHeldPlate } from "./packshot-search.ts";
-import { coverRejected, holderCheckerText } from "./scan.ts";
+import { cropHeldPhoto } from "./plate-pass.ts";
+import { hasCleanCover, keptPlateKey, plateResultPatch } from "./plate.ts";
+import { holderCheckerText, placeHeldGarment } from "./scan.ts";
 import { useCloset } from "./store.ts";
 import { guessTuck } from "./tuck.ts";
 
@@ -95,26 +97,51 @@ export function enqueueTag(id: string, cover: string): void {
 
 export function enqueuePrint(id: string, original: string): void {
   chain = chain.then(async () => {
-    if (!useCloset.getState().garments.some((g) => g.id === id)) return;
+    const g = useCloset.getState().garments.find((item) => item.id === id);
+    if (!g) return;
+    const previous = keptPlateKey(g);
     try {
-      const print = await withTimeout(
-        printGarment({ data: { image: await shrinkJpeg(original, 1024) } }),
-        PRINT_TIMEOUT_MS,
-      );
-      if (!print?.ok) return;
-      if (!useCloset.getState().garments.some((g) => g.id === id)) return;
-      const verdict = await withTimeout(
-        judgeHeldPlate({ data: { image: print.image } }).catch(() => null),
-        4000,
-      );
-      if (coverRejected(holderCheckerText(verdict))) return;
-      const cutout = await shrinkJpeg(await toLocalDataUrl(print.image), 900, 0.85);
-      await putImage(imageKey(id, "c"), dataUrlToBlob(cutout));
-      await putThumb(id, cutout).catch(() => {});
-      useCloset.getState().updateGarment(id, {
-        cutoutSrc: imageKey(id, "c"),
-        imageSource: "cutout",
+      const written = await placeHeldGarment({
+        photo: original,
+        previous,
+        crop: () => cropHeldPhoto(original),
+        print: async (src, attempt) => {
+          try {
+            const image = await shrinkJpeg(src, 1024);
+            const retry = Boolean(attempt?.retry);
+            return await printGarment({ data: { image, held: retry, retry } });
+          } catch {
+            return { ok: false, error: "print" };
+          }
+        },
+        check: async (plate) => {
+          try {
+            const image = await shrinkJpeg(plate, 768);
+            const verdict = await withTimeout(
+              judgeHeldPlate({ data: { image } }).catch(() => null),
+              4000,
+            );
+            return holderCheckerText(verdict);
+          } catch {
+            return "";
+          }
+        },
+        showTile: () => {},
+        save: () => {},
       });
+      if (!useCloset.getState().garments.some((item) => item.id === id)) return;
+      const plateKey = imageKey(id, "c");
+      const patch = plateResultPatch(g.imageSrc, written, plateKey, previous);
+      if (!written.reprint && written.cutoutSrc.startsWith("data:")) {
+        const cutout = await shrinkJpeg(await toLocalDataUrl(written.cutoutSrc), 900, 0.85);
+        await putImage(plateKey, dataUrlToBlob(cutout));
+        await putThumb(id, cutout).catch(() => {});
+        useCloset.getState().updateGarment(id, patch);
+        return;
+      }
+      const current = useCloset.getState().garments.find((item) => item.id === id);
+      if (current && hasCleanCover(current)) return;
+      useCloset.getState().updateGarment(id, patch);
     } catch {
       /* keep the matte */
     }

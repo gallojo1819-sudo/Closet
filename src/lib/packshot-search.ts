@@ -17,14 +17,13 @@ export type OfficialCover =
   | { ok: true; image: string; pageUrl: string; title: string }
   | { ok: false };
 
-export type PlateJudge = { hand: boolean; arm: boolean; hanger: boolean };
+export type PlateJudge = { clean: boolean; why: string };
 
 const PLATE_JUDGE_PROMPT =
-  'Look only at the picture. Return ONLY JSON: {"hand":false,"arm":false,"hanger":false}. ' +
-  "hand is true only if a human hand is actually visible in the picture. " +
-  "arm is true only if a human arm is actually visible in the picture. " +
-  "hanger is true only if a clothes hanger is actually visible in the picture. " +
-  "A closed jacket on plain paper with no skin is false for all three. JSON only.";
+  'Look only at the picture. Return ONLY JSON: {"clean":true,"why":""}. ' +
+  "clean is false if a person, a face, a hand, an arm, skin, or a clothes hanger is still visible. " +
+  "clean is true only when none of those are visible. " +
+  "why is a few words, empty when clean. JSON only.";
 
 const MATCH_PROMPT =
   "Image 1 is the closet photo. Image 2 is a downloaded product photograph. " +
@@ -36,7 +35,7 @@ const MATCH_PROMPT =
   "model is true if image 2 shows a person, a mannequin, or a hand. " +
   "If you cannot see a detail, say unclear. Do not guess a match. JSON only.";
 
-const CLEAR: PlateJudge = { hand: false, arm: false, hanger: false };
+const CLEAR: PlateJudge = { clean: true, why: "" };
 
 async function xaiPost(
   url: string,
@@ -79,12 +78,19 @@ function parseJudge(text: string): PlateJudge {
   if (start < 0 || end <= start) return CLEAR;
   try {
     const o = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
-    if (!("hand" in o) && !("arm" in o) && !("hanger" in o)) return CLEAR;
-    return {
-      hand: o.hand === true,
-      arm: o.arm === true,
-      hanger: o.hanger === true,
-    };
+    if (typeof o.clean === "boolean") {
+      return { clean: o.clean, why: typeof o.why === "string" ? o.why.slice(0, 80) : "" };
+    }
+    if ("hand" in o || "arm" in o || "hanger" in o) {
+      const hand = o.hand === true;
+      const arm = o.arm === true;
+      const hanger = o.hanger === true;
+      const why = [hand ? "hand" : "", arm ? "arm" : "", hanger ? "hanger" : ""]
+        .filter(Boolean)
+        .join(" ");
+      return { clean: !(hand || arm || hanger), why };
+    }
+    return CLEAR;
   } catch {
     return CLEAR;
   }

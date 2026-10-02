@@ -11,6 +11,7 @@ import {
   slotOf,
 } from "./style.ts";
 import { houseFingerprintOk, type House } from "./houses.ts";
+import { hasCleanCover } from "./plate.ts";
 import { wearSlot } from "./stylist/jackets.ts";
 
 const ORDER: Garment["category"][] = [
@@ -89,6 +90,34 @@ export function layersForOnMe(pieces: Garment[]): Garment[] {
       : undefined;
 
   return [top, bottom, shoe, outer].filter((g): g is Garment => Boolean(g)).slice(0, 4);
+}
+
+/**
+ * One top, one bottom, one shoe, optional jacket — and only pieces with a clean plate.
+ * A missing required plate blocks the render. A missing jacket is named and left out.
+ */
+export function cutoutsForOnYou(pieces: Garment[]): {
+  layers: Garment[];
+  blocked: string | null;
+  skipped: string | null;
+} {
+  const worn = layersForOnMe(pieces);
+  const top = worn.find((g) => kitBand(g) === "top");
+  const bottom = worn.find((g) => kitBand(g) === "bottom");
+  const shoe = worn.find((g) => kitBand(g) === "shoe");
+  const jacket = worn.find((g) => kitBand(g) === "jacket");
+  const required = [top, bottom, shoe].filter((g): g is Garment => Boolean(g));
+  const dirty = required.find((g) => !hasCleanCover(g));
+  if (dirty) return { layers: [], blocked: dirty.name, skipped: null };
+  if (required.length < 3) return { layers: [], blocked: null, skipped: null };
+  if (jacket && !hasCleanCover(jacket)) {
+    return { layers: required, blocked: null, skipped: jacket.name };
+  }
+  return {
+    layers: jacket ? [...required, jacket] : required,
+    blocked: null,
+    skipped: null,
+  };
 }
 
 /** Band for a plate already chosen for the look. Category wins over a jacket-ish name, except a classified jacket filed as a top. */

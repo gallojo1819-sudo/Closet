@@ -146,7 +146,7 @@ export function GarmentDetail({
   const [plating, setPlating] = useState(false);
   const [finding, setFinding] = useState(false);
   const originalSrc = useImageSrc(garment.imageSrc);
-  const usingOriginal = garment.cutoutSrc === garment.imageSrc;
+
   const cpw = costPerWear(garment);
   const md = useMdUp();
   void getTile;
@@ -446,22 +446,7 @@ export function GarmentDetail({
               {plating ? "Making a plate…" : "Make a plate"}
             </button>
           )}
-          {!usingOriginal && view !== "me" && (
-            <button
-              type="button"
-              onClick={() => {
-                updateGarment(garment.id, {
-                  cutoutSrc: garment.imageSrc,
-                  imageSource: "photo",
-                  reprint: false,
-                });
-                setView("original");
-              }}
-              className="micro w-full py-2 text-ink-soft border-t border-hairline hover:text-ink"
-            >
-              Use my photo as cover — the extract lies
-            </button>
-          )}
+
         </div>
         <div className="p-6 flex flex-col gap-4">
           <div className="flex items-center gap-3">

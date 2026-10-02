@@ -6,7 +6,7 @@ import { ensureLookOnMe } from "@/components/closet/on-me";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { colorLine } from "@/lib/color";
-import { nameLook, spreadTitle } from "@/lib/look";
+import { cutoutsForOnYou, nameLook, spreadTitle } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { moreOutfitsForLook } from "@/lib/dress";
 import type { House } from "@/lib/houses";
@@ -153,6 +153,7 @@ export function LookSheet({
     setDressError(null);
     void (async () => {
       try {
+        const plan = cutoutsForOnYou(piecesRef.current);
         const image = await ensureLookOnMe(
           look.id,
           piecesRef.current,
@@ -160,6 +161,7 @@ export function LookSheet({
           look.occasion as Occasion,
         );
         if (n !== gen.current) return;
+        if (plan.skipped) setDressError(`${plan.skipped} has no clean cover.`);
         const url = URL.createObjectURL(dataUrlToBlob(image));
         setFrame((prev) => {
           if (prev) URL.revokeObjectURL(prev);

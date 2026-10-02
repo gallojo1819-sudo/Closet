@@ -45,7 +45,9 @@ const HOLDER_LABEL = /\b(hands?|hangers?|arms?|sleeves?|fingers?)\b/i;
 const HELD_CUE = /\b(hands?|hangers?|held|holding|arms?|sleeves?)\b/i;
 const WORN_PERSON = /\b(person|people|selfie|wearing)\b/i;
 
-export const HAND_COVER_MESSAGE = "Cover still has the hand — tap Reprint.";
+export const PLATE_FAIL_MESSAGE = "Plate failed — outline the jacket.";
+export const OUTLINE_FAIL_MESSAGE = "Still seeing the hanger";
+export const HAND_COVER_MESSAGE = PLATE_FAIL_MESSAGE;
 const SKIP_FILE =
   /\b(pizza|food|receipt|screenshot|menu|landscape|meme|invoice|document)\b/i;
 
@@ -391,14 +393,30 @@ function holderSighting(checker: string): boolean {
   return SIGHTING.test(text);
 }
 
+/** JSON `{clean:boolean}` wins. Missing or unreadable keeps the plate. */
+export function parseCleanVerdict(checker: string): boolean | null {
+  const raw = checker.trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const o = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+    return typeof o.clean === "boolean" ? o.clean : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Reject only when a hand, an arm, or a hanger is actually in the picture.
- * Floor, wall, skin, and the prompt word "hand" do not drop a closed plate.
+ * Reject when the result says clean:false, or a hand, arm, or hanger is actually in the picture.
+ * The prompt's own word "hand", and a bare "skin", are not a sighting.
  * An empty or unreadable checker keeps the plate.
  */
 export function coverRejected(checker: string): boolean {
   const raw = checker.trim();
   if (!raw) return false;
+  const clean = parseCleanVerdict(raw);
+  if (clean !== null) return !clean;
   const flags = parseHolderFlags(raw);
   if (flags) return flags.hand || flags.arm || flags.hanger;
   return holderSighting(raw);
@@ -406,9 +424,24 @@ export function coverRejected(checker: string): boolean {
 
 /** Checker string for a plate. Null keeps the plate. Booleans, not the prompt. */
 export function holderCheckerText(
-  verdict: { hand?: boolean; arm?: boolean; hanger?: boolean } | null | undefined,
+  verdict:
+    | {
+        hand?: boolean;
+        arm?: boolean;
+        hanger?: boolean;
+        clean?: boolean;
+        why?: string;
+      }
+    | null
+    | undefined,
 ): string {
   if (!verdict) return "";
+  if (typeof verdict.clean === "boolean") {
+    return JSON.stringify({
+      clean: verdict.clean,
+      why: typeof verdict.why === "string" ? verdict.why : "",
+    });
+  }
   return JSON.stringify({
     hand: verdict.hand === true,
     arm: verdict.arm === true,
@@ -440,18 +473,30 @@ export type CutoutWrite = {
   reprint: boolean;
 };
 
+function keptPrevious(photo: string, previous?: string | null): string {
+  const prev = (previous ?? "").trim();
+  if (!prev || prev === photo) return "";
+  return prev;
+}
+
 /** The photo stays imageSrc. A refused plate is not cutoutSrc. */
 export function writtenCutout(input: {
   photo: string;
   plate: string | null;
   checker: string;
+  /** A plate already stored. Never the phone photo. */
+  previous?: string | null;
 }): CutoutWrite {
   const reject = !input.plate || coverRejected(input.checker);
   if (reject) {
+    const keep = keptPrevious(input.photo, input.previous);
+    if (keep) {
+      return { imageSrc: input.photo, cutoutSrc: keep, message: null, reprint: false };
+    }
     return {
       imageSrc: input.photo,
-      cutoutSrc: input.photo,
-      message: HAND_COVER_MESSAGE,
+      cutoutSrc: "",
+      message: PLATE_FAIL_MESSAGE,
       reprint: true,
     };
   }
@@ -472,28 +517,68 @@ export async function placeHeldGarment(opts: {
   /** Empty string when the plate was refused — do not paint the phone photo. */
   showTile: (cover: string) => void;
   save: (written: CutoutWrite) => void | Promise<void>;
+  /** Second print. The jacket only, as tight as the box allows. Null reprints the same frame. */
+  crop?: () => Promise<string | null>;
+  /** Kept when both prints fail the check. Never the phone photo. */
+  previous?: string | null;
 }): Promise<CutoutWrite> {
-  const once = async (retry: boolean) => {
-    const printed = await opts.print(opts.photo, { retry });
+  const once = async (src: string, retry: boolean) => {
+    const printed = await opts.print(src, { retry });
     const plate = printed.ok && printed.image ? printed.image : null;
     const checker = plate ? await opts.check(plate) : "";
     return { plate, checker };
   };
-  let { plate, checker } = await once(false);
+  let { plate, checker } = await once(opts.photo, false);
   if (!plate || coverRejected(checker)) {
-    const again = await once(true);
+    let src = opts.photo;
+    if (opts.crop) {
+      const cropped = await opts.crop().catch(() => null);
+      if (cropped) src = cropped;
+    }
+    const again = await once(src, true);
     if (again.plate && !coverRejected(again.checker)) {
       plate = again.plate;
       checker = again.checker;
     } else {
       plate = null;
-      checker = again.checker || checker || "hand";
+      checker = again.checker || checker || '{"clean":false,"why":"hand"}';
     }
   }
-  const written = writtenCutout({ photo: opts.photo, plate, checker });
+  const written = writtenCutout({
+    photo: opts.photo,
+    plate,
+    checker,
+    previous: opts.previous,
+  });
   opts.showTile(written.reprint ? "" : written.cutoutSrc);
   await opts.save(written);
   return written;
+}
+
+/** Tight crop. No padding. Fractions are 0–1 of the photo. */
+export async function cropToBox(dataUrl: string, box: CropBox): Promise<string | null> {
+  if (typeof document === "undefined") return null;
+  const tight = clampBox(box);
+  if (tight.w < 0.02 || tight.h < 0.02) return null;
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("crop"));
+      el.src = dataUrl;
+    });
+    const sx = Math.max(0, Math.round(tight.x * img.naturalWidth));
+    const sy = Math.max(0, Math.round(tight.y * img.naturalHeight));
+    const sw = Math.max(1, Math.min(img.naturalWidth - sx, Math.round(tight.w * img.naturalWidth)));
+    const sh = Math.max(1, Math.min(img.naturalHeight - sy, Math.round(tight.h * img.naturalHeight)));
+    const c = document.createElement("canvas");
+    c.width = sw;
+    c.height = sh;
+    c.getContext("2d")?.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    return c.toDataURL("image/jpeg", 0.85);
+  } catch {
+    return null;
+  }
 }
 
 /** New tab. Google image search of brand + name. Does not fetch a picture. */

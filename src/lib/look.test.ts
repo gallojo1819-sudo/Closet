@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { heroPieces, kitBand, kitCells, layersForOnMe, nameLook, spreadTitle } from "./look.ts";
+import { readFileSync } from "node:fs";
+import { cutoutsForOnYou, heroPieces, kitBand, kitCells, layersForOnMe, nameLook, spreadTitle } from "./look.ts";
 import type { Garment } from "./types.ts";
 
 function g(
@@ -25,6 +26,56 @@ function g(
     ...partial,
   };
 }
+
+describe("cutoutsForOnYou", () => {
+  it("does not send a jacket whose plate failed the check", () => {
+    const look = [
+      g({ id: "t", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      g({ id: "b", name: "Stone trouser", category: "bottom", subtype: "trouser" }),
+      g({ id: "s", name: "Brown loafer", category: "footwear", subtype: "loafer" }),
+      g({
+        id: "j",
+        name: "Brown suede jacket",
+        category: "outerwear",
+        subtype: "jacket",
+        imageSrc: "photo://jacket",
+        cutoutSrc: "",
+        imageSource: "cutout",
+        reprint: true,
+      }),
+    ];
+    const plan = cutoutsForOnYou(look);
+    assert.equal(plan.blocked, null);
+    assert.equal(plan.skipped, "Brown suede jacket");
+    assert.deepEqual(plan.layers.map((x) => x.id), ["t", "b", "s"]);
+    assert.equal(plan.layers.some((x) => x.cutoutSrc === "photo://jacket"), false);
+    const dirtyTop = cutoutsForOnYou([
+      g({
+        id: "t2",
+        name: "Navy oxford",
+        category: "top",
+        subtype: "oxford",
+        imageSrc: "photo://shirt",
+        cutoutSrc: "photo://shirt",
+        imageSource: "photo",
+      }),
+      look[1]!,
+      look[2]!,
+    ]);
+    assert.equal(dirtyTop.blocked, "Navy oxford");
+    assert.deepEqual(dirtyTop.layers, []);
+    const onMe = readFileSync(new URL("../components/closet/on-me.tsx", import.meta.url), "utf8");
+    const dress = onMe.slice(
+      onMe.indexOf("export async function dressLook"),
+      onMe.indexOf("export async function isLegsOnlyBody"),
+    );
+    assert.ok(dress.indexOf("plan.blocked") < dress.indexOf("onMePreview"));
+    assert.ok(dress.indexOf("cutoutsForOnYou") < dress.indexOf("onMePreview"));
+    assert.match(dress, /loadPlateCovers/);
+    assert.equal(dress.includes("loadLookCovers"), false);
+    assert.equal(dress.includes("imageSrc"), false);
+  });
+});
 
 describe("layersForOnMe", () => {
   it("sends one knit, not fair isle fused with a 90s hoodie", () => {
