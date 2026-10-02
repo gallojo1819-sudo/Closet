@@ -26,6 +26,8 @@ export type LegalCtx = {
   occasion: Occasion | string;
   season?: Season | string;
   color?: string | null;
+  /** Display fill for a gated house. The gate note stays; the outfits still have to be legal. */
+  ignoreGate?: boolean;
 };
 
 export function deletedSneaker(ids: string[]): boolean {
@@ -60,7 +62,7 @@ function houseVerdict(
   const profile = APPROVED[ctx.house];
   if (!profile) return { passed: false, score: Number.NEGATIVE_INFINITY };
   const season = seasonOf(ctx);
-  if (gateOff(profile as never, { occasion: ctx.occasion, season })) {
+  if (!ctx.ignoreGate && gateOff(profile as never, { occasion: ctx.occasion, season })) {
     return { passed: false, score: Number.NEGATIVE_INFINITY };
   }
   const evalCtx = { occasion: ctx.occasion, season };
@@ -110,7 +112,7 @@ export function missingJacketOnly(pieces: Garment[], ctx: LegalCtx): boolean {
   const profile = APPROVED[ctx.house];
   if (!profile) return false;
   const season = seasonOf(ctx);
-  if (gateOff(profile as never, { occasion: ctx.occasion, season })) return false;
+  if (!ctx.ignoreGate && gateOff(profile as never, { occasion: ctx.occasion, season })) return false;
   const ev = evaluatePlates(profile as never, ps, { occasion: ctx.occasion, season });
   const outerRules = new Set(
     ((profile as { pairing_rules?: { type?: string; id?: string }[] }).pairing_rules ?? [])
@@ -136,6 +138,16 @@ export function explain(
     !hits.some((h) => h.severity === "hard") &&
     (!col || col.passed);
   return { legal, house: verdict.eval, hits, colorNote: col?.note ?? null };
+}
+
+/** Same rejects as isLegal, then the rank. Illegal is -Infinity. */
+export function scoreLook(pieces: Garment[], ctx: LegalCtx): number {
+  if (pieces.length < 3) return Number.NEGATIVE_INFINITY;
+  if (deletedSneaker(pieces.map((p) => p.id))) return Number.NEGATIVE_INFINITY;
+  if (clashes(pieces)) return Number.NEGATIVE_INFINITY;
+  const ps = slotted(pieces);
+  if (!ps.top || !ps.bottom || !ps.shoe) return Number.NEGATIVE_INFINITY;
+  return rankLook(pieces, ctx);
 }
 
 export function rankLook(pieces: Garment[], ctx: LegalCtx): number {

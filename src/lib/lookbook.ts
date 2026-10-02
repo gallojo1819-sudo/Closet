@@ -1905,7 +1905,7 @@ function finishStyled(
   if (house) {
     const cell = matrix.houses[house];
     if (!cell) return [];
-    if (cell.gate) {
+    if (cell.gate && cell.looks.length === 0) {
       return [
         lookFromPieces([], occasion, 0, house, {
           name: cell.gate.text,
@@ -1916,12 +1916,25 @@ function finishStyled(
     }
     const filled = fillHouseRow(cell.looks, cell.pool, cap, opts?.salt ?? 1);
     let row = publish(filled, house);
-    row = rotateJackets(row, pool, house, occasion, season);
-    if (row.length < 3) {
+    if (!cell.gate) row = rotateJackets(row, pool, house, occasion, season);
+    if (cell.gate) {
+      const note = cell.gate.text;
+      row = row.map((look) => ({ ...look, gap: look.gap || note }));
+    }
+    if (row.length < 3 && !cell.gate) {
       const note = cell.gap || houseGapNote(house, pool, occasion) || "Needs pieces from this house.";
       row = [
         ...row,
         lookFromPieces([], occasion, row.length, house, { name: note, gap: note, needsPieces: true }),
+      ];
+    }
+    if (row.length === 0 && cell.gate) {
+      return [
+        lookFromPieces([], occasion, 0, house, {
+          name: cell.gate.text,
+          gap: cell.gate.text,
+          gate: { occasion: cell.gate.occasion, season: cell.gate.season, text: cell.gate.text },
+        }),
       ];
     }
     return row.slice(0, cap);

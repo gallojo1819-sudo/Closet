@@ -1420,7 +1420,7 @@
    "name": "fall_resort_pieces",
    "type": "season_piece",
    "target_file": "_cross_chip.json",
-   "description": "Fall Weekday/Out: linen, seersucker, camp or bowling shirts soft -10; mules soft -5 (early-fall edge only).",
+   "description": "Fall Weekday/Out: linen, seersucker, camp or bowling shirts soft -10. Mules are a hard fail in fall and winter.",
    "logic": {
     "seasons": [
      "fall"
@@ -1445,7 +1445,7 @@
       "occasion": "weekday",
       "season": "fall"
      },
-     "expected": "soft -15 (camp -10, mule -5)"
+     "expected": "fail: mules in fall"
     },
     {
      "look": {

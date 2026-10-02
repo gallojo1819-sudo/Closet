@@ -24,7 +24,7 @@ const HASHES: Record<string, string> = {
   "approved/sweetstable.json": "bebd2185bcb22cbba86a76112d771c505894a95f70785f09601887478e6e8f1c",
   "../stylist/data/color-value-map.json": "5a7e7012ba07969dfa3bdb252126ad672bd18c39a1ded509272b066be7e89dd0",
   "../stylist/data/2026-09-30-proposed-stylist-rules.json":
-    "25037d15d2634ff4803b7be3a36b3f241213ce82f23523bc3326e78edbf017f3",
+    "82ad36149e05feff3a5b60c8dea5e4ca3034cf26c0c49b531f22ab9bf7f4b54b",
 };
 
 const by = new Map<string, Plate>(

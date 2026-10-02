@@ -94,9 +94,15 @@ function sameJson(a: unknown, b: unknown): boolean {
 /**
  * Three-way field merge. A side that still matches `base` did not edit that
  * field, so the other side's edit wins. Image srcs still prefer closet_meta sb:.
+ * A new local plate stays when the cloud cutout still equals the last pull.
+ * If the cloud cutout actually changed, the cloud one wins.
  */
 export function mergeGarmentFields<T extends CloudGarment>(base: T | undefined, local: T, cloud: T): T {
   const srcs = preferAccountSrcs(local, cloud);
+  const cutoutSrc =
+    base && cloud.cutoutSrc === base.cutoutSrc && local.cutoutSrc && local.cutoutSrc !== base.cutoutSrc
+      ? local.cutoutSrc
+      : srcs.cutoutSrc;
   if (!base) return srcs;
   const out: Record<string, unknown> = { ...cloud };
   const keys = new Set([
@@ -113,7 +119,7 @@ export function mergeGarmentFields<T extends CloudGarment>(base: T | undefined, 
     else out[key] = c;
   }
   out.imageSrc = srcs.imageSrc;
-  out.cutoutSrc = srcs.cutoutSrc;
+  out.cutoutSrc = cutoutSrc;
   return out as T;
 }
 

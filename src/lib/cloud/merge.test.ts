@@ -107,6 +107,24 @@ describe("mergeGarments", () => {
     assert.equal(next.length, 3);
   });
 
+  it("keeps a new local plate when the cloud cutout has not changed", () => {
+    const base = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c.jpg" }];
+    const local = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "idb:a:c" }];
+    const cloud = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c.jpg" }];
+    const next = mergeGarments({ local, cloud, lastCloudIds: ["a"], base });
+    assert.equal(next[0]?.cutoutSrc, "idb:a:c");
+    assert.equal(next[0]?.imageSrc, "sb:u/a/o.jpg");
+  });
+
+  it("cloud cutout wins when the cloud cover changed", () => {
+    const base = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c.jpg" }];
+    const local = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "idb:a:c" }];
+    const cloud = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c-abc12345.jpg" }];
+    const next = mergeGarments({ local, cloud, lastCloudIds: ["a"], base });
+    assert.equal(next[0]?.cutoutSrc, "sb:u/a/c-abc12345.jpg");
+    assert.equal(next[0]?.imageSrc, "sb:u/a/o.jpg");
+  });
+
   it("closet_meta sb: srcs win over local idb: on the same id", () => {
     const local = [{ id: "a", imageSrc: "idb:a:o", cutoutSrc: "idb:a:c" }];
     const cloud = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c.jpg" }];

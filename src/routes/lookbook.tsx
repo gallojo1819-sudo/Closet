@@ -140,6 +140,7 @@ function LookCard({
   note,
   named,
   houseChip,
+  pool,
 }: {
   look: Look;
   pieces: Garment[];
@@ -153,6 +154,7 @@ function LookCard({
   note?: string | null;
   named: boolean;
   houseChip: "all" | House;
+  pool: Garment[];
 }) {
   const dots = pieceDots(pieces);
   return (
@@ -182,6 +184,9 @@ function LookCard({
         />
       </IdleMount>
       <p className="mt-3">{spreadTitle(pieces, look.occasion as Occasion, houseChip, season)}</p>
+      <p className="mt-1 text-sm leading-snug">
+        {pieces.map((g) => pieceLabel(g, pool)).join(" · ")}
+      </p>
       {dots.length > 0 && (
         <div className="mt-2 flex gap-1.5" aria-hidden="true">
           {dots.map((dot) => (
@@ -592,6 +597,7 @@ function LookbookPage() {
                   houseChip={houseChip}
                   houseLabel={lead ? HOUSE_LABEL[lead] : "All"}
                   note={card.why}
+                  pool={garments}
                   named={openId === look.id}
                   highlight={highlightId === look.id}
                   onOpen={() => {

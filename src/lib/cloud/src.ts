@@ -77,7 +77,8 @@ export function rewriteCloudSrcs<T extends SrcGarment>(
       : t
         ? cloudSrc(userId, g.id, "t")
         : g.cutoutSrc;
-    const imageSrc = o ? cloudSrc(userId, g.id, "o") : cutoutSrc;
+    const alreadyOriginal = isCloudSrc(g.imageSrc) || /\/o\.jpg$/.test(g.imageSrc);
+    const imageSrc = o ? cloudSrc(userId, g.id, "o") : alreadyOriginal ? g.imageSrc : cutoutSrc;
     return { ...g, imageSrc, cutoutSrc };
   });
 }

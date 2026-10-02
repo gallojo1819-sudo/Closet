@@ -338,10 +338,12 @@ export function stylistHits(
   }
   if (season === "fall" && (occ === "weekday" || occ === "out")) {
     for (const g of all) {
-      if (!hot(g)) continue;
-      if (sig(g, "mule", SIG)) hit("XC-SEA-3", "soft", -5, `mule in fall ${occ}`);
-      else hit("XC-SEA-3", "soft", -10, `resort piece in fall ${occ}: ${g.name}`);
+      if (!hot(g) || sig(g, "mule", SIG)) continue;
+      hit("XC-SEA-3", "soft", -10, `resort piece in fall ${occ}: ${g.name}`);
     }
+  }
+  if ((season === "fall" || season === "winter") && shoe && sig(shoe, "mule", SIG)) {
+    hit("XC-SEA-3", "hard", 0, `mules ${shoe.name} in ${season}`);
   }
   if (all.some(cold) && all.some(hot)) hit("XC-SEA-4", "soft", -15, "cold + hot pieces in one look");
 

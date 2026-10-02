@@ -132,6 +132,38 @@ describe("fixture matrix", () => {
     expect(gates).toBe(6);
 
     const fall = matrices.find((m) => m.occ === "weekday" && m.season === "fall")!.matrix;
+    const allJackets = fall.all.slice(0, 3).map((look) => look.outer).filter((id): id is string => Boolean(id));
+    expect(new Set(allJackets).size, "Weekday/Fall All top 3 jackets").toBe(3);
+    const sweet = fall.houses.sweetStable!;
+    expect(sweet.gate?.text.toLowerCase()).toContain("not an office look");
+    expect(sweet.looks, "SweetStable weekday/fall").toHaveLength(3);
+    const sweetRow = buildReshuffleRow(RACK, "weekday", { house: "sweetStable", season: "fall", cap: 3 });
+    const sweetReal = sweetRow.filter((look) => look.garmentIds.length >= 3 && !look.gate && !look.needsPieces);
+    expect(sweetReal, "SweetStable cards").toHaveLength(3);
+    expect(sweetRow.some((look) => (look.gap ?? "").toLowerCase().includes("not an office"))).toBe(true);
+    const ald2 = fall.houses.ald!.looks[1]!;
+    expect(ald2.top, "varsity is not a sweater").not.toBe("g_j5og5jmzh5tx");
+    const aldPieces = [ald2.top, ald2.bottom, ald2.shoe, ald2.outer]
+      .filter((id): id is string => Boolean(id))
+      .map((id) => by.get(id))
+      .filter((g): g is Garment => Boolean(g));
+    expect(kitCells(aldPieces)[0]?.id).not.toBe("g_j5og5jmzh5tx");
+    for (const { occ, season, matrix } of matrices) {
+      if (season !== "fall" && season !== "winter") continue;
+      const rows = [
+        ...HOUSES.flatMap((house) => matrix.houses[house]!.looks),
+        ...matrix.all.slice(0, 8),
+      ];
+      for (const look of rows) {
+        const shoe = by.get(look.shoe);
+        expect(`${shoe?.name ?? ""} ${shoe?.subtype ?? ""}`.toLowerCase(), `${occ}/${season}`).not.toMatch(/mule/);
+        if ((occ === "weekday" || occ === "out") && !look.outer) expect(look.demoted).toBe("JKT-COV-1");
+      }
+    }
+    const italian = fall.houses.italianSummer!.looks[2]!;
+    const italianShoe = by.get(italian.shoe);
+    expect(`${italianShoe?.name ?? ""} ${italianShoe?.subtype ?? ""}`.toLowerCase()).not.toMatch(/mule/);
+    expect(italian.outer || italian.demoted).toBeTruthy();
     const winter = matrices.find((m) => m.occ === "weekday" && m.season === "winter")!.matrix;
     const summer = matrices.find((m) => m.occ === "weekend" && m.season === "summer")!.matrix;
     const weekend = matrices.find((m) => m.occ === "weekend" && m.season === "fall")!.matrix;

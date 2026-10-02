@@ -11,6 +11,7 @@ import {
   slotOf,
 } from "./style.ts";
 import { houseFingerprintOk, type House } from "./houses.ts";
+import { wearSlot } from "./stylist/jackets.ts";
 
 const ORDER: Garment["category"][] = [
   "top",
@@ -90,8 +91,9 @@ export function layersForOnMe(pieces: Garment[]): Garment[] {
   return [top, bottom, shoe, outer].filter((g): g is Garment => Boolean(g)).slice(0, 4);
 }
 
-/** Band for a plate already chosen for the look. Category wins over a jacket-ish name. */
+/** Band for a plate already chosen for the look. Category wins over a jacket-ish name, except a classified jacket filed as a top. */
 export function kitBand(g: Garment): "top" | "jacket" | "bottom" | "shoe" | null {
+  if (wearSlot(g) === "outer") return "jacket";
   if (g.category === "top" || g.category === "dress") return "top";
   if (g.category === "bottom") return "bottom";
   if (g.category === "footwear") return "shoe";
@@ -117,6 +119,12 @@ export function nameLook(pieces: Garment[]): string {
   if (sorted.length === 0) return "Nothing on the rack";
   if (sorted.length === 1) return sorted[0]!.name;
   return `${sorted[0]!.name} · ${sorted[1]!.name}`;
+}
+
+/** Today's hero is the strip cell when that cell has a thumbnail. Otherwise the drop. */
+export function heroPieces(dropPieces: Garment[], stripPieces: Garment[]): Garment[] {
+  if (stripPieces.length >= 2) return stripPieces;
+  return dropPieces;
 }
 
 /** Editorial card title — palette + the chip's house, or a short occasion line. Not a SKU dump. */

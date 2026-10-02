@@ -6,7 +6,7 @@ import { LookBuilder } from "@/components/closet/look-builder";
 import { LookSheet } from "@/components/closet/look-sheet";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
-import { alternatives, dropNote, kitCells, nameLook, neglectedPiece, sortLook } from "@/lib/look";
+import { alternatives, dropNote, heroPieces, kitCells, nameLook, neglectedPiece, sortLook } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { rackCanDress, weekStripDays } from "@/lib/lookbook";
 import { seasonFromWeather } from "@/lib/season";
@@ -144,9 +144,7 @@ function Today() {
     [garments],
   );
   const sample = garments.some((g) => g.demo);
-  const lookName = nameLook(pieces);
   const dropSeason = seasonFromWeather(weather?.f ?? 68);
-  const note = dropNote(pieces, weather, drop?.occasion, drop?.moment, undefined, dropSeason);
   const avoided = useMemo(
     () =>
       drop
@@ -154,7 +152,6 @@ function Today() {
         : null,
     [journal, drop, garments],
   );
-  const houses = lookHouses(pieces, drop?.occasion ?? "weekday", dropSeason);
   const today = todayISO();
   const weekCells = useMemo(
     () =>
@@ -168,6 +165,20 @@ function Today() {
       }),
     [today, drop, journal, thisWeek, garments],
   );
+  const shown = useMemo(() => {
+    const cell = weekCells.find((c) => c.iso === today);
+    const strip = cell?.look
+      ? sortLook(
+          cell.look.garmentIds
+            .map((id) => garments.find((g) => g.id === id))
+            .filter((g): g is Garment => Boolean(g)),
+        )
+      : [];
+    return heroPieces(pieces, strip);
+  }, [weekCells, today, pieces, garments]);
+  const lookName = nameLook(shown);
+  const note = dropNote(shown, weather, drop?.occasion, drop?.moment, undefined, dropSeason);
+  const houses = lookHouses(shown, drop?.occasion ?? "weekday", dropSeason);
   const done = drop?.worn || drop?.verdict === "worn";
 
   const setOccasion = (occasion: Occasion) => {
@@ -296,7 +307,7 @@ function Today() {
 
       <div className="mt-10 grid md:grid-cols-[1fr_0.95fr] gap-10 items-start">
         <div>
-          {pieces.length > 0 && (
+          {shown.length > 0 && (
             <div className="mb-3 flex gap-2">
               {(
                 [
@@ -320,14 +331,14 @@ function Today() {
               ))}
             </div>
           )}
-          {view === "me" && pieces.length > 0 ? (
+          {view === "me" && shown.length > 0 ? (
             <OnMePanel
-              pieces={pieces}
+              pieces={shown}
               occasion={drop?.occasion}
               onUsePaper={() => setView("paper")}
             />
           ) : (
-            <FlatLay pieces={pieces} />
+            <FlatLay pieces={shown} />
           )}
         </div>
         <div className="space-y-6">
@@ -345,7 +356,7 @@ function Today() {
             )}
           </div>
           <ol className="space-y-3">
-            {pieces.map((g) => {
+            {shown.map((g) => {
               const canSwap = alternatives(garments, g, drop?.garmentIds ?? []).length > 0;
               const idle = daysIdle(g);
               const locked = (drop?.lockedIds ?? []).includes(g.id);
@@ -395,7 +406,7 @@ function Today() {
                   </button>
                   <button
                     type="button"
-                    disabled={!canSwap || done || locked}
+                    disabled={!canSwap || done || locked || !drop?.garmentIds?.includes(g.id)}
                     onClick={() => swapDropPiece(g.id)}
                     className="micro text-ink-soft hover:text-ink disabled:opacity-30"
                   >
@@ -403,7 +414,7 @@ function Today() {
                   </button>
                   <button
                     type="button"
-                    disabled={done || pieces.length <= 2}
+                    disabled={done || shown.length <= 2 || !drop?.garmentIds?.includes(g.id)}
                     onClick={() => removeDropPiece(g.id)}
                     className="micro text-ink-soft hover:text-ink disabled:opacity-30"
                   >
@@ -415,7 +426,10 @@ function Today() {
           </ol>
           <div className="flex flex-wrap gap-3">
             <Button
-              onClick={() => drop && wearToday(drop.garmentIds)}
+              onClick={() => {
+                const ids = pieces.length >= 2 ? (drop?.garmentIds ?? []) : shown.map((g) => g.id);
+                if (ids.length >= 2) wearToday(ids);
+              }}
               disabled={done}
             >
               {done ? "Logged for today" : "Wear this"}
@@ -429,16 +443,17 @@ function Today() {
             </Button>
             <Button
               variant="ghost"
-              onClick={() =>
-                drop &&
+              onClick={() => {
+                const ids = pieces.length >= 2 ? (drop?.garmentIds ?? []) : shown.map((g) => g.id);
+                if (ids.length < 2) return;
                 saveLook({
                   name: lookName,
-                  occasion: drop.occasion ?? "weekday",
-                  garmentIds: drop.garmentIds,
+                  occasion: drop?.occasion ?? "weekday",
+                  garmentIds: ids,
                   source: "manual",
                   lookbook: true,
-                })
-              }
+                });
+              }}
             >
               Save look
             </Button>

@@ -67,6 +67,21 @@ describe("rewriteCloudSrcs", () => {
     assert.equal(parseCloudSrc(store.garments[0]!.imageSrc)?.kind, "o");
     assert.notEqual(fromState, pre);
   });
+
+  it("a cover upload leaves the cloud original and writes c-<sha>.jpg", () => {
+    const user = "11111111-1111-1111-1111-111111111111";
+    const original = `sb:${user}/a/o.jpg`;
+    const next = rewriteCloudSrcs(
+      [{ id: "a", imageSrc: original, cutoutSrc: "idb:a:c" }],
+      user,
+      new Set(["a:c"]),
+      new Map([["a", "abc12345"]]),
+    );
+    assert.equal(next[0]!.imageSrc, original);
+    assert.equal(next[0]!.cutoutSrc, `sb:${user}/a/c-abc12345.jpg`);
+    assert.equal(parseCloudSrc(next[0]!.imageSrc)?.kind, "o");
+    assert.equal(parseCloudSrc(next[0]!.cutoutSrc)?.kind, "c");
+  });
 });
 
 describe("paintSrc", () => {

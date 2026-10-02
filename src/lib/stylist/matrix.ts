@@ -9,7 +9,7 @@ import { HOUSES, type House } from "../houses.ts";
 import type { Garment, Occasion, Season } from "../types.ts";
 import { canonTokens } from "./colorChip.ts";
 import { clashes } from "../style.ts";
-import { isLegal, missingJacketOnly, rankLook, DELETED_SNEAKERS } from "./legal.ts";
+import { missingJacketOnly, rankLook, scoreLook, DELETED_SNEAKERS } from "./legal.ts";
 import { allowedJackets, fwEligibleJackets, houseCode, jacketRequired, wearSlot, SUEDE_FAMILY } from "./jackets.ts";
 import { DOMINANT, rep1Fails, violatesMustDiffer } from "./row.ts";
 
@@ -94,7 +94,13 @@ function siblingOf(occasion: string, season: string): { occasion: string; season
   return null;
 }
 
-function enumerateHouse(house: House, garments: Garment[], occasion: string, season: string): { cores: Core[]; singleShoe: boolean } {
+function enumerateHouse(
+  house: House,
+  garments: Garment[],
+  occasion: string,
+  season: string,
+  ignoreGate = false,
+): { cores: Core[]; singleShoe: boolean } {
   const profile = profileOf(house);
   const by = new Map(garments.map((g) => [g.id, g]));
   const take = (slot: string) =>
@@ -119,7 +125,7 @@ function enumerateHouse(house: House, garments: Garment[], occasion: string, sea
   const orderedBottoms = plainFirst(bottoms);
   const orderedShoes = plainFirst(shoes);
   const needOuter = jacketRequired(occasion, season);
-  const ctx = { house, occasion, season };
+  const ctx = { house, occasion, season, ignoreGate };
   const cores: Core[] = [];
   const perShoe = new Map<string, number>();
   const tryOpt = (pieces: Garment[], outer: Garment | undefined, into: Opt[]) => {
@@ -593,23 +599,32 @@ function leadsBrown(g: Garment | undefined): boolean {
   return canonTokens(raw).some((token) => token === "brown" || token.endsWith(" brown"));
 }
 
-function enumerateAll(garments: Garment[], occasion: string, season: string, avoid: Set<string>): MatrixLook[] {
+function enumerateAll(
+  garments: Garment[],
+  occasion: string,
+  season: string,
+  avoid: Set<string>,
+  usedJackets: Map<string, number>,
+): MatrixLook[] {
   const tops: Garment[] = [];
   const bots: Garment[] = [];
   const shoes: Garment[] = [];
   const outers: Garment[] = [];
   for (const g of garments) {
     if (DELETED.has(g.id) || g.archived) continue;
-    if (g.category === "top" || g.category === "dress") tops.push(g);
-    else if (g.category === "bottom") bots.push(g);
+    const worn = wearSlot(g);
+    if (worn === "outer") outers.push(g);
+    else if (g.category === "top" || g.category === "dress") {
+      if (worn !== "mid") tops.push(g);
+    } else if (g.category === "bottom") bots.push(g);
     else if (g.category === "footwear") shoes.push(g);
-    else if (g.category === "outerwear") outers.push(g);
+    else if (g.category === "outerwear" && worn !== "mid") outers.push(g);
   }
   const brown: MatrixLook[] = [];
   const rest: MatrixLook[] = [];
   const seen = new Set<string>();
   const limit = Math.min(6000, Math.max(tops.length, 1) * Math.max(bots.length, 1));
-  for (let i = 0; i < limit && (brown.length < 8 || rest.length < 8); i++) {
+  for (let i = 0; i < limit && (brown.length < 8 || rest.length < 24); i++) {
     const top = tops[i % Math.max(tops.length, 1)];
     const bottom = bots[(i * 3 + 1) % Math.max(bots.length, 1)];
     const shoe = shoes[(i * 5 + 2) % Math.max(shoes.length, 1)];
@@ -619,8 +634,7 @@ function enumerateAll(garments: Garment[], occasion: string, season: string, avo
     const key = coreOf({ top: top.id, bottom: bottom.id, shoe: shoe.id });
     if (seen.has(key) || avoid.has(key)) continue;
     const pieces = [top, bottom, shoe, ...(outer && ![top.id, bottom.id, shoe.id].includes(outer.id) ? [outer] : [])];
-    if (!isLegal(pieces, { occasion, season })) continue;
-    const score = rankLook(pieces, { occasion, season });
+    const score = scoreLook(pieces, { occasion, season });
     if (!Number.isFinite(score)) continue;
     seen.add(key);
     const look: MatrixLook = { top: top.id, bottom: bottom.id, shoe: shoe.id, outer: pieces[3]?.id, score };
@@ -628,7 +642,94 @@ function enumerateAll(garments: Garment[], occasion: string, season: string, avo
     else rest.push(look);
   }
   const byScore = (a: MatrixLook, b: MatrixLook) => b.score - a.score || a.top.localeCompare(b.top);
-  return [...rest.sort(byScore), ...brown.sort(byScore)];
+  const pool = [...rest.sort(byScore), ...brown.sort(byScore)];
+  return capAllJackets(pool, garments, occasion, season, usedJackets);
+}
+
+/** Same jacket caps as a house row, without loosening ROT-1 or ROT-2. */
+function capAllJackets(
+  pool: MatrixLook[],
+  garments: Garment[],
+  occasion: string,
+  season: string,
+  usedJackets: Map<string, number>,
+): MatrixLook[] {
+  const by = new Map(garments.map((g) => [g.id, g]));
+  const outers = garments.filter((g) => !g.archived && !DELETED.has(g.id) && wearSlot(g) === "outer");
+  const required = jacketRequired(occasion, season);
+  const worn = (id?: string) => (id ? (usedJackets.get(id) ?? 0) : 1000);
+  const brownLook = (look: MatrixLook) =>
+    leadsBrown(by.get(look.top)) || leadsBrown(by.get(look.bottom)) || leadsBrown(look.outer ? by.get(look.outer) : undefined);
+  const ordered = [...pool].sort((a, b) => Number(brownLook(a)) - Number(brownLook(b)) || b.score - a.score);
+  const options = new Map<string, { outer?: string; score: number }[]>();
+  const legalJackets = new Set<string>();
+  const expand = (look: MatrixLook) => {
+    const key = coreOf(look);
+    if (options.has(key)) return;
+    const top = by.get(look.top);
+    const bottom = by.get(look.bottom);
+    const shoe = by.get(look.shoe);
+    if (!top || !bottom || !shoe) return;
+    const base = [top, bottom, shoe];
+    const opts: { outer?: string; score: number }[] = [];
+    for (const outer of outers) {
+      if (base.some((g) => g.id === outer.id)) continue;
+      const pieces = [...base, outer];
+      const score = scoreLook(pieces, { occasion, season });
+      if (!Number.isFinite(score)) continue;
+      opts.push({ outer: outer.id, score });
+      legalJackets.add(outer.id);
+    }
+    if (!required) {
+      const score = scoreLook(base, { occasion, season });
+      if (Number.isFinite(score)) opts.push({ score });
+    }
+    if (opts.length) options.set(key, opts);
+  };
+  for (const look of ordered) {
+    if (options.size >= 16 && legalJackets.size >= 3) break;
+    if (brownLook(look) && options.size >= 8) continue;
+    expand(look);
+  }
+  if (legalJackets.size < 3) {
+    for (const look of ordered) {
+      if (options.size >= 32) break;
+      expand(look);
+    }
+  }
+  const many = legalJackets.size >= 3;
+  const chosen: MatrixLook[] = [];
+  const used = new Set<string>();
+  const inWindow = (id: string) => {
+    const start = Math.max(0, chosen.length - 7);
+    let n = 0;
+    for (let i = start; i < chosen.length; i++) if (chosen[i]!.outer === id) n += 1;
+    return n;
+  };
+  const place = (allowBrown: boolean) => {
+    for (const look of ordered) {
+      if (chosen.length >= 8) return;
+      const key = coreOf(look);
+      if (used.has(key) || !options.has(key)) continue;
+      if (!allowBrown && brownLook(look)) continue;
+      const ranked = [...options.get(key)!].sort(
+        (a, b) => worn(a.outer) - worn(b.outer) || b.score - a.score || (a.outer ?? "").localeCompare(b.outer ?? ""),
+      );
+      const pick = ranked.find((opt) => {
+        if (!opt.outer) return !required;
+        if (inWindow(opt.outer) >= 2) return false;
+        if (chosen.length < 3 && many && chosen.some((row) => row.outer === opt.outer)) return false;
+        return true;
+      });
+      if (!pick) continue;
+      used.add(key);
+      chosen.push({ top: look.top, bottom: look.bottom, shoe: look.shoe, outer: pick.outer, score: pick.score });
+    }
+  };
+  place(false);
+  if (chosen.length < 8) place(true);
+  const rest = pool.filter((look) => !used.has(coreOf(look)) && brownLook(look));
+  return chosen.length ? [...chosen, ...rest] : pool;
 }
 
 export function buildHouseMatrix(garments: Garment[], occasion: Occasion | string, season: Season | string): Matrix {
@@ -650,17 +751,48 @@ export function buildHouseMatrix(garments: Garment[], occasion: Occasion | strin
     const profile = profileOf(house);
     const gate = gateOff(profile as never, { occasion, season });
     if (gate) {
-      cells[house] = {
-        gate: {
-          occasion: primaryKey(profile.occasion_gate, "weekend"),
-          season: primaryKey(profile.season_gate, "fall"),
-          text: gate.text,
-          ruleId: gate.ruleId,
-        },
-        looks: [],
-        pool: [],
-        gap: profile.gap_note ?? null,
+      const gateInfo = {
+        occasion: primaryKey(profile.occasion_gate, "weekend"),
+        season: primaryKey(profile.season_gate, "fall"),
+        text: gate.text,
+        ruleId: gate.ruleId,
       };
+      if (house === "sweetStable" && occasion === "weekday" && season === "fall") {
+        // Weekday is gated off. The note stays. The cards are this house's weekend outfits.
+        const found = enumerateHouse(house, garments, "weekend", season, false);
+        const outerIds = new Set(
+          found.cores.flatMap((core) => core.options.map((opt) => opt.outer).filter((id): id is string => Boolean(id))),
+        );
+        const picks = fillHouse(
+          found.cores,
+          emptyState(),
+          chipOf(house),
+          found.singleShoe,
+          outerIds.size < 3,
+          null,
+          new Set(),
+          false,
+        );
+        cells[house] = {
+          gate: gateInfo,
+          looks: picks.map(toLook),
+          pool: found.cores.map((c) => ({
+            top: c.top,
+            bottom: c.bottom,
+            shoe: c.shoe,
+            outer: c.options[0]?.outer,
+            score: c.best,
+          })),
+          gap: profile.gap_note ?? null,
+        };
+      } else {
+        cells[house] = {
+          gate: gateInfo,
+          looks: [],
+          pool: [],
+          gap: profile.gap_note ?? null,
+        };
+      }
       continue;
     }
     const found = enumerateHouse(house, garments, occasion, season);
@@ -680,11 +812,15 @@ export function buildHouseMatrix(garments: Garment[], occasion: Occasion | strin
   const required = jacketRequired(occasion, season);
   const assigned = rebalance(open, assignTop3(open, required), season);
   const usedCores = new Set<string>();
+  const usedHere = new Map<string, number>();
   for (const house of open) {
     const picks = assigned.get(house.id) ?? [];
     const looks = picks.map(toLook);
     for (const look of looks) {
-      if (look.outer && !look.demoted) JACKET_USES.set(look.outer, (JACKET_USES.get(look.outer) ?? 0) + 1);
+      if (look.outer && !look.demoted) {
+        JACKET_USES.set(look.outer, (JACKET_USES.get(look.outer) ?? 0) + 1);
+        usedHere.set(look.outer, (usedHere.get(look.outer) ?? 0) + 1);
+      }
     }
     for (const look of looks) usedCores.add(coreOf(look));
     cells[house.id] = {
@@ -704,7 +840,7 @@ export function buildHouseMatrix(garments: Garment[], occasion: Occasion | strin
     occasion,
     season,
     houses: cells,
-    all: enumerateAll(garments, occasion, season, usedCores),
+    all: enumerateAll(garments, occasion, season, usedCores, usedHere),
   };
   CACHE.set(key, matrix);
   if (CACHE.size > 12) {

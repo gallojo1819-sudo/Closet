@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { kitCells, layersForOnMe, spreadTitle } from "./look.ts";
+import { heroPieces, kitBand, kitCells, layersForOnMe, nameLook, spreadTitle } from "./look.ts";
 import type { Garment } from "./types.ts";
 
 function g(
@@ -114,6 +114,34 @@ describe("kitCells", () => {
       kitCells(look).map((x) => x.id),
       ["polo", "tr", "lf"],
     );
+  });
+});
+
+describe("heroPieces", () => {
+  it("uses the strip look when that cell has a thumbnail", () => {
+    const drop: Garment[] = [];
+    const strip = [
+      g({ id: "a", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      g({ id: "b", name: "Cream chino", category: "bottom", subtype: "chino" }),
+      g({ id: "c", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const hero = heroPieces(drop, strip);
+    assert.equal(nameLook(drop), "Nothing on the rack");
+    assert.notEqual(nameLook(hero), "Nothing on the rack");
+    assert.deepEqual(hero.map((piece) => piece.id), ["a", "b", "c"]);
+  });
+
+  it("keeps the drop when the strip cell has no thumbnail", () => {
+    const drop = [g({ id: "a", name: "Navy oxford", category: "top", subtype: "oxford" })];
+    assert.equal(heroPieces(drop, []).length, 1);
+    assert.equal(heroPieces([], [drop[0]!]).length, 0);
+  });
+});
+
+describe("kitBand", () => {
+  it("files the khaki varsity as a jacket, not a sweater", () => {
+    const varsity = g({ id: "g_j5og5jmzh5tx", name: "Khaki varsity", category: "top", subtype: "" });
+    assert.equal(kitBand(varsity), "jacket");
   });
 });
 
