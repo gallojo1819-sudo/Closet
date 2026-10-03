@@ -3,7 +3,9 @@ import { requestCutout, requestThumb } from "@/lib/cloud/blobs";
 import { isCloudSrc } from "@/lib/cloud/src";
 import { backupPhotos } from "@/lib/cloud/sync";
 import { imageKey, isIdbKey } from "@/lib/images";
-import { hasCleanCover } from "@/lib/plate";
+import { coverBytesKnown, hasCleanCover } from "@/lib/plate";
+import { noteGarmentCoverBytes } from "@/lib/plate-pass";
+import { useCoverByteRev } from "@/lib/use-clean-cover";
 import { useImageSrc } from "@/lib/use-image";
 import type { Garment } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -24,24 +26,31 @@ export function GarmentImg({
   eager?: boolean;
   nudge?: boolean;
 }) {
+  const byteRev = useCoverByteRev();
   const clean = hasCleanCover(garment);
-  const fullKey = clean ? garment.cutoutSrc : "";
-  const cloudSrc = clean && isCloudSrc(garment.cutoutSrc) ? garment.cutoutSrc : "";
-  const thumbKey = !clean
+  const hold = clean && !coverBytesKnown(garment);
+  useEffect(() => {
+    if (!hold) return;
+    void noteGarmentCoverBytes(garment);
+  }, [hold, garment, byteRev]);
+  const show = clean && !hold;
+  const fullKey = show ? garment.cutoutSrc : "";
+  const cloudSrc = show && isCloudSrc(garment.cutoutSrc) ? garment.cutoutSrc : "";
+  const thumbKey = !show
     ? ""
     : cloudSrc && !cloudSrc.endsWith("/o.jpg")
       ? cloudSrc
       : imageKey(garment.id, "t");
   const thumbSrc = useImageSrc(thumbKey);
   const fullSrc = useImageSrc(thumb ? "" : fullKey);
-  const src = !clean ? "" : thumb ? thumbSrc : fullSrc || thumbSrc;
+  const src = !show ? "" : thumb ? thumbSrc : fullSrc || thumbSrc;
   const node = useRef<HTMLElement | null>(null);
   const phoneOnly = isIdbKey(garment.cutoutSrc) || isIdbKey(garment.imageSrc);
   const showChip =
-    clean && nudge && phoneOnly && !isCloudSrc(garment.cutoutSrc) && !isCloudSrc(garment.imageSrc);
+    show && nudge && phoneOnly && !isCloudSrc(garment.cutoutSrc) && !isCloudSrc(garment.imageSrc);
 
   useEffect(() => {
-    if (!clean) return;
+    if (!show) return;
     if (!thumb) {
       requestCutout(garment.id, garment.cutoutSrc);
       return;
@@ -60,7 +69,7 @@ export function GarmentImg({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [clean, garment.id, garment.cutoutSrc, thumb, eager, thumbSrc]);
+  }, [show, garment.id, garment.cutoutSrc, thumb, eager, thumbSrc]);
 
   return (
     <div

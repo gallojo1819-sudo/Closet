@@ -393,7 +393,7 @@ function holderSighting(checker: string): boolean {
   return SIGHTING.test(text);
 }
 
-/** JSON `{clean:boolean}` wins. Missing or unreadable keeps the plate. */
+/** JSON `{clean:boolean}` wins. Missing or unreadable is not a cover. */
 export function parseCleanVerdict(checker: string): boolean | null {
   const raw = checker.trim();
   const start = raw.indexOf("{");
@@ -409,20 +409,20 @@ export function parseCleanVerdict(checker: string): boolean | null {
 
 /**
  * Reject when the result says clean:false, or a hand, arm, or hanger is actually in the picture.
- * The prompt's own word "hand", and a bare "skin", are not a sighting.
- * An empty or unreadable checker keeps the plate.
+ * A missing check, a timeout, or no JSON is not a cover.
  */
 export function coverRejected(checker: string): boolean {
   const raw = checker.trim();
-  if (!raw) return false;
+  if (!raw) return true;
   const clean = parseCleanVerdict(raw);
   if (clean !== null) return !clean;
   const flags = parseHolderFlags(raw);
   if (flags) return flags.hand || flags.arm || flags.hanger;
-  return holderSighting(raw);
+  if (holderSighting(raw)) return true;
+  return true;
 }
 
-/** Checker string for a plate. Null keeps the plate. Booleans, not the prompt. */
+/** Checker string for a plate. Null is a missing check. Booleans, not the prompt. */
 export function holderCheckerText(
   verdict:
     | {

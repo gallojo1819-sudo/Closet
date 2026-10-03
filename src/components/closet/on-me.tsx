@@ -13,6 +13,7 @@ import {
 import { useCloset } from "@/lib/store";
 import type { Garment, Occasion } from "@/lib/types";
 import { cutoutsForOnYou } from "@/lib/look";
+import { noteGarmentCoverBytes } from "@/lib/plate-pass";
 import { coverLoadError, loadPlateCovers, liveCoverLoader } from "@/lib/cloud/cover";
 import { livePool } from "@/lib/rack";
 import { slotOf } from "@/lib/style";
@@ -35,7 +36,9 @@ export async function dressLook(
   }
   const refImage = await jpegDataUrl(blob, 768, 0.8);
   const allowed = new Set(livePool(useCloset.getState().garments).map((g) => g.id));
-  const plan = cutoutsForOnYou(pieces.filter((g) => allowed.has(g.id)));
+  const wornPieces = pieces.filter((g) => allowed.has(g.id));
+  await Promise.all(wornPieces.map((piece) => noteGarmentCoverBytes(piece)));
+  const plan = cutoutsForOnYou(wornPieces);
   if (plan.blocked) throw new Error(`${plan.blocked} has no clean cover.`);
   const worn = plan.layers;
   if (worn.length < 3) {

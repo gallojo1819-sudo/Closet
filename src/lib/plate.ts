@@ -16,6 +16,83 @@ type CoverFields = {
 
 const PLATE_SOURCES = new Set(["official", "cutout", "segmented"]);
 
+/** Short hash of a cover or original. A different file name is not a plate. */
+const blobHashes = new Map<string, string>();
+const unreadableBlobs = new Set<string>();
+let blobRev = 0;
+const blobListeners = new Set<() => void>();
+
+function bumpBlobRev(): void {
+  blobRev += 1;
+  for (const fn of blobListeners) fn();
+}
+
+export function subscribeCoverBytes(fn: () => void): () => void {
+  blobListeners.add(fn);
+  return () => {
+    blobListeners.delete(fn);
+  };
+}
+
+export function coverByteRev(): number {
+  return blobRev;
+}
+
+export function resetBlobHashes(): void {
+  blobHashes.clear();
+  unreadableBlobs.clear();
+  bumpBlobRev();
+}
+
+/** SHA-1, first 8 hex chars. Same width as `c-<sha>.jpg`. */
+export async function shortBlobHash(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-1", bytes);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 8);
+}
+
+export function noteBlobHash(src: string, hash: string): void {
+  const key = src.trim();
+  if (!key || !hash || blobHashes.get(key) === hash) return;
+  blobHashes.set(key, hash);
+  unreadableBlobs.delete(key);
+  bumpBlobRev();
+}
+
+export async function noteBlob(src: string, blob: Blob): Promise<string> {
+  const hash = await shortBlobHash(await blob.arrayBuffer());
+  noteBlobHash(src, hash);
+  return hash;
+}
+
+export function markBlobUnreadable(src: string): void {
+  const key = src.trim();
+  if (!key || unreadableBlobs.has(key)) return;
+  unreadableBlobs.add(key);
+  bumpBlobRev();
+}
+
+/** True when both files were hashed and the bytes match. A different name is not enough. */
+export function coverBytesMatch(g: CoverFields): boolean {
+  const image = g.imageSrc?.trim() ?? "";
+  const cutout = g.cutoutSrc?.trim() ?? "";
+  if (!image || !cutout || image === cutout) return false;
+  const a = blobHashes.get(cutout);
+  const b = blobHashes.get(image);
+  return Boolean(a && b && a === b);
+}
+
+/** False only while a distinct cover and original still need a hash. */
+export function coverBytesKnown(g: CoverFields): boolean {
+  const image = g.imageSrc?.trim() ?? "";
+  const cutout = g.cutoutSrc?.trim() ?? "";
+  if (!image || !cutout || image === cutout) return true;
+  if (unreadableBlobs.has(image) || unreadableBlobs.has(cutout)) return true;
+  return blobHashes.has(image) && blobHashes.has(cutout);
+}
+
 /**
  * The cover is still the phone photo.
  * Equal srcs, or a photo that never became a plate (camera matte writes :o and :c).
@@ -42,7 +119,8 @@ export function notesSayHeld(notes?: string): boolean {
 /**
  * A plate the grid, Lookbook, and On you may paint.
  * Official and segmented catalog rows may store the same URL for image and cutout.
- * A phone photo, an empty cover, a refused plate, or a held shot still pointing at itself is not.
+ * A phone photo, an empty cover, a refused plate, a held shot still pointing at
+ * itself, or a `c-<sha>.jpg` whose bytes match the original is not.
  */
 export function hasCleanCover(g: CoverFields): boolean {
   const cutout = g.cutoutSrc?.trim() ?? "";
@@ -56,11 +134,13 @@ export function hasCleanCover(g: CoverFields): boolean {
     if (notesSayHeld(g.notes)) return false;
     return source === "official" || source === "segmented";
   }
+  if (coverBytesMatch(g)) return false;
   return true;
 }
 
 /** The stored plate key when one already exists. Never the phone photo. */
 export function keptPlateKey(g: CoverFields): string {
+  if (coverBytesMatch(g)) return "";
   if (hasCleanCover(g)) return g.cutoutSrc?.trim() ?? "";
   const cutout = g.cutoutSrc?.trim() ?? "";
   const image = g.imageSrc?.trim() ?? "";
@@ -78,7 +158,8 @@ export function needsReprintTile(g: CoverFields): boolean {
 
 /**
  * One signed-in pass. Outerwear with no clean plate, when the cover is missing,
- * the notes say held, imageSource is photo, or the cutout is still the original.
+ * the notes say held, imageSource is photo, the cutout URL is the original,
+ * or the cover file is the same bytes as the original.
  */
 export function jacketsNeedingPlate<T extends CoverFields>(garments: T[]): T[] {
   return garments.filter((g) => {
@@ -90,7 +171,7 @@ export function jacketsNeedingPlate<T extends CoverFields>(garments: T[]): T[] {
     const held = notesSayHeld(g.notes);
     const photo = g.imageSource === "photo";
     const same = Boolean(image) && cutout === image;
-    return missing || held || photo || same;
+    return missing || held || photo || same || coverBytesMatch(g);
   });
 }
 
@@ -108,10 +189,21 @@ export type PlatePatch = {
   reprint: boolean;
 };
 
+function sameFileBytes(a: string, b: string): boolean {
+  const left = a.trim();
+  const right = b.trim();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const ha = blobHashes.get(left);
+  const hb = blobHashes.get(right);
+  return Boolean(ha && hb && ha === hb);
+}
+
 /**
  * imageSrc is not in the patch. A clean plate is stored at plateKey.
  * A refusal does not point cutoutSrc at the phone photo.
- * A previous clean plate is left in place.
+ * A previous c- file that matches the original is not kept.
+ * A previous plate whose bytes differ is left in place.
  */
 export function plateResultPatch(
   garmentImageSrc: string,
@@ -119,6 +211,12 @@ export function plateResultPatch(
   plateKey: string,
   previousCutout = "",
 ): PlatePatch {
+  const refused = {
+    cutoutSrc: "",
+    imageSource: "cutout" as const,
+    matteQuality: "busy" as const,
+    reprint: true,
+  };
   if (!written.reprint && written.cutoutSrc.startsWith("data:")) {
     return {
       cutoutSrc: plateKey,
@@ -128,8 +226,9 @@ export function plateResultPatch(
     };
   }
   const prev = previousCutout.trim();
-  const keepPrev = Boolean(prev) && prev !== garmentImageSrc && !prev.startsWith("data:");
-  if (keepPrev) {
+  const prevIsPhoto =
+    !prev || prev === garmentImageSrc || prev.startsWith("data:") || sameFileBytes(prev, garmentImageSrc);
+  if (!prevIsPhoto) {
     return {
       cutoutSrc: prev,
       imageSource: "cutout",
@@ -142,7 +241,8 @@ export function plateResultPatch(
     !written.reprint &&
     fromWritten &&
     fromWritten !== garmentImageSrc &&
-    !fromWritten.startsWith("data:")
+    !fromWritten.startsWith("data:") &&
+    !sameFileBytes(fromWritten, garmentImageSrc)
   ) {
     return {
       cutoutSrc: fromWritten,
@@ -151,12 +251,7 @@ export function plateResultPatch(
       reprint: false,
     };
   }
-  return {
-    cutoutSrc: "",
-    imageSource: "cutout",
-    matteQuality: "busy",
-    reprint: true,
-  };
+  return refused;
 }
 
 /** At most `concurrency` workers. Does not start until the caller awaits it. */

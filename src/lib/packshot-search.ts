@@ -35,7 +35,7 @@ const MATCH_PROMPT =
   "model is true if image 2 shows a person, a mannequin, or a hand. " +
   "If you cannot see a detail, say unclear. Do not guess a match. JSON only.";
 
-const CLEAR: PlateJudge = { clean: true, why: "" };
+const UNREADABLE: PlateJudge = { clean: false, why: "unreadable" };
 
 async function xaiPost(
   url: string,
@@ -75,7 +75,7 @@ function chatText(json: unknown): string {
 function parseJudge(text: string): PlateJudge {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) return CLEAR;
+  if (start < 0 || end <= start) return UNREADABLE;
   try {
     const o = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
     if (typeof o.clean === "boolean") {
@@ -90,17 +90,17 @@ function parseJudge(text: string): PlateJudge {
         .join(" ");
       return { clean: !(hand || arm || hanger), why };
     }
-    return CLEAR;
+    return UNREADABLE;
   } catch {
-    return CLEAR;
+    return UNREADABLE;
   }
 }
 
-/** True only when a hand, an arm, or a hanger is actually in the plate. A silent judge keeps it. */
+/** clean:false when a person, face, hand, arm, skin, or hanger is visible. No JSON is not a cover. */
 export const judgeHeldPlate = createServerFn({ method: "POST" })
   .validator((input: { image: string }) => input)
   .handler(async ({ data }): Promise<PlateJudge> => {
-    if (!process.env.XAI_API_KEY || !data.image) return CLEAR;
+    if (!process.env.XAI_API_KEY || !data.image) return UNREADABLE;
     const messages = [
       {
         role: "user",
@@ -118,13 +118,13 @@ export const judgeHeldPlate = createServerFn({ method: "POST" })
       );
       if (!r.ok) {
         if (r.status === 400 || r.status === 403 || r.status === 404 || r.status === 422) continue;
-        return CLEAR;
+        return UNREADABLE;
       }
       const text = chatText(r.json).trim();
       if (!text) continue;
       return parseJudge(text);
     }
-    return CLEAR;
+    return UNREADABLE;
   });
 
 async function searchOnce(query: string, brief: string, site: string | null): Promise<unknown> {

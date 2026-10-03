@@ -7,9 +7,12 @@ import {
   needsReprintTile,
   hasCleanCover,
   jacketsNeedingPlate,
+  keptPlateKey,
+  noteBlob,
   plateResultPatch,
   rawOuterwearCovers,
   REPRINT_CAPTION,
+  resetBlobHashes,
   runPlatePass,
 } from "./plate.ts";
 
@@ -161,6 +164,65 @@ describe("plate patch", () => {
     assert.equal(kept.reprint, false);
     assert.equal("imageSrc" in kept, false);
     assert.equal(REPRINT_CAPTION, "Plate failed — outline the jacket.");
+  });
+});
+
+describe("a copied phone photo is not a plate", () => {
+  it("identical bytes are not a clean cover when the file names differ", async () => {
+    resetBlobHashes();
+    const phone = new Blob(["hanger-photo"]);
+    const plate = new Blob(["closed-jacket-on-paper"]);
+    const copy = {
+      id: "suede-copy",
+      name: "Brown suede",
+      category: "outerwear",
+      imageSrc: "sb:user/suede/o.jpg",
+      cutoutSrc: "sb:user/suede/c-693a12d9.jpg",
+      imageSource: "cutout" as const,
+    };
+    const real = {
+      id: "blazer-plate",
+      name: "Navy blazer",
+      category: "outerwear",
+      imageSrc: "sb:user/blazer/o.jpg",
+      cutoutSrc: "sb:user/blazer/c-11111111.jpg",
+      imageSource: "cutout" as const,
+    };
+    await noteBlob(copy.cutoutSrc, phone);
+    await noteBlob(copy.imageSrc, phone);
+    await noteBlob(real.cutoutSrc, plate);
+    await noteBlob(real.imageSrc, phone);
+    assert.equal(copy.cutoutSrc === copy.imageSrc, false);
+    assert.equal(copy.imageSource, "cutout");
+    assert.equal(hasCleanCover(copy), false);
+    assert.equal(hasCleanCover(real), true);
+    assert.equal(keptPlateKey(copy), "");
+    assert.equal(keptPlateKey(real), real.cutoutSrc);
+    const queued = jacketsNeedingPlate([copy, real]);
+    assert.deepEqual(
+      queued.map((g) => g.id),
+      ["suede-copy"],
+    );
+    const refused = plateResultPatch(
+      copy.imageSrc,
+      { reprint: true, cutoutSrc: "" },
+      "idb:suede-copy:c",
+      copy.cutoutSrc,
+    );
+    assert.equal(refused.cutoutSrc, "");
+    assert.equal(refused.reprint, true);
+    assert.equal("imageSrc" in refused, false);
+    assert.notEqual(refused.cutoutSrc, copy.cutoutSrc);
+    const marked = plateResultPatch(
+      copy.imageSrc,
+      { reprint: false, cutoutSrc: copy.cutoutSrc },
+      "idb:suede-copy:c",
+      copy.cutoutSrc,
+    );
+    assert.equal(marked.cutoutSrc, "");
+    assert.equal(marked.reprint, true);
+    assert.equal("imageSrc" in marked, false);
+    resetBlobHashes();
   });
 });
 

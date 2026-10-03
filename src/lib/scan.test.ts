@@ -293,7 +293,7 @@ describe("held garment cover", () => {
         },
         check: async () => {
           order.push("check");
-          return "suede jacket";
+          return '{"clean":true,"why":""}';
         },
         showTile: () => {
           order.push("tile");
@@ -328,29 +328,31 @@ describe("held garment cover", () => {
     assert.equal(coverRejected("an arm is visible"), true);
     assert.equal(coverRejected('{"hand":true,"arm":false,"hanger":false}'), true);
     assert.equal(coverRejected('{"hand":false,"arm":false,"hanger":false}'), false);
-    assert.equal(coverRejected("hand"), false);
-    assert.equal(coverRejected("hanger"), false);
-    assert.equal(coverRejected("arm"), false);
-    assert.equal(coverRejected("skin"), false);
+    assert.equal(coverRejected("hand"), true);
+    assert.equal(coverRejected("hanger"), true);
+    assert.equal(coverRejected("arm"), true);
+    assert.equal(coverRejected("skin"), true);
     assert.equal(coverRejected('{"clean":false,"why":"skin"}'), true);
     assert.equal(coverRejected('{"clean":false,"why":"hand"}'), true);
     assert.equal(coverRejected('{"clean":true,"why":"hand"}'), false);
-    assert.equal(coverRejected("floor"), false);
-    assert.equal(coverRejected("wall"), false);
-    assert.equal(coverRejected("no hand"), false);
-    assert.equal(coverRejected("no skin"), false);
-    assert.equal(coverRejected("without a wall"), false);
-    assert.equal(coverRejected("floor removed"), false);
-    assert.equal(coverRejected("not held in a hand"), false);
-    assert.equal(coverRejected("the hand was removed"), false);
+    assert.equal(coverRejected("floor"), true);
+    assert.equal(coverRejected("wall"), true);
+    assert.equal(coverRejected("no hand"), true);
+    assert.equal(coverRejected("no skin"), true);
+    assert.equal(coverRejected("without a wall"), true);
+    assert.equal(coverRejected("floor removed"), true);
+    assert.equal(coverRejected("not held in a hand"), true);
+    assert.equal(coverRejected("the hand was removed"), true);
     assert.equal(
       coverRejected(
         "Remove the arm, the hand, the sleeve holding it, the hanger, the wall, and the floor.",
       ),
-      false,
+      true,
     );
-    assert.equal(coverRejected("handle"), false);
-    assert.equal(coverRejected("suede jacket on paper"), false);
+    assert.equal(coverRejected("handle"), true);
+    assert.equal(coverRejected("suede jacket on paper"), true);
+    assert.equal(coverRejected(""), true);
+    assert.equal(coverRejected("   "), true);
     assert.equal(written.imageSrc, "photo://jacket");
     assert.equal(written.cutoutSrc, "");
     assert.equal(written.reprint, true);
@@ -383,9 +385,21 @@ describe("held garment cover", () => {
       checker:
         "Remove the arm, the hand, the sleeve holding it, the hanger, the wall, and the floor.",
     });
-    assert.equal(kept.reprint, false);
-    assert.equal(kept.cutoutSrc, "data:image/jpeg;base64,clean");
+    assert.equal(kept.reprint, true);
+    assert.equal(kept.cutoutSrc, "");
+    assert.notEqual(kept.cutoutSrc, "data:image/jpeg;base64,clean");
+    assert.notEqual(kept.cutoutSrc, "photo://jacket");
     assert.equal(kept.imageSrc, "photo://jacket");
+    const empty = writtenCutout({
+      photo: "photo://jacket",
+      plate: "data:image/jpeg;base64,hand",
+      checker: "",
+    });
+    assert.equal(empty.cutoutSrc, "");
+    assert.equal(empty.reprint, true);
+    assert.equal(empty.imageSrc, "photo://jacket");
+    assert.notEqual(empty.cutoutSrc, "photo://jacket");
+    assert.notEqual(empty.cutoutSrc, "data:image/jpeg;base64,hand");
   });
 
   it("retries once and keeps a clean plate", async () => {

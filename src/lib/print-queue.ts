@@ -6,7 +6,7 @@ import { garmentV2Fields, garmentWriter, mirrorGarmentFields } from "./data/mirr
 import { dataUrlToBlob, imageKey, putImage, putThumb } from "./images.ts";
 import { withTimeout } from "./ingest.ts";
 import { judgeHeldPlate } from "./packshot-search.ts";
-import { cropHeldPhoto } from "./plate-pass.ts";
+import { cropHeldPhoto, noteGarmentCoverBytes } from "./plate-pass.ts";
 import { hasCleanCover, keptPlateKey, plateResultPatch } from "./plate.ts";
 import { holderCheckerText, placeHeldGarment } from "./scan.ts";
 import { useCloset } from "./store.ts";
@@ -97,8 +97,10 @@ export function enqueueTag(id: string, cover: string): void {
 
 export function enqueuePrint(id: string, original: string): void {
   chain = chain.then(async () => {
-    const g = useCloset.getState().garments.find((item) => item.id === id);
-    if (!g) return;
+    const started = useCloset.getState().garments.find((item) => item.id === id);
+    if (!started) return;
+    await noteGarmentCoverBytes(started);
+    const g = useCloset.getState().garments.find((item) => item.id === id) ?? started;
     const previous = keptPlateKey(g);
     try {
       const written = await placeHeldGarment({

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { classifyScan, printGarment } from "./ai.ts";
 import { fetchCloudBlob } from "./cloud/blobs.ts";
+import { closetImagesBucket, getSupabase } from "./cloud/client.ts";
 import { isCloudSrc, parseCloudSrc } from "./cloud/src.ts";
 import { withTimeout } from "./ingest.ts";
 import {
@@ -17,9 +18,12 @@ import { getAccount } from "./cloud/account.ts";
 import { findOfficialCover, judgeHeldPlate } from "./packshot-search.ts";
 import { maySearchOfficial, officialCoverPatch } from "./packshot.ts";
 import {
+  coverBytesKnown,
   hasCleanCover,
   jacketsNeedingPlate,
   keptPlateKey,
+  markBlobUnreadable,
+  noteBlob,
   plateResultPatch,
   runPlatePass,
 } from "./plate.ts";
@@ -44,6 +48,109 @@ async function shrinkForPrint(src: string, max: number): Promise<string> {
   c.height = Math.max(1, Math.round(img.naturalHeight * scale));
   c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.85);
+}
+
+function unversionedCloudFile(path: string): boolean {
+  return /\/[oct]\.jpg$/.test(path);
+}
+
+/** Read a cover or original. Does not upload, and does not write o.jpg. */
+async function readSrcBlob(id: string, src: string): Promise<Blob | null> {
+  if (src.startsWith("data:")) return dataUrlToBlob(src);
+  if (isIdbKey(src)) {
+    try {
+      return await getImage(src);
+    } catch {
+      return null;
+    }
+  }
+  if (!isCloudSrc(src)) return null;
+  const parsed = parseCloudSrc(src);
+  if (!parsed) return null;
+  const pathKey = cloudImageKey(parsed.path);
+  try {
+    const hit = await getImage(pathKey);
+    if (hit && hit.size > 0) return hit;
+  } catch {
+    /* IDB miss falls through */
+  }
+  if (unversionedCloudFile(parsed.path)) {
+    try {
+      const legacy = await getImage(imageKey(id || parsed.id, parsed.kind));
+      if (legacy && legacy.size > 0) return legacy;
+    } catch {
+      /* still try storage */
+    }
+  }
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb.storage.from(closetImagesBucket()).download(parsed.path);
+  if (error || !data || data.size === 0) return null;
+  try {
+    await putImage(pathKey, data);
+  } catch {
+    /* the hash can still use this blob */
+  }
+  return data;
+}
+
+const hashInflight = new Map<string, Promise<void>>();
+let hashActive = 0;
+const hashWaiters: Array<() => void> = [];
+
+function takeHashSlot(): Promise<void> {
+  if (hashActive < 2) {
+    hashActive += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    hashWaiters.push(() => {
+      hashActive += 1;
+      resolve();
+    });
+  });
+}
+
+function releaseHashSlot(): void {
+  hashActive = Math.max(0, hashActive - 1);
+  const next = hashWaiters.shift();
+  if (next) next();
+}
+
+/** Hash the cover and the original. A copied phone photo is then not a plate. */
+export async function noteGarmentCoverBytes(g: {
+  id?: string;
+  imageSrc?: string;
+  cutoutSrc?: string;
+}): Promise<void> {
+  const image = g.imageSrc?.trim() ?? "";
+  const cutout = g.cutoutSrc?.trim() ?? "";
+  if (!image || !cutout || image === cutout) return;
+  if (coverBytesKnown(g)) return;
+  const token = `${cutout}\n${image}`;
+  const pending = hashInflight.get(token);
+  if (pending) return pending;
+  const job = (async () => {
+    await takeHashSlot();
+    try {
+      const [cover, photo] = await Promise.all([
+        readSrcBlob(g.id ?? "", cutout),
+        readSrcBlob(g.id ?? "", image),
+      ]);
+      if (cover) await noteBlob(cutout, cover);
+      else markBlobUnreadable(cutout);
+      if (photo) await noteBlob(image, photo);
+      else markBlobUnreadable(image);
+    } finally {
+      releaseHashSlot();
+    }
+  })();
+  hashInflight.set(token, job);
+  try {
+    await job;
+  } finally {
+    hashInflight.delete(token);
+  }
 }
 
 /** Original photo bytes. Does not change imageSrc. */
@@ -113,6 +220,9 @@ export async function cropHeldPhoto(photo: string): Promise<string | null> {
 }
 
 async function printOnePlate(id: string): Promise<void> {
+  const started = useCloset.getState().garments.find((item) => item.id === id);
+  if (!started || started.archived) return;
+  await noteGarmentCoverBytes(started);
   const g = useCloset.getState().garments.find((item) => item.id === id);
   if (!g || g.archived || hasCleanCover(g)) return;
   const previous = keptPlateKey(g);
@@ -242,8 +352,31 @@ export function usePlatePassNote(): string {
   );
 }
 
-/** Fire-and-forget. Once per id this session. Signed in only. Does not search the web. */
-export function scheduleOuterwearPlates(): void {
+function needsByteCheck(g: {
+  archived?: boolean;
+  category?: string;
+  imageSrc?: string;
+  cutoutSrc?: string;
+  imageSource?: string;
+  reprint?: boolean;
+}): boolean {
+  if (g.archived || g.category !== "outerwear") return false;
+  if (g.reprint === true || g.imageSource === "photo") return false;
+  if (g.imageSource !== "official" && g.imageSource !== "cutout" && g.imageSource !== "segmented") {
+    return false;
+  }
+  const image = g.imageSrc?.trim() ?? "";
+  const cutout = g.cutoutSrc?.trim() ?? "";
+  if (!image || !cutout || image === cutout) return false;
+  return !coverBytesKnown(g);
+}
+
+let passChain: Promise<void> = Promise.resolve();
+
+async function hashThenPass(): Promise<void> {
+  if (!getAccount().user) return;
+  const suspects = useCloset.getState().garments.filter(needsByteCheck);
+  await runPlatePass(suspects, (g) => noteGarmentCoverBytes(g), 2);
   if (!getAccount().user) return;
   const items = jacketsNeedingPlate(useCloset.getState().garments).filter(
     (g) => g.id && !autoStarted.has(g.id),
@@ -255,8 +388,16 @@ export function scheduleOuterwearPlates(): void {
   const n = items.length;
   passDepth += 1;
   setPlateNote(n === 1 ? "Cleaning 1 jacket." : `Cleaning ${n} jackets.`);
-  void runPlatePass(items, (g) => makePlate(g.id!), 2).finally(() => {
+  try {
+    await runPlatePass(items, (g) => makePlate(g.id!), 2);
+  } finally {
     passDepth = Math.max(0, passDepth - 1);
     if (passDepth === 0) setPlateNote("");
-  });
+  }
+}
+
+/** Fire-and-forget. Once per id this session. Signed in only. Does not search the web. */
+export function scheduleOuterwearPlates(): void {
+  if (!getAccount().user) return;
+  passChain = passChain.then(() => hashThenPass()).catch(() => {});
 }

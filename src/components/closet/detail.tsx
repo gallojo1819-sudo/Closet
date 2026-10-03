@@ -7,6 +7,7 @@ import { describeCover, readAiStatus, recolorCover } from "@/lib/ai";
 import { findRealPhoto, makePlate } from "@/lib/plate-pass";
 import { maySearchOfficial } from "@/lib/packshot";
 import { coverIsOriginal, needsReprintTile, REPRINT_CAPTION } from "@/lib/plate";
+import { useCoverByteRev } from "@/lib/use-clean-cover";
 import {
   coversSameSilhouette,
   notesWantGurkha,
@@ -145,6 +146,7 @@ export function GarmentDetail({
   const [coverError, setCoverError] = useState<string | null>(null);
   const [plating, setPlating] = useState(false);
   const [finding, setFinding] = useState(false);
+  useCoverByteRev();
   const originalSrc = useImageSrc(garment.imageSrc);
 
   const cpw = costPerWear(garment);

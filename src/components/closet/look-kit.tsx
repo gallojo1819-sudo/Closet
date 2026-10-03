@@ -1,7 +1,7 @@
-import type { CSSProperties } from "react";
+import { useSyncExternalStore, type CSSProperties } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { kitBand, kitCells } from "@/lib/look";
-import { hasCleanCover } from "@/lib/plate";
+import { coverByteRev, hasCleanCover, subscribeCoverBytes } from "@/lib/plate";
 import type { Garment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -95,6 +95,7 @@ function CoverArt({
   thumb: boolean;
   className: string;
 }) {
+  useSyncExternalStore(subscribeCoverBytes, coverByteRev, () => 0);
   if (!hasCleanCover(garment)) {
     return (
       <div className={cn("flex h-full w-full items-center justify-center px-3 text-center", className)}>

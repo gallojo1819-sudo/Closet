@@ -1,6 +1,7 @@
 import type { MouseEvent } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { hasCleanCover, needsReprintTile, REPRINT_CAPTION } from "@/lib/plate";
+import { useCoverByteRev } from "@/lib/use-clean-cover";
 import { pieceLabel } from "@/lib/piece-label";
 import { useCloset } from "@/lib/store";
 import type { Garment } from "@/lib/types";
@@ -21,6 +22,7 @@ export function GarmentTile({
   eager?: boolean;
 }) {
   const pool = useCloset((s) => s.garments);
+  useCoverByteRev();
   const reprint = needsReprintTile(garment);
   const paper = !hasCleanCover(garment);
   return (
