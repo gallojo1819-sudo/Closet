@@ -7,21 +7,22 @@ import { evaluateColor } from "../stylist/colorChip.ts";
 import platesFile from "../stylist/__tests__/fixtures/plates-2026-09-30.json" with { type: "json" };
 import { piecesFromIds } from "../stylist/rules.ts";
 import { cross1Fails, cross3Fails, rep2Fails } from "../stylist/row.ts";
-import { evaluate, sig, type Plate } from "./evaluate.ts";
+import library from "../detectors/library.json" with { type: "json" };
+import { brandHits, evaluate, sig, type Plate } from "./evaluate.ts";
 import { APPROVED, COLOR_PROFILE, CROSS } from "./load.ts";
 
 const HASHES: Record<string, string> = {
-  "approved/545.json": "85d8d64727d77f55201ea847e748f866cf8af14b992cb91198e8d7bb26fb72ac",
+  "approved/545.json": "8062768c5356a80322e0450be8e69e9af3d95296ff102bf7be5f7ba94ba661a5",
   "approved/_cross_chip.json": "5850e61eb7fed90f0369d176bc2d1b8e5ad88f178ecc5d5cec1cba7da8317f8c",
-  "approved/ald.json": "5a3ad3807a8e531b299a878715f3d26311e01f4e154276792cfc161179b5a9ee",
+  "approved/ald.json": "fc5ac566d2f2c0a75e17c8d7229317146fca70417711a0aa896d8ec8f87d5476",
   "approved/color.json": "78af58830b8a87fbd566145090340a53062783ee031722c3bcc04ade1730800d",
-  "approved/faloni.json": "6324362c2c7065786ce27e2da68a64ec9440915f6b55831aeb9e062f291e9246",
-  "approved/italiansummer.json": "adec651dc8dd82b6d20dfd8eb99e5acd539a10f6e03aa0e081ad02d7c57c9001",
-  "approved/italianwinter.json": "7eea06fdeb3bc44de85b577d9b25cce3590f9bf559801983037e22037cdaf79b",
-  "approved/polo.json": "74d00b6e378d7829ae6735bb727248be5b3792521d445fe8a975f320ae7b65b7",
-  "approved/purple.json": "23c03f38e62b359bc59bfd10e4c5f980ce41e2d654c33435f2f5ec882b23be62",
-  "approved/rrl.json": "eed33d82b7375a3a715b29842bc42a05a7f3695171037107d597083ad7c9bf8f",
-  "approved/sweetstable.json": "bebd2185bcb22cbba86a76112d771c505894a95f70785f09601887478e6e8f1c",
+  "approved/faloni.json": "aba57de608adeb1f1058445b360c20f0d67efef86a869585241cab4f04a993ed",
+  "approved/italiansummer.json": "e6daff21a8c9091414560faa19e97576b14cce2656a5aa268d639634bcb51dd3",
+  "approved/italianwinter.json": "146429c0dccb2d95f310d9e758f395a126589da599c3b73c6718b84b814cbbda",
+  "approved/polo.json": "d31fff5fdc65d22cffd1c3ef625ec8fa4290f200aa3b0e4a29be7d35c1173fe3",
+  "approved/purple.json": "f00dd98fbe6a3dbb9f34e8d11fc324eb47a1e28e45002a576a8b0ba3063844c1",
+  "approved/rrl.json": "c72258b52c4b03edacb2da7f65f339d2ae4c543b4148a8ff01f7a68e47b59f7c",
+  "approved/sweetstable.json": "d888abb2d5f3689e8fa50a3d498cabfc68a0a700ce7b355071438e732cb4b58c",
   "../stylist/data/color-value-map.json": "5a7e7012ba07969dfa3bdb252126ad672bd18c39a1ded509272b066be7e89dd0",
   "../stylist/data/2026-09-30-proposed-stylist-rules.json":
     "82ad36149e05feff3a5b60c8dea5e4ca3034cf26c0c49b531f22ab9bf7f4b54b",
@@ -39,6 +40,20 @@ type Case = {
   context?: { occasion?: string; season?: string; color?: string; house?: string };
   core?: string;
 };
+
+describe("detector registry", () => {
+  it("legacy_chip keeps the old label, and a brand is a whole word", () => {
+    expect(library.detectors).toHaveLength(15);
+    for (const [house, profile] of Object.entries(APPROVED)) {
+      const row = library.detectors.find((d) => d.legacy_id === house);
+      expect(row, house).toBeTruthy();
+      expect((profile as { legacy_chip?: string }).legacy_chip).toBe(row?.legacy_chip);
+      expect((profile as { detector_id?: string }).detector_id).toBe(row?.id);
+    }
+    expect(brandHits("amiri", ["AMI"])).toBe(false);
+    expect(brandHits("ami paris", ["AMI"])).toBe(true);
+  });
+});
 
 describe("approved profile sha256", () => {
   it("copied JSON matches the law file hashes", () => {

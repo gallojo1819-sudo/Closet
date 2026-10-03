@@ -44,7 +44,7 @@ import { buildHouseMatrix, type MatrixLook } from "./stylist/matrix.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { houseCode, jacketHits, jacketRequired, slotPieces, wearSlot as jacketWearSlot } from "./stylist/jackets.ts";
 import { rep3Fails, repCaps, recipeOuterIssue } from "./stylist/row.ts";
-import { APPROVED } from "./house-profiles/load.ts";
+import { approvedProfile } from "./house-profiles/load.ts";
 import { evaluateColor, colorEmptyCopy } from "./stylist/colorChip.ts";
 import { assignSlots } from "./house-profiles/evaluate.ts";
 import {
@@ -1809,7 +1809,7 @@ function rotateJackets(
   if (season === "summer" || looks.length < 4) return looks;
   const raw =
     (
-      APPROVED[house] as unknown as {
+      approvedProfile(house) as unknown as {
         allowed_jackets?: { joe_plate_ids?: Array<string | { id: string }> };
       }
     ).allowed_jackets?.joe_plate_ids ?? [];

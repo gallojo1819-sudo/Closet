@@ -35,6 +35,8 @@
     }
   ],
   "chip_id": "rrl",
+  "detector_id": "western_work",
+  "legacy_chip": "RRL",
   "code_house_id": "rrl",
   "label": "RRL",
   "type": "house",

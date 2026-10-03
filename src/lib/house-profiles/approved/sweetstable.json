@@ -31,6 +31,8 @@
     }
   ],
   "chip_id": "sweetstable",
+  "detector_id": "country_stable",
+  "legacy_chip": "Sweet Stable",
   "code_house_id": "sweetStable",
   "label": "SweetStable",
   "type": "house",

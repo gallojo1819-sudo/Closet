@@ -55,6 +55,8 @@
     }
   ],
   "chip_id": "polo",
+  "detector_id": "ivy_prep",
+  "legacy_chip": "Polo",
   "code_house_id": "polo",
   "label": "Polo",
   "type": "house",

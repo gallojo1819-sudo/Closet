@@ -3,7 +3,7 @@
  * Houses with the fewest legal looks are placed first. The search backtracks
  * when a later house cannot reach three looks.
  */
-import { APPROVED } from "../house-profiles/load.ts";
+import { approvedProfile } from "../house-profiles/load.ts";
 import { gateOff, primaryKey } from "../house-profiles/evaluate.ts";
 import { HOUSES, type House } from "../houses.ts";
 import type { Garment, Occasion, Season } from "../types.ts";
@@ -80,7 +80,7 @@ function domsOf(ids: string[]): string[] {
 }
 
 function profileOf(house: House): ProfileBits {
-  return APPROVED[house] as unknown as ProfileBits;
+  return approvedProfile(house) as unknown as ProfileBits;
 }
 
 function chipOf(house: House): string {

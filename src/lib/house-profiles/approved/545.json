@@ -32,6 +32,8 @@
     }
   ],
   "chip_id": "545",
+  "detector_id": "henley_denim",
+  "legacy_chip": "545",
   "code_house_id": "fiveFourFive",
   "label": "545",
   "type": "house",

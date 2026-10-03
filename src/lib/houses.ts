@@ -2,7 +2,8 @@
  * House chips. Legality is the approved profile evaluator, not a phrase list.
  * Look-print axes below are for variety only. They do not decide a house.
  */
-import { APPROVED } from "./house-profiles/load.ts";
+import library from "./detectors/library.json" with { type: "json" };
+import { approvedProfile } from "./house-profiles/load.ts";
 import {
   assignSlots,
   evaluatePlates,
@@ -16,18 +17,22 @@ import { resolveTuck } from "./tuck.ts";
 import type { Garment, Occasion, Season } from "./types.ts";
 import { wearSlot } from "./stylist/jackets.ts";
 
-export type House =
-  | "polo"
-  | "purple"
-  | "rrl"
-  | "ald"
-  | "faloni"
-  | "fiveFourFive"
-  | "sweetStable"
-  | "italianSummer"
-  | "italianWinter";
+/** Detector id, loaded from the registry. Legacy chip ids remain valid strings. */
+export type House = (typeof library.detectors)[number]["id"];
 
-export const HOUSE_LABEL: Record<House, string> = {
+export const DETECTOR_LIBRARY = library.detectors;
+
+export function legacyChip(id: string): string | null {
+  const row = DETECTOR_LIBRARY.find((d) => d.id === id || d.legacy_id === id);
+  return row?.legacy_chip ?? null;
+}
+
+export function detectorIdFor(id: string): string | null {
+  const row = DETECTOR_LIBRARY.find((d) => d.id === id || d.legacy_id === id);
+  return row?.id ?? null;
+}
+
+export const HOUSE_LABEL: Record<string, string> = {
   polo: "Polo",
   purple: "Purple Label",
   rrl: "RRL",
@@ -38,6 +43,9 @@ export const HOUSE_LABEL: Record<House, string> = {
   italianSummer: "Italian summer",
   italianWinter: "Italian winter",
 };
+for (const row of DETECTOR_LIBRARY) {
+  HOUSE_LABEL[row.id] = row.title;
+}
 
 export const HOUSE_CHIPS: { id: House; label: string }[] = [
   { id: "polo", label: "Polo" },
@@ -353,7 +361,7 @@ function ctxOf(occasion?: string, season?: string) {
 }
 
 function profile(house: House) {
-  return APPROVED[house];
+  return approvedProfile(house);
 }
 
 /** Approved profile for a chip. Callers that still read gap/card notes use the JSON fields. */

@@ -30,6 +30,8 @@
     }
   ],
   "chip_id": "italiansummer",
+  "detector_id": "linen_soft",
+  "legacy_chip": "Italian summer",
   "code_house_id": "italianSummer",
   "label": "Italian Summer",
   "type": "house",

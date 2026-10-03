@@ -36,6 +36,8 @@
     }
   ],
   "chip_id": "ald",
+  "detector_id": "clean_city",
+  "legacy_chip": "ALD",
   "code_house_id": "ald",
   "label": "ALD",
   "type": "house",

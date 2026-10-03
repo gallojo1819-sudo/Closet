@@ -36,6 +36,8 @@
     }
   ],
   "chip_id": "purple",
+  "detector_id": "glossy_formal",
+  "legacy_chip": "Purple Label",
   "code_house_id": "purple",
   "label": "Purple",
   "type": "house",

@@ -5,7 +5,7 @@ import { clashes } from "../style.ts";
 import { seasonRank } from "../season.ts";
 import type { Garment, Occasion, Season } from "../types.ts";
 import type { House } from "../houses.ts";
-import { APPROVED } from "../house-profiles/load.ts";
+import { approvedProfile } from "../house-profiles/load.ts";
 import {
   assignSlots,
   evaluatePlates,
@@ -59,7 +59,7 @@ function houseVerdict(
   ctx: LegalCtx,
 ): { passed: boolean; eval?: EvalResult; score: number } {
   if (!ctx.house) return { passed: true, score: 0 };
-  const profile = APPROVED[ctx.house];
+  const profile = ctx.house ? approvedProfile(ctx.house) : undefined;
   if (!profile) return { passed: false, score: Number.NEGATIVE_INFINITY };
   const season = seasonOf(ctx);
   if (!ctx.ignoreGate && gateOff(profile as never, { occasion: ctx.occasion, season })) {
@@ -109,7 +109,7 @@ export function missingJacketOnly(pieces: Garment[], ctx: LegalCtx): boolean {
   if (hits.some((h) => h.severity === "hard" && h.id !== "JKT-COV-1")) return false;
   if (!hits.some((h) => h.id === "JKT-COV-1" && h.severity === "hard")) return false;
   if (!ctx.house) return true;
-  const profile = APPROVED[ctx.house];
+  const profile = ctx.house ? approvedProfile(ctx.house) : undefined;
   if (!profile) return false;
   const season = seasonOf(ctx);
   if (!ctx.ignoreGate && gateOff(profile as never, { occasion: ctx.occasion, season })) return false;

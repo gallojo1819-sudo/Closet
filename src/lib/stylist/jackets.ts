@@ -4,7 +4,7 @@
  * Shearling g_wwy9b2pusds3 is outside the brown-suede cap.
  * Cuts marked confirm are guesses until Joe says otherwise.
  */
-import { APPROVED, HOUSE_BY_CODE } from "../house-profiles/load.ts";
+import { approvedProfile, HOUSE_BY_CODE } from "../house-profiles/load.ts";
 import {
   blob,
   hasText,
@@ -388,7 +388,7 @@ type IdSeason = { id: string; seasons?: string[] };
 
 function approvedIds(code: string): IdSeason[] {
   const key = HOUSE_BY_CODE[code] ?? PROFILE_KEY[code] ?? code;
-  const profile = APPROVED[key] as unknown as {
+  const profile = approvedProfile(key) as unknown as {
     allowed_jackets?: { joe_plate_ids?: Array<string | { id: string; seasons?: string[] }> };
   };
   const raw = profile?.allowed_jackets?.joe_plate_ids ?? [];

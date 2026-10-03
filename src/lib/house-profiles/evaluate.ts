@@ -73,6 +73,20 @@ export function hasText(text: string, kws: string[] | undefined): boolean {
   return kws.some((k) => kwRe(k).test(t));
 }
 
+/** Whole word. "AMI" does not match "Amiri". */
+export function brandHits(brand: string, words: string[] | undefined): boolean {
+  if (!words?.length || !brand) return false;
+  return words.some((word) => {
+    const esc = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?<![\\p{L}\\p{N}])${esc}(?![\\p{L}\\p{N}])`, "iu").test(brand);
+  });
+}
+
+export function legacyChipOf(profile: { legacy_chip?: string | null }): string | null {
+  const chip = profile.legacy_chip;
+  return typeof chip === "string" && chip.trim() ? chip : null;
+}
+
 /** name | subtype | material. Never notes. */
 export function blob(g: Plate): string {
   return [g.name ?? "", g.subtype ?? "", g.material ?? ""].join(" | ").toLowerCase();
@@ -114,8 +128,8 @@ export function matchSpec(g: Plate, spec: Spec | undefined): boolean {
   if (spec.material_none) ok = ok && !hasText(material, spec.material_none);
   if (spec.fit_any) ok = ok && spec.fit_any.includes((g.fit ?? "").toLowerCase());
   const brand = (g.brand ?? "").toLowerCase();
-  if (spec.brand_any) ok = ok && hasText(brand, spec.brand_any);
-  if (spec.brand_none) ok = ok && !hasText(brand, spec.brand_none);
+  if (spec.brand_any) ok = ok && brandHits(brand, spec.brand_any);
+  if (spec.brand_none) ok = ok && !brandHits(brand, spec.brand_none);
   return Boolean(ok);
 }
 

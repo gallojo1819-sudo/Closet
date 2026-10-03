@@ -24,6 +24,8 @@
     }
   ],
   "chip_id": "faloni",
+  "detector_id": "fine_knit_loafer",
+  "legacy_chip": "Faloni",
   "code_house_id": "faloni",
   "label": "Faloni",
   "type": "house",

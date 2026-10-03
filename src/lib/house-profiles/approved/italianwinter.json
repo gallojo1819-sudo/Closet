@@ -31,6 +31,8 @@
     }
   ],
   "chip_id": "italianwinter",
+  "detector_id": "flannel_cashmere",
+  "legacy_chip": "Italian winter",
   "code_house_id": "italianWinter",
   "label": "Italian Winter",
   "type": "house",
