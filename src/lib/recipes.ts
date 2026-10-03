@@ -14,6 +14,7 @@ import {
   type ShoeFamily,
 } from "./houses.ts";
 import type { Garment, Occasion } from "./types.ts";
+import { prepRecipeId, recipeLocksToOwn, usesWeekdayPrep } from "./detectors/behavior.ts";
 import { recipeOuterIssue } from "./stylist/row.ts";
 
 export type RecipeId =
@@ -735,8 +736,8 @@ export function pickRecipe(
 ): Recipe {
   const house = opts?.house && opts.house !== "all" ? opts.house : undefined;
   const track = opts?.track;
-  if (house === "rrl") {
-    const owned = RECIPES.filter((r) => r.houses.includes("rrl"));
+  if (house && recipeLocksToOwn(house)) {
+    const owned = RECIPES.filter((r) => r.houses.includes(house));
     const forOcc = owned.filter((r) => r.occasions.includes(occasion));
     const fit = forOcc.filter((r) => recipeFitsPool(r, pool));
     const list = fit.length ? fit : forOcc.length ? forOcc : owned;
@@ -752,10 +753,10 @@ export function pickRecipe(
   if (!list.length) list = RECIPES.filter((r) => recipeFitsPool(r, pool));
   if (!list.length) list = RECIPES.filter((r) => r.occasions.includes(occasion));
   if (!list.length) list = [...RECIPES];
-  if (occasion === "weekday" && (!house || house === "polo")) {
+  if (occasion === "weekday" && usesWeekdayPrep(house)) {
     const needPrep = !track || track.index % 3 === 0;
     if (needPrep) {
-      const prep = list.find((r) => r.id === "WD_PREP_OCBD");
+      const prep = list.find((r) => r.id === prepRecipeId());
       if (prep) return prep;
     }
   }
@@ -790,10 +791,10 @@ export function matchRecipe(
   const outerName = outer ? `${outer.name} ${outer.subtype}` : undefined;
   const sameOccasion = (id: string) => id.startsWith(OCCASION_PREFIX[occasion]);
   const showsPromise = (id: string) => recipeOuterIssue(id, outerName) == null;
-  const rrlOnly = house === "rrl";
+  const ownHouse = house && house !== "all" && recipeLocksToOwn(house) ? house : null;
   const list = (
-    rrlOnly
-      ? RECIPES.filter((r) => r.houses.includes("rrl") && r.occasions.includes(occasion))
+    ownHouse
+      ? RECIPES.filter((r) => r.houses.includes(ownHouse) && r.occasions.includes(occasion))
       : recipesFor(occasion, house)
   ).filter((r) => sameOccasion(r.id) && showsPromise(r.id));
   let best: Recipe | undefined;
@@ -806,7 +807,7 @@ export function matchRecipe(
     }
   }
   if (best && bestN >= 3) return best.id;
-  if (rrlOnly) return undefined;
+  if (ownHouse) return undefined;
   const any = RECIPES.filter((r) => r.occasions.includes(occasion) && sameOccasion(r.id) && showsPromise(r.id));
   for (const r of any) {
     const n = recipeScore(pieces, r);

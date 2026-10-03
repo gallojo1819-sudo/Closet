@@ -24,6 +24,14 @@ import {
   type House,
 } from "./houses.ts";
 import {
+  climateDelta,
+  dropsMidlayerInHeat,
+  outerForce,
+  outerScoreDelta,
+  skipsShirtTrouserBonus,
+  wantsButtonDownQuota,
+} from "./detectors/behavior.ts";
+import {
   isButtonDown,
   isCreamCable,
   pickRecipe,
@@ -61,25 +69,7 @@ export function daysIdle(g: Garment, today = todayISO()): number {
 
 
 function houseClimateScore(g: Garment, f: number, occasion: Occasion): number {
-  const hs = housesOf(g);
-  let s = 0;
-  if (f > 75 && hs.includes("faloni")) s += 2;
-  if (f < 55 && hs.includes("italianWinter")) s += 2;
-  if (
-    (occasion === "weekend" || occasion === "travel") &&
-    (hs.includes("fiveFourFive") || hs.includes("sweetStable"))
-  ) {
-    s += 1.4;
-  }
-  if (
-    (occasion === "weekday" || occasion === "out") &&
-    hs.includes("polo")
-  ) {
-    s += 1.1;
-  }
-  if ((occasion === "weekend" || occasion === "comfy") && hs.includes("ald")) s += 1.2;
-  if (occasion === "comfy" && hs.includes("sweetStable")) s += 1.2;
-  return s;
+  return climateDelta(housesOf(g), f, occasion);
 }
 
 function formalityTarget(occasion: Occasion, moment: Moment): number {
@@ -449,16 +439,14 @@ export function trendScore(
   if (
     shirtOrKnitPolo &&
     trousers &&
-    opts?.house !== "ald" &&
+    !skipsShirtTrouserBonus(opts?.house) &&
     !pieces.some(isCampCollar) &&
     !pieces.some((g) => /chambray/.test(blobOf(g)))
   ) {
     s += 3;
   }
-  const heat = f > 75;
   if (
-    heat &&
-    (opts?.house === "faloni" || opts?.house === "fiveFourFive") &&
+    dropsMidlayerInHeat(opts?.house, f) &&
     pieces.some((g) => isMidlayer(g) && !isHoodiePiece(g))
   ) {
     s -= 12;
@@ -658,8 +646,8 @@ function outerRequired(
 ): boolean {
   if (recipe?.outerRequired) return true;
   if (recipe?.outer === "none") return false;
-  if (house === "faloni" && f > 72) return false;
-  if (house === "purple" || house === "italianWinter") return true;
+  const forced = outerForce(house, f);
+  if (forced != null) return forced;
   const cool = f < 62;
   const season = seasonFromWeather(f);
   const fallWinter = season === "fall" || season === "winter";
@@ -687,20 +675,7 @@ function scoreOuterForRecipe(
   if (recipe?.outer === "suede" && k === "suede") s += 8;
   if (recipe?.outer === "soft" && (k === "blazer" || k === "chore" || k === "field")) s += 6;
   if (recipe?.outer === "cold" && (k === "suede" || k === "blazer" || isOvercoatPiece(g))) s += 8;
-  if (house === "ald") {
-    if (k === "chore" || k === "denim" || k === "field") s += 8;
-    if (k === "blazer" && /navy/.test(b)) s -= 20;
-  }
-  if (house === "rrl") {
-    if (k === "chore" || k === "denim" || k === "suede") s += 8;
-    if (k === "blazer" && /navy/.test(b)) s -= 20;
-  }
-  if (house === "purple" && k === "blazer" && /taupe|ivory|cord|beige/.test(b)) s += 8;
-  if (house === "polo" && occasion === "weekday" && k === "blazer") s += 5;
-  if (house === "polo" && occasion === "weekend" && k === "field") s += 6;
-  if (house === "italianSummer" && k === "blazer" && /taupe|ivory/.test(b)) s += 6;
-  if (house === "italianWinter" && (k === "suede" || k === "blazer")) s += 6;
-  if (house === "faloni") s -= 12;
+  s += outerScoreDelta(house, k, b, occasion);
   if (occasion === "weekend" && isWeekendSoftJacket(g)) s += 4;
   if (occasion === "weekend" && k === "blazer" && /navy/.test(b)) s -= 6;
   return s;
@@ -826,9 +801,8 @@ export function pickLook(
     recipeById(opts.recipeId) ??
     pickRecipe(opts.occasion, pool, { house: opts.house, track: chapter });
   const realOuters = pool.filter(isTrueOuter);
-  const quotaHouse = opts.house && opts.house !== "all" ? opts.house : "polo";
   const bdWant =
-    opts.occasion === "weekday" && quotaHouse === "polo" ? scaledButtonDownQuota(pool, 3) : 0;
+    opts.occasion === "weekday" && wantsButtonDownQuota(opts.house) ? scaledButtonDownQuota(pool, 3) : 0;
 
   const avoid = opts.avoid ?? {};
   const recent = new Set(opts.recentWorn ?? []);
@@ -1067,7 +1041,7 @@ export function pickLook(
       }).some((h) => h.severity === "hard"),
   );
   if (dressed.length) poolC = dressed;
-  if ((house === "faloni" || house === "fiveFourFive") && f > 75) {
+  if (dropsMidlayerInHeat(house, f)) {
     const noMid = poolC.filter(
       (c) => !c.pieces.some((g) => isMidlayer(g) && !isHoodiePiece(g)),
     );

@@ -4,6 +4,7 @@
  * Decision (a): the Italian Summer pink-linen look with the taupe blazer
  * softens COL-9 and PASTEL-b to −10.
  */
+import { ruleKinds } from "../detectors/behavior.ts";
 import { blob, hasText, sig, slotOfPlate, type Plate } from "../house-profiles/evaluate.ts";
 import cmap from "./data/color-value-map.json" with { type: "json" };
 import rules from "./data/2026-09-30-proposed-stylist-rules.json" with { type: "json" };
@@ -16,24 +17,6 @@ export type StylistHit = { id: string; severity: "hard" | "soft"; delta: number;
 const ORDER = ["outer", "mid", "top", "bottom", "shoe"] as const;
 
 const EXCEPTION = ["g_9t24uvtl10wd", "g_66xj06nllgf2", "g_5g4fqg77s4rw", "g_juk45cokjxxy"];
-
-const PASTEL_HOUSES = new Set(["polo", "ald", "faloni", "italiansummer", "sweetstable"]);
-
-const HOUSE_CODE: Record<string, string> = {
-  polo: "polo",
-  ald: "ald",
-  faloni: "faloni",
-  purple: "purple",
-  rrl: "rrl",
-  fiveFourFive: "545",
-  "545": "545",
-  sweetStable: "sweetstable",
-  sweetstable: "sweetstable",
-  italianSummer: "italiansummer",
-  italiansummer: "italiansummer",
-  italianWinter: "italianwinter",
-  italianwinter: "italianwinter",
-};
 
 type ColorInfo = { family: string; value: number; default_role: string; accent_family?: string; level?: string };
 
@@ -375,12 +358,14 @@ export function stylistHits(
     hit("XC-PAT-1", "soft", -10, "stripe + check");
   }
 
-  const h = HOUSE_CODE[(house ?? "").trim()] ?? (house ?? "").toLowerCase();
-  if (h) {
-    if (h === "polo" && occ === "out" && (season === "fall" || season === "winter") && !outer) {
-      hit("POLO-P7", "hard", 0, "Polo Out needs a jacket");
+  const cloth = ruleKinds(house);
+  const clothRule = (name: string) => cloth.find((rule) => rule.kind === name);
+  if ((house ?? "").trim()) {
+    const outJacket = clothRule("out_needs_jacket");
+    if (outJacket && occ === "out" && (season === "fall" || season === "winter") && !outer) {
+      hit(outJacket.id ?? "POLO-P7", outJacket.severity ?? "hard", outJacket.delta ?? 0, outJacket.text ?? "Polo Out needs a jacket");
     }
-    if (PASTEL_HOUSES.has(h)) {
+    if (clothRule("pastel")) {
       const past = new Set(["pink", "mauve", "yellow", "mint", "lavender", "sage"]);
       let n = 0;
       for (const [k, g] of Object.entries(ps)) {
@@ -391,26 +376,30 @@ export function stylistHits(
       }
       if (n > 1) hit("PASTEL-b", "hard", 0, `${n} pastel pieces (sage/light-blue counted)`);
     }
-    if (h === "faloni" && season === "winter" && !outer && !mid) {
+    const cotton = clothRule("winter_summer_cotton");
+    if (cotton && season === "winter" && !outer && !mid) {
       if ((top && sig(top, "short_sleeve_top", SIG)) || (bot && dominant(bot) === "light blue" && !isDenim(bot))) {
-        hit("FAL-P5", "hard", 0, "Faloni winter: summer cotton pieces with no layer");
+        hit(cotton.id ?? "FAL-P5", cotton.severity ?? "hard", cotton.delta ?? 0, cotton.text ?? "Faloni winter: summer cotton pieces with no layer");
       }
     }
-    if (h === "faloni" && top && bot && (valOf(top) ?? 5) <= 2 && (valOf(bot) ?? 5) <= 2) {
+    const pale = clothRule("pale_without_brown");
+    if (pale && top && bot && (valOf(top) ?? 5) <= 2 && (valOf(bot) ?? 5) <= 2) {
       const anch = [shoe, outer].filter(
         (g): g is Plate => Boolean(g && cinfo(dominant(g!))?.family === "brown" && (valOf(g!) ?? 0) >= 4),
       );
-      if (!anch.length) hit("FAL-P6", "soft", -10, "pale Faloni look without a brown anchor");
+      if (!anch.length) hit(pale.id ?? "FAL-P6", pale.severity ?? "soft", pale.delta ?? -10, pale.text ?? "pale Faloni look without a brown anchor");
     }
-    if (h === "545" && garments.some((g) => dominant(g) === "black") && shoe) {
+    const blackShoe = clothRule("black_shoe");
+    if (blackShoe && garments.some((g) => dominant(g) === "black") && shoe) {
       const c = dominant(shoe);
       const m = (shoe.material ?? "").toLowerCase();
       if (!(c === "black" || c === "white" || c === "cream" || ((c === "brown" || c === "chocolate") && m === "suede"))) {
-        hit("545-P3", "hard", 0, `545 black look with ${shoe.name}`);
+        hit(blackShoe.id ?? "545-P3", blackShoe.severity ?? "hard", blackShoe.delta ?? 0, `${blackShoe.text ?? "545 black look"} with ${shoe.name}`);
       }
     }
+    const creamKnit = clothRule("cream_knit_denim");
     if (
-      h === "sweetstable" &&
+      creamKnit &&
       top &&
       bot &&
       hasText(blob(top), ["fair isle", "cable"]) &&
@@ -418,19 +407,22 @@ export function stylistHits(
       isDenim(bot) &&
       wash(bot) === 0
     ) {
-      hit("SS-P5", "soft", -10, "cream knit over white/ecru denim");
+      hit(creamKnit.id ?? "SS-P5", creamKnit.severity ?? "soft", creamKnit.delta ?? -10, creamKnit.text ?? "cream knit over white/ecru denim");
     }
-    if (h === "italiansummer") {
+    const warmth = clothRule("warmth_cap");
+    if (warmth) {
       const cap = season === "summer" ? 2 : 3;
       if ((top && (top.warmth ?? 0) > cap) || [top, mid].some((g) => g && hasText(blob(g), ["fleece"]))) {
-        hit("IS-P5", "hard", 0, `IS warmth cap ${cap} / fleece`);
+        hit(warmth.id ?? "IS-P5", warmth.severity ?? "hard", warmth.delta ?? 0, `${warmth.text ?? "IS warmth cap"} ${cap} / fleece`);
       }
     }
-    if (h === "italianwinter" && ![top, bot, outer, mid].some((g) => g && (valOf(g) ?? 0) >= 4)) {
-      hit("IW-P5", "soft", -15, "IW look with no dark anchor");
+    const dark = clothRule("dark_anchor");
+    if (dark && ![top, bot, outer, mid].some((g) => g && (valOf(g) ?? 0) >= 4)) {
+      hit(dark.id ?? "IW-P5", dark.severity ?? "soft", dark.delta ?? -15, dark.text ?? "IW look with no dark anchor");
     }
+    const tonal = clothRule("tonal_needs_jacket");
     if (
-      h === "purple" &&
+      tonal &&
       top &&
       bot &&
       cinfo(dominant(top)) &&
@@ -438,10 +430,11 @@ export function stylistHits(
       cinfo(dominant(top))!.family === cinfo(dominant(bot))!.family &&
       !outer
     ) {
-      hit("PL-P2", "hard", 0, "Purple tonal without a jacket");
+      hit(tonal.id ?? "PL-P2", tonal.severity ?? "hard", tonal.delta ?? 0, tonal.text ?? "Purple tonal without a jacket");
     }
-    if (h === "rrl" && season === "winter" && outer && isDenim(outer) && !mid) {
-      hit("RRL-P7", "soft", -10, "denim trucker alone in winter");
+    const trucker = clothRule("denim_trucker_winter");
+    if (trucker && season === "winter" && outer && isDenim(outer) && !mid) {
+      hit(trucker.id ?? "RRL-P7", trucker.severity ?? "soft", trucker.delta ?? -10, trucker.text ?? "denim trucker alone in winter");
     }
   }
 

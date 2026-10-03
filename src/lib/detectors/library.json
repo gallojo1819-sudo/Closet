@@ -319,5 +319,118 @@
       "extra": [],
       "fail": "Fleece over a dress shirt or with a sport coat."
     }
-  ]
+  ],
+  "behavior": {
+    "superseded_hits": ["XC-TEX-8", "POLO-P7", "RRL-P7"],
+    "polo": {
+      "code": "polo",
+      "profile_key": "polo",
+      "fw_code": "polo",
+      "weekday_prep": true,
+      "prep_recipe": "WD_PREP_OCBD",
+      "button_down_quota": true,
+      "outer_score": [
+        { "kinds": ["blazer"], "occasions": ["weekday"], "delta": 5 },
+        { "kinds": ["field"], "occasions": ["weekend"], "delta": 6 }
+      ],
+      "climate": [{ "occasions": ["weekday", "out"], "delta": 1.1 }],
+      "rules": [
+        { "kind": "out_needs_jacket", "id": "POLO-P7", "severity": "hard", "delta": 0, "text": "Polo Out needs a jacket" },
+        { "kind": "pastel" }
+      ]
+    },
+    "purple": {
+      "code": "purple",
+      "profile_key": "purple",
+      "fw_code": "purple",
+      "outer_required": true,
+      "zip_knit_exempt": true,
+      "outer_score": [{ "kinds": ["blazer"], "colors": "taupe|ivory|cord|beige", "delta": 8 }],
+      "rules": [{ "kind": "tonal_needs_jacket", "id": "PL-P2", "severity": "hard", "delta": 0, "text": "Purple tonal without a jacket" }]
+    },
+    "rrl": {
+      "code": "rrl",
+      "profile_key": "rrl",
+      "fw_code": "rrl",
+      "recipe_lock": "own",
+      "outer_score": [
+        { "kinds": ["chore", "denim", "suede"], "delta": 8 },
+        { "kinds": ["blazer"], "colors": "navy", "delta": -20 }
+      ],
+      "rules": [{ "kind": "denim_trucker_winter", "id": "RRL-P7", "severity": "soft", "delta": -10, "text": "denim trucker alone in winter" }]
+    },
+    "ald": {
+      "code": "ald",
+      "profile_key": "ald",
+      "fw_code": "ald",
+      "skip_shirt_trouser_bonus": true,
+      "outer_score": [
+        { "kinds": ["chore", "denim", "field"], "delta": 8 },
+        { "kinds": ["blazer"], "colors": "navy", "delta": -20 }
+      ],
+      "climate": [{ "occasions": ["weekend", "comfy"], "delta": 1.2 }],
+      "rules": [{ "kind": "pastel" }]
+    },
+    "faloni": {
+      "code": "faloni",
+      "profile_key": "faloni",
+      "fw_code": "faloni",
+      "outer_off_above_f": 72,
+      "drop_mid_above_f": 75,
+      "outer_score": [{ "delta": -12 }],
+      "climate": [{ "above_f": 75, "delta": 2 }],
+      "jacket_defaults": [{ "id": "g_wwy9b2pusds3", "seasons": ["winter"] }],
+      "rules": [
+        { "kind": "winter_summer_cotton", "id": "FAL-P5", "severity": "hard", "delta": 0, "text": "Faloni winter: summer cotton pieces with no layer" },
+        { "kind": "pale_without_brown", "id": "FAL-P6", "severity": "soft", "delta": -10, "text": "pale Faloni look without a brown anchor" },
+        { "kind": "pastel" }
+      ]
+    },
+    "fiveFourFive": {
+      "code": "545",
+      "profile_key": "fiveFourFive",
+      "fw_code": "545",
+      "drop_mid_above_f": 75,
+      "zip_knit_exempt": true,
+      "climate": [{ "occasions": ["weekend", "travel"], "delta": 1.4 }],
+      "jacket_defaults": [
+        { "id": "g_x4adkv9zu9yu" },
+        { "id": "g_wwy9b2pusds3", "seasons": ["winter"] }
+      ],
+      "rules": [{ "kind": "black_shoe", "id": "545-P3", "severity": "hard", "delta": 0, "text": "545 black look" }]
+    },
+    "sweetStable": {
+      "code": "sweetstable",
+      "profile_key": "sweetStable",
+      "fw_code": "sweetstable",
+      "climate": [
+        { "occasions": ["weekend", "travel"], "delta": 1.4 },
+        { "occasions": ["comfy"], "delta": 1.2 }
+      ],
+      "rules": [
+        { "kind": "cream_knit_denim", "id": "SS-P5", "severity": "soft", "delta": -10, "text": "cream knit over white/ecru denim" },
+        { "kind": "pastel" }
+      ]
+    },
+    "italianSummer": {
+      "code": "italiansummer",
+      "profile_key": "italianSummer",
+      "fw_code": "italiansummer",
+      "outer_score": [{ "kinds": ["blazer"], "colors": "taupe|ivory", "delta": 6 }],
+      "rules": [
+        { "kind": "warmth_cap", "id": "IS-P5", "severity": "hard", "delta": 0, "text": "IS warmth cap" },
+        { "kind": "pastel" }
+      ]
+    },
+    "italianWinter": {
+      "code": "italianwinter",
+      "profile_key": "italianWinter",
+      "fw_code": "italianwinter",
+      "outer_required": true,
+      "zip_knit_exempt": true,
+      "outer_score": [{ "kinds": ["suede", "blazer"], "delta": 6 }],
+      "climate": [{ "below_f": 55, "delta": 2 }],
+      "rules": [{ "kind": "dark_anchor", "id": "IW-P5", "severity": "soft", "delta": -15, "text": "IW look with no dark anchor" }]
+    }
+  }
 }

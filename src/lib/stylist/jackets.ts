@@ -1,9 +1,10 @@
 /**
  * Jacket classification and hits. Plate rows stay as filed.
- * Joe's exceptions (545-B4, FAL-B4) are JACKET_DEFAULTS here, not in the approved JSON.
+ * Joe's jacket exceptions live on the detector behavior, not in the approved JSON.
  * Shearling g_wwy9b2pusds3 is outside the brown-suede cap.
  * Cuts marked confirm are guesses until Joe says otherwise.
  */
+import { codeOf, fwCodes, jacketDefaults, profileKey, supersededHit, zipKnitExempt } from "../detectors/behavior.ts";
 import { approvedProfile, HOUSE_BY_CODE } from "../house-profiles/load.ts";
 import {
   blob,
@@ -106,18 +107,8 @@ export const SHEARLING_BOMBER = "g_wwy9b2pusds3";
 const OVERSHIRT = "g_v7uvadckh79p";
 const VARSITY = "g_j5og5jmzh5tx";
 
-/**
- * Code overlays. Not written into the approved profiles.
- * 545-B4: cord jacket, and shearling in winter only.
- * FAL-B4: shearling in winter only.
- */
-export const JACKET_DEFAULTS: Record<string, { id: string; seasons?: string[] }[]> = {
-  "545": [
-    { id: "g_x4adkv9zu9yu" },
-    { id: SHEARLING_BOMBER, seasons: ["winter"] },
-  ],
-  faloni: [{ id: SHEARLING_BOMBER, seasons: ["winter"] }],
-};
+/** Code overlays from the detector. Not written into the approved profiles. */
+export const JACKET_DEFAULTS: Record<string, { id: string; seasons?: string[] }[]> = jacketDefaults();
 
 const NONE: JacketInfo = {
   class: null,
@@ -132,41 +123,8 @@ const NONE: JacketInfo = {
   countsAsJacket: false,
 };
 
-const PROFILE_KEY: Record<string, string> = {
-  polo: "polo",
-  ald: "ald",
-  faloni: "faloni",
-  purple: "purple",
-  rrl: "rrl",
-  "545": "fiveFourFive",
-  fiveFourFive: "fiveFourFive",
-  sweetstable: "sweetStable",
-  sweetStable: "sweetStable",
-  italiansummer: "italianSummer",
-  italianSummer: "italianSummer",
-  italianwinter: "italianWinter",
-  italianWinter: "italianWinter",
-};
-
-const CODE_OF: Record<string, string> = {
-  polo: "polo",
-  ald: "ald",
-  faloni: "faloni",
-  purple: "purple",
-  rrl: "rrl",
-  "545": "545",
-  fiveFourFive: "545",
-  sweetstable: "sweetstable",
-  sweetStable: "sweetstable",
-  italiansummer: "italiansummer",
-  italianSummer: "italiansummer",
-  italianwinter: "italianwinter",
-  italianWinter: "italianwinter",
-};
-
 export function houseCode(house?: string | null): string {
-  const h = (house ?? "").trim();
-  return CODE_OF[h] ?? h.toLowerCase();
+  return codeOf(house);
 }
 
 function matchExt(g: Plate, spec: Spec | undefined): boolean {
@@ -387,7 +345,7 @@ function countsAsOuter(g: Plate | undefined): boolean {
 type IdSeason = { id: string; seasons?: string[] };
 
 function approvedIds(code: string): IdSeason[] {
-  const key = HOUSE_BY_CODE[code] ?? PROFILE_KEY[code] ?? code;
+  const key = HOUSE_BY_CODE[code] ?? profileKey(code) ?? code;
   const profile = approvedProfile(key) as unknown as {
     allowed_jackets?: { joe_plate_ids?: Array<string | { id: string; seasons?: string[] }> };
   };
@@ -447,7 +405,7 @@ export function isJacketAddition(house: string, id: string, season: string): boo
 }
 
 export function fwEligibleJackets(): string[] {
-  const codes = ["rrl", "polo", "purple", "ald", "faloni", "545", "sweetstable", "italiansummer", "italianwinter"];
+  const codes = fwCodes();
   const out: string[] = [];
   for (const plate of CLASS_PLATES) {
     if (plate.counts_as_jacket === false) continue;
@@ -474,8 +432,7 @@ export function jacketRequired(occasion: string, season: string, tempF?: number)
 
 export function supersededStylist(h: { id: string; severity: string }): boolean {
   if (h.id === "XC-TEX-2" && h.severity === "soft") return true;
-  if (h.id === "XC-TEX-8" || h.id === "POLO-P7" || h.id === "RRL-P7") return true;
-  return false;
+  return supersededHit(h.id);
 }
 
 function topScore(g: Plate): number {
@@ -537,7 +494,6 @@ function underHit(g: Plate, worn: string, outer: Plate, ctx: JacketCtx, hits: Ja
   const structured = info.class === "sport_coat_structured";
   const occ = ctx.occasion.toLowerCase();
   const season = ctx.season.toLowerCase();
-  const code = houseCode(ctx.house);
   const push = (severity: "hard" | "soft", delta: number, why: string) => {
     if (severity === "soft" && delta === 0) return;
     hits.push({ id: "JKT-LAY-2", severity, delta, why });
@@ -555,7 +511,7 @@ function underHit(g: Plate, worn: string, outer: Plate, ctx: JacketCtx, hits: Ja
     return;
   }
   if (jsig(g, "zip_knit", worn)) {
-    const exempt = (code === "italianwinter" || code === "purple" || code === "545") && (g.fit ?? "regular") === "regular" && !hasText(blob(g), ["fleece"]);
+    const exempt = zipKnitExempt(ctx.house) && (g.fit ?? "regular") === "regular" && !hasText(blob(g), ["fleece"]);
     if (!exempt) {
       const delta = occ === "weekend" || occ === "travel" ? -5 : -10;
       push("soft", delta, `zip knit ${g.name} under a sport coat`);
