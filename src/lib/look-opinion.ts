@@ -93,6 +93,17 @@ export function lookOpinion(
     reason: `${names}. ${why}`,
     house: null,
     swaps: swap ? [swap] : [],
-    stuck: null,
+    stuck: swap ? null : "The pair doesn't work.",
   };
+}
+
+/** One line. A better piece is named only when this closet already has it. */
+export function suggestLine(opinion: LookOpinion, pool: Garment[]): string {
+  if (opinion.headline === "This matches.") return "This matches.";
+  const owned = new Set(pool.map((g) => g.id));
+  const swap = opinion.swaps.find((row) => owned.has(row.id));
+  const piece = swap ? pool.find((g) => g.id === swap.id) : undefined;
+  if (piece) return `Better: ${piece.name}`;
+  const names = opinion.reason.split(". ")[0] ?? "";
+  return `This doesn't match: ${names}. The pair doesn't work.`;
 }

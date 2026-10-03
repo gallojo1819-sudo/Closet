@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { lookOpinion } from "./look-opinion.ts";
+import { readFileSync } from "node:fs";
+import { lookOpinion, suggestLine } from "./look-opinion.ts";
 import { emptyTaste } from "./taste.ts";
 import type { Garment } from "./types.ts";
 
@@ -94,6 +95,8 @@ describe("look opinion", () => {
     assert.equal(opinion?.swaps.length, 1);
     assert.equal(opinion?.swaps[0]?.id, retro.id);
     assert.equal(opinion?.swaps[0]?.line, "Better: retro sneaker, not the brown penny loafer.");
+    assert.equal(suggestLine(opinion!, pool), "Better: retro sneaker");
+    assert.equal(suggestLine({ ...opinion!, swaps: [{ id: "missing", slot: "footwear", line: "Better: invented loafer" }] }, pool).includes("invented"), false);
     assert.equal(pool.some((piece) => piece.id === opinion?.swaps[0]?.id), true);
   });
 
@@ -106,7 +109,8 @@ describe("look opinion", () => {
     assert.match(opinion?.reason ?? "", /navy hoodie/);
     assert.match(opinion?.reason ?? "", /brown penny loafer/);
     assert.equal(opinion?.swaps.length, 0);
-    assert.equal(opinion?.stuck, null);
+    assert.equal(opinion?.stuck, "The pair doesn't work.");
+    assert.equal(suggestLine(opinion!, [hoodie, loafer, sneaker]), "This doesn't match: navy hoodie, brown penny loafer. The pair doesn't work.");
     assert.equal(/shop|buy|sale/i.test(`${opinion?.reason} ${opinion?.stuck}`), false);
   });
 
@@ -121,5 +125,16 @@ describe("look opinion", () => {
     });
     assert.equal(opinion?.headline, "This doesn't match.");
     assert.equal(opinion?.reason, "Navy oxford, Khaki chinos. You skipped this.");
+  });
+
+  it("the builder is labeled Suggest and paints a slot edge", () => {
+    const src = readFileSync(new URL("../components/closet/look-builder.tsx", import.meta.url), "utf8");
+    const today = readFileSync(new URL("../routes/index.tsx", import.meta.url), "utf8");
+    assert.match(src, /heading = "Suggest"/);
+    assert.equal(src.includes("Make a look"), false);
+    assert.match(src, /suggestLine\(opinion, pool\)/);
+    assert.match(src, /border-green-800/);
+    assert.match(src, /border-red-800/);
+    assert.equal(today.includes("Make a look"), false);
   });
 });

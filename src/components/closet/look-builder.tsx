@@ -3,7 +3,7 @@ import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMeButton } from "@/components/closet/on-me";
 import { lookbookPool } from "@/lib/lookbook";
-import { lookOpinion } from "@/lib/look-opinion";
+import { lookOpinion, suggestLine } from "@/lib/look-opinion";
 import { nameLook } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { defaultOccasion, slotOf } from "@/lib/style";
@@ -30,7 +30,7 @@ function inSlot(g: Garment, slot: SlotId): boolean {
 
 export function LookBuilder({
   onClose,
-  heading = "Make a look",
+  heading = "Suggest",
   occasion,
   season,
   house,
@@ -68,6 +68,8 @@ export function LookBuilder({
     house,
     taste,
   });
+  const line = opinion ? suggestLine(opinion, pool) : null;
+  const matched = opinion?.headline === "This matches.";
   const ids = pieces.map((g) => g.id);
   const ready = Boolean(picked.top && picked.bottom && picked.footwear);
   const lookName = nameLook(pieces);
@@ -120,15 +122,14 @@ export function LookBuilder({
       <div className="grid grid-cols-4 gap-2">
         {SLOTS.map((s) => {
           const g = byId.get(picked[s.id] ?? "");
+          const edge =
+            g && opinion ? (matched ? "border-green-800" : "border-red-800") : openSlot === s.id ? "border-ink" : "border-hairline";
           return (
             <button
               key={s.id}
               type="button"
               onClick={() => setOpenSlot(openSlot === s.id ? null : s.id)}
-              className={cn(
-                "border text-left",
-                openSlot === s.id ? "border-ink" : "border-hairline",
-              )}
+              className={cn("border-2 text-left", edge)}
             >
               <div className="bg-paper-deep aspect-page">
                 {g ? (
@@ -178,27 +179,17 @@ export function LookBuilder({
         </div>
       )}
 
-      {opinion && (
-        <div>
-          <p className="text-sm text-ink">{opinion.headline}</p>
-          {opinion.reason ? <p className="mt-1 text-sm text-ink-soft">{opinion.reason}</p> : null}
-          {opinion.swaps.length > 0 && (
-            <div className="mt-2 flex flex-col items-start gap-1">
-              {opinion.swaps.map((swap) => (
-                <button
-                  key={`${swap.slot}:${swap.id}`}
-                  type="button"
-                  onClick={() => fill(swap.slot, swap.id)}
-                  className="text-left text-sm text-ink underline"
-                >
-                  {swap.line}
-                </button>
-              ))}
-            </div>
-          )}
-          {opinion.stuck ? <p className="mt-1 text-sm text-ink-soft">{opinion.stuck}</p> : null}
-        </div>
-      )}
+      {line && opinion?.swaps[0] && pool.some((g) => g.id === opinion.swaps[0]?.id) ? (
+        <button
+          type="button"
+          onClick={() => fill(opinion.swaps[0]!.slot, opinion.swaps[0]!.id)}
+          className="text-left text-sm text-ink underline"
+        >
+          {line}
+        </button>
+      ) : line ? (
+        <p className="text-sm text-ink">{line}</p>
+      ) : null}
 
       {pieces.length > 0 && <FlatLay pieces={pieces} className="max-w-xs" />}
 

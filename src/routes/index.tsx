@@ -491,7 +491,7 @@ function Today() {
             onClick={() => setPlay((v) => !v)}
             className="micro text-ink-soft hover:text-ink"
           >
-            {play ? "Close builder" : "Make a look"}
+            {play ? "Close builder" : "Suggest"}
           </button>
           {play && <LookBuilder onClose={() => setPlay(false)} />}
           {neglected && !done && (
