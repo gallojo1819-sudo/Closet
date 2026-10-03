@@ -6,15 +6,16 @@ import { LookBuilder } from "@/components/closet/look-builder";
 import { LookSheet } from "@/components/closet/look-sheet";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
-import { alternatives, dropNote, heroPieces, kitCells, nameLook, neglectedPiece, sortLook } from "@/lib/look";
+import { alternatives, dropNote, kitCells, unwornLine, sortLook } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
+import { isFakeName } from "@/lib/rack";
 import { rackCanDress, weekStripDays } from "@/lib/lookbook";
 import { seasonFromWeather } from "@/lib/season";
 import { useAccount } from "@/lib/cloud/account";
 import { persistGate } from "@/lib/store-persist";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
-import { HOUSE_LABEL, avoidedUniformLine, daysIdle, lookHouses } from "@/lib/style";
+import { HOUSE_LABEL, avoidedUniformLine, lastWornDays, lookHouses } from "@/lib/style";
 import { emptyTaste, leftOffLine, techniqueLine } from "@/lib/taste";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
@@ -54,9 +55,10 @@ function Today() {
     (async () => {
       let weather = drop?.weather;
       try {
-        weather = await getNycWeather();
+        const live = await getNycWeather();
+        if (live) weather = live;
       } catch {
-        weather = weather ?? { f: 68, label: "Fair", code: 2 };
+        weather = drop?.weather;
       }
       if (cancelled) return;
       const owned = useCloset.getState().garments.filter((g) => !g.archived);
@@ -115,7 +117,7 @@ function Today() {
       if (cancelled) return;
       const s = useCloset.getState();
       if (s.thisWeek.length >= 3 || !rackCanDress(s.garments)) return;
-      const season = seasonFromWeather(s.drop?.weather?.f ?? 68);
+      const season = seasonFromWeather(s.drop?.weather?.f);
       s.fillThisWeek(season);
     };
     if (typeof requestIdleCallback === "function") {
@@ -132,21 +134,13 @@ function Today() {
     };
   }, [hydrated, ownedCount]);
 
-  const pieces = useMemo(
-    () => sortLook(garments.filter((g) => drop?.garmentIds.includes(g.id))),
-    [garments, drop],
-  );
   const weather = drop?.weather;
-  const neglected = useMemo(
-    () => neglectedPiece(garments, drop?.garmentIds ?? []),
-    [garments, drop],
-  );
   const waiting = useMemo(
-    () => garments.filter((g) => !g.archived && daysIdle(g) >= 21),
+    () => garments.filter((g) => !g.archived && (lastWornDays(g) ?? -1) >= 30),
     [garments],
   );
   const sample = garments.some((g) => g.demo);
-  const dropSeason = seasonFromWeather(weather?.f ?? 68);
+  const dropSeason = seasonFromWeather(weather?.f);
   const avoided = useMemo(
     () =>
       drop
@@ -183,16 +177,22 @@ function Today() {
   );
   const shown = useMemo(() => {
     const cell = weekCells.find((c) => c.iso === today);
-    const strip = cell?.look
-      ? sortLook(
-          cell.look.garmentIds
-            .map((id) => garments.find((g) => g.id === id))
-            .filter((g): g is Garment => Boolean(g)),
-        )
-      : [];
-    return heroPieces(pieces, strip);
-  }, [weekCells, today, pieces, garments]);
-  const lookName = nameLook(shown);
+    return sortLook(
+      (cell?.look?.garmentIds ?? [])
+        .map((id) => garments.find((g) => g.id === id))
+        .filter((g): g is Garment => Boolean(g)),
+    );
+  }, [weekCells, today, garments]);
+  const lookName =
+    shown.length === 0
+      ? "Nothing on the rack"
+      : shown.length === 1
+        ? pieceLabel(shown[0]!, garments)
+        : `${pieceLabel(shown[0]!, garments)} · ${pieceLabel(shown[1]!, garments)}`;
+  const resting = useMemo(
+    () => unwornLine(garments, shown.map((g) => g.id)),
+    [garments, shown],
+  );
   const note = dropNote(shown, weather, drop?.occasion, drop?.moment, undefined, dropSeason);
   const houses = lookHouses(shown, drop?.occasion ?? "weekday", dropSeason);
   const done = drop?.worn || drop?.verdict === "worn";
@@ -379,8 +379,8 @@ function Today() {
           </div>
           <ol className="space-y-3">
             {shown.map((g) => {
-              const canSwap = alternatives(garments, g, drop?.garmentIds ?? []).length > 0;
-              const idle = daysIdle(g);
+              const canSwap = alternatives(garments, g, shown.map((p) => p.id)).length > 0;
+              const wornAgo = lastWornDays(g);
               const locked = (drop?.lockedIds ?? []).includes(g.id);
               return (
                 <li
@@ -402,9 +402,12 @@ function Today() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p>{pieceLabel(g, garments)}</p>
+                    {isFakeName(g.name) ? (
+                      <p className="micro text-accent">Placeholder name</p>
+                    ) : null}
                     <p className="micro text-ink-soft">
                       {g.subtype || g.category}
-                      {idle >= 21 ? ` · sat ${idle}d` : ""}
+                      {wornAgo != null && wornAgo >= 30 ? ` · last worn ${wornAgo}d ago` : ""}
                     </p>
                   </div>
                   <button
@@ -449,7 +452,7 @@ function Today() {
           <div className="flex flex-wrap gap-3">
             <Button
               onClick={() => {
-                const ids = pieces.length >= 2 ? (drop?.garmentIds ?? []) : shown.map((g) => g.id);
+                const ids = shown.map((g) => g.id);
                 if (ids.length >= 2) wearToday(ids);
               }}
               disabled={done}
@@ -466,7 +469,7 @@ function Today() {
             <Button
               variant="ghost"
               onClick={() => {
-                const ids = pieces.length >= 2 ? (drop?.garmentIds ?? []) : shown.map((g) => g.id);
+                const ids = shown.map((g) => g.id);
                 if (ids.length < 2) return;
                 saveLook({
                   name: lookName,
@@ -494,11 +497,9 @@ function Today() {
             {play ? "Close builder" : "Suggest"}
           </button>
           {play && <LookBuilder onClose={() => setPlay(false)} />}
-          {neglected && !done && (
+          {resting && !done && (
             <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
-              Still waiting:{" "}
-              <span className="text-ink">{neglected.name}</span>
-              {` · ${daysIdle(neglected)} days.`} Swap it in — don’t buy another.
+              {resting}
             </p>
           )}
         </div>

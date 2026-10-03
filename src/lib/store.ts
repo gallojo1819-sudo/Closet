@@ -45,8 +45,8 @@ import {
 } from "./store-persist";
 import {
   coreComboKey,
-  daysIdle,
   defaultOccasion,
+  lastWornDays,
   isMulePiece,
   momentOfDay,
   pickLook,
@@ -163,7 +163,7 @@ function pickDrop(
   },
 ): string[] {
   const occ = occasion ?? defaultOccasion();
-  const season = seasonFromWeather(weather?.f ?? 68);
+  const season = seasonFromWeather(weather?.f);
   const cold = season === "fall" || season === "winter";
   return pickLook(garments, {
     weather,
@@ -604,7 +604,7 @@ export const useCloset = create<ClosetState>()(
               (slotOf(g) ?? g.category) === slot &&
               !used.has(g.id),
           )
-          .sort((a, b) => daysIdle(b) - daysIdle(a));
+          .sort((a, b) => (lastWornDays(b) ?? Number.POSITIVE_INFINITY) - (lastWornDays(a) ?? Number.POSITIVE_INFINITY));
         const next = pool[0];
         if (!next) return;
         set({
@@ -644,6 +644,7 @@ export const useCloset = create<ClosetState>()(
           const before = s.looks.length;
           const row = buildReshuffleRow(s.garments, "weekday", {
             season,
+            weather: s.drop?.weather,
             salt: s.reshuffleCount,
             cap: 7,
             taste: s.taste,

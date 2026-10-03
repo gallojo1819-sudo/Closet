@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { cutoutsForOnYou, heroPieces, kitBand, kitCells, layersForOnMe, nameLook, spreadTitle } from "./look.ts";
+import { cutoutsForOnYou, heroPieces, kitBand, kitCells, layersForOnMe, nameLook, spreadTitle, unwornLine } from "./look.ts";
+import { readingToSnap } from "./weather.ts";
 import type { Garment } from "./types.ts";
 
 function g(
@@ -186,6 +187,43 @@ describe("heroPieces", () => {
     const drop = [g({ id: "a", name: "Navy oxford", category: "top", subtype: "oxford" })];
     assert.equal(heroPieces(drop, []).length, 1);
     assert.equal(heroPieces([], [drop[0]!]).length, 0);
+  });
+});
+
+describe("today agrees", () => {
+  it("does not invent a temperature or a last-worn date", () => {
+    assert.equal(readingToSnap(undefined, 2), null);
+    assert.equal(readingToSnap(Number.NaN, 1), null);
+    const snap = readingToSnap(74.2, 1);
+    assert.equal(snap?.f, 74);
+    assert.equal(snap?.measured, true);
+    assert.equal(snap?.label, "Mostly clear");
+    const never = g({
+      id: "n",
+      name: "Navy oxford",
+      category: "top",
+      subtype: "oxford",
+      createdAt: "2020-01-01T00:00:00.000Z",
+      wornOn: [],
+    });
+    const ago = new Date();
+    ago.setUTCDate(ago.getUTCDate() - 40);
+    const old = g({
+      id: "o",
+      name: "Grey flannel",
+      category: "bottom",
+      subtype: "trouser",
+      wornOn: [ago.toISOString().slice(0, 10)],
+    });
+    assert.equal(unwornLine([never], []), null);
+    assert.equal(unwornLine([old, never], []), "You haven't worn Grey flannel in 30 days.");
+    assert.equal(unwornLine([old], ["o"]), null);
+    const page = readFileSync(new URL("../routes/index.tsx", import.meta.url), "utf8");
+    assert.equal(page.includes("heroPieces"), false);
+    assert.match(page, /weekCells\.find\(\(c\) => c\.iso === today\)/);
+    assert.match(page, /unwornLine/);
+    assert.match(page, /Placeholder name/);
+    assert.equal(page.includes("{ f: 68"), false);
   });
 });
 

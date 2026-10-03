@@ -257,8 +257,8 @@ describe("piece labels", () => {
     const b = plate({ id: "s2", name: "White leather sneakers", brand: "Koio", colors: ["white", "navy"] });
     const only = plate({ id: "s3", name: "Cream trousers", brand: "Incotex", category: "bottom", subtype: "trouser" });
     const pool = [a, b, only];
-    assert.equal(pieceLabel(a, pool), "White leather sneakers · Common Projects");
-    assert.equal(pieceLabel(b, pool), "White leather sneakers · Koio");
+    assert.equal(pieceLabel(a, pool), "White leather sneakers · gum");
+    assert.equal(pieceLabel(b, pool), "White leather sneakers · navy");
     assert.equal(pieceLabel(only, pool), "Cream trousers");
     assert.equal(a.name, "White leather sneakers");
 
@@ -280,8 +280,8 @@ describe("piece labels", () => {
       category: "outerwear",
       colors: ["brown"],
     });
-    assert.equal(pieceLabel(named, [named, twin]), "Brown suede jacket · relaxed");
-    assert.equal(pieceLabel(twin, [named, twin]), "Brown suede jacket · slim");
+    assert.equal(pieceLabel(named, [named, twin]), "Brown suede jacket · tan");
+    assert.equal(pieceLabel(twin, [named, twin]), "Brown suede jacket · leather");
 
     const jeansA = plate({
       id: "d1",
@@ -299,8 +299,30 @@ describe("piece labels", () => {
       subtype: "",
       category: "bottom",
       colors: ["light blue"],
+      material: "",
     });
     assert.equal(pieceLabel(jeansA, [jeansA, jeansB]), "Light blue jeans · indigo");
     assert.equal(pieceLabel(jeansB, [jeansA, jeansB]), "Light blue jeans");
+
+    const cashmere = plate({
+      id: "k1",
+      name: "Navy crew",
+      category: "top",
+      subtype: "crew",
+      colors: ["navy"],
+      brand: "",
+      material: "cashmere",
+    });
+    const merino = plate({
+      id: "k2",
+      name: "Navy crew",
+      category: "top",
+      subtype: "crew",
+      colors: ["navy"],
+      brand: "",
+      material: "merino",
+    });
+    assert.equal(pieceLabel(cashmere, [cashmere, merino]), "Navy crew · cashmere");
+    assert.equal(pieceLabel(merino, [cashmere, merino]), "Navy crew · merino");
   });
 });

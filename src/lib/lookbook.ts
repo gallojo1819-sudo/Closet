@@ -56,7 +56,7 @@ import {
   type ChapterTrack,
 } from "./recipes.ts";
 import { lookFitsSeason, seasonRank, weatherForSeason } from "./season.ts";
-import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion, type Season } from "./types.ts";
+import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion, type Season, type WeatherSnap } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
 export const CHAPTER_CAP = 10;
@@ -2010,6 +2010,8 @@ export function buildReshuffleRow(
     replacing?: Look[];
     cap?: number;
     salt?: number;
+    /** Live snap. Used for the 72F jacket rule only when measured. */
+    weather?: WeatherSnap;
     /** Star these ids first, one per look, most idle first. */
     mustInclude?: string[];
     color?: string | null;
@@ -2025,7 +2027,8 @@ export function buildReshuffleRow(
   const byId = new Map(pool.map((g) => [g.id, g]));
   const house = opts?.house;
   const season = opts?.season;
-  const weather = season ? weatherForSeason(season) : weatherForOcc(occasion);
+  const live = opts?.weather?.measured ? opts.weather : null;
+  const weather = live ?? (season ? weatherForSeason(season) : weatherForOcc(occasion));
   const banned = new Set(opts?.excludeKeys ?? []);
   const replacingRecipes = new Set(
     (opts?.replacing ?? []).map((l) => l.recipeId).filter((id): id is string => Boolean(id)),
@@ -2233,7 +2236,6 @@ export function buildReshuffleRow(
     const taste = opts.taste;
     draws.sort((a, b) => techniqueWeight(taste, b) - techniqueWeight(taste, a));
   }
-  void weather;
   void usedCount;
   void replacingRecipes;
   let picks = 0;
@@ -2322,7 +2324,10 @@ export function buildReshuffleRow(
       if (top && isCreamCable(top)) cable = true;
       noteChapterLook(track, pieces, recipeId, occasion);
       const jacketOn = pieces.some((g) => jacketWearSlot(g) === "outer");
-      const demoted = season != null && jacketRequired(occasion, season) && !jacketOn ? ("JKT-COV-1" as const) : undefined;
+      const demoted =
+        season != null && jacketRequired(occasion, season, live?.f) && !jacketOn
+          ? ("JKT-COV-1" as const)
+          : undefined;
       row.push({
         id: `reshuffle_${occasion}_${row.length}_${key.replace(/\|/g, "_")}`,
         name: nameOf(pieces),

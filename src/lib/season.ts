@@ -61,20 +61,25 @@ export function seasonsOf(g: Garment): Season[] {
   return ["spring", "summer", "fall", "winter"];
 }
 
-/** One season name. Auto follows the weather, then the month. October, mild, is Fall. */
+/** One season name. Auto follows a real temperature, then the month. October, mild, is Fall. */
 export function seasonControlLabel(
   chip: "auto" | Season,
   date = new Date(),
-  weatherF = 68,
+  weatherF?: number | null,
 ): string {
   const id = chip === "auto" ? seasonFromWeather(weatherF, date) : chip;
   return SEASONS.find((s) => s.id === id)?.label ?? "Fall";
 }
 
-/** ≥75 summer, <55 winter, otherwise by month. September through November is fall. */
-export function seasonFromWeather(f: number, d = new Date()): Season {
-  if (f >= 75) return "summer";
-  if (f < 55) return "winter";
+/**
+ * A measured temperature wins: ≥75 summer, <55 winter.
+ * No temperature means the month. September through November is fall.
+ */
+export function seasonFromWeather(f?: number | null, d = new Date()): Season {
+  if (f != null && Number.isFinite(f)) {
+    if (f >= 75) return "summer";
+    if (f < 55) return "winter";
+  }
   const m = d.getMonth();
   if (m >= 2 && m <= 4) return "spring";
   if (m >= 8 && m <= 10) return "fall";

@@ -249,9 +249,9 @@ function LookbookPage() {
   );
   const gap = useMemo(() => rackLine(garments), [garments]);
   const chapterLabel = OCCASIONS.find((o) => o.id === occasion)?.label ?? "Weekday";
-  const autoSeason = seasonFromWeather(drop?.weather?.f ?? 68);
+  const autoSeason = seasonFromWeather(drop?.weather?.f);
   const season: Season = seasonChip === "auto" ? autoSeason : seasonChip;
-  const seasonShown = seasonControlLabel(seasonChip, new Date(), drop?.weather?.f ?? 68);
+  const seasonShown = seasonControlLabel(seasonChip, new Date(), drop?.weather?.f);
   const month = new Date().getMonth();
   const ways = useMemo(() => {
     const stamp = garments.map((g) => `${g.id}:${g.wornOn?.length ?? 0}`).join(",");

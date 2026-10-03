@@ -78,6 +78,8 @@ describe("seasonFromWeather", () => {
     assert.equal(seasonFromWeather(68, sep), "fall");
     assert.equal(seasonFromWeather(80, sep), "summer");
     assert.equal(seasonFromWeather(40, sep), "winter");
+    assert.equal(seasonFromWeather(undefined, sep), "fall");
+    assert.equal(seasonFromWeather(null, sep), "fall");
   });
 
   it("October Auto shows Fall, not a row of season chips", () => {

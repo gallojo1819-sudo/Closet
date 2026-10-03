@@ -95,6 +95,8 @@ export type WeatherSnap = {
   f: number;
   label: string;
   code: number;
+  /** True only when a weather service returned this temperature. */
+  measured?: boolean;
 };
 
 export const OCCASIONS = [

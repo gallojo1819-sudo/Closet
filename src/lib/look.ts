@@ -3,6 +3,7 @@ import { colorLine } from "./color.ts";
 import {
   HOUSE_LABEL,
   daysIdle,
+  lastWornDays,
   isCampCollar,
   isFairIsle,
   isHoodiePiece,
@@ -11,6 +12,7 @@ import {
   slotOf,
 } from "./style.ts";
 import { houseFingerprintOk, type House } from "./houses.ts";
+import { pieceLabel } from "./piece-label.ts";
 import { hasCleanCover } from "./plate.ts";
 import { wearSlot } from "./stylist/jackets.ts";
 
@@ -211,6 +213,23 @@ export function dropNote(
     if (named && houseFingerprintOk(pieces, named, occ, undefined, season)) label = HOUSE_LABEL[named];
   }
   return colorLine(pieces, label) || (label ? label : "From the closet.");
+}
+
+/** A piece with a real wear at least 30 days ago, not on this look. No date is invented. */
+export function unwornLine(garments: Garment[], excludeIds: readonly string[]): string | null {
+  const used = new Set(excludeIds);
+  let best: Garment | null = null;
+  let bestDays = 0;
+  for (const g of garments) {
+    if (g.archived || used.has(g.id)) continue;
+    const days = lastWornDays(g);
+    if (days == null || days < 30) continue;
+    if (best && (days < bestDays || (days === bestDays && g.id > best.id))) continue;
+    best = g;
+    bestDays = days;
+  }
+  if (!best) return null;
+  return `You haven't worn ${pieceLabel(best, garments)} in 30 days.`;
 }
 
 export function neglectedPiece(

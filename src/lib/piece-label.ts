@@ -1,9 +1,9 @@
 import type { Garment } from "./types.ts";
 
-/** One short token that is not already the whole name. Display only. */
+/** Color, then brand, then material. Skip a token already written in the name. */
 function distinguisher(g: Garment): string | null {
   const name = g.name.trim().toLowerCase();
-  const candidates = [g.brand, g.fit, g.subtype, g.colors?.[1]];
+  const candidates = [...(g.colors ?? []), g.brand, g.material];
   for (const raw of candidates) {
     const token = (raw ?? "").trim();
     if (!token) continue;

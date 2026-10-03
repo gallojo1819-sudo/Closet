@@ -66,6 +66,15 @@ export function daysIdle(g: Garment, today = todayISO()): number {
   return Math.max(0, Math.round(ms / 86_400_000));
 }
 
+/** Days since the last real wear. Null when wornOn is empty. Does not use createdAt. */
+export function lastWornDays(g: Garment, today = todayISO()): number | null {
+  const last = g.wornOn.at(-1);
+  if (!last) return null;
+  const ms = Date.parse(today) - Date.parse(last);
+  if (!Number.isFinite(ms)) return null;
+  return Math.max(0, Math.round(ms / 86_400_000));
+}
+
 
 
 function houseClimateScore(g: Garment, f: number, occasion: Occasion): number {
@@ -689,6 +698,8 @@ export function pickTrueOuter(
     occasion: Occasion;
     house?: House | "all" | null;
     f: number;
+    /** Measured temperature only. Omitted when the service did not answer. */
+    tempF?: number;
     legalCombo?: (pieces: Garment[]) => boolean;
     usedOuters?: Set<string>;
     /** Weight above 0 prefers the jacket that completes the technique. */
@@ -722,6 +733,7 @@ export function pickTrueOuter(
       occasion: opts.occasion,
       season,
       house: opts.house && opts.house !== "all" ? opts.house : undefined,
+      tempF: opts.tempF,
     }).some((h) => h.severity === "hard");
     if (jacketHard) continue;
     if (opts.f > 78 && (o.warmth >= 5 || isOvercoatPiece(o))) continue;
@@ -791,6 +803,7 @@ export function pickLook(
     }
     return salted ? shuffle(list, rng) : list;
   };
+  const measuredF = opts.weather?.measured ? opts.weather.f : undefined;
   const f = opts.weather?.f ?? 68;
   const cool = f < 62;
   const warm = f > 78;
@@ -831,7 +844,8 @@ export function pickLook(
     if (recent.has(g.id) && slotOf(g) !== "accessory") s -= 2.5;
     s -= Math.min(avoid[g.id] ?? 0, 4) * 1.6;
     if (previous.has(g.id)) s -= 8;
-    s += Math.min(daysIdle(g), 90) / 10;
+    const wornAgo = lastWornDays(g);
+    s += wornAgo == null ? 9 : Math.min(wornAgo, 90) / 10;
     s += occasionScore(g, opts.occasion);
     s += houseClimateScore(g, f, opts.occasion);
     const season = seasonFromWeather(f);
@@ -1038,6 +1052,7 @@ export function pickLook(
         occasion: opts.occasion,
         season: jacketSeason,
         house,
+        tempF: measuredF,
       }).some((h) => h.severity === "hard"),
   );
   if (dressed.length) poolC = dressed;
@@ -1091,6 +1106,7 @@ export function pickLook(
         occasion: opts.occasion,
         house: opts.house,
         f,
+        tempF: measuredF,
         legalCombo: opts.legalCombo,
         usedOuters: chapter?.usedOuters,
         taste,
