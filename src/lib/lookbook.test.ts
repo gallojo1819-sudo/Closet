@@ -1483,7 +1483,11 @@ describe("lookbook card stack", () => {
     assert.equal(book.includes("HOUSE_CHIPS"), false);
     assert.equal(book.includes("HOUSE_LABEL"), false);
     assert.equal(book.includes("dressableHouses"), false);
-    assert.match(book, /<DetectorSections garments=\{garments\} \/>/);
+    assert.match(book, /<DetectorSections garments=\{garments\} ways=\{shownWays\} \/>/);
+    assert.match(book, /Your ways of dressing/);
+    assert.match(book, />Context</);
+    assert.match(book, /rankWays\(garments, \{ season, month \}\)/);
+    assert.match(book, /data-ways-row/);
     assert.match(book, /heading="Suggest"/);
     assert.equal(book.includes("Make a look"), false);
     assert.equal(

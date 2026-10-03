@@ -11,6 +11,7 @@ import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import { detectorTitle } from "@/lib/detectors";
+import { rankWays } from "@/lib/detectors/detect";
 import {
   buildReshuffleRow,
   comboKey,
@@ -223,6 +224,8 @@ function LookbookPage() {
   const [seasonOpen, setSeasonOpen] = useState(false);
   const [color, setColor] = useState<string | null>(null);
   const [colorOpen, setColorOpen] = useState(false);
+  const [wayId, setWayId] = useState<string | null>(null);
+  const rankCache = useRef(new Map<string, ReturnType<typeof rankWays>>());
   const drop = useCloset((s) => s.drop);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dressed, setDressed] = useState<Look | null>(null);
@@ -249,6 +252,17 @@ function LookbookPage() {
   const autoSeason = seasonFromWeather(drop?.weather?.f ?? 68);
   const season: Season = seasonChip === "auto" ? autoSeason : seasonChip;
   const seasonShown = seasonControlLabel(seasonChip, new Date(), drop?.weather?.f ?? 68);
+  const month = new Date().getMonth();
+  const ways = useMemo(() => {
+    const stamp = garments.map((g) => `${g.id}:${g.wornOn?.length ?? 0}`).join(",");
+    const key = `${occasion}|${season}|${month}|${stamp}`;
+    const hit = rankCache.current.get(key);
+    if (hit) return hit;
+    const next = rankWays(garments, { season, month });
+    rankCache.current.set(key, next);
+    return next;
+  }, [garments, occasion, season, month]);
+  const shownWays = wayId ? ways.filter((way) => way.id === wayId) : ways;
   const seasonLabel =
     seasonChip === "auto"
       ? `Auto · ${SEASONS.find((s) => s.id === autoSeason)?.label ?? "Fall"}`
@@ -353,7 +367,10 @@ function LookbookPage() {
       {gap && (
         <p className="mt-3 text-sm text-ink-soft max-w-xl">{gap}</p>
       )}
-      <div className="mt-6 space-y-2">
+      <div className="mt-6 space-y-4">
+        <div>
+          <p className="micro text-ink-soft">Context</p>
+          <div className="mt-2 space-y-2">
         <div className="flex flex-wrap items-center gap-2" data-chapter-row>
           {OCCASIONS.map((o) => (
             <button
@@ -471,8 +488,29 @@ function LookbookPage() {
             </div>
           )}
         </div>
+          </div>
+        </div>
+        <div data-ways-row>
+          <p className="micro text-ink-soft">Your ways of dressing</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {ways.map((way) => (
+              <button
+                key={way.id}
+                type="button"
+                aria-pressed={wayId === way.id}
+                onClick={() => setWayId((current) => (current === way.id ? null : way.id))}
+                className={cn(
+                  "micro border px-3 py-2",
+                  wayId === way.id ? "border-ink bg-ink text-paper" : "border-hairline text-ink-soft",
+                )}
+              >
+                {way.title}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-      <DetectorSections garments={garments} />
+      <DetectorSections garments={garments} ways={shownWays} />
       <div className="mt-6 flex flex-wrap gap-3">
       <button
         type="button"
