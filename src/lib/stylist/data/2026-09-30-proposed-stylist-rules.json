@@ -1462,6 +1462,33 @@
    ]
   },
   {
+   "id": "XC-SEA-5",
+   "name": "linen_with_flannel",
+   "type": "mixed_season",
+   "target_file": "_cross_chip.json",
+   "description": "Linen with flannel is a hard fail in every season.",
+   "logic": {
+    "linen": "linen",
+    "flannel": "flannel"
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_j4qu90fgv347",
+      "bottom": "g_0re8nrx2mpdy",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "expected": "fail",
+     "why": "flannel shirt with linen trousers"
+    }
+   ]
+  },
+  {
    "id": "XC-SEA-4",
    "name": "mixed_season_look",
    "type": "mixed_season",

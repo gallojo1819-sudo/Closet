@@ -38,6 +38,13 @@ const loafer = g({
   material: "leather",
   colors: ["brown"],
 });
+const blazer = g({
+  id: "bz",
+  name: "Navy blazer",
+  category: "outerwear",
+  subtype: "blazer",
+  colors: ["navy"],
+});
 const hoodie = g({ id: "hd", name: "navy hoodie", category: "top", subtype: "hoodie", formality: 1 });
 const sneaker = g({
   id: "sn",
@@ -49,8 +56,8 @@ const sneaker = g({
 });
 
 describe("look opinion", () => {
-  it("oxford and chino match in clothes, not a house name", () => {
-    const opinion = lookOpinion([oxford, chino], [oxford, chino, loafer], {
+  it("a finished oxford look matches in clothes, not a house name", () => {
+    const opinion = lookOpinion([oxford, chino, loafer, blazer], [oxford, chino, loafer, blazer], {
       occasion: "weekday",
       season: "fall",
       house: "purple",
@@ -79,25 +86,58 @@ describe("look opinion", () => {
     assert.equal(opinion?.swaps.length, 0);
   });
 
-  it("offers one piece he already owns", () => {
-    const tee = g({ id: "tee", name: "graphic tee", category: "top", subtype: "tee" });
+  it("offers one piece he already owns when that swap passes", () => {
     const retro = g({
       id: "retro",
       name: "retro sneaker",
       category: "footwear",
       subtype: "sneaker",
+      colors: ["white"],
+      formality: 1,
     });
-    const pool = [tee, loafer, retro];
-    const opinion = lookOpinion([tee, loafer], pool);
+    const pool = [oxford, chino, loafer, retro, blazer];
+    const opinion = lookOpinion([oxford, chino, retro, blazer], pool, {
+      occasion: "weekday",
+      season: "fall",
+    });
     assert.equal(opinion?.headline, "This doesn't match.");
-    assert.match(opinion?.reason ?? "", /graphic tee/);
-    assert.match(opinion?.reason ?? "", /brown penny loafer/);
+    assert.match(opinion?.reason ?? "", /Navy oxford/);
+    assert.match(opinion?.reason ?? "", /retro sneaker/);
     assert.equal(opinion?.swaps.length, 1);
-    assert.equal(opinion?.swaps[0]?.id, retro.id);
-    assert.equal(opinion?.swaps[0]?.line, "Better: retro sneaker, not the brown penny loafer.");
-    assert.equal(suggestLine(opinion!, pool), "Better: retro sneaker");
+    assert.equal(opinion?.swaps[0]?.id, loafer.id);
+    assert.equal(opinion?.swaps[0]?.line, "Better: brown penny loafer, not the retro sneaker.");
+    assert.equal(suggestLine(opinion!, pool), "Better: brown penny loafer");
     assert.equal(suggestLine({ ...opinion!, swaps: [{ id: "missing", slot: "footwear", line: "Better: invented loafer" }] }, pool).includes("invented"), false);
     assert.equal(pool.some((piece) => piece.id === opinion?.swaps[0]?.id), true);
+  });
+
+  it("the pink linen shirt does not match in October", () => {
+    const linen = g({
+      id: "pl",
+      name: "Pink linen shirt",
+      category: "top",
+      subtype: "shirt",
+      material: "linen",
+      colors: ["pink"],
+    });
+    const flannel = g({
+      id: "fl",
+      name: "Grey flannel trousers",
+      category: "bottom",
+      subtype: "trouser",
+      material: "flannel",
+      colors: ["grey"],
+    });
+    const opinion = lookOpinion([linen, flannel, loafer], [linen, flannel, loafer], {
+      occasion: "weekend",
+      season: "fall",
+    });
+    assert.notEqual(opinion?.headline, "This matches.");
+    const bare = lookOpinion([linen, loafer], [linen, loafer, chino], {
+      occasion: "weekend",
+      season: "fall",
+    });
+    assert.notEqual(bare?.headline, "This matches.");
   });
 
   it("stops when nothing he owns finishes the way", () => {

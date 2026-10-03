@@ -61,8 +61,22 @@ const flat = groups.flatMap((rule) =>
 );
 
 describe("stylist rules", () => {
-  it("loads the 79 stylist tests", () => {
-    expect(flat).toHaveLength(79);
+  it("loads the 80 stylist tests", () => {
+    expect(flat).toHaveLength(80);
+  });
+
+  it("XC-SEA-5 is hard in every season and sits next to XC-SEA-4", () => {
+    const ids = groups.map((rule) => rule.id);
+    const hard = ids.indexOf("XC-SEA-5");
+    const soft = ids.indexOf("XC-SEA-4");
+    expect(hard).toBeGreaterThan(-1);
+    expect(Math.abs(hard - soft)).toBe(1);
+    const look = { top: "g_j4qu90fgv347", bottom: "g_0re8nrx2mpdy", shoe: "g_om0dh5nps1ke" };
+    for (const season of ["spring", "summer", "fall", "winter"]) {
+      const hits = stylistHits(piecesFromIds(look, by), "weekend", season);
+      expect(hits.some((hit) => hit.id === "XC-SEA-5" && hit.severity === "hard"), season).toBe(true);
+      expect(hits.some((hit) => hit.id === "XC-SEA-4" && hit.severity === "hard"), season).toBe(false);
+    }
   });
 
   for (const { rule, test, i } of flat) {

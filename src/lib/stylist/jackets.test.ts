@@ -75,8 +75,8 @@ const flat = groups.flatMap((rule) =>
 );
 
 describe("T1 jacket rules", () => {
-  it("loads 60 graded tests", () => {
-    expect(flat).toHaveLength(60);
+  it("loads 63 graded tests", () => {
+    expect(flat).toHaveLength(63);
   });
 
   for (const { rule, test, i } of flat) {
@@ -177,13 +177,13 @@ describe("T3 classification", () => {
   it("sha256 of the copied jacket files matches", () => {
     const sha = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
     expect(sha("src/lib/stylist/data/2026-09-30-jacket-rules.json")).toBe(
-      "ed72a42f79ed542c6a168777346bccd98a9f8388ff9f8afc8f22086d6d2e9174",
+      "474b455e7d01a93da73e12e81087c5ae46f7d2c2a02235fbc02958331b8df983",
     );
     expect(sha("src/lib/stylist/data/2026-09-30-jacket-classification.json")).toBe(
       "8c3cdbe8e0a534e6674cfeb42c96a5d3200265ffe43f90b2931c7c99cf797177",
     );
     expect(sha("docs/stylist/2026-09-30-jacket-rules.md")).toBe(
-      "daecc8baf82a1359f719c9ef9f0fd5799f67d714cd4a3a122d5140395925bce1",
+      "14efdc9e217bbb995f9a01097bd961efc2f151c7e3bbeff41395d0fec5a51cb1",
     );
     expect(sha("src/lib/stylist/__tests__/fixtures/plates-2026-09-30.json")).toBe(
       "dd4788a465042c9f22519a8880fd90bfbbb3459fa6ad0a32d6aef4c09abae126",

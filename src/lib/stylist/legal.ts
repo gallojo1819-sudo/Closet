@@ -38,8 +38,12 @@ function seasonOf(ctx: LegalCtx): string {
   return ctx.season || "fall";
 }
 
-function slotted(pieces: Garment[]): Partial<Record<string, Plate>> {
+export function slottedPieces(pieces: Garment[]): Partial<Record<string, Plate>> {
   return slotPieces(pieces);
+}
+
+function slotted(pieces: Garment[]): Partial<Record<string, Plate>> {
+  return slottedPieces(pieces);
 }
 
 function activeHits(ps: Partial<Record<string, Plate>>, ctx: LegalCtx): StylistHit[] {

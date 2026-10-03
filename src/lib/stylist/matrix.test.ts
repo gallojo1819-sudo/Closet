@@ -64,10 +64,8 @@ const CONTEXTS = [
 ] as const;
 
 const OFF = new Set([
-  "sweetStable|weekday|fall",
   "sweetStable|out|fall",
   "sweetStable|weekend|summer",
-  "sweetStable|weekday|winter",
   "italianSummer|weekday|winter",
   "italianWinter|weekend|summer",
 ]);
@@ -128,19 +126,19 @@ describe("fixture matrix", () => {
         expect(cell.looks.map(core).join("||"), house).not.toBe(allCores);
       }
     }
-    expect(outfits).toBe(117);
-    expect(gates).toBe(6);
+    expect(outfits).toBe(123);
+    expect(gates).toBe(4);
 
     const fall = matrices.find((m) => m.occ === "weekday" && m.season === "fall")!.matrix;
     const allJackets = fall.all.slice(0, 3).map((look) => look.outer).filter((id): id is string => Boolean(id));
     expect(new Set(allJackets).size, "Weekday/Fall All top 3 jackets").toBe(3);
     const sweet = fall.houses.sweetStable!;
-    expect(sweet.gate?.text.toLowerCase()).toContain("not an office look");
+    expect(sweet.gate, "Sweet Stable weekday is allowed").toBeNull();
     expect(sweet.looks, "SweetStable weekday/fall").toHaveLength(3);
     const sweetRow = buildReshuffleRow(RACK, "weekday", { house: "sweetStable", season: "fall", cap: 3 });
     const sweetReal = sweetRow.filter((look) => look.garmentIds.length >= 3 && !look.gate && !look.needsPieces);
     expect(sweetReal, "SweetStable cards").toHaveLength(3);
-    expect(sweetRow.some((look) => (look.gap ?? "").toLowerCase().includes("not an office"))).toBe(true);
+    expect(sweetRow.some((look) => (look.gap ?? "").toLowerCase().includes("not an office"))).toBe(false);
     const ald2 = fall.houses.ald!.looks[1]!;
     expect(ald2.top, "varsity is not a sweater").not.toBe("g_j5og5jmzh5tx");
     const aldPieces = [ald2.top, ald2.bottom, ald2.shoe, ald2.outer]
@@ -168,6 +166,9 @@ describe("fixture matrix", () => {
     const summer = matrices.find((m) => m.occ === "weekend" && m.season === "summer")!.matrix;
     const weekend = matrices.find((m) => m.occ === "weekend" && m.season === "fall")!.matrix;
     const out = matrices.find((m) => m.occ === "out" && m.season === "fall")!.matrix;
+    const sweetOut = out.houses.sweetStable!;
+    expect(sweetOut.gate?.ruleId).toContain("SS-G-out");
+    expect(sweetOut.looks).toHaveLength(0);
     for (const house of HOUSES) {
       const a = fall.houses[house]!;
       const b = winter.houses[house]!;
@@ -204,7 +205,8 @@ describe("fixture matrix", () => {
     const shown = dressableHouses(RACK, "weekday", "fall");
     const matrix = buildHouseMatrix(RACK, "weekday", "fall");
     expect(shown).toContain("polo");
-    expect(shown).not.toContain("sweetStable");
+    expect(matrix.houses.sweetStable?.gate).toBeNull();
+    expect(shown).toContain("sweetStable");
     for (const house of HOUSES) {
       const cell = matrix.houses[house];
       const count = Math.max(cell?.pool.length ?? 0, cell?.looks.length ?? 0);

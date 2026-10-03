@@ -18,6 +18,293 @@
       "reason": "This cloth is built for winter; the other piece is summer weight. Keep the cloth and swap the other piece."
     }
   ],
+  "cells": [
+  {
+    "id": "1",
+    "key": "western_work",
+    "title": "Selvedge and western work",
+    "required": ["shoe"],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "in",
+    "occasionOff": [],
+    "seasonOff": [],
+    "ban": [],
+    "fails": ["WW-F1"],
+    "slots": {
+      "top": { "core": ["denim chambray", "western snap"], "compatible": ["flannel check", "henley", "plain tee"] },
+      "bottom": { "core": ["selvedge or raw", "dark denim"], "compatible": ["denim", "work chino"] },
+      "shoe": { "core": ["boot"], "compatible": [] },
+      "layer": { "core": ["chore", "waxed", "denim trucker"], "compatible": ["field", "suede", "shearling", "plaid", "zip knit"] }
+    }
+  },
+  {
+    "id": "2",
+    "key": "ivy_prep",
+    "title": "Oxford, chino, navy blazer",
+    "required": [],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "in",
+    "occasionOff": [],
+    "seasonOff": [],
+    "ban": [],
+    "fails": ["IV-F1"],
+    "slots": {
+      "top": { "core": ["oxford", "cable", "rugby"], "compatible": ["pique polo", "solid crew", "collegiate", "gingham", "knit polo"] },
+      "bottom": { "core": ["chino"], "compatible": ["work chino", "denim", "light trouser", "cord"] },
+      "shoe": { "core": ["penny or boat", "plain leather loafer", "tassel"], "compatible": ["suede loafer", "clean leather sneaker"] },
+      "layer": { "core": ["navy blazer"], "compatible": ["any blazer", "cardigan", "field", "chore-weight", "zip knit", "varsity"] }
+    }
+  },
+  {
+    "id": "3",
+    "key": "country_stable",
+    "title": "Cords, gingham, boots",
+    "required": [],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "in",
+    "occasionOff": ["out"],
+    "seasonOff": [],
+    "ban": [],
+    "fails": ["CS-F1"],
+    "slots": {
+      "top": { "core": ["gingham", "fair isle", "country knit", "cable"], "compatible": ["flannel check", "oxford", "solid crew", "rugby"] },
+      "bottom": { "core": ["cord"], "compatible": ["work chino", "dark denim", "denim"] },
+      "shoe": { "core": ["boot", "chelsea", "chukka"], "compatible": ["suede", "tassel", "plain loafer", "dark suede sneaker"] },
+      "layer": { "core": ["plaid", "shearling", "cord jacket"], "compatible": ["waxed", "field", "suede", "chore"] }
+    }
+  },
+  {
+    "id": "4",
+    "key": "glossy_formal",
+    "title": "Glossy tailoring",
+    "required": ["bottom"],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "full",
+    "occasionOff": ["comfy"],
+    "seasonOff": [],
+    "ban": [],
+    "fails": ["GF-F1"],
+    "slots": {
+      "top": { "core": ["spread-collar dress shirt"], "compatible": ["oxford", "fine knit", "turtleneck"] },
+      "bottom": { "core": ["suit trouser", "pinstripe"], "compatible": ["tailored", "wool"] },
+      "shoe": { "core": ["calf dress", "polished loafer"], "compatible": [] },
+      "layer": { "core": ["suit jacket", "navy blazer"], "compatible": ["any blazer", "zip knit"] }
+    }
+  },
+  {
+    "id": "5",
+    "key": "shrunken_suit",
+    "title": "Shrunken grey suit",
+    "required": ["bottom"],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "full",
+    "occasionOff": ["comfy"],
+    "seasonOff": ["summer"],
+    "ban": [],
+    "fails": ["SS-F1"],
+    "slots": {
+      "top": { "core": ["four-bar trim"], "compatible": ["oxford", "fine knit", "cardigan", "polo"] },
+      "bottom": { "core": ["cropped trouser"], "compatible": ["grey wool"] },
+      "shoe": { "core": ["brogue"], "compatible": ["polished loafer", "calf"] },
+      "layer": { "core": ["short narrow jacket"], "compatible": ["cardigan"] }
+    }
+  },
+  {
+    "id": "6",
+    "key": "fine_knit_loafer",
+    "title": "Fine knit and suede loafer",
+    "required": [],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "full",
+    "occasionOff": [],
+    "seasonOff": [],
+    "ban": [],
+    "fails": ["FK-F1"],
+    "slots": {
+      "top": { "core": ["knit polo", "fine knit", "solid crew", "linen shirt"], "compatible": ["pique", "oxford", "camp", "turtleneck", "resort"] },
+      "bottom": { "core": ["light trouser", "pleated", "linen"], "compatible": ["light or ecru denim", "wool"] },
+      "shoe": { "core": ["suede", "woven", "mule"], "compatible": ["plain leather loafer"] },
+      "layer": { "core": ["suede jacket or bomber"], "compatible": ["unstructured", "casual", "zip knit"] }
+    }
+  },
+  {
+    "id": "7",
+    "key": "henley_denim",
+    "title": "Henley and relaxed denim",
+    "required": [],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "out",
+    "occasionOff": [],
+    "seasonOff": [],
+    "ban": [],
+    "fails": ["HD-F1"],
+    "slots": {
+      "top": { "core": ["henley", "zip knit"], "compatible": ["solid crew", "plain tee"] },
+      "bottom": { "core": ["wide or regular denim", "dark denim"], "compatible": ["relaxed or dark trouser"] },
+      "shoe": { "core": ["plain leather or woven loafer"], "compatible": ["suede loafer", "boot"] },
+      "layer": { "core": ["leather", "suede", "zip knit"], "compatible": ["shearling"] }
+    }
+  },
+  {
+    "id": "8",
+    "key": "linen_soft",
+    "title": "Linen and a soft jacket",
+    "required": [],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "shirt_in_camp_out",
+    "occasionOff": ["comfy"],
+    "seasonOff": ["winter"],
+    "ban": [],
+    "fails": ["LS-F1"],
+    "slots": {
+      "top": { "core": ["linen shirt", "short-sleeve knit polo"], "compatible": ["knit polo", "plain tee", "oxford"] },
+      "bottom": { "core": ["linen", "light trouser"], "compatible": ["light or ecru denim", "pleated"] },
+      "shoe": { "core": ["suede loafer", "mule", "woven"], "compatible": ["plain leather loafer"] },
+      "layer": { "core": ["unstructured"], "compatible": ["soft blazer", "field", "casual"] }
+    }
+  },
+  {
+    "id": "9",
+    "key": "flannel_cashmere",
+    "title": "Flannel, cashmere, dark suede",
+    "required": [],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "shirt_in_knit_out",
+    "occasionOff": ["comfy"],
+    "seasonOff": ["summer"],
+    "ban": [],
+    "fails": ["FC-F1", "FC-F2"],
+    "slots": {
+      "top": { "core": ["fine knit", "solid crew", "turtleneck", "oxford"], "compatible": ["knit polo", "spread collar"] },
+      "bottom": { "core": ["flannel trouser", "wool"], "compatible": ["cord", "dark denim"] },
+      "shoe": { "core": ["dark suede", "chukka"], "compatible": ["polished", "calf", "tassel"] },
+      "layer": { "core": ["soft wool blazer", "shearling", "overcoat"], "compatible": ["suede", "any blazer", "zip knit"] }
+    }
+  },
+  {
+    "id": "10",
+    "key": "clean_city",
+    "title": "Clean city sportswear",
+    "required": [],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "in",
+    "occasionOff": [],
+    "seasonOff": [],
+    "ban": [],
+    "fails": ["CC-F1"],
+    "slots": {
+      "top": { "core": ["plain sweatshirt", "overshirt", "solid crew", "plain tee"], "compatible": ["oxford", "pique", "collegiate", "knit polo", "rugby"] },
+      "bottom": { "core": ["straight jean", "chino"], "compatible": [] },
+      "shoe": { "core": ["clean leather sneaker", "suede sneaker"], "compatible": ["any loafer", "suede", "plain", "tassel", "woven"] },
+      "layer": { "core": ["chore", "wool jacket", "overshirt", "varsity"], "compatible": ["field", "trucker", "plaid", "casual", "zip knit", "fleece"] }
+    }
+  },
+  {
+    "id": "11",
+    "key": "boxy_tonal",
+    "title": "Boxy one-tone tailoring",
+    "required": [],
+    "minCore": 2,
+    "tonal": true,
+    "tuck": "in",
+    "occasionOff": [],
+    "seasonOff": [],
+    "ban": [],
+    "fails": ["BT-F1"],
+    "slots": {
+      "top": { "core": ["boxy"], "compatible": ["relaxed oxford", "solid crew", "gradient knit"] },
+      "bottom": { "core": ["wide pleated"], "compatible": ["relaxed or dark trouser"] },
+      "shoe": { "core": ["minimal derby"], "compatible": ["polished loafer", "clean leather sneaker"] },
+      "layer": { "core": ["oversized blazer"], "compatible": ["any blazer"] }
+    }
+  },
+  {
+    "id": "12",
+    "key": "print_plain",
+    "title": "One print against plain",
+    "required": ["top"],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "in",
+    "occasionOff": ["comfy"],
+    "seasonOff": [],
+    "ban": ["g_n955igwlvcl4", "g_lqf1mrlsure9"],
+    "fails": ["PP-F1"],
+    "slots": {
+      "top": { "core": ["pattern", "rich texture", "resort"], "compatible": [] },
+      "bottom": { "core": ["plain"], "compatible": ["denim"] },
+      "shoe": { "core": ["derby", "any loafer"], "compatible": ["clean leather sneaker"] },
+      "layer": { "core": [], "compatible": ["soft blazer", "unstructured", "suede", "casual"] }
+    }
+  },
+  {
+    "id": "13",
+    "key": "graphic_street",
+    "title": "Graphic tee and retro sneaker",
+    "required": [],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "out",
+    "occasionOff": ["weekday", "out", "travel"],
+    "seasonOff": [],
+    "ban": [],
+    "fails": ["GS-F1", "GS-F2"],
+    "slots": {
+      "top": { "core": ["graphic", "hoodie", "track jacket"], "compatible": ["sweatshirt", "plain tee", "resort"] },
+      "bottom": { "core": ["nylon short", "track pant"], "compatible": ["denim"] },
+      "shoe": { "core": ["retro or athletic sneaker"], "compatible": ["any sneaker"] },
+      "layer": { "core": ["track", "varsity"], "compatible": ["suede bomber", "trucker", "leather"] }
+    }
+  },
+  {
+    "id": "14",
+    "key": "worn_paris",
+    "title": "Worn-in Paris casual",
+    "required": [],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "out",
+    "occasionOff": ["weekday"],
+    "seasonOff": [],
+    "ban": [],
+    "fails": ["WP-F1"],
+    "slots": {
+      "top": { "core": ["washed tee", "suede overshirt"], "compatible": ["plain tee", "solid crew", "resort"] },
+      "bottom": { "core": ["washed black jean", "distressed"], "compatible": ["denim"] },
+      "shoe": { "core": ["chelsea", "worn suede sneaker"], "compatible": ["boot"] },
+      "layer": { "core": ["suede jacket or overshirt"], "compatible": ["bomber", "leather", "casual"] }
+    }
+  },
+  {
+    "id": "15",
+    "key": "soft_outdoor",
+    "title": "Soft outdoor",
+    "required": [],
+    "minCore": 2,
+    "tonal": false,
+    "tuck": "out",
+    "occasionOff": ["weekday", "out", "travel"],
+    "seasonOff": ["summer"],
+    "ban": [],
+    "fails": ["SO-F1"],
+    "slots": {
+      "top": { "core": ["fleece"], "compatible": ["solid crew", "sweatshirt", "henley"] },
+      "bottom": { "core": ["technical relaxed pant"], "compatible": ["wide or regular denim"] },
+      "shoe": { "core": ["trail", "suede sneaker"], "compatible": ["any sneaker"] },
+      "layer": { "core": ["technical", "fleece"], "compatible": ["shearling", "vest", "casual"] }
+    }
+  }
+],
   "detectors": [
     {
       "id": "western_work",

@@ -454,9 +454,9 @@
       "modifier": "Cable + cords + suede sneaker; sweats allowed"
     },
     "weekday": {
-      "status": "off",
+      "status": "allowed",
       "rule_id": "SS-G-weekday",
-      "modifier": "Country weekend label; not an office look (hard off)."
+      "modifier": "Country stable may be a weekday."
     },
     "out": {
       "status": "off",
@@ -490,7 +490,7 @@
   "gap_note": "No horse corduroys, rugby or blue gingham: plain cords and pink gingham stand in.",
   "must_differ": {
     "rrl": "SS requires cord or a plaid jacket + a country knit/gingham; RRL requires a work shirt or rugged jacket + jean.",
-    "polo": "SS is weekend only and needs cords or plaid; Polo's top-3 must use a different top+bottom+shoe core."
+    "polo": "SS needs cords or a plaid jacket; Polo's top-3 must use a different top+bottom+shoe core. Out stays off."
   },
   "scoring": {
     "hard_fail": [
@@ -500,7 +500,6 @@
       "SS-P1",
       "SS-P3",
       "SS-P4",
-      "SS-G-weekday",
       "SS-G-out",
       "SS-G-summer"
     ],
@@ -508,7 +507,7 @@
       "SS-P2": -10,
       "SS-D1": -15
     },
-    "empty_state": "On Weekday/Out or in summer, hide the chip's row and show 'Sweet Stable is a fall/winter weekend look'. Don't show All."
+    "empty_state": "On Out or in summer, hide the chip's row and show 'Sweet Stable is a fall and winter look, including weekday. Out stays off'. Don't show All."
   },
   "dominance_caps": {
     "plates": {
@@ -985,7 +984,8 @@
         "valid_looks_incl_outer_choice": 0,
         "distinct_tops": 0,
         "distinct_bottoms": 0,
-        "distinct_shoes": 0
+        "distinct_shoes": 0,
+        "note": "Weekday gate is allowed. These zeros are the old gated count, not a fresh enumeration. Out stays off."
       },
       "weekend/fall": {
         "valid_cores_top_bottom_shoe": 555,
@@ -1013,14 +1013,15 @@
         "valid_looks_incl_outer_choice": 0,
         "distinct_tops": 0,
         "distinct_bottoms": 0,
-        "distinct_shoes": 0
+        "distinct_shoes": 0,
+        "note": "Weekday gate is allowed. These zeros are the old gated count, not a fresh enumeration. Out stays off."
       }
     },
     "proposed_top3": {
       "weekday/fall": {
-        "status": "hidden_by_gate",
+        "status": "allowed",
         "looks": [],
-        "note": "No horse corduroys, rugby or blue gingham: plain cords and pink gingham stand in."
+        "note": "Weekday is allowed. Out stays off. Counts were not regenerated from a rev-40 snapshot."
       },
       "weekend/fall": {
         "status": "ok",
@@ -1095,13 +1096,13 @@
         "note": "No horse corduroys, rugby or blue gingham: plain cords and pink gingham stand in."
       },
       "weekday/winter": {
-        "status": "hidden_by_gate",
+        "status": "allowed",
         "looks": [],
-        "note": "No horse corduroys, rugby or blue gingham: plain cords and pink gingham stand in."
+        "note": "Weekday is allowed. Out stays off. Counts were not regenerated from a rev-40 snapshot."
       }
     }
   },
-  "current_code_scoring": "houses.ts sweetStable: required tokens (cord/gingham/cable/fair isle + boot/loafer), with a Weekday branch in lookFitsOccasion (NOT gated off Weekday in code). bottomType checks /drawstring|gurkha/ first, so the brown cord gurkha reads 'drawstring', not cord, and SS undercounts its best bottom.",
+  "current_code_scoring": "houses.ts sweetStable: weekday is allowed. Out stays off (SS-G-out). required tokens (cord/gingham/cable/fair isle + boot/loafer). bottomType checks /drawstring|gurkha/ first, so the brown cord gurkha reads 'drawstring', not cord, and SS undercounts its best bottom.",
   "test_cases": [
     {
       "id": "SS-T1",
@@ -1143,15 +1144,11 @@
         "shoe": "g_b4zsf3dfrhdv",
         "outer": "g_8qqqzpwxuwti"
       },
-      "expected": "fail",
-      "rule_ids": [
-        "SS-G-weekday"
-      ],
+      "expected": "pass",
+      "rule_ids": [],
       "_validator": {
-        "result": "fail",
-        "fired": [
-          "SS-G-weekday"
-        ],
+        "result": "pass",
+        "fired": [],
         "soft": [
           [
             "SS-D1",

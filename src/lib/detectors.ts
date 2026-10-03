@@ -1,17 +1,19 @@
-import { slotOf } from "./style.ts";
 import type { Garment } from "./types.ts";
 
-/**
- * A way of dressing, named in cloth. Brand is not read.
- * Shown only when this closet has a top, a bottom, and a shoe that all trip it.
- */
-export type Way = {
-  id: string;
-  title: string;
-  pieces: Garment[];
-};
-
-type Slot = "top" | "bottom" | "footwear";
+export type { CellContext, Way } from "./detectors/cells.ts";
+export {
+  cellGateOpen,
+  cellLooks,
+  detectorColor,
+  detectorPalette,
+  detectorTitle,
+  maxDisjoint,
+  nearestOpen,
+  OCCASION_ORDER,
+  sharedDetector,
+  visibleDetectors,
+  warmCellBook,
+} from "./detectors/cells.ts";
 
 type Detector = {
   id: string;
@@ -29,15 +31,6 @@ const BANNED_TITLE =
 
 function text(g: Garment): string {
   return `${g.name} ${g.subtype} ${g.material} ${g.notes ?? ""} ${(g.colors ?? []).join(" ")}`.toLowerCase();
-}
-
-function wearRole(g: Garment): Slot | "outer" | null {
-  const s = slotOf(g);
-  if (s === "top" || s === "dress") return "top";
-  if (s === "bottom") return "bottom";
-  if (s === "footwear") return "footwear";
-  if (s === "outerwear") return "outer";
-  return null;
 }
 
 function has(pieces: Garment[], re: RegExp): boolean {
@@ -220,51 +213,12 @@ const DETECTORS: Detector[] = [
   },
 ];
 
-function trips(d: Detector, g: Garment): boolean {
-  const role = wearRole(g);
-  const t = text(g);
-  if (role === "top" || role === "outer") return d.top(t);
-  if (role === "bottom") return d.bottom(t);
-  if (role === "footwear") return d.shoe(t);
-  return false;
-}
-
-function firstOutfit(d: Detector, garments: Garment[]): Garment[] | null {
-  const shirts = garments.filter((g) => wearRole(g) === "top" && d.top(text(g)));
-  const jackets = garments.filter((g) => wearRole(g) === "outer" && d.top(text(g)));
-  const tops = [...shirts, ...jackets].slice(0, 8);
-  const bottoms = garments.filter((g) => wearRole(g) === "bottom" && d.bottom(text(g))).slice(0, 8);
-  const shoes = garments.filter((g) => wearRole(g) === "footwear" && d.shoe(text(g))).slice(0, 8);
-  for (const top of tops) {
-    for (const bottom of bottoms) {
-      for (const shoe of shoes) {
-        const pieces = [top, bottom, shoe];
-        if (!d.clash(pieces)) return pieces;
-      }
-    }
-  }
-  return null;
-}
-
 export function detectorTitles(): string[] {
   return DETECTORS.map((d) => d.title);
 }
 
 export function titlesAreClothes(): boolean {
   return DETECTORS.length <= 15 && DETECTORS.every((d) => !BANNED_TITLE.test(d.title));
-}
-
-/** At most four ways this closet can finish. No title for a detector with no outfit. */
-export function visibleDetectors(garments: Garment[]): Way[] {
-  const live = garments.filter((g) => !g.archived);
-  const out: Way[] = [];
-  for (const d of DETECTORS) {
-    const pieces = firstOutfit(d, live);
-    if (!pieces) continue;
-    out.push({ id: d.id, title: d.title, pieces });
-    if (out.length >= DETECTOR_CAP) break;
-  }
-  return out;
 }
 
 export function clashSentence(pieces: Garment[]): string | null {
@@ -275,23 +229,4 @@ export function clashSentence(pieces: Garment[]): string | null {
   return null;
 }
 
-/** The clothes name when every core piece trips one detector and nothing clashes. */
-export function sharedDetector(pieces: Garment[]): { id: string; title: string } | null {
-  const interested = pieces.filter((g) => wearRole(g));
-  if (interested.length < 2) return null;
-  if (clashSentence(pieces)) return null;
-  for (const d of DETECTORS) {
-    let hits = 0;
-    let miss = false;
-    for (const g of interested) {
-      if (trips(d, g)) hits += 1;
-      else if (wearRole(g) !== "outer") miss = true;
-    }
-    if (!miss && hits >= 2) return { id: d.id, title: d.title };
-  }
-  return null;
-}
 
-export function detectorTitle(pieces: Garment[]): string | null {
-  return sharedDetector(pieces)?.title ?? null;
-}

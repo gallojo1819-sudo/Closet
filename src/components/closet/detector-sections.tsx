@@ -1,9 +1,7 @@
-import { visibleDetectors } from "@/lib/detectors";
-import type { Garment } from "@/lib/types";
+import { nearestOpen, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";
+import type { Garment, Occasion, Season } from "@/lib/types";
 
-const OCCASION_ORDER = ["weekday", "out", "weekend", "travel", "comfy"] as const;
-
-const OCCASION_LABEL: Record<(typeof OCCASION_ORDER)[number], string> = {
+const OCCASION_LABEL: Record<Occasion, string> = {
   weekday: "Weekday",
   out: "Out",
   weekend: "Weekend",
@@ -11,59 +9,95 @@ const OCCASION_LABEL: Record<(typeof OCCASION_ORDER)[number], string> = {
   comfy: "Comfy",
 };
 
-export type WayView = {
-  id: string;
-  title: string;
-  pieces?: Garment[];
-  outfits?: { occasion: string; pieces: Garment[] }[];
-};
+const NOTE = "Not enough of your pieces for this here yet.";
 
-/** Ways this closet can finish. A detector with no outfit is not rendered. */
+function chapterLooks(way: Way, occasion: Occasion): Garment[][] {
+  return (way.looks[occasion] ?? []).filter((look) => look.length >= 3);
+}
+
+function Chapter({ occasion, looks }: { occasion: Occasion; looks: Garment[][] }) {
+  if (looks.length < 3) return null;
+  return (
+    <div>
+      <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[occasion]}</p>
+      <div className="look-swipe">
+        {looks.map((look, index) => (
+          <p key={`${occasion}:${index}`} className="mt-1 text-sm text-ink-soft">
+            {look.map((g) => g.name).join(" · ")}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Ways this closet can dress. A chapter under three looks is not rendered. */
 export function DetectorSections({
   garments,
   ways,
+  occasion = "weekday",
+  season = "fall",
+  color = null,
+  activeId = null,
 }: {
   garments: Garment[];
-  ways?: WayView[];
+  ways?: Way[];
+  occasion?: Occasion;
+  season?: Season;
+  color?: string | null;
+  activeId?: string | null;
 }) {
-  if (ways) {
-    if (!ways.length) return null;
+  const found = ways ?? visibleDetectors(garments, { occasion, season, color });
+  const usual = found.some((way) => way.usual);
+  if (usual) {
     return (
       <div data-detectors className="mt-8 space-y-6">
-        {ways.map((way) => (
-          <section key={way.id}>
-            <h2 className="font-editorial text-2xl tracking-tight">{way.title}</h2>
-            {OCCASION_ORDER.map((id) => {
-              const looks = (way.outfits ?? []).filter((row) => row.occasion === id).slice(0, 3);
-              if (!looks.length) return null;
-              return (
-                <div key={id}>
-                  <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[id]}</p>
-                  <div className="look-swipe">
-                  {looks.map((look, index) => (
-                    <p key={`${id}:${index}`} className="mt-1 text-sm text-ink-soft">
-                      {look.pieces.map((g) => g.name).join(" · ")}
-                    </p>
-                  ))}
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-        ))}
+        <section>
+          <h2 className="font-editorial text-2xl tracking-tight">Your usual</h2>
+          {found
+            .filter((way) => way.id !== "usual")
+            .map((way) => (
+              <div key={way.id}>
+                <h3 className="mt-4 font-editorial text-xl tracking-tight">{way.title}</h3>
+                {OCCASION_ORDER.map((id) => {
+                  const looks = (way.looks[id] ?? []).slice(0, 3);
+                  if (!looks.length) return null;
+                  return (
+                    <div key={id}>
+                      <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[id]}</p>
+                      <div className="look-swipe">
+                        {looks.map((look, index) => (
+                          <p key={`${id}:${index}`} className="mt-1 text-sm text-ink-soft">
+                            {look.map((g) => g.name).join(" · ")}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+        </section>
       </div>
     );
   }
-  const found = visibleDetectors(garments);
-  if (!found.length) return null;
+  const focused = activeId ? found.find((way) => way.id === activeId) : undefined;
+  const short = focused && (focused.counts[occasion] ?? 0) < 3 ? focused : undefined;
+  const nearest = short ? nearestOpen(short.counts, occasion) : null;
   return (
     <div data-detectors className="mt-8 space-y-6">
-      {found.map((way) => (
-        <section key={way.id}>
-          <h2 className="font-editorial text-2xl tracking-tight">{way.title}</h2>
-          <p className="mt-1 text-sm text-ink-soft">{way.pieces.map((g) => g.name).join(" · ")}</p>
-        </section>
-      ))}
+      {short ? <p className="text-sm text-ink-soft">{NOTE}</p> : null}
+      {(short ? found.filter((way) => way.id === short.id) : found).map((way) => {
+        const show = short && nearest ? nearest : occasion;
+        const looks = chapterLooks(way, show);
+        if (!short && looks.length < 3) return null;
+        return (
+          <section key={way.id}>
+            <h2 className="font-editorial text-2xl tracking-tight">{way.title}</h2>
+            {short && nearest ? <Chapter occasion={nearest} looks={looks} /> : <Chapter occasion={occasion} looks={looks} />}
+          </section>
+        );
+      })}
     </div>
   );
 }

@@ -77,9 +77,11 @@ describe("house fingerprints HARD", () => {
     );
   });
 
-  it("SweetStable weekday is gated off", () => {
-    assert.equal(lookFitsHouse(combo(["fair", "cord", "boot"]), "sweetStable", "weekday", FIX), false);
-    assert.notEqual(houseKill(combo(["fair", "cord", "boot"]), "sweetStable", "weekday"), null);
+  it("Sweet Stable weekday is allowed and out stays off", () => {
+    assert.equal(lookFitsHouse(combo(["fair", "cord", "boot"]), "sweetStable", "weekday", FIX), true);
+    assert.equal(houseKill(combo(["fair", "cord", "boot"]), "sweetStable", "weekday"), null);
+    assert.equal(lookFitsHouse(combo(["fair", "cord", "boot"]), "sweetStable", "out", FIX), false);
+    assert.equal(houseKill(combo(["fair", "cord", "boot"]), "sweetStable", "out"), "SS-G-out");
   });
 
   it("a house chip never pads a failing synthetic rack into a legal look", () => {

@@ -757,42 +757,12 @@ export function buildHouseMatrix(garments: Garment[], occasion: Occasion | strin
         text: gate.text,
         ruleId: gate.ruleId,
       };
-      if (house === "sweetStable" && occasion === "weekday" && season === "fall") {
-        // Weekday is gated off. The note stays. The cards are this house's weekend outfits.
-        const found = enumerateHouse(house, garments, "weekend", season, false);
-        const outerIds = new Set(
-          found.cores.flatMap((core) => core.options.map((opt) => opt.outer).filter((id): id is string => Boolean(id))),
-        );
-        const picks = fillHouse(
-          found.cores,
-          emptyState(),
-          chipOf(house),
-          found.singleShoe,
-          outerIds.size < 3,
-          null,
-          new Set(),
-          false,
-        );
-        cells[house] = {
-          gate: gateInfo,
-          looks: picks.map(toLook),
-          pool: found.cores.map((c) => ({
-            top: c.top,
-            bottom: c.bottom,
-            shoe: c.shoe,
-            outer: c.options[0]?.outer,
-            score: c.best,
-          })),
-          gap: profile.gap_note ?? null,
-        };
-      } else {
-        cells[house] = {
-          gate: gateInfo,
-          looks: [],
-          pool: [],
-          gap: profile.gap_note ?? null,
-        };
-      }
+      cells[house] = {
+        gate: gateInfo,
+        looks: [],
+        pool: [],
+        gap: profile.gap_note ?? null,
+      };
       continue;
     }
     const found = enumerateHouse(house, garments, occasion, season);

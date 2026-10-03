@@ -10,8 +10,7 @@ import { GarmentTile } from "@/components/closet/tile";
 import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
-import { detectorTitle } from "@/lib/detectors";
-import { rankWays } from "@/lib/detectors/detect";
+import { detectorTitle, visibleDetectors, warmCellBook } from "@/lib/detectors";
 import {
   buildReshuffleRow,
   comboKey,
@@ -225,7 +224,6 @@ function LookbookPage() {
   const [color, setColor] = useState<string | null>(null);
   const [colorOpen, setColorOpen] = useState(false);
   const [wayId, setWayId] = useState<string | null>(null);
-  const rankCache = useRef(new Map<string, ReturnType<typeof rankWays>>());
   const drop = useCloset((s) => s.drop);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dressed, setDressed] = useState<Look | null>(null);
@@ -252,16 +250,20 @@ function LookbookPage() {
   const autoSeason = seasonFromWeather(drop?.weather?.f);
   const season: Season = seasonChip === "auto" ? autoSeason : seasonChip;
   const seasonShown = seasonControlLabel(seasonChip, new Date(), drop?.weather?.f);
-  const month = new Date().getMonth();
-  const ways = useMemo(() => {
-    const stamp = garments.map((g) => `${g.id}:${g.wornOn?.length ?? 0}`).join(",");
-    const key = `${occasion}|${season}|${month}|${stamp}`;
-    const hit = rankCache.current.get(key);
-    if (hit) return hit;
-    const next = rankWays(garments, { season, month });
-    rankCache.current.set(key, next);
-    return next;
-  }, [garments, occasion, season, month]);
+  const ways = useMemo(
+    () => visibleDetectors(garments, { occasion, season, color }),
+    [garments, occasion, season, color],
+  );
+  useEffect(() => {
+    const run = () => warmCellBook(garments, season);
+    const idle = window.requestIdleCallback;
+    if (typeof idle === "function") {
+      const id = idle(run);
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(run, 0);
+    return () => window.clearTimeout(id);
+  }, [garments, season]);
   const shownWays = wayId ? ways.filter((way) => way.id === wayId) : ways;
   const seasonLabel =
     seasonChip === "auto"
@@ -510,7 +512,14 @@ function LookbookPage() {
           </div>
         </div>
       </div>
-      <DetectorSections garments={garments} ways={shownWays} />
+      <DetectorSections
+        garments={garments}
+        ways={shownWays}
+        occasion={occasion}
+        season={season}
+        color={color}
+        activeId={wayId}
+      />
       <div className="mt-6 flex flex-wrap gap-3">
       <button
         type="button"
@@ -644,7 +653,7 @@ function LookbookPage() {
                   season={season}
                   chip={occasion}
                   houseChip="all"
-                  houseLabel={detectorTitle(pieces) ?? chapterLabel}
+                  houseLabel={detectorTitle(pieces, { occasion, season, color, pool: garments }) ?? chapterLabel}
                   note={card.why}
                   pool={garments}
                   named={openId === look.id}

@@ -105,7 +105,12 @@
       "nb_dad_sneaker",
       "suede_sneaker",
       "clean_leather_sneaker",
-      "boot"
+      "boot",
+      "loafer_any",
+      "tassel_loafer",
+      "woven_loafer",
+      "suede_loafer",
+      "leather_plain_loafer"
     ],
     "outer": [
       "chore",
@@ -140,9 +145,14 @@
           "nb_dad_sneaker",
           "suede_sneaker",
           "clean_leather_sneaker",
-          "boot"
+          "boot",
+          "loafer_any",
+          "tassel_loafer",
+          "woven_loafer",
+          "suede_loafer",
+          "leather_plain_loafer"
         ],
-        "why": "ALD sits on sneakers (boot only as a soft exception)."
+        "why": "Sneakers first, loafers allowed."
       }
     ],
     "min_signals": {
@@ -173,7 +183,8 @@
           "name": "dad_shoe",
           "signals": [
             "nb_dad_sneaker",
-            "suede_sneaker"
+            "suede_sneaker",
+            "loafer_any"
           ]
         },
         {
@@ -194,13 +205,10 @@
       "id": "ALD-B1",
       "slot": "shoe",
       "signals": [
-        "loafer_any",
-        "tassel_loafer",
-        "woven_loafer",
         "mule",
         "fashion_sneaker"
       ],
-      "why": "No loafers, mules or luxury fashion sneakers."
+      "why": "No mules or luxury fashion sneakers. Sneakers first, loafers allowed."
     },
     {
       "id": "ALD-B1s",
@@ -392,7 +400,12 @@
       "nb_dad_sneaker",
       "suede_sneaker",
       "clean_leather_sneaker",
-      "boot (soft −15)"
+      "boot (soft −15)",
+      "loafer_any",
+      "tassel_loafer",
+      "woven_loafer",
+      "leather_plain_loafer",
+      "suede_loafer"
     ],
     "keywords": [
       "New Balance / 990 / 991 / 992 / 2002R",
@@ -401,7 +414,6 @@
       "hiker"
     ],
     "not": [
-      "loafer",
       "mule",
       "Golden Goose",
       "Gucci"
@@ -497,7 +509,7 @@
   "card_note": "Queens prep: varsity or hoodie, relaxed jeans, New Balance or suede runners.",
   "gap_note": "No rugby, no oversized OCBD, no grey 990: using the NB leather and suede sneakers.",
   "must_differ": {
-    "polo": "Always sneakers, never loafers; the top is street/collegiate, not OCBD/polo.",
+    "polo": "Sneakers first, loafers allowed. The top is street/collegiate, not OCBD/polo.",
     "rrl": "Sneaker instead of boot; no work-shirt + boot stack.",
     "545": "545 bans NB/hoodies and allows loafers."
   },
@@ -1460,18 +1472,17 @@
       },
       "expected": "fail",
       "rule_ids": [
-        "ALD-R1",
-        "ALD-B1",
-        "ALD-B4"
+        "ALD-A-top",
+        "ALD-A-bottom",
+        "ALD-B4",
+        "ALD-R2"
       ],
       "_validator": {
         "result": "fail",
         "fired": [
           "ALD-A-bottom",
           "ALD-A-top",
-          "ALD-B1",
           "ALD-B4",
-          "ALD-R1",
           "ALD-R2"
         ],
         "soft": [],
@@ -1501,6 +1512,28 @@
           "ALD-A-outer",
           "ALD-B2"
         ],
+        "soft": [],
+        "matches_expected": true
+      }
+    },
+    {
+      "id": "ALD-T4",
+      "desc": "Light blue half-zip fleece + navy cords + black woven loafers + navy brown plaid jacket",
+      "context": {
+        "occasion": "weekend",
+        "season": "fall"
+      },
+      "look": {
+        "top": "g_8m17f0l0tss9",
+        "bottom": "g_v3ovns4bv344",
+        "shoe": "g_5g4fqg77s4rw",
+        "outer": "g_3qjmw7n4wj2a"
+      },
+      "expected": "pass",
+      "rule_ids": [],
+      "_validator": {
+        "result": "pass",
+        "fired": [],
         "soft": [],
         "matches_expected": true
       }
@@ -2630,9 +2663,10 @@
         "name": "Navy leather tassel loafers",
         "saved_looks_of_601": 171,
         "rule_id": "ALD-D1",
-        "status": "banned_by_house_rules",
-        "max_per_row": 0,
-        "max_in_top3": 0
+        "status": "capped",
+        "max_per_row": 1,
+        "max_in_top3": 1,
+        "penalty": -25
       },
       "g_mqjsmpqgwwvm": {
         "name": "Cream cable-knit sweater",

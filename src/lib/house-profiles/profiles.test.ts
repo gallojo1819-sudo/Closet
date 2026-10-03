@@ -14,7 +14,7 @@ import { APPROVED, COLOR_PROFILE, CROSS } from "./load.ts";
 const HASHES: Record<string, string> = {
   "approved/545.json": "8062768c5356a80322e0450be8e69e9af3d95296ff102bf7be5f7ba94ba661a5",
   "approved/_cross_chip.json": "5850e61eb7fed90f0369d176bc2d1b8e5ad88f178ecc5d5cec1cba7da8317f8c",
-  "approved/ald.json": "fc5ac566d2f2c0a75e17c8d7229317146fca70417711a0aa896d8ec8f87d5476",
+  "approved/ald.json": "29b429882b635e0d07a321278bc55ea2494273a5081fd60155c6d352710a3af4",
   "approved/color.json": "78af58830b8a87fbd566145090340a53062783ee031722c3bcc04ade1730800d",
   "approved/faloni.json": "aba57de608adeb1f1058445b360c20f0d67efef86a869585241cab4f04a993ed",
   "approved/italiansummer.json": "e6daff21a8c9091414560faa19e97576b14cce2656a5aa268d639634bcb51dd3",
@@ -22,10 +22,10 @@ const HASHES: Record<string, string> = {
   "approved/polo.json": "d31fff5fdc65d22cffd1c3ef625ec8fa4290f200aa3b0e4a29be7d35c1173fe3",
   "approved/purple.json": "f00dd98fbe6a3dbb9f34e8d11fc324eb47a1e28e45002a576a8b0ba3063844c1",
   "approved/rrl.json": "c72258b52c4b03edacb2da7f65f339d2ae4c543b4148a8ff01f7a68e47b59f7c",
-  "approved/sweetstable.json": "d888abb2d5f3689e8fa50a3d498cabfc68a0a700ce7b355071438e732cb4b58c",
+  "approved/sweetstable.json": "53e591969a7a8f64184cf7f6e62ec2c50e91f3bf43ea9dfc3e85226d47405e54",
   "../stylist/data/color-value-map.json": "5a7e7012ba07969dfa3bdb252126ad672bd18c39a1ded509272b066be7e89dd0",
   "../stylist/data/2026-09-30-proposed-stylist-rules.json":
-    "82ad36149e05feff3a5b60c8dea5e4ca3034cf26c0c49b531f22ab9bf7f4b54b",
+    "321689f43c65b202c11e99691af19991cb5b850acda82882c1f0a5f8a9965a96",
 };
 
 const by = new Map<string, Plate>(
@@ -71,8 +71,8 @@ describe("house test_cases", () => {
     for (const tc of (profile as { test_cases?: Case[] }).test_cases ?? []) cases.push({ house, tc });
   }
 
-  it("covers the 28 house cases", () => {
-    expect(cases).toHaveLength(28);
+  it("covers the 29 house cases", () => {
+    expect(cases).toHaveLength(29);
   });
 
   for (const { house, tc } of cases) {

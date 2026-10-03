@@ -740,7 +740,7 @@
    "name": "sport_coat_underlayer_whitelist",
    "type": "underlayer_whitelist",
    "target_file": "_cross_chip.json",
-   "description": "Under a sport coat: collared woven shirts (dress/oxford/button-up/gingham/denim/chambray/flannel), polos and knit polos, fine/mid-gauge knits (fine_knit). Plain tee or henley only under a SOFT sport coat (tailored_soft: Taupe, Beige cord) and only on Weekend/Travel (-5); on Weekday/Out -15; under a STRUCTURED coat (Navy, Ivory DB) hard. Graphic/logo tee hard. Zip knit -10 (Weekend/Travel -5; 0 in IW/Purple/545, house exception JKT-HX-1). Non-chunky cardigan as mid -10. Camp/bowling shirt under a sport coat outside spring/summer -10. Anything unrated -5.",
+   "description": "Under a sport coat: collared woven shirts (dress/oxford/button-up/gingham/denim/chambray/flannel), polos and knit polos, fine/mid-gauge knits (fine_knit). Plain tee or henley only under a SOFT sport coat (tailored_soft: Taupe, Beige cord) and only on Weekend/Travel (-5); on Weekday/Out -15; under a STRUCTURED coat (Navy, Ivory DB) hard. Graphic/logo tee hard. A graphic, collegiate, letterman, or varsity piece (jacket-classification subclass \"varsity jacket\", or those words) under a sport coat is hard. Zip knit -10 (Weekend/Travel -5; 0 in IW/Purple/545, house exception JKT-HX-1). Non-chunky cardigan as mid -10. Camp/bowling shirt under a sport coat outside spring/summer -10. Anything unrated -5.",
    "logic": {
     "if": {
      "slot": "outer",
@@ -882,6 +882,24 @@
      "why": "card-1 fix A1: light blue dress shirt under taupe",
      "result": "PASS",
      "hits": []
+    },
+    {
+     "look": {
+      "top": "g_j5og5jmzh5tx",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_vf28ktbdhmtz",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "khaki varsity under a sport coat",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-2 hard: graphic or collegiate Khaki varsity under a sport coat"
+     ]
     }
    ]
   },
@@ -1400,6 +1418,65 @@
      "why": "card-3 fix: brown chore over navy cords",
      "result": "PASS",
      "hits": []
+    }
+   ]
+  },
+  {
+   "id": "JKT-LAY-8",
+   "name": "graphic_collegiate_not_with_sport_coat",
+   "type": "pair_ban",
+   "target_file": "_cross_chip.json",
+   "description": "A khaki varsity, or any graphic or collegiate piece, never shares a look with a sport coat, in either order. Keyed on jacket-classification subclass \"varsity jacket\" plus the words varsity, letterman, collegiate, and graphic. Not a single garment id.",
+   "logic": {
+    "any_slot": [
+     "varsity jacket",
+     "varsity",
+     "letterman",
+     "collegiate",
+     "graphic"
+    ],
+    "with": "sport coat",
+    "severity": "hard"
+   },
+   "severity": "hard",
+   "tests": [
+    {
+     "look": {
+      "top": "g_mq1ob9uc1npn",
+      "mid": "g_j5og5jmzh5tx",
+      "outer": "g_juk45cokjxxy",
+      "bottom": "g_vf28ktbdhmtz",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekday",
+      "season": "fall"
+     },
+     "why": "varsity under the taupe blazer",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-8 hard: a graphic or collegiate piece cannot share a look with a sport coat"
+     ]
+    },
+    {
+     "look": {
+      "top": "g_mq1ob9uc1npn",
+      "mid": "g_juk45cokjxxy",
+      "outer": "g_j5og5jmzh5tx",
+      "bottom": "g_vf28ktbdhmtz",
+      "shoe": "g_om0dh5nps1ke"
+     },
+     "expected": "fail",
+     "context": {
+      "occasion": "weekend",
+      "season": "fall"
+     },
+     "why": "taupe blazer beside the varsity, other slot order",
+     "result": "PASS",
+     "hits": [
+      "JKT-LAY-8 hard: a graphic or collegiate piece cannot share a look with a sport coat"
+     ]
     }
    ]
   }

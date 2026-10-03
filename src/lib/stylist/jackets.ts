@@ -488,6 +488,18 @@ function matFam(g: Plate): string | null {
   return null;
 }
 
+function graphicOrCollegiate(g: Plate): boolean {
+  const sub = (BY_ID.get(g.id)?.subclass ?? "").toLowerCase();
+  if (sub.includes("varsity jacket")) return true;
+  return hasText(blob(g), ["varsity", "letterman", "collegiate", "graphic"]);
+}
+
+function sportCoat(g: Plate | undefined): boolean {
+  if (!g) return false;
+  const cls = jacketInfo(g).class;
+  return cls === "sport_coat_soft" || cls === "sport_coat_structured";
+}
+
 function underHit(g: Plate, worn: string, outer: Plate, ctx: JacketCtx, hits: JacketHit[]) {
   const info = jacketInfo(outer);
   const softCoat = info.class === "sport_coat_soft";
@@ -498,6 +510,10 @@ function underHit(g: Plate, worn: string, outer: Plate, ctx: JacketCtx, hits: Ja
     if (severity === "soft" && delta === 0) return;
     hits.push({ id: "JKT-LAY-2", severity, delta, why });
   };
+  if (graphicOrCollegiate(g)) {
+    push("hard", 0, `graphic or collegiate ${g.name} under a sport coat`);
+    return;
+  }
   if (jsig(g, "tee_graphic", worn)) {
     push("hard", 0, `graphic tee ${g.name} under a sport coat`);
     return;
@@ -580,6 +596,11 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
         hit("JKT-LAY-4", "soft", season === "summer" ? -5 : -10, `mules ${shoe.name} with a sport coat`);
       }
     }
+  }
+
+  const piled = [top, mid, outer, bottom, shoe].filter((g): g is Plate => Boolean(g));
+  if (piled.some(sportCoat) && piled.some(graphicOrCollegiate)) {
+    hit("JKT-LAY-8", "hard", 0, "a graphic or collegiate piece cannot share a look with a sport coat");
   }
 
   if (casual && outer) {

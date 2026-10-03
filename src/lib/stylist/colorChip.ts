@@ -59,7 +59,7 @@ function paletteKey(house: string): string {
   return short ?? house.toLowerCase();
 }
 
-function paletteFamilies(house: string): Set<string> {
+export function paletteFamilies(house: string): Set<string> {
   const row = PALETTE[paletteKey(house)] ?? [];
   return new Set(row.map((s) => s.split("(")[0]!.trim().toLowerCase()));
 }
@@ -102,10 +102,12 @@ export function colorEmptyCopy(houseLabel: string, color: string, houseKey: stri
     .replaceAll("{closest family}", palette.split(",")[0]?.trim() || "a house colour");
 }
 
-export function evaluateColor(
+/** A null palette skips COL-4, the same as evaluateColor with no house. */
+export function evaluateColorWithPalette(
   ps: Partial<Record<string, Plate>>,
   color: string,
-  house?: string | null,
+  palette: Set<string> | null,
+  label: string,
 ): ColorResult {
   const want = canonTokens(color)[0] || color.toLowerCase().trim();
   const hard: string[] = [];
@@ -121,12 +123,11 @@ export function evaluateColor(
     if (others.some((g) => !neutralPiece(g))) hard.push("COL-3");
   }
   let note: string | null = null;
-  if (house) {
+  if (palette) {
     const fam = familyOf(want) ?? want;
-    const allowed = paletteFamilies(house);
-    if (!allowed.has(fam) && !allowed.has(want)) {
+    if (!palette.has(fam) && !palette.has(want)) {
       hard.push("COL-4");
-      note = colorEmptyCopy(house, color, house);
+      note = colorEmptyCopy(label, color, label);
     }
   }
   const fam = familyOf(want) ?? want;
@@ -138,4 +139,13 @@ export function evaluateColor(
   }
   void ruleText;
   return { passed: hard.length === 0, hardFails: [...new Set(hard)].sort(), soft, note };
+}
+
+export function evaluateColor(
+  ps: Partial<Record<string, Plate>>,
+  color: string,
+  house?: string | null,
+): ColorResult {
+  if (!house) return evaluateColorWithPalette(ps, color, null, "");
+  return evaluateColorWithPalette(ps, color, paletteFamilies(house), house);
 }

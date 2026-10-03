@@ -328,6 +328,11 @@ export function stylistHits(
   if ((season === "fall" || season === "winter") && shoe && sig(shoe, "mule", SIG)) {
     hit("XC-SEA-3", "hard", 0, `mules ${shoe.name} in ${season}`);
   }
+  const linenPiece = (g: Plate) => /linen/.test(`${blob(g)} ${g.material ?? ""}`);
+  const flannelPiece = (g: Plate) => /flannel/.test(`${blob(g)} ${g.material ?? ""}`);
+  if (all.some(linenPiece) && all.some(flannelPiece)) {
+    hit("XC-SEA-5", "hard", 0, "linen with flannel");
+  }
   if (all.some(cold) && all.some(hot)) hit("XC-SEA-4", "soft", -15, "cold + hot pieces in one look");
 
   const pat = new Map<string, [string, string][]>();

@@ -36,7 +36,8 @@ function skipped(pieces: Garment[], taste?: TasteMemory): boolean {
 function oneSwap(
   pieces: Garment[],
   pool: Garment[],
-  taste?: TasteMemory,
+  taste: TasteMemory | undefined,
+  ctx: { occasion?: Occasion; season?: Season; pool: Garment[] },
 ): OpinionSwap | null {
   const order: OpinionSlot[] = ["footwear", "top", "bottom", "outerwear"];
   for (const slot of order) {
@@ -47,7 +48,7 @@ function oneSwap(
       if (slotOfPiece(cand) !== slot) continue;
       if (taste && pieceVetoIds(taste).has(cand.id)) continue;
       const next = pieces.map((g) => (g.id === current.id ? cand : g));
-      if (skipped(next, taste) || !sharedDetector(next)) continue;
+      if (skipped(next, taste) || !sharedDetector(next, ctx, pool)) continue;
       return {
         id: cand.id,
         slot,
@@ -72,14 +73,13 @@ export function lookOpinion(
     taste?: TasteMemory;
   },
 ): LookOpinion | null {
-  void opts?.occasion;
-  void opts?.season;
   void opts?.house;
   if (pieces.length < 2) return null;
   const taste = opts?.taste;
+  const ctx = { occasion: opts?.occasion, season: opts?.season, pool };
   const names = pieces.map((g) => g.name).join(", ");
   if (!skipped(pieces, taste)) {
-    const hit = sharedDetector(pieces);
+    const hit = sharedDetector(pieces, ctx, pool);
     if (hit) {
       return { headline: "This matches.", reason: hit.title, house: null, swaps: [], stuck: null };
     }
@@ -87,7 +87,7 @@ export function lookOpinion(
   const why = skipped(pieces, taste)
     ? "You skipped this."
     : (clashSentence(pieces) ?? "They don't finish one way of dressing.");
-  const swap = oneSwap(pieces, pool, taste);
+  const swap = oneSwap(pieces, pool, taste, ctx);
   return {
     headline: "This doesn't match.",
     reason: `${names}. ${why}`,

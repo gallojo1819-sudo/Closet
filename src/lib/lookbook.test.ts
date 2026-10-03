@@ -27,7 +27,10 @@ import {
   stripRepeatBlazers,
   unusedFromLooks,
 } from "./lookbook.ts";
+import { houseKill } from "./houses.ts";
 import { lookFitsSeason } from "./season.ts";
+import { isLegal } from "./stylist/legal.ts";
+import platesFile from "./stylist/__tests__/fixtures/plates-2026-09-30.json" with { type: "json" };
 import { isButtonDown, isCreamCable } from "./recipes.ts";
 import { isBrownSuedeOuter, isTrueOuter, isWeekendSoftJacket, pickLook, slotOf, trendScore } from "./style.ts";
 import type { Garment, Look } from "./types.ts";
@@ -792,7 +795,7 @@ describe("2026-09 stylist pack", () => {
     assert.equal(lookFitsOccasion([...core, blazer], "weekday"), false);
   });
 
-  it("rugby+loafer+jean is a legal occasion, and ALD still bans the loafer", () => {
+  it("rugby+loafer+jean is a legal occasion, and ALD no longer bans the loafer", () => {
     const look = [
       piece({ id: "rg", name: "Navy rugby", category: "top", subtype: "rugby" }),
       piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean" }),
@@ -801,10 +804,12 @@ describe("2026-09 stylist pack", () => {
     assert.equal(lookClashes(look), false);
     assert.equal(lookFitsOccasion(look, "weekday"), true);
     assert.equal(lookFitsOccasion(look, "weekend"), true);
-    assert.equal(lookFitsHouse(look, "ald", "weekday", look), false);
+    const kill = houseKill(look, "ald", "weekday");
+    assert.notEqual(kill, "ALD-B1");
+    assert.notEqual(kill, "ALD-R1");
   });
 
-  it("fair isle+cord+boot is Sweet Stable on the weekend; weekday is gated off", () => {
+  it("fair isle+cord+boot is Sweet Stable on weekday and the weekend; out stays off", () => {
     const look = [
       piece({ id: "fi", name: "Cream fair isle", category: "top", subtype: "knit" }),
       piece({ id: "cord", name: "Brown cords", category: "bottom", subtype: "cord" }),
@@ -819,8 +824,55 @@ describe("2026-09 stylist pack", () => {
       piece({ id: "cord2", name: "Brown cords", category: "bottom", subtype: "cord" }),
       piece({ id: "bt2", name: "Brown boot", category: "footwear", subtype: "boot" }),
     ];
-    assert.equal(lookFitsHouse(booted, "sweetStable", "weekday", booted), false);
+    assert.equal(lookFitsHouse(booted, "sweetStable", "weekday", booted), true);
     assert.equal(lookFitsHouse(booted, "sweetStable", "weekend", booted), true);
+    assert.equal(lookFitsHouse(booted, "sweetStable", "out", booted), false);
+  });
+
+  it("ALD loafers are legal, a varsity stays off a sport coat, and the deleted sneakers never pass", () => {
+    const byId = new Map(
+      (platesFile.plates as { id: string }[]).map((row) => [row.id, row as {
+        id: string;
+        name?: string;
+        category?: string;
+        subtype?: string;
+        material?: string;
+        colors?: string[];
+        brand?: string;
+        warmth?: number;
+      }]),
+    );
+    const take = (...ids: string[]) =>
+      ids.map((id) => {
+        const row = byId.get(id);
+        assert.ok(row, id);
+        return piece({
+          id: row.id,
+          name: row.name ?? id,
+          category: (row.category ?? "top") as Garment["category"],
+          subtype: row.subtype ?? "",
+          material: row.material ?? "",
+          colors: row.colors ?? [],
+          brand: row.brand ?? "",
+          warmth: Math.min(5, Math.max(1, row.warmth ?? 2)) as Garment["warmth"],
+          seasons: ["spring", "summer", "fall", "winter"],
+        });
+      });
+    const ald = take("g_8m17f0l0tss9", "g_v3ovns4bv344", "g_5g4fqg77s4rw", "g_3qjmw7n4wj2a");
+    assert.equal(isLegal(ald, { house: "ald", occasion: "weekend", season: "fall" }), true);
+    const banned = take("g_mq1ob9uc1npn", "g_vf28ktbdhmtz", "g_om0dh5nps1ke", "g_j5og5jmzh5tx", "g_juk45cokjxxy");
+    for (const occasion of ["weekday", "weekend"] as const) {
+      assert.equal(isLegal(banned, { house: null, occasion, season: "fall" }), false);
+      assert.equal(isLegal([...banned].reverse(), { house: null, occasion, season: "fall" }), false);
+    }
+    const linen = take("g_j4qu90fgv347", "g_0re8nrx2mpdy", "g_om0dh5nps1ke");
+    for (const season of ["spring", "summer", "fall", "winter"] as const) {
+      assert.equal(isLegal(linen, { house: null, occasion: "weekend", season }), false);
+    }
+    for (const id of ["g_37e5eqjwgd3d", "g_c6qdv5c3gkor", "g_x0ro1mg2gu0a"]) {
+      const dead = piece({ id, name: "deleted sneaker", category: "footwear", subtype: "sneaker" });
+      assert.equal(isLegal([ald[0]!, ald[1]!, dead], { house: null, occasion: "weekend", season: "fall" }), false);
+    }
   });
 
   it("oxford+dark jean+loafer weekday → VALID", () => {
@@ -1483,10 +1535,15 @@ describe("lookbook card stack", () => {
     assert.equal(book.includes("HOUSE_CHIPS"), false);
     assert.equal(book.includes("HOUSE_LABEL"), false);
     assert.equal(book.includes("dressableHouses"), false);
-    assert.match(book, /<DetectorSections garments=\{garments\} ways=\{shownWays\} \/>/);
+    assert.match(book, /<DetectorSections/);
+    assert.match(book, /ways=\{shownWays\}/);
+    assert.match(book, /occasion=\{occasion\}/);
+    assert.match(book, /season=\{season\}/);
+    assert.match(book, /color=\{color\}/);
+    assert.match(book, /activeId=\{wayId\}/);
     assert.match(book, /Your ways of dressing/);
     assert.match(book, />Context</);
-    assert.match(book, /rankWays\(garments, \{ season, month \}\)/);
+    assert.equal(book.includes("rankWays"), false);
     assert.match(book, /data-ways-row/);
     assert.match(book, /heading="Suggest"/);
     assert.equal(book.includes("Make a look"), false);
