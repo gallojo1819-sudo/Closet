@@ -13,6 +13,8 @@ export type CloudGarment = {
   demo?: boolean;
   imageSrc?: string;
   cutoutSrc?: string;
+  /** Local refusal. An empty cutout with this set is the plate, not a missing row. */
+  reprint?: boolean;
   /** Durable delete. Not a live piece. */
   tombstone?: boolean;
   name?: string;
@@ -98,12 +100,17 @@ function sameJson(a: unknown, b: unknown): boolean {
  * Three-way field merge. A side that still matches `base` did not edit that
  * field, so the other side's edit wins. Image srcs still prefer closet_meta sb:.
  * A new local plate stays when the cloud cutout still equals the last pull.
+ * An emptied local plate stays when reprint is true and the cloud cutout has not changed.
  * If the cloud cutout actually changed, the cloud one wins.
+ * imageSrc is never replaced with the cover.
  */
 export function mergeGarmentFields<T extends CloudGarment>(base: T | undefined, local: T, cloud: T): T {
   const srcs = preferAccountSrcs(local, cloud);
-  const cutoutSrc =
-    base && cloud.cutoutSrc === base.cutoutSrc && local.cutoutSrc && local.cutoutSrc !== base.cutoutSrc
+  const cloudSame = Boolean(base) && cloud.cutoutSrc === base?.cutoutSrc;
+  const emptied = cloudSame && local.reprint === true && !(local.cutoutSrc ?? "").trim();
+  const cutoutSrc = emptied
+    ? ""
+    : cloudSame && local.cutoutSrc && local.cutoutSrc !== base?.cutoutSrc
       ? local.cutoutSrc
       : srcs.cutoutSrc;
   if (!base) return srcs;

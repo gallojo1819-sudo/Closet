@@ -435,7 +435,7 @@ export function holderCheckerText(
     | null
     | undefined,
 ): string {
-  if (!verdict) return "";
+  if (!verdict) return JSON.stringify({ clean: false, why: "timeout" });
   if (typeof verdict.clean === "boolean") {
     return JSON.stringify({
       clean: verdict.clean,

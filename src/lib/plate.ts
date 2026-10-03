@@ -8,6 +8,7 @@ type CoverFields = {
   cutoutSrc?: string;
   imageSource?: ImageSource | string;
   reprint?: boolean;
+  plated?: boolean;
   category?: string;
   archived?: boolean;
   id?: string;
@@ -113,7 +114,12 @@ export function coverStillPhoto(g: CoverFields): boolean {
 }
 
 export function notesSayHeld(notes?: string): boolean {
-  return /\bheld\b/i.test(notes ?? "");
+  return /\b(held|camera)\b/i.test(notes ?? "");
+}
+
+/** Outerwear shot on a phone that has never had a real plate saved. */
+function cameraCover(g: CoverFields): boolean {
+  return g.category === "outerwear" && notesSayHeld(g.notes) && g.plated !== true;
 }
 
 /**
@@ -135,11 +141,13 @@ export function hasCleanCover(g: CoverFields): boolean {
     return source === "official" || source === "segmented";
   }
   if (coverBytesMatch(g)) return false;
+  if (cameraCover(g)) return false;
   return true;
 }
 
 /** The stored plate key when one already exists. Never the phone photo. */
 export function keptPlateKey(g: CoverFields): string {
+  if (cameraCover(g)) return "";
   if (coverBytesMatch(g)) return "";
   if (hasCleanCover(g)) return g.cutoutSrc?.trim() ?? "";
   const cutout = g.cutoutSrc?.trim() ?? "";
@@ -158,7 +166,7 @@ export function needsReprintTile(g: CoverFields): boolean {
 
 /**
  * One signed-in pass. Outerwear with no clean plate, when the cover is missing,
- * the notes say held, imageSource is photo, the cutout URL is the original,
+ * the notes say held or camera, imageSource is photo, the cutout URL is the original,
  * or the cover file is the same bytes as the original.
  */
 export function jacketsNeedingPlate<T extends CoverFields>(garments: T[]): T[] {
@@ -187,6 +195,8 @@ export type PlatePatch = {
   imageSource: ImageSource;
   matteQuality: "clean" | "busy";
   reprint: boolean;
+  /** Set only when a real plate is saved. A refusal leaves this unset. */
+  plated?: boolean;
 };
 
 function sameFileBytes(a: string, b: string): boolean {
@@ -223,6 +233,7 @@ export function plateResultPatch(
       imageSource: "cutout",
       matteQuality: "clean",
       reprint: false,
+      plated: true,
     };
   }
   const prev = previousCutout.trim();
@@ -234,6 +245,7 @@ export function plateResultPatch(
       imageSource: "cutout",
       matteQuality: "clean",
       reprint: false,
+      plated: true,
     };
   }
   const fromWritten = written.cutoutSrc.trim();
@@ -249,6 +261,7 @@ export function plateResultPatch(
       imageSource: "cutout",
       matteQuality: "clean",
       reprint: false,
+      plated: true,
     };
   }
   return refused;

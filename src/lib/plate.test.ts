@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { borderIsCleanStudio } from "./matte.ts";
 import {
   coverIsOriginal,
@@ -112,7 +113,7 @@ describe("raw outerwear covers", () => {
       notes: "held in a hand",
     };
     assert.equal(hasCleanCover(catalog), true);
-    assert.equal(hasCleanCover(heldNote), true);
+    assert.equal(hasCleanCover(heldNote), false);
     const queued = jacketsNeedingPlate([
       photo,
       blazer,
@@ -128,6 +129,94 @@ describe("raw outerwear covers", () => {
       queued.map((g) => g.id),
       ["suede", "field", "chosen", "miss", "held"],
     );
+  });
+});
+
+describe("a camera photo labeled cutout is not a plate", () => {
+  const camera = {
+    id: "camera-jacket",
+    category: "outerwear",
+    notes: "camera",
+    imageSource: "cutout" as const,
+    reprint: false as const,
+    cutoutSrc: "c-693a12d9.jpg",
+    imageSrc: "o.jpg",
+  };
+  const blazer = {
+    id: "blazer",
+    name: "Navy blazer",
+    category: "outerwear",
+    imageSrc: "sb:u/blazer/o.jpg",
+    cutoutSrc: "sb:u/blazer/c.jpg",
+    imageSource: "official" as const,
+  };
+  const toggle = {
+    id: "toggle",
+    name: "White beige toggle jacket",
+    category: "outerwear",
+    imageSrc: "sb:u/toggle/o.jpg",
+    cutoutSrc: "sb:u/toggle/c.jpg",
+    imageSource: "cutout" as const,
+  };
+
+  it("queues the phone photo and stamps only a real plate", () => {
+    assert.equal("plated" in camera, false);
+    assert.equal(camera.reprint, false);
+    assert.equal(hasCleanCover(camera), false);
+    assert.equal(keptPlateKey(camera), "");
+    assert.equal(needsReprintTile(camera), true);
+    const queued = jacketsNeedingPlate([camera, blazer, toggle]);
+    assert.deepEqual(
+      queued.map((g) => g.id),
+      ["camera-jacket"],
+    );
+    assert.equal(hasCleanCover(blazer), true);
+    assert.equal(hasCleanCover(toggle), true);
+    assert.equal(hasCleanCover({ ...blazer, notes: "photographic" }), true);
+    assert.equal(
+      hasCleanCover({ ...camera, id: "jeans", category: "bottom" }),
+      true,
+    );
+
+    const printed = plateResultPatch(
+      camera.imageSrc,
+      { reprint: false, cutoutSrc: "data:image/jpeg;base64,plate" },
+      "c-aabbccdd.jpg",
+      keptPlateKey(camera),
+    );
+    assert.equal(printed.plated, true);
+    assert.equal(printed.cutoutSrc, "c-aabbccdd.jpg");
+    assert.equal(printed.reprint, false);
+    assert.equal("imageSrc" in printed, false);
+    const saved = { ...camera, ...printed };
+    assert.equal(saved.imageSrc, "o.jpg");
+    assert.notEqual(saved.cutoutSrc, camera.cutoutSrc);
+    assert.equal(hasCleanCover(saved), true);
+    assert.equal(jacketsNeedingPlate([saved]).length, 0);
+
+    const refused = plateResultPatch(
+      camera.imageSrc,
+      { reprint: true, cutoutSrc: camera.imageSrc },
+      "c-aabbccdd.jpg",
+      keptPlateKey(camera),
+    );
+    assert.equal("plated" in refused, false);
+    assert.equal(refused.cutoutSrc, "");
+    assert.equal(refused.reprint, true);
+    assert.equal(refused.imageSource, "cutout");
+    assert.notEqual(refused.cutoutSrc, camera.imageSrc);
+    assert.notEqual(refused.cutoutSrc, camera.cutoutSrc);
+    const paper = { ...camera, ...refused };
+    assert.equal(paper.imageSrc, "o.jpg");
+    assert.equal(hasCleanCover(paper), false);
+    assert.equal(needsReprintTile(paper), true);
+    assert.equal(REPRINT_CAPTION, "Plate failed — outline the jacket.");
+  });
+
+  it("the signed-in closet pass does not skip reprint false", () => {
+    const route = readFileSync(new URL("../routes/closet.tsx", import.meta.url), "utf8");
+    assert.match(route, /jacketsNeedingPlate\(garmentsAll\)/);
+    assert.equal(route.includes("rawOuterwearCovers"), false);
   });
 });
 

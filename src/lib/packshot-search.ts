@@ -114,7 +114,7 @@ export const judgeHeldPlate = createServerFn({ method: "POST" })
       const r = await xaiPost(
         "https://api.x.ai/v1/chat/completions",
         { model, temperature: 0, max_tokens: 80, messages },
-        12000,
+        4000,
       );
       if (!r.ok) {
         if (r.status === 400 || r.status === 403 || r.status === 404 || r.status === 422) continue;

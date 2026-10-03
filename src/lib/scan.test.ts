@@ -5,6 +5,7 @@ import {
   chipLabel,
   collectKnownHashes,
   coverRejected,
+  holderCheckerText,
   filenameLooksLikeSkip,
   findThisHref,
   HAND_COVER_MESSAGE,
@@ -353,6 +354,9 @@ describe("held garment cover", () => {
     assert.equal(coverRejected("suede jacket on paper"), true);
     assert.equal(coverRejected(""), true);
     assert.equal(coverRejected("   "), true);
+    assert.equal(holderCheckerText(null), '{"clean":false,"why":"timeout"}');
+    assert.equal(coverRejected(holderCheckerText(null)), true);
+    assert.equal(coverRejected(holderCheckerText({ clean: true, why: "" })), false);
     assert.equal(written.imageSrc, "photo://jacket");
     assert.equal(written.cutoutSrc, "");
     assert.equal(written.reprint, true);

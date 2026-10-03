@@ -122,6 +122,7 @@ export function OutlineJacket({
         imageSource: "cutout",
         matteQuality: "clean",
         reprint: false,
+        plated: true,
       });
       onClose();
     } catch {

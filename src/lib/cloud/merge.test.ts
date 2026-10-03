@@ -116,6 +116,36 @@ describe("mergeGarments", () => {
     assert.equal(next[0]?.imageSrc, "sb:u/a/o.jpg");
   });
 
+  it("an emptied local plate wins when reprint is true and the cloud cutout has not changed", () => {
+    type Row = { id: string; imageSrc: string; cutoutSrc: string; reprint?: boolean };
+    const base: Row[] = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c-693a12d9.jpg" }];
+    const local: Row[] = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "", reprint: true }];
+    const cloud: Row[] = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c-693a12d9.jpg" }];
+    const next = mergeGarments({ local, cloud, lastCloudIds: ["a"], base });
+    assert.equal(next[0]?.cutoutSrc, "");
+    assert.equal(next[0]?.imageSrc, "sb:u/a/o.jpg");
+    assert.equal(next[0]?.reprint, true);
+    assert.notEqual(next[0]?.imageSrc, "sb:u/a/c-693a12d9.jpg");
+  });
+
+  it("keeps a new local plate and does not copy it onto the original", () => {
+    const base = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c-693a12d9.jpg" }];
+    const local = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c-aabbccdd.jpg", reprint: false }];
+    const cloud = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c-693a12d9.jpg" }];
+    const next = mergeGarments({ local, cloud, lastCloudIds: ["a"], base });
+    assert.equal(next[0]?.cutoutSrc, "sb:u/a/c-aabbccdd.jpg");
+    assert.equal(next[0]?.imageSrc, "sb:u/a/o.jpg");
+  });
+
+  it("a changed cloud cutout wins over an emptied local plate", () => {
+    const base = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c-old.jpg" }];
+    const local = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "", reprint: true }];
+    const cloud = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c-new.jpg" }];
+    const next = mergeGarments({ local, cloud, lastCloudIds: ["a"], base });
+    assert.equal(next[0]?.cutoutSrc, "sb:u/a/c-new.jpg");
+    assert.equal(next[0]?.imageSrc, "sb:u/a/o.jpg");
+  });
+
   it("cloud cutout wins when the cloud cover changed", () => {
     const base = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "sb:u/a/c.jpg" }];
     const local = [{ id: "a", imageSrc: "sb:u/a/o.jpg", cutoutSrc: "idb:a:c" }];

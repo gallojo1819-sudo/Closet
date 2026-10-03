@@ -437,6 +437,7 @@ export function Studio() {
               imageSource: "cutout",
               matteQuality: usePlate ? "clean" : "busy",
               reprint: !usePlate,
+              ...(usePlate ? { plated: true as const } : {}),
               fileHash: opts.hash,
               tuck: guessTuck({ name: NEW_PIECE_NAME, subtype: "", notes: opts.notes }),
             },

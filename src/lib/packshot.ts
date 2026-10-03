@@ -267,6 +267,7 @@ export function officialCoverPatch(plateKey: string, pageUrl: string): OfficialP
     imageSource: "official",
     matteQuality: "clean",
     reprint: false,
+    plated: true,
   };
   const page = pageUrl.trim();
   if (page) patch.productUrl = page;

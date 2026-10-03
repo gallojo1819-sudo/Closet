@@ -214,6 +214,7 @@ describe("cover pass", () => {
     assert.equal(patch.cutoutSrc, "idb:g_1pg9y05mlkek:c");
     assert.equal(patch.imageSource, "official");
     assert.equal(patch.reprint, false);
+    assert.equal(patch.plated, true);
     assert.equal(patch.productUrl, "https://www.reiss.com/jacket");
     const noPage = officialCoverPatch("idb:g_qnmo5yzgl50b:c", "  ");
     assert.equal("productUrl" in noPage, false);
@@ -231,5 +232,17 @@ describe("cover pass", () => {
     assert.match(pass, /findOfficialCover/);
     assert.equal(pass.includes("imageSrc:"), false);
     assert.equal(pass.includes("notes:"), false);
+  });
+
+  it("a timed-out hand check is not a clean plate", () => {
+    const src = readFileSync(new URL("./packshot-search.ts", import.meta.url), "utf8");
+    const start = src.indexOf("export const judgeHeldPlate");
+    const end = src.indexOf("async function searchOnce");
+    const judge = src.slice(start, end);
+    assert.ok(start > 0 && end > start);
+    assert.match(judge, /\b4000\b/);
+    assert.equal(judge.includes("12000"), false);
+    assert.match(judge, /return UNREADABLE/);
+    assert.match(src, /const UNREADABLE: PlateJudge = \{ clean: false/);
   });
 });

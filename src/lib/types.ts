@@ -39,6 +39,8 @@ export type Garment = {
   matteQuality: "clean" | "ok" | "busy";
   /** Plate was refused. The grid shows paper, not the phone photo. Absent on old rows. */
   reprint?: boolean;
+  /** A real plate was saved. Absent until then. A camera filename is not this. */
+  plated?: boolean;
   demo: boolean;
   wornOn: string[];
   paid?: number;
