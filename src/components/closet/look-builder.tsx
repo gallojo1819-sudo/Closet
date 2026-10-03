@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMeButton } from "@/components/closet/on-me";
@@ -49,6 +49,9 @@ export function LookBuilder({
   const setDrop = useCloset((s) => s.setDrop);
   const [picked, setPicked] = useState<Partial<Record<SlotId, string>>>({});
   const [openSlot, setOpenSlot] = useState<SlotId | null>("top");
+  const [hover, setHover] = useState<{ slot: SlotId; id: string } | null>(null);
+  const [changedSlot, setChangedSlot] = useState<SlotId | null>(null);
+  const dragId = useRef<string | null>(null);
 
   const pool = useMemo(
     () => lookbookPool(garmentsAll.filter((g) => !g.archived)),
@@ -62,22 +65,32 @@ export function LookBuilder({
 
   const pieces = SLOTS.map((s) => byId.get(picked[s.id] ?? ""))
     .filter((g): g is Garment => Boolean(g));
-  const opinion = lookOpinion(pieces, pool, {
+  const opinionOpts = {
     occasion: occasion ?? mapOccasion(drop?.occasion),
     season,
     house,
     taste,
-  });
-  const line = opinion ? suggestLine(opinion, pool) : null;
-  const matched = opinion?.headline === "This matches.";
+  };
+  const opinion = lookOpinion(pieces, pool, opinionOpts);
+  const hoverPieces = hover
+    ? SLOTS.map((s) => byId.get((s.id === hover.slot ? hover.id : picked[s.id]) ?? "")).filter(
+        (g): g is Garment => Boolean(g),
+      )
+    : null;
+  const hoverOpinion = hoverPieces ? lookOpinion(hoverPieces, pool, opinionOpts) : null;
+  const shown = hoverOpinion ?? opinion;
+  const line = shown ? suggestLine(shown, pool) : null;
+  const matched = shown?.headline === "This matches.";
   const ids = pieces.map((g) => g.id);
   const ready = Boolean(picked.top && picked.bottom && picked.footwear);
   const lookName = nameLook(pieces);
 
   const fill = (slot: SlotId, id: string) => {
     const nextVal = picked[slot] === id ? undefined : id;
+    setChangedSlot(picked[slot] && nextVal && picked[slot] !== nextVal ? slot : null);
     const next = { ...picked, [slot]: nextVal };
     setPicked(next);
+    setHover(null);
     const order: SlotId[] = ["top", "bottom", "footwear"];
     setOpenSlot(order.find((s) => !next[s]) ?? null);
   };
@@ -128,12 +141,30 @@ export function LookBuilder({
             <button
               key={s.id}
               type="button"
+              data-changed={changedSlot === s.id ? "" : undefined}
               onClick={() => setOpenSlot(openSlot === s.id ? null : s.id)}
+              onDragOver={(e) => {
+                const id = dragId.current;
+                if (!id || !byId.has(id)) return;
+                e.preventDefault();
+                setHover((cur) => (cur?.slot === s.id && cur.id === id ? cur : { slot: s.id, id }));
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const id = dragId.current;
+                dragId.current = null;
+                setHover(null);
+                if (id && byId.has(id)) fill(s.id, id);
+              }}
               className={cn("border-2 text-left", edge)}
             >
               <div className="bg-paper-deep aspect-page">
                 {g ? (
-                  <GarmentImg garment={g} className="h-full w-full object-contain p-[8%]" />
+                  <GarmentImg
+                    key={g.id}
+                    garment={g}
+                    className="slot-crossfade h-full w-full object-contain p-[8%]"
+                  />
                 ) : (
                   <span className="flex h-full items-center justify-center micro text-ink-soft">
                     {s.label}
@@ -161,6 +192,16 @@ export function LookBuilder({
                 <li key={g.id}>
                   <button
                     type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      dragId.current = g.id;
+                      e.dataTransfer.setData("text/plain", g.id);
+                      e.dataTransfer.effectAllowed = "copy";
+                    }}
+                    onDragEnd={() => {
+                      dragId.current = null;
+                      setHover(null);
+                    }}
                     onClick={() => fill(openSlot, g.id)}
                     className={cn(
                       "w-full border",
@@ -178,6 +219,29 @@ export function LookBuilder({
           )}
         </div>
       )}
+
+      {opinion?.swaps[0] && pool.some((g) => g.id === opinion.swaps[0]?.id) ? (
+        <div className="flex gap-2">
+          {pieces
+            .filter((g) => inSlot(g, opinion.swaps[0]!.slot))
+            .map((g) => (
+              <div key={g.id} className="w-16 border-2 border-red-800">
+                <GarmentImg garment={g} className="aspect-page w-full object-contain" />
+              </div>
+            ))}
+          {pool
+            .filter((g) => g.id === opinion.swaps[0]?.id)
+            .map((g) => (
+              <div key={g.id} data-changed="" className="w-16 border-2 border-green-800">
+                <GarmentImg
+                  key={g.id}
+                  garment={g}
+                  className="slot-crossfade aspect-page w-full object-contain"
+                />
+              </div>
+            ))}
+        </div>
+      ) : null}
 
       {line && opinion?.swaps[0] && pool.some((g) => g.id === opinion.swaps[0]?.id) ? (
         <button

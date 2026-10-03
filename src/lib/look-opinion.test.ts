@@ -132,9 +132,17 @@ describe("look opinion", () => {
     const today = readFileSync(new URL("../routes/index.tsx", import.meta.url), "utf8");
     assert.match(src, /heading = "Suggest"/);
     assert.equal(src.includes("Make a look"), false);
-    assert.match(src, /suggestLine\(opinion, pool\)/);
+    assert.match(src, /suggestLine\(shown, pool\)/);
     assert.match(src, /border-green-800/);
     assert.match(src, /border-red-800/);
+    assert.match(src, /slot-crossfade/);
+    assert.match(src, /draggable/);
+    assert.match(src, /onDrop/);
+    assert.equal(src.includes("parallax"), false);
+    const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+    assert.match(css, /@keyframes slot-crossfade/);
+    const reduce = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    assert.match(reduce, /\.slot-crossfade\s*\{[^}]*animation:\s*none/);
     assert.equal(today.includes("Make a look"), false);
   });
 });

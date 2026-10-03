@@ -603,7 +603,7 @@ function LookbookPage() {
           <ul
             key={weekPulse}
             className={cn(
-              "mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-8",
+              "look-swipe mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-8",
               weekPulse > 0 && "week-crossfade",
             )}
           >

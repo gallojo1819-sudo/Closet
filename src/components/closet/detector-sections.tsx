@@ -39,11 +39,13 @@ export function DetectorSections({
               return (
                 <div key={id}>
                   <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[id]}</p>
+                  <div className="look-swipe">
                   {looks.map((look, index) => (
                     <p key={`${id}:${index}`} className="mt-1 text-sm text-ink-soft">
                       {look.pieces.map((g) => g.name).join(" · ")}
                     </p>
                   ))}
+                  </div>
                 </div>
               );
             })}
