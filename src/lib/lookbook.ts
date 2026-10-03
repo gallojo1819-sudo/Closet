@@ -24,6 +24,7 @@ import {
   slotOf,
   type House,
 } from "./style.ts";
+import { applyAtlas, pieceVetoIds, techniqueWeight, type TasteMemory } from "./taste.ts";
 import {
   bottomType,
   houseFingerprintOk,
@@ -1786,6 +1787,7 @@ function rotateJackets(
   house: House,
   occasion: Occasion,
   season: Season,
+  taste?: TasteMemory,
 ): Look[] {
   if (season === "summer" || looks.length < 4) return looks;
   const raw =
@@ -1796,7 +1798,13 @@ function rotateJackets(
     ).allowed_jackets?.joe_plate_ids ?? [];
   const ids = raw.map((item) => (typeof item === "string" ? item : item.id));
   const byId = new Map(pool.map((g) => [g.id, g]));
-  const jackets = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+  const veto = taste ? pieceVetoIds(taste) : new Set<string>();
+  const jackets = ids
+    .map((id) => byId.get(id))
+    .filter((g): g is Garment => {
+      if (!g) return false;
+      return !veto.has(g.id);
+    });
   if (jackets.length < 4) return looks;
   const next = looks.map((look) => ({ ...look, garmentIds: [...look.garmentIds] }));
   const claimed = new Set<string>();
@@ -1833,6 +1841,7 @@ function finishStyled(
     cap?: number;
     salt?: number;
     color?: string | null;
+    taste?: TasteMemory;
   },
 ): Look[] {
   const cap = opts?.cap ?? RESHUFFLE_ROW;
@@ -1845,11 +1854,33 @@ function finishStyled(
   const color = opts?.color?.trim().toLowerCase() || "";
 
   const publish = (looks: MatrixLook[], tag?: House): Look[] => {
-    const out: Look[] = [];
+    const weighted = Boolean(opts?.taste?.techniques.some((t) => t.weight > 0));
+    const accepted: { pieces: Garment[]; demoted?: MatrixLook["demoted"]; score: number }[] = [];
+    const plain: { pieces: Garment[]; demoted?: MatrixLook["demoted"]; score: number }[] = [];
     for (const look of looks) {
-      const pieces = piecesOfLook(look, byId);
-      if (pieces.length < 3) continue;
-      if (DELETED_HIT(pieces)) continue;
+      const raw = piecesOfLook(look, byId);
+      if (raw.length < 3) continue;
+      if (DELETED_HIT(raw)) continue;
+      plain.push({ pieces: raw, demoted: look.demoted, score: look.score });
+      const pieces = opts?.taste ? applyAtlas(raw, opts.taste) : raw;
+      if (!pieces) continue;
+      accepted.push({ pieces, demoted: look.demoted, score: look.score });
+    }
+    let ranked = accepted.length ? accepted : plain;
+    if (weighted && opts?.taste) {
+      const taste = opts.taste;
+      const indexed = ranked.map((item, i) => ({ item, i }));
+      indexed.sort((a, b) => {
+        const as = a.item.score + techniqueWeight(taste, a.item.pieces) * 8;
+        const bs = b.item.score + techniqueWeight(taste, b.item.pieces) * 8;
+        if (bs !== as) return bs - as;
+        return a.i - b.i;
+      });
+      ranked = indexed.map((row) => row.item);
+    }
+    const out: Look[] = [];
+    for (const item of ranked) {
+      const pieces = item.pieces;
       const key = comboKey(pieces.map((p) => p.id));
       if (banned.has(key)) continue;
       if (color) {
@@ -1866,7 +1897,7 @@ function finishStyled(
         }))), color, tag);
         if (!col.passed) continue;
       }
-      out.push(lookFromPieces(pieces, occasion, out.length, tag, look.demoted ? { demoted: look.demoted } : undefined));
+      out.push(lookFromPieces(pieces, occasion, out.length, tag, item.demoted ? { demoted: item.demoted } : undefined));
       if (out.length >= cap) break;
     }
     return out;
@@ -1916,7 +1947,7 @@ function finishStyled(
     }
     const filled = fillHouseRow(cell.looks, cell.pool, cap, opts?.salt ?? 1);
     let row = publish(filled, house);
-    if (!cell.gate) row = rotateJackets(row, pool, house, occasion, season);
+    if (!cell.gate) row = rotateJackets(row, pool, house, occasion, season, opts?.taste);
     if (cell.gate) {
       const note = cell.gate.text;
       row = row.map((look) => ({ ...look, gap: look.gap || note }));
@@ -1965,6 +1996,7 @@ export function buildReshuffleRow(
     /** Star these ids first, one per look, most idle first. */
     mustInclude?: string[];
     color?: string | null;
+    taste?: TasteMemory;
   },
 ): Look[] {
   const cap = opts?.cap ?? RESHUFFLE_ROW;
@@ -1999,12 +2031,18 @@ export function buildReshuffleRow(
     }
     return x;
   };
-  const tops = shuffle(pool.filter((g) => {
+  const vetoIds = opts?.taste ? pieceVetoIds(opts.taste) : new Set<string>();
+  const open = (list: Garment[]) => {
+    if (!vetoIds.size) return list;
+    const kept = list.filter((g) => !vetoIds.has(g.id));
+    return kept.length ? kept : list;
+  };
+  const tops = shuffle(open(pool.filter((g) => {
     const s = slotOf(g);
     return s === "top" || s === "dress";
-  }));
-  const bottoms = shuffle(pool.filter((g) => slotOf(g) === "bottom"));
-  const shoes = shuffle(pool.filter((g) => slotOf(g) === "footwear"));
+  })));
+  const bottoms = shuffle(open(pool.filter((g) => slotOf(g) === "bottom")));
+  const shoes = shuffle(open(pool.filter((g) => slotOf(g) === "footwear")));
   const profile = house ? houseProfile(house) : undefined;
   const onProfile = (g: Garment) => {
     if (!profile) return false;
@@ -2025,7 +2063,7 @@ export function buildReshuffleRow(
     profile
       ? pool.filter((g) => profile.jackets.some((name) => jacketNameHits(g, name)))
       : pool.filter((g) => isBlazerPiece(g)),
-  );
+  ).filter((g) => !vetoIds.has(g.id));
   const color = opts?.color?.trim().toLowerCase() ?? "";
   const legal = (pieces: Garment[]): boolean => {
     if (pieces.length < 3) return false;
@@ -2069,13 +2107,19 @@ export function buildReshuffleRow(
   };
   const draws: Garment[][] = [];
   const seenDraw = new Set<string>();
+  const rawDraws: Garment[][] = [];
   const pushDraw = (pieces: Garment[]) => {
-    if (house && !isLegal(pieces, { house, occasion, season: season ?? "fall", color: color || null })) return;
-    if (!legal(pieces)) return;
-    const key = comboKey(pieces.map((p) => p.id));
+    const dressed = opts?.taste ? applyAtlas(pieces, opts.taste) : pieces;
+    if (!dressed) {
+      rawDraws.push(pieces);
+      return;
+    }
+    if (house && !isLegal(dressed, { house, occasion, season: season ?? "fall", color: color || null })) return;
+    if (!legal(dressed)) return;
+    const key = comboKey(dressed.map((p) => p.id));
     if (seenDraw.has(key)) return;
     seenDraw.add(key);
-    draws.push(pieces);
+    draws.push(dressed);
   };
   const stars = [...new Set(opts?.mustInclude ?? [])]
     .map((id) => byId.get(id))
@@ -2151,7 +2195,26 @@ export function buildReshuffleRow(
       s += spec.signals.filter((sig) => profilePhraseHits(pieces, sig, occasion)).length;
       return s;
     };
-    draws.sort((left, right) => score(right) - score(left));
+    const taste = opts?.taste;
+    draws.sort((left, right) => {
+      const base = score(right) - score(left);
+      if (base || !taste) return base;
+      return techniqueWeight(taste, right) - techniqueWeight(taste, left);
+    });
+  }
+  if (!draws.length && rawDraws.length) {
+    for (const pieces of rawDraws) {
+      if (house && !isLegal(pieces, { house, occasion, season: season ?? "fall", color: color || null })) continue;
+      if (!legal(pieces)) continue;
+      const key = comboKey(pieces.map((p) => p.id));
+      if (seenDraw.has(key)) continue;
+      seenDraw.add(key);
+      draws.push(pieces);
+    }
+  }
+  if (!house && opts?.taste?.techniques.some((t) => t.weight > 0)) {
+    const taste = opts.taste;
+    draws.sort((a, b) => techniqueWeight(taste, b) - techniqueWeight(taste, a));
   }
   void weather;
   void usedCount;
@@ -2165,6 +2228,7 @@ export function buildReshuffleRow(
       weather,
       salt: salt0 + picks,
       house,
+      taste: opts?.taste,
     });
     const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
     pushDraw(pieces);

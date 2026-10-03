@@ -6,6 +6,13 @@ import { jacketHits, slotPieces, wearSlot } from "./stylist/jackets.ts";
 import { livePool } from "./rack.ts";
 import { onlyTopIsUntucked, resolveTuck } from "./tuck.ts";
 import {
+  pairingBlocked,
+  pieceVetoIds,
+  techniqueWeight,
+  tuckHabitIds,
+  type TasteMemory,
+} from "./taste.ts";
+import {
   HOUSE_CHIPS,
   HOUSE_LABEL,
   housesOf,
@@ -709,15 +716,20 @@ export function pickTrueOuter(
     f: number;
     legalCombo?: (pieces: Garment[]) => boolean;
     usedOuters?: Set<string>;
+    /** Weight above 0 prefers the jacket that completes the technique. */
+    taste?: TasteMemory;
   },
 ): Garment | undefined {
+  const tech = (g: Garment) =>
+    opts.taste ? techniqueWeight(opts.taste, [...core, g]) * 8 : 0;
   const ranked = [...outers]
     .filter(isTrueOuter)
     .filter((g) => !core.some((c) => c.id === g.id))
     .sort(
       (a, b) =>
-        scoreOuterForRecipe(b, recipe, opts.house, opts.occasion) -
-        scoreOuterForRecipe(a, recipe, opts.house, opts.occasion),
+        scoreOuterForRecipe(b, recipe, opts.house, opts.occasion) +
+        tech(b) -
+        (scoreOuterForRecipe(a, recipe, opts.house, opts.occasion) + tech(a)),
     );
   const unused = ranked.filter((g) => !opts.usedOuters?.has(g.id));
   const list = unused.length ? unused : ranked;
@@ -742,6 +754,17 @@ export function pickTrueOuter(
     return o;
   }
   return undefined;
+}
+
+/** A never-tuck habit keeps the shirt and wears it out. The garment record is not rewritten. */
+export function lookTuck(
+  g: Garment,
+  occasion: Occasion | undefined,
+  pieces: Garment[],
+  taste?: TasteMemory,
+): "in" | "out" {
+  if (taste && tuckHabitIds(taste).includes(g.id)) return "out";
+  return resolveTuck(g, occasion, pieces);
 }
 
 export function pickLook(
@@ -773,13 +796,24 @@ export function pickLook(
     minSlotChange?: number;
     /** Consecutive Skip: same silhouette + recolor is illegal. */
     requireSilhouetteChange?: boolean;
+    /** Atlas. A piece veto leaves the pool unless that piece is locked. */
+    taste?: TasteMemory;
   },
 ): string[] {
   const pool = livePool(garments);
   const rng = rngFromSalt(opts.salt ?? 1);
   const salted = opts.salt != null;
+  const lockedSet = new Set(opts.lockedIds ?? []);
+  const taste = opts.taste;
+  const vetoed = taste ? pieceVetoIds(taste) : new Set<string>();
   const by = (slot: Slot) => {
-    const list = pool.filter((g) => slotOf(g) === slot);
+    const raw = pool.filter((g) => slotOf(g) === slot);
+    const required = slot !== "outerwear" && slot !== "accessory";
+    let list = raw;
+    if (vetoed.size) {
+      const kept = raw.filter((g) => !vetoed.has(g.id) || lockedSet.has(g.id));
+      list = kept.length ? kept : required ? raw : [];
+    }
     return salted ? shuffle(list, rng) : list;
   };
   const f = opts.weather?.f ?? 68;
@@ -799,7 +833,6 @@ export function pickLook(
   const avoid = opts.avoid ?? {};
   const recent = new Set(opts.recentWorn ?? []);
   const previous = new Set(opts.previousIds ?? []);
-  const lockedSet = new Set(opts.lockedIds ?? []);
   const lockedGs = [...lockedSet]
     .map((id) => pool.find((g) => g.id === id))
     .filter((g): g is Garment => Boolean(g));
@@ -906,8 +939,11 @@ export function pickLook(
   }
   const shoeList = pin.get("footwear") ? [pin.get("footwear")!] : shoesSrc.slice(0, salted ? 4 : 8);
 
-  type Combo = { ids: string[]; s: number; h: number; pieces: Garment[] };
+  type Combo = { ids: string[]; s: number; h: number; pieces: Garment[]; pairVeto?: boolean };
   const combos: Combo[] = [];
+  const outerCandidates = pool.filter(
+    (g) => slotOf(g) === "outerwear" && (!vetoed.has(g.id) || lockedSet.has(g.id)),
+  );
   for (const t of topList) {
     const bottomsOr = bottoms.length ? bottoms : [undefined];
     const shoesOr = shoeList.length ? shoeList : [undefined];
@@ -948,19 +984,27 @@ export function pickLook(
           });
           if (hasKnit) continue;
         }
+        const tucked = topG ? lookTuck(topG, opts.occasion, pieces, taste) : null;
         if (
           (opts.occasion === "weekend" || opts.occasion === "travel") &&
-          topG &&
-          resolveTuck(topG, opts.occasion, pieces) === "out"
+          tucked === "out"
         ) {
           s += 1.2;
         }
         if (
           (opts.occasion === "weekday" || opts.occasion === "out") &&
-          topG &&
-          resolveTuck(topG, opts.occasion, pieces) === "in"
+          tucked === "in"
         ) {
           s += 0.6;
+        }
+        if (taste) {
+          let tech = techniqueWeight(taste, pieces);
+          for (const o of outerCandidates) {
+            if (pieces.some((g) => g.id === o.id)) continue;
+            const n = techniqueWeight(taste, [...pieces, o]);
+            if (n > tech) tech = n;
+          }
+          s += tech * 8;
         }
         if (recipe.top(t)) s += 2;
         if (b && recipe.bottom(b)) s += 1.5;
@@ -992,7 +1036,11 @@ export function pickLook(
           const leftover = topList.filter((x) => !chapter.usedTops.has(x.id));
           if (leftover.length) continue;
         }
-        combos.push({ ids: pieces.map((g) => g.id), s, h, pieces });
+        const pairVeto =
+          Boolean(taste) &&
+          pairingBlocked(pieces, taste!) &&
+          !pieces.some((g) => lockedSet.has(g.id));
+        combos.push({ ids: pieces.map((g) => g.id), s, h, pieces, pairVeto });
       }
     }
   }
@@ -1029,6 +1077,8 @@ export function pickLook(
     const fresh = poolC.filter((c) => !banned.has(coreComboKey(c.ids, pool)));
     if (fresh.length) poolC = fresh;
   }
+  const openPairs = poolC.filter((c) => !c.pairVeto);
+  if (openPairs.length) poolC = openPairs;
   if (opts.minSlotChange && opts.minSlotChange > 0 && (opts.previousIds?.length ?? 0) >= 3) {
     const moved = poolC.filter(
       (c) => slotsChanged(opts.previousIds!, c.ids, pool) >= (opts.minSlotChange ?? 0),
@@ -1069,6 +1119,7 @@ export function pickLook(
         f,
         legalCombo: opts.legalCombo,
         usedOuters: chapter?.usedOuters,
+        taste,
       });
       if (outer && !ids.includes(outer.id)) ids.push(outer.id);
     }
@@ -1090,6 +1141,7 @@ export function pickLook(
       ? []
       : [...pool]
         .filter((g) => !used.has(g.id) && !previous.has(g.id) && daysIdle(g) >= 21)
+        .filter((g) => !vetoed.has(g.id) || lockedSet.has(g.id))
         .sort((a, b) => daysIdle(b) - daysIdle(a));
   const candidate = idle[0];
   if (candidate) {

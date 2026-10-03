@@ -17,6 +17,7 @@ import { noteGarmentCoverBytes } from "@/lib/plate-pass";
 import { coverLoadError, loadPlateCovers, liveCoverLoader } from "@/lib/cloud/cover";
 import { livePool } from "@/lib/rack";
 import { slotOf } from "@/lib/style";
+import { emptyTaste, tuckHabitIds } from "@/lib/taste";
 import { tuckDressingLines } from "@/lib/tuck";
 
 /** Dress Joe in these exact cutouts. Never writes cutoutSrc. */
@@ -59,7 +60,7 @@ export async function dressLook(
     .map((l, i) => `image ${i + 2} = ${l.name} (${l.category})`)
     .join(". ");
   const only = layers.map((l) => l.name).join(", ");
-  const tuck = tuckDressingLines(worn, occasion);
+  const tuck = tuckDressingLines(worn, occasion, tuckHabitIds(useCloset.getState().taste ?? emptyTaste()));
   const gurkha = worn.some((g) =>
     /gurkha/.test(`${g.subtype} ${g.notes} ${g.name}`.toLowerCase()),
   );

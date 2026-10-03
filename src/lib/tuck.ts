@@ -64,11 +64,16 @@ export function resolveTuck(
   return oxford ? "in" : camp ? "out" : "in";
 }
 
-export function tuckDressingLines(pieces: Garment[], occasion?: Occasion): string {
+export function tuckDressingLines(
+  pieces: Garment[],
+  occasion?: Occasion,
+  neverTuck?: readonly string[],
+): string {
+  const habits = new Set(neverTuck ?? []);
   const lines: string[] = [];
   for (const g of pieces) {
     if (!isShirtLike(g)) continue;
-    const how = resolveTuck(g, occasion, pieces);
+    const how = habits.has(g.id) ? "out" : resolveTuck(g, occasion, pieces);
     if (how === "in") {
       lines.push(
         `Tuck THIS shirt (${g.name}). Shirt-tail in, clean belt line. Not a blousy untuck.`,

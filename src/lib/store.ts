@@ -159,6 +159,7 @@ function pickDrop(
     usedCount?: Map<string, number>;
     excludeKeys?: string[];
     skip?: boolean;
+    taste?: TasteMemory;
   },
 ): string[] {
   const occ = occasion ?? defaultOccasion();
@@ -178,6 +179,7 @@ function pickDrop(
     excludeKeys: extra?.excludeKeys,
     minSlotChange: extra?.skip ? 2 : 0,
     requireSilhouetteChange: Boolean(extra?.skip),
+    taste: extra?.taste,
     legalCombo: (pieces) => {
       if (
         cold &&
@@ -441,6 +443,7 @@ export const useCloset = create<ClosetState>()(
           weather: s.drop?.weather,
           journal: s.journal,
           house,
+          taste: s.taste,
         });
         if (!dressed) return null;
         const star =
@@ -522,6 +525,7 @@ export const useCloset = create<ClosetState>()(
               Boolean,
             ),
             skip,
+            taste: get().taste,
           },
         );
         let lockNote: string | null = null;
@@ -642,6 +646,7 @@ export const useCloset = create<ClosetState>()(
             season,
             salt: s.reshuffleCount,
             cap: 7,
+            taste: s.taste,
           });
           if (get().looks.length !== before) return s.thisWeek.length;
           set({ thisWeek: row });
@@ -664,6 +669,7 @@ export const useCloset = create<ClosetState>()(
             usedCount: lookCountMap(s.looks),
             replacing: s.thisWeek,
             salt: n,
+            taste: s.taste,
           });
           set({ thisWeek: row, reshuffleCount: n });
           return row.length;

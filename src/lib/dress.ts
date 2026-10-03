@@ -1,4 +1,5 @@
 import { lookCountMap } from "./lookbook.ts";
+import type { TasteMemory } from "./taste.ts";
 import { livePool } from "./rack.ts";
 import { houseLegalCombo, type House } from "./houses.ts";
 import {
@@ -121,6 +122,7 @@ export function dressThisPiece(opts: {
   previousIds?: string[];
   repeatPairs?: Set<string>;
   house?: House | "all" | null;
+  taste?: TasteMemory;
 }): DressResult | null {
   const pool = livePool(opts.garments);
   const lockedIds = [...new Set(opts.lockedIds)].filter((id) =>
@@ -141,6 +143,7 @@ export function dressThisPiece(opts: {
     repeatPairs: repeats,
     usedCount,
     house,
+    taste: opts.taste,
     legalCombo: house
       ? (p) => houseLegalCombo(p, house, occasion, undefined, pool)
       : undefined,

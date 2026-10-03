@@ -660,6 +660,70 @@ export function techniqueUsed(taste: TasteMemory, pieces: Garment[]): string | n
   return best?.name ?? null;
 }
 
+/** Sum of matched technique weights. Weight 0 adds nothing and does not ban the look. */
+export function techniqueWeight(taste: TasteMemory, pieces: Garment[]): number {
+  const matched = new Set(matchedTechniques(pieces));
+  let n = 0;
+  for (const t of taste.techniques) {
+    if (t.weight > 0 && matched.has(t.id)) n += t.weight;
+  }
+  return n;
+}
+
+/**
+ * Drop a vetoed piece when the look still dresses without it.
+ * A blocked pairing is rejected. A locked piece stays.
+ * Null means this combo cannot be dressed under the vetoes.
+ */
+export function applyAtlas(
+  pieces: Garment[],
+  taste: TasteMemory | undefined,
+  lockedIds?: Iterable<string>,
+): Garment[] | null {
+  if (!taste || !taste.vetoes.length) return pieces;
+  const locked = new Set(lockedIds ?? []);
+  const veto = pieceVetoIds(taste);
+  const stripped = pieces.filter((g) => !veto.has(g.id) || locked.has(g.id));
+  const candidate = stripped.length === pieces.length ? pieces : stripped.length >= 3 ? stripped : null;
+  if (!candidate) return null;
+  if (pairingBlocked(candidate, taste) && !candidate.some((g) => locked.has(g.id))) return null;
+  return candidate;
+}
+
+/** One line when the next drop actually left a skipped piece or pairing off. */
+export function leftOffLine(opts: {
+  skipped: Garment[];
+  next: Garment[];
+  taste: TasteMemory;
+}): string | null {
+  const nextIds = new Set(opts.next.map((g) => g.id));
+  const dropped = opts.skipped.find((g) => pieceVetoIds(opts.taste).has(g.id) && !nextIds.has(g.id));
+  if (dropped) return `Left the ${dropped.name.trim()} off.`;
+  if (pairingBlocked(opts.skipped, opts.taste) && !pairingBlocked(opts.next, opts.taste)) {
+    const top = opts.skipped.find((g) => {
+      const s = slotOf(g);
+      return s === "top" || s === "dress";
+    });
+    const shoe = opts.skipped.find((g) => slotOf(g) === "footwear");
+    if (top && shoe && (!nextIds.has(top.id) || !nextIds.has(shoe.id))) {
+      return `Left the ${top.name.trim()} with the ${shoe.name.trim()} off.`;
+    }
+  }
+  return null;
+}
+
+/** Technique name, then the pieces. Weight 0 stays silent. */
+export function techniqueLine(taste: TasteMemory, pieces: Garment[]): string | null {
+  const name = techniqueUsed(taste, pieces);
+  if (!name) return null;
+  const names = pieces
+    .filter((g) => slotOf(g) !== "accessory")
+    .map((g) => g.name.trim())
+    .filter(Boolean);
+  if (!names.length) return null;
+  return `${name}. ${names.join(", ")}.`;
+}
+
 export function trendVisible(taste: TasteMemory, now: number): string | null {
   if (!taste.trendNote || !taste.lastTrendAt) return null;
   const age = now - Date.parse(taste.lastTrendAt);
@@ -924,6 +988,7 @@ export function composeAtlasLook(opts: {
     avoid,
     lockedIds: locked,
     previousIds: opts.previousIds,
+    taste,
     legalCombo: (pieces) => !pairingBlocked(pieces, taste) && houseMixPenalty(pieces) >= -8,
   });
   ids = ids.filter((id) => owned.has(id) && !banned.has(id));

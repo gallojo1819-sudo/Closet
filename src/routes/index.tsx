@@ -15,6 +15,7 @@ import { persistGate } from "@/lib/store-persist";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
 import { HOUSE_LABEL, avoidedUniformLine, daysIdle, lookHouses } from "@/lib/style";
+import { emptyTaste, leftOffLine, techniqueLine } from "@/lib/taste";
 import { useCloset } from "@/lib/store";
 import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
 import { getNycWeather } from "@/lib/weather";
@@ -38,6 +39,7 @@ function Today() {
   const outfitWith = useCloset((s) => s.outfitWith);
   const looksAll = useCloset((s) => s.looks);
   const thisWeek = useCloset((s) => s.thisWeek);
+  const taste = useCloset((s) => s.taste) ?? emptyTaste();
   const hydrated = useCloset((s) => s.hydrated);
   const account = useAccount();
   const [view, setView] = useState<"paper" | "me">("paper");
@@ -152,6 +154,20 @@ function Today() {
         : null,
     [journal, drop, garments],
   );
+  const atlasLine = useMemo(() => {
+    if (!drop) return { left: null as string | null, technique: null as string | null };
+    const skip = journal.find((j) => j.verdict === "skipped");
+    const skipped = (skip?.garmentIds ?? [])
+      .map((id) => garments.find((g) => g.id === id))
+      .filter((g): g is Garment => Boolean(g));
+    const next = drop.garmentIds
+      .map((id) => garments.find((g) => g.id === id))
+      .filter((g): g is Garment => Boolean(g));
+    return {
+      left: leftOffLine({ skipped, next, taste }),
+      technique: techniqueLine(taste, next),
+    };
+  }, [journal, drop, garments, taste]);
   const today = todayISO();
   const weekCells = useMemo(
     () =>
@@ -350,6 +366,12 @@ function Today() {
             <p className="mt-3 text-sm text-ink-soft leading-relaxed">{note}</p>
             {drop?.lockNote && (
               <p className="mt-2 text-sm text-ink-soft">{drop.lockNote}</p>
+            )}
+            {atlasLine.left && (
+              <p className="mt-2 text-sm text-ink-soft">{atlasLine.left}</p>
+            )}
+            {atlasLine.technique && (
+              <p className="mt-2 text-sm text-ink-soft">{atlasLine.technique}</p>
             )}
             {avoided && (
               <p className="mt-2 text-sm text-ink-soft">{avoided}</p>

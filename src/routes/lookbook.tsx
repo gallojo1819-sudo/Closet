@@ -28,6 +28,7 @@ import { livePool } from "@/lib/rack";
 import { HOUSE_LABEL, leadHouse } from "@/lib/houses";
 import { daysIdle, HOUSE_CHIPS, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
+import { emptyTaste } from "@/lib/taste";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -231,6 +232,7 @@ function LookbookPage() {
   const { look: focusLook } = Route.useSearch();
 
   const garments = useMemo(() => livePool(garmentsAll), [garmentsAll]);
+  const taste = useCloset((s) => s.taste) ?? emptyTaste();
   const byId = useMemo(() => {
     const m = new Map<string, Garment>();
     for (const g of garments) m.set(g.id, g);
@@ -257,7 +259,8 @@ function LookbookPage() {
   const piecesFor = (look: Look) =>
     look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
-  const filterKey = `${occasion}:${season}:${houseChip}:${color ?? ""}:${garments.length}`;
+  const tasteKey = `${taste.vetoes.length}:${taste.techniques.map((t) => t.weight).join(",")}`;
+  const filterKey = `${occasion}:${season}:${houseChip}:${color ?? ""}:${garments.length}:${tasteKey}`;
   const openRow = useMemo(
     () =>
       buildReshuffleRow(garments, occasion, {
@@ -266,8 +269,9 @@ function LookbookPage() {
         color,
         salt: 1,
         cap: 8,
+        taste,
       }),
-    [garments, occasion, season, houseChip, color],
+    [garments, occasion, season, houseChip, color, taste],
   );
   const [shown, setShown] = useState<{ key: string; looks: Look[] } | null>(null);
   const [salt, setSalt] = useState(1);
@@ -479,6 +483,7 @@ function LookbookPage() {
             cap: 8,
             excludeKeys: row.map((look) => comboKey(look.garmentIds)),
             mustInclude: unusedFromLooks(garments, looksAll).map((g) => g.id),
+            taste,
           });
           setSalt(nextSalt);
           if (next.length) {
