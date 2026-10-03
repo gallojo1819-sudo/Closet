@@ -18,6 +18,7 @@ import { livePool } from "@/lib/rack";
 import { HOUSE_LABEL, avoidedUniformLine, lastWornDays, lookHouses } from "@/lib/style";
 import { emptyTaste, leftOffLine, techniqueLine } from "@/lib/taste";
 import { useCloset } from "@/lib/store";
+import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
 import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
 import { getNycWeather } from "@/lib/weather";
 import { cn, formatLongDate, lastDays, todayISO, weekdayLetter } from "@/lib/utils";
@@ -196,6 +197,21 @@ function Today() {
   const note = dropNote(shown, weather, drop?.occasion, drop?.moment, undefined, dropSeason);
   const houses = lookHouses(shown, drop?.occasion ?? "weekday", dropSeason);
   const done = drop?.worn || drop?.verdict === "worn";
+  const matched = drop ? weekCells.find((cell) => cell.iso === drop.date) : undefined;
+  const onScreenLookIds = matched?.look ? [matched.look.id] : [];
+  const pageWeather = realWeatherF(weather);
+  useEffect(() => {
+    writeStylistPage({
+      route: "today",
+      ...(drop?.occasion ? { occasion: drop.occasion } : {}),
+      ...(drop ? { season: dropSeason } : {}),
+      onScreenLookIds,
+      screenLooks: matched?.look
+        ? [{ id: matched.look.id, garmentIds: [...matched.look.garmentIds] }]
+        : [],
+      ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
+    });
+  }, [drop, dropSeason, matched, onScreenLookIds, pageWeather]);
 
   const setOccasion = (occasion: Occasion) => {
     rerollDrop(weather, occasion, drop?.garmentIds);

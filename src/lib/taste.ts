@@ -863,12 +863,12 @@ export function buildStylistSystem(opts: {
       lines.push(`- ${id} ${name}`);
     }
   }
-  const f = opts.weatherF ?? 68;
   const occasion = opts.occasion ?? "weekday";
+  const weather = typeof opts.weatherF === "number" && Number.isFinite(opts.weatherF) ? opts.weatherF : undefined;
   lines.push(
     "",
     "TODAY",
-    `${occasion} ${f}°`,
+    weather === undefined ? occasion : `${occasion} ${weather}°`,
     "",
     "FORMAT",
     "Line 1: one technique name, then the occasion. Omit the technique if none of the earned ones fit.",
@@ -957,7 +957,7 @@ function finishLook(pieces: Garment[], taste: TasteMemory, occasion: Occasion, g
 export function composeAtlasLook(opts: {
   garments: Garment[];
   prompt: string;
-  weatherF: number;
+  weatherF?: number;
   taste: TasteMemory;
   modelText?: string;
   lockedIds?: string[];
@@ -984,7 +984,9 @@ export function composeAtlasLook(opts: {
   let ids = pickLook(dressable, {
     occasion,
     moment: momentOfDay(),
-    weather: { f: opts.weatherF, label: "Fair", code: 2 },
+    ...(typeof opts.weatherF === "number" && Number.isFinite(opts.weatherF)
+      ? { weather: { f: opts.weatherF, label: "Fair", code: 2 } }
+      : {}),
     avoid,
     lockedIds: locked,
     previousIds: opts.previousIds,
@@ -1071,7 +1073,7 @@ export function swapDraft(opts: {
   garments: Garment[];
   taste: TasteMemory;
   occasion: Occasion;
-  weatherF: number;
+  weatherF?: number;
 }): AtlasLook | null {
   const pieces = piecesFromIds(opts.garments, opts.ids);
   const current = pieces.find((g) => slotOf(g) === opts.slot);

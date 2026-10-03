@@ -1,9 +1,14 @@
+import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Studio } from "@/components/add/studio";
+import { writeStylistPage } from "@/lib/stylist-page";
 
 export const Route = createFileRoute("/add")({ component: AddPage });
 
 function AddPage() {
+  useEffect(() => {
+    writeStylistPage({ route: "add", onScreenLookIds: [] });
+  }, []);
   return (
     <div className="mx-auto max-w-3xl px-4 md:px-6 py-8 md:py-12 rise">
       <p className="micro text-ink-soft">No white wall.</p>

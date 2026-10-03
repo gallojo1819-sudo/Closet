@@ -61,7 +61,7 @@ describe("stylist ask", () => {
       true,
     );
 
-    const src = readFileSync(new URL("../routes/stylist.tsx", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
     const send = src.slice(src.indexOf("const send"), src.indexOf("const wearDraft"));
     assert.equal(send.includes("saveLook"), false);
     assert.equal(send.includes("setDrop"), false);

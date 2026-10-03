@@ -13,7 +13,9 @@ import { livePool } from "@/lib/rack";
 import { migrateImagesToIdb } from "@/lib/migrate";
 import { openPersistGate, useCloset } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { noteRoute } from "@/lib/stylist-page";
 import { BottomNav } from "./bottom-nav";
+import { StylistDock } from "./stylist-dock";
 import { TopBar } from "./top-bar";
 
 function BackupBanner({ night }: { night: boolean }) {
@@ -145,6 +147,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [night]);
 
   useEffect(() => {
+    noteRoute(pathname);
+  }, [pathname]);
+
+  useEffect(() => {
     if (typeof document.startViewTransition === "function") return;
     const main = document.querySelector("main");
     if (!main) return;
@@ -177,10 +183,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     >
       <TopBar />
       <BackupBanner night={night} />
-      <main className={cn("pb-20 md:pb-10", backupOpen ? "pt-24 md:pt-28" : "pt-12 md:pt-16")}>
+      <main
+        className={cn(
+          night ? "pb-20 md:pb-10" : "pb-44 md:pb-36",
+          backupOpen ? "pt-24 md:pt-28" : "pt-12 md:pt-16",
+        )}
+      >
         {cleaning ? <p className="micro px-4 py-1 text-ink-soft md:px-6">{cleaning}</p> : null}
         {children}
       </main>
+      {night ? null : <StylistDock />}
       <BottomNav />
     </div>
   );

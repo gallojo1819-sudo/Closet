@@ -109,7 +109,7 @@ describe("taste memory", () => {
     assert.equal(useCloset.getState().looks[0]?.name, "Olive field jacket · weekday");
     assert.ok(taste.vetoes.some((v) => v.kind === "piece" && v.id === "g_field"));
 
-    const src = readFileSync(new URL("../routes/stylist.tsx", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
     const send = src.slice(src.indexOf("const send"), src.indexOf("const wearDraft"));
     assert.equal(send.includes("saveLook"), false);
     assert.equal(send.includes("setDrop"), false);

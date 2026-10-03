@@ -33,6 +33,7 @@ import { findThisHref } from "@/lib/scan";
 import { guessTuck, tuckOf } from "@/lib/tuck";
 import { fetchCloudBlob } from "@/lib/cloud/blobs";
 import { useCloset } from "@/lib/store";
+import { bindClosetPiece } from "@/lib/stylist-page";
 import { useImageSrc } from "@/lib/use-image";
 import { cn, todayISO } from "@/lib/utils";
 
@@ -165,6 +166,8 @@ export function GarmentDetail({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  useEffect(() => bindClosetPiece(garment.id), [garment.id]);
 
   useEffect(() => {
     readAiStatus()

@@ -29,6 +29,7 @@ import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
 import { daysIdle, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
+import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
 import { emptyTaste } from "@/lib/taste";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -296,6 +297,40 @@ function LookbookPage() {
     shown && shown.key === filterKey && shown.looks.length > 0 ? shown.looks : openRow;
   const cards = row.map((look) => ({ look, why: look.gap ?? "" }));
   const visible = cards;
+  const onScreenLookIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const card of cards) {
+      const look = card.look;
+      if (look.gate || look.needsPieces) continue;
+      let count = 0;
+      for (const id of look.garmentIds) if (byId.has(id)) count += 1;
+      if (count < 3) continue;
+      ids.push(look.id);
+    }
+    return ids;
+  }, [cards, byId]);
+  const screenKey = onScreenLookIds.join("|");
+  const screenLooks = useMemo(
+    () =>
+      onScreenLookIds.map((id) => {
+        const look = cards.find((card) => card.look.id === id)?.look;
+        return { id, garmentIds: look ? [...look.garmentIds] : [] };
+      }),
+    [onScreenLookIds, cards],
+  );
+  const pageWeather = realWeatherF(drop?.weather);
+  useEffect(() => {
+    writeStylistPage({
+      route: "lookbook",
+      occasion,
+      season,
+      ...(color ? { color } : {}),
+      ...(heroId ? { openGarmentId: heroId } : {}),
+      onScreenLookIds,
+      screenLooks,
+      ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
+    });
+  }, [occasion, season, color, heroId, screenKey, screenLooks, onScreenLookIds, pageWeather]);
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const rack = useMemo(

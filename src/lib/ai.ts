@@ -10,6 +10,7 @@ import {
 } from "./compose";
 import { livePool } from "./rack";
 import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
+import { acceptStylistReply, answerAsked, pageNotes, type StylistPageContext } from "./stylist-page";
 import { buildStylistSystem, composeAtlasLook, normalizeTaste, occasionFromPrompt, type TasteMemory } from "./taste";
 import type { Category, Garment, Occasion } from "./types";
 
@@ -428,10 +429,14 @@ export function parseLookLine(text: string, valid: Set<string>): string[] {
     .filter((id) => id && valid.has(id));
 }
 
+function finiteTemp(n: unknown): number | undefined {
+  return typeof n === "number" && Number.isFinite(n) ? n : undefined;
+}
+
 function resolveStylistLook(
   garments: Garment[],
   prompt: string,
-  f: number,
+  f: number | undefined,
   grokText?: string,
   taste?: TasteMemory,
   lockedIds?: string[],
@@ -439,7 +444,7 @@ function resolveStylistLook(
   return composeAtlasLook({
     garments,
     prompt,
-    weatherF: f,
+    ...(f !== undefined ? { weatherF: f } : {}),
     occasion: occasionFromPrompt(prompt),
     taste: normalizeTaste(taste),
     modelText: grokText,
@@ -538,6 +543,8 @@ export const askStylist = createServerFn({ method: "POST" })
       taste?: TasteMemory;
       lockedIds?: string[];
       thread?: { role: "user" | "stylist"; text: string }[];
+      page?: StylistPageContext;
+      onScreenLooks?: { id: string; garmentIds: string[] }[];
     }) => input,
   )
   .handler(
@@ -548,8 +555,33 @@ export const askStylist = createServerFn({ method: "POST" })
       | { ok: false; error: string }
     > => {
     const rack = livePool(data.garments ?? []);
-    const f = data.weatherF ?? 68;
+    const page = data.page;
+    const f = finiteTemp(page?.weatherF) ?? finiteTemp(data.weatherF);
     const taste = normalizeTaste(data.taste);
+    const onScreen = (data.onScreenLooks ?? []).filter((look) =>
+      page?.onScreenLookIds?.includes(look.id),
+    );
+    if (page && (page.onScreenLookIds.length > 0 || page.openGarmentId)) {
+      const local = answerAsked({
+        prompt: data.prompt,
+        page,
+        garments: rack,
+        looks: onScreen,
+      });
+      if (local.kind === "reject") {
+        return { ok: false, error: "That piece is not in this closet." };
+      }
+      if (local.kind === "answer") {
+        const occasion = (page.occasion as Occasion) || occasionFromPrompt(data.prompt);
+        return {
+          ok: true,
+          text: local.text,
+          garmentIds: local.garmentIds,
+          occasion,
+          technique: null,
+        };
+      }
+    }
     const fallback = () =>
       rack.length
         ? { ok: true as const, ...resolveStylistLook(rack, data.prompt, f, undefined, taste, data.lockedIds) }
@@ -560,11 +592,12 @@ export const askStylist = createServerFn({ method: "POST" })
     const system = buildStylistSystem({
       garments: rack,
       taste,
-      weatherF: f,
-      occasion: occasionFromPrompt(data.prompt),
+      ...(f !== undefined ? { weatherF: f } : {}),
+      occasion: (page?.occasion as Occasion) || occasionFromPrompt(data.prompt),
       lockedIds: data.lockedIds,
     });
-    const notes = data.context ? `\n\nNOTES\n${data.context}` : "";
+    const noteBody = [data.context, pageNotes(page)].filter(Boolean).join("\n");
+    const notes = noteBody ? `\n\nNOTES\n${noteBody}` : "";
     const prior = (data.thread ?? [])
       .slice(-8)
       .filter((m) => m.text.trim())
@@ -589,7 +622,14 @@ export const askStylist = createServerFn({ method: "POST" })
         const body = r.json as { choices?: { message?: { content?: string } }[] };
         const text = body.choices?.[0]?.message?.content ?? "";
         if (text.trim() && rack.length) {
-          return { ok: true, ...resolveStylistLook(rack, data.prompt, f, text, taste, data.lockedIds) };
+          if (!acceptStylistReply(text, rack)) {
+            return { ok: false, error: "That piece is not in this closet." };
+          }
+          const resolved = resolveStylistLook(rack, data.prompt, f, text, taste, data.lockedIds);
+          if (!acceptStylistReply(resolved.text, rack)) {
+            return { ok: false, error: "That piece is not in this closet." };
+          }
+          return { ok: true, ...resolved };
         }
       }
       if (rack.length) return fallback();
