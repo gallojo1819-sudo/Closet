@@ -1477,6 +1477,19 @@ describe("lookbook card stack", () => {
     assert.equal(hero.includes('layout="stack"'), false);
   });
 
+  it("the house row renders only houses this closet can dress", () => {
+    const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
+    const houseAt = book.indexOf("data-house-row");
+    const houseRow = book.slice(houseAt, book.indexOf("Reshuffle", houseAt));
+    assert.match(houseRow, /dressable\.map/);
+    assert.match(houseRow, /HOUSE_LABEL\[id\]/);
+    assert.equal(houseRow.includes("HOUSE_CHIPS"), false);
+    assert.equal(houseRow.includes("SEASONS"), false);
+    assert.equal(/>\s*Purple\s*</.test(houseRow), false);
+    assert.match(book, /heading="Suggest"/);
+    assert.equal(book.includes("Make a look"), false);
+  });
+
   it("three pieces render three bands, and a cached On you image stays out until it is on", async () => {
     const ts = await import("typescript");
     const { createElement } = await import("react");

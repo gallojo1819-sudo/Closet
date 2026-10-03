@@ -61,10 +61,17 @@ export function seasonsOf(g: Garment): Season[] {
   return ["spring", "summer", "fall", "winter"];
 }
 
-/**
- * NYC Auto: ≥75 summer, <55 winter, 55–74 by month.
- * September in New York is fall.
- */
+/** One season name. Auto follows the weather, then the month. October, mild, is Fall. */
+export function seasonControlLabel(
+  chip: "auto" | Season,
+  date = new Date(),
+  weatherF = 68,
+): string {
+  const id = chip === "auto" ? seasonFromWeather(weatherF, date) : chip;
+  return SEASONS.find((s) => s.id === id)?.label ?? "Fall";
+}
+
+/** ≥75 summer, <55 winter, otherwise by month. September through November is fall. */
 export function seasonFromWeather(f: number, d = new Date()): Season {
   if (f >= 75) return "summer";
   if (f < 55) return "winter";

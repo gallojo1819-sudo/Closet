@@ -3,11 +3,14 @@ import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMeButton } from "@/components/closet/on-me";
 import { lookbookPool } from "@/lib/lookbook";
+import { lookOpinion } from "@/lib/look-opinion";
 import { nameLook } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { defaultOccasion, slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import { mapOccasion, type Garment } from "@/lib/types";
+import { emptyTaste } from "@/lib/taste";
+import { mapOccasion, type Garment, type Occasion, type Season } from "@/lib/types";
+import type { House } from "@/lib/houses";
 import { cn, todayISO } from "@/lib/utils";
 
 const SLOTS = [
@@ -25,9 +28,22 @@ function inSlot(g: Garment, slot: SlotId): boolean {
   return s === slot;
 }
 
-export function LookBuilder({ onClose }: { onClose?: () => void }) {
+export function LookBuilder({
+  onClose,
+  heading = "Make a look",
+  occasion,
+  season,
+  house,
+}: {
+  onClose?: () => void;
+  heading?: string;
+  occasion?: Occasion;
+  season?: Season;
+  house?: House | null;
+}) {
   const garmentsAll = useCloset((s) => s.garments);
   const drop = useCloset((s) => s.drop);
+  const taste = useCloset((s) => s.taste) ?? emptyTaste();
   const wearToday = useCloset((s) => s.wearToday);
   const saveLook = useCloset((s) => s.saveLook);
   const setDrop = useCloset((s) => s.setDrop);
@@ -46,6 +62,12 @@ export function LookBuilder({ onClose }: { onClose?: () => void }) {
 
   const pieces = SLOTS.map((s) => byId.get(picked[s.id] ?? ""))
     .filter((g): g is Garment => Boolean(g));
+  const opinion = lookOpinion(pieces, pool, {
+    occasion: occasion ?? mapOccasion(drop?.occasion),
+    season,
+    house,
+    taste,
+  });
   const ids = pieces.map((g) => g.id);
   const ready = Boolean(picked.top && picked.bottom && picked.footwear);
   const lookName = nameLook(pieces);
@@ -79,7 +101,7 @@ export function LookBuilder({ onClose }: { onClose?: () => void }) {
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <p className="micro text-ink-soft">Play</p>
-          <p className="font-editorial text-2xl tracking-tight">Make a look</p>
+          <p className="font-editorial text-2xl tracking-tight">{heading}</p>
         </div>
         {onClose && (
           <button
@@ -153,6 +175,28 @@ export function LookBuilder({ onClose }: { onClose?: () => void }) {
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {opinion && (
+        <div>
+          <p className="text-sm text-ink">{opinion.headline}</p>
+          {opinion.reason ? <p className="mt-1 text-sm text-ink-soft">{opinion.reason}</p> : null}
+          {opinion.swaps.length > 0 && (
+            <div className="mt-2 flex flex-col items-start gap-1">
+              {opinion.swaps.map((swap) => (
+                <button
+                  key={`${swap.slot}:${swap.id}`}
+                  type="button"
+                  onClick={() => fill(swap.slot, swap.id)}
+                  className="text-left text-sm text-ink underline"
+                >
+                  {swap.line}
+                </button>
+              ))}
+            </div>
+          )}
+          {opinion.stuck ? <p className="mt-1 text-sm text-ink-soft">{opinion.stuck}</p> : null}
         </div>
       )}
 

@@ -1,8 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   guessSeason,
   lookFitsSeason,
+  seasonControlLabel,
   seasonFromWeather,
   seasonsOf,
 } from "./season.ts";
@@ -76,6 +78,22 @@ describe("seasonFromWeather", () => {
     assert.equal(seasonFromWeather(68, sep), "fall");
     assert.equal(seasonFromWeather(80, sep), "summer");
     assert.equal(seasonFromWeather(40, sep), "winter");
+  });
+
+  it("October Auto shows Fall, not a row of season chips", () => {
+    const october = new Date(2026, 9, 15);
+    assert.equal(seasonControlLabel("auto", october, 68), "Fall");
+    assert.notEqual(seasonControlLabel("auto", october, 68), "Auto");
+    const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
+    const houseAt = book.indexOf("data-house-row");
+    const seasonAt = book.indexOf("data-season-control");
+    assert.ok(seasonAt > 0 && houseAt > seasonAt);
+    const seasonCtl = book.slice(seasonAt, houseAt);
+    const houseRow = book.slice(houseAt, book.indexOf("Reshuffle", houseAt));
+    assert.match(seasonCtl, /\{seasonShown\}/);
+    assert.equal(houseRow.includes("SEASONS"), false);
+    assert.equal(houseRow.includes("Spring"), false);
+    assert.equal(houseRow.includes(">Auto<"), false);
   });
 });
 

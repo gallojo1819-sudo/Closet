@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { HOUSES, type House } from "../houses.ts";
 import { kitCells } from "../look.ts";
-import { buildReshuffleRow } from "../lookbook.ts";
+import { buildReshuffleRow, dressableHouses } from "../lookbook.ts";
 import type { Garment, Look } from "../types.ts";
 import { buildHouseMatrix, clearMatrixCache } from "./matrix.ts";
 import { isLegal } from "./legal.ts";
@@ -198,5 +198,23 @@ describe("fixture matrix", () => {
         expect(colorKey, `${house} ${occ} ${season}`).not.toBe(key);
       }
     }
+  });
+
+  it("a house that cannot dress three looks is not in the row", () => {
+    const shown = dressableHouses(RACK, "weekday", "fall");
+    const matrix = buildHouseMatrix(RACK, "weekday", "fall");
+    expect(shown).toContain("polo");
+    expect(shown).not.toContain("sweetStable");
+    for (const house of HOUSES) {
+      const cell = matrix.houses[house];
+      const count = Math.max(cell?.pool.length ?? 0, cell?.looks.length ?? 0);
+      if (!cell || cell.gate || count < 3) expect(shown, house).not.toContain(house);
+      else expect(shown, house).toContain(house);
+    }
+    const one = matrix.houses.polo?.pool[0];
+    const thinIds = new Set([one?.top, one?.bottom, one?.shoe].filter((id): id is string => Boolean(id)));
+    const thin = RACK.filter((g) => thinIds.has(g.id));
+    expect(thin.length).toBeGreaterThan(0);
+    expect(dressableHouses(thin, "weekday", "fall")).not.toContain("polo");
   });
 });

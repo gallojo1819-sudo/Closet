@@ -29,26 +29,26 @@ export type House =
 
 export const HOUSE_LABEL: Record<House, string> = {
   polo: "Polo",
-  purple: "Purple",
+  purple: "Purple Label",
   rrl: "RRL",
   ald: "ALD",
   faloni: "Faloni",
   fiveFourFive: "545",
-  sweetStable: "SweetStable",
-  italianSummer: "ItalianSummer",
-  italianWinter: "ItalianWinter",
+  sweetStable: "Sweet Stable",
+  italianSummer: "Italian summer",
+  italianWinter: "Italian winter",
 };
 
 export const HOUSE_CHIPS: { id: House; label: string }[] = [
   { id: "polo", label: "Polo" },
-  { id: "purple", label: "Purple" },
+  { id: "purple", label: "Purple Label" },
   { id: "rrl", label: "RRL" },
   { id: "ald", label: "ALD" },
   { id: "faloni", label: "Faloni" },
   { id: "fiveFourFive", label: "545" },
-  { id: "sweetStable", label: "SweetStable" },
-  { id: "italianSummer", label: "ItalianSummer" },
-  { id: "italianWinter", label: "ItalianWinter" },
+  { id: "sweetStable", label: "Sweet Stable" },
+  { id: "italianSummer", label: "Italian summer" },
+  { id: "italianWinter", label: "Italian winter" },
 ];
 
 /** All-chip rank: Polo last. */
@@ -443,12 +443,24 @@ export function appendHouseGap(
   return `${text}\nMISSING: ${gap}`;
 }
 
-/** Highest-scoring house whose approved profile passes. Polo is last. Null when none pass. */
-export function leadHouse(pieces: Garment[], occasion: Occasion = "weekday", season?: Season): House | null {
+/**
+ * Highest-scoring house whose approved profile passes. Polo is last. Null when none pass.
+ * Partial is for two plates in the builder: an empty slot is not a missing core.
+ */
+export function leadHouse(
+  pieces: Garment[],
+  occasion: Occasion = "weekday",
+  season?: Season,
+  partial = false,
+): House | null {
   let best: House | null = null;
   let bestN = Number.NEGATIVE_INFINITY;
   for (const h of HOUSES) {
-    const scored = scorePlates(profile(h) as never, assignSlots(pieces.map(asPlate)), ctxOf(occasion, season));
+    const scored = scorePlates(
+      profile(h) as never,
+      assignSlots(pieces.map(asPlate)),
+      { ...ctxOf(occasion, season), partial },
+    );
     if (!scored.eval.passed) continue;
     const n = h === "polo" ? scored.score - 0.01 : scored.score;
     if (n > bestN) {

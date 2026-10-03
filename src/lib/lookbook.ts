@@ -55,8 +55,8 @@ import {
   pickRecipe,
   type ChapterTrack,
 } from "./recipes.ts";
-import { lookFitsSeason, seasonRank, weatherForSeason, type Season } from "./season.ts";
-import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "./types.ts";
+import { lookFitsSeason, seasonRank, weatherForSeason } from "./season.ts";
+import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion, type Season } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
 export const CHAPTER_CAP = 10;
@@ -71,6 +71,23 @@ export function lookbookIsFrozen(
 
 export function lookbookPool(garments: Garment[]): Garment[] {
   return livePool(garments);
+}
+
+/** Houses with at least three legal looks for this chapter and season. A gate is not three looks. */
+export function dressableHouses(
+  garments: Garment[],
+  occasion: Occasion,
+  season: Season,
+): House[] {
+  const matrix = buildHouseMatrix(lookbookPool(garments), occasion, season);
+  const out: House[] = [];
+  for (const chip of HOUSE_CHIPS) {
+    const cell = matrix.houses[chip.id];
+    if (!cell || cell.gate) continue;
+    if (Math.max(cell.pool.length, cell.looks.length) < 3) continue;
+    out.push(chip.id);
+  }
+  return out;
 }
 
 function bySlot(pool: Garment[], slot: "top" | "bottom" | "footwear" | "outerwear" | "dress") {

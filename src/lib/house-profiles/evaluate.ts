@@ -25,7 +25,7 @@ export type LookIds = {
   mid?: string;
 };
 
-export type EvalCtx = { occasion?: string; season?: string };
+export type EvalCtx = { occasion?: string; season?: string; partial?: boolean };
 
 export type SoftHit = [string, number];
 
@@ -246,7 +246,7 @@ export function evaluatePlates(profile: Profile, ps: Partial<Record<string, Plat
   const sg = (season && profile.season_gate?.[season]) || {};
   if (sg.status === "off") fails.push(sg.rule_id || "GATE-SEASON");
   for (const slot of ["top", "bottom", "shoe"]) {
-    if (!ps[slot]) fails.push(`CORE-MISSING-${slot}`);
+    if (!ps[slot] && !ctx.partial) fails.push(`CORE-MISSING-${slot}`);
   }
   for (const ban of profile.banned ?? []) {
     for (const [slot, g] of Object.entries(ps)) {
