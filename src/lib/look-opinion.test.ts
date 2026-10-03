@@ -1,6 +1,5 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { HOUSE_CHIPS, HOUSE_LABEL } from "./houses.ts";
 import { lookOpinion } from "./look-opinion.ts";
 import { emptyTaste } from "./taste.ts";
 import type { Garment } from "./types.ts";
@@ -49,44 +48,69 @@ const sneaker = g({
 });
 
 describe("look opinion", () => {
-  it("two Polo plates say this matches Polo, not the chip he had selected", () => {
+  it("oxford and chino match in clothes, not a house name", () => {
     const opinion = lookOpinion([oxford, chino], [oxford, chino, loafer], {
       occasion: "weekday",
       season: "fall",
       house: "purple",
     });
-    assert.equal(opinion?.headline, "This matches. Polo.");
-    assert.equal(opinion?.house, "polo");
+    assert.equal(opinion?.headline, "This matches.");
+    assert.equal(opinion?.reason, "Oxford, chino, navy blazer");
+    assert.equal(opinion?.house, null);
+    assert.equal(opinion?.swaps.length, 0);
+    assert.equal(/\b(Polo|Purple|RRL|ALD)\b/.test(`${opinion?.headline} ${opinion?.reason}`), false);
   });
 
-  it("hoodie and loafer do not match, and the better shoe is one he owns", () => {
-    const pool = [hoodie, loafer, sneaker];
-    const opinion = lookOpinion([hoodie, loafer], pool, { occasion: "weekday", season: "fall" });
+  it("names his pieces and the clash", () => {
+    const polo = g({ id: "pk", name: "pink polo", category: "top", subtype: "polo", colors: ["pink"] });
+    const white = g({
+      id: "ws",
+      name: "white sneaker",
+      category: "footwear",
+      subtype: "sneaker",
+      colors: ["white"],
+    });
+    const opinion = lookOpinion([polo, white], [polo, white]);
     assert.equal(opinion?.headline, "This doesn't match.");
-    assert.match(opinion?.reason ?? "", /Hoodie with loafers/);
-    assert.match(opinion?.reason ?? "", /ALD/);
-    const shoe = opinion?.swaps.find((swap) => swap.slot === "footwear");
-    assert.ok(shoe);
-    assert.equal(shoe?.id, sneaker.id);
-    assert.equal(pool.some((piece) => piece.id === shoe?.id), true);
-    assert.match(shoe?.line ?? "", /^Better: white sneaker, not the brown penny loafer\./);
-    for (const swap of opinion?.swaps ?? []) {
-      assert.equal(pool.some((piece) => piece.id === swap.id), true);
-    }
+    assert.match(opinion?.reason ?? "", /pink polo/);
+    assert.match(opinion?.reason ?? "", /white sneaker/);
+    assert.match(opinion?.reason ?? "", /A pink polo with a white sneaker\./);
+    assert.equal(opinion?.swaps.length, 0);
   });
 
-  it("says nothing else in the closet fixes it when he owns no better plate", () => {
-    const opinion = lookOpinion([hoodie, loafer], [hoodie, loafer], {
+  it("offers one piece he already owns", () => {
+    const tee = g({ id: "tee", name: "graphic tee", category: "top", subtype: "tee" });
+    const retro = g({
+      id: "retro",
+      name: "retro sneaker",
+      category: "footwear",
+      subtype: "sneaker",
+    });
+    const pool = [tee, loafer, retro];
+    const opinion = lookOpinion([tee, loafer], pool);
+    assert.equal(opinion?.headline, "This doesn't match.");
+    assert.match(opinion?.reason ?? "", /graphic tee/);
+    assert.match(opinion?.reason ?? "", /brown penny loafer/);
+    assert.equal(opinion?.swaps.length, 1);
+    assert.equal(opinion?.swaps[0]?.id, retro.id);
+    assert.equal(opinion?.swaps[0]?.line, "Better: retro sneaker, not the brown penny loafer.");
+    assert.equal(pool.some((piece) => piece.id === opinion?.swaps[0]?.id), true);
+  });
+
+  it("stops when nothing he owns finishes the way", () => {
+    const opinion = lookOpinion([hoodie, loafer], [hoodie, loafer, sneaker], {
       occasion: "weekday",
       season: "fall",
     });
     assert.equal(opinion?.headline, "This doesn't match.");
+    assert.match(opinion?.reason ?? "", /navy hoodie/);
+    assert.match(opinion?.reason ?? "", /brown penny loafer/);
     assert.equal(opinion?.swaps.length, 0);
-    assert.equal(opinion?.stuck, "Nothing else in the closet fixes this.");
+    assert.equal(opinion?.stuck, null);
     assert.equal(/shop|buy|sale/i.test(`${opinion?.reason} ${opinion?.stuck}`), false);
   });
 
-  it("a veto is a clash even when the house would allow the plates", () => {
+  it("a veto names the pieces and says he skipped them", () => {
     const taste = emptyTaste();
     taste.vetoes.push({ kind: "piece", id: oxford.id });
     const opinion = lookOpinion([oxford, chino], [oxford, chino], {
@@ -96,29 +120,6 @@ describe("look opinion", () => {
       taste,
     });
     assert.equal(opinion?.headline, "This doesn't match.");
-    assert.equal(opinion?.reason, "You skipped this.");
-  });
-
-  it("Purple Label is the label, never Purple alone", () => {
-    assert.equal(HOUSE_LABEL.purple, "Purple Label");
-    assert.equal(HOUSE_LABEL.polo, "Polo");
-    assert.deepEqual(
-      HOUSE_CHIPS.map((chip) => chip.label),
-      [
-        "Polo",
-        "Purple Label",
-        "RRL",
-        "ALD",
-        "Faloni",
-        "545",
-        "Sweet Stable",
-        "Italian summer",
-        "Italian winter",
-      ],
-    );
-    assert.equal(
-      HOUSE_CHIPS.some((chip) => chip.label === "Purple" || chip.label === "ItalianSummer" || chip.label === "SweetStable"),
-      false,
-    );
+    assert.equal(opinion?.reason, "Navy oxford, Khaki chinos. You skipped this.");
   });
 });

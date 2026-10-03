@@ -1,5 +1,6 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { DetectorSections } from "@/components/closet/detector-sections";
 import { IdleMount } from "@/components/closet/idle-mount";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { LookKit } from "@/components/closet/look-kit";
@@ -9,10 +10,10 @@ import { GarmentTile } from "@/components/closet/tile";
 import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
+import { detectorTitle } from "@/lib/detectors";
 import {
   buildReshuffleRow,
   comboKey,
-  dressableHouses,
   emptyFilterCopy,
   lookbookPool,
   looksForHero,
@@ -26,7 +27,6 @@ import { pieceLabel } from "@/lib/piece-label";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
-import { HOUSE_LABEL, leadHouse } from "@/lib/houses";
 import { daysIdle, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { emptyTaste } from "@/lib/taste";
@@ -221,7 +221,6 @@ function LookbookPage() {
   const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]["id"]>("weekday");
   const [seasonChip, setSeasonChip] = useState<"auto" | Season>("auto");
   const [seasonOpen, setSeasonOpen] = useState(false);
-  const [houseChip, setHouseChip] = useState<"all" | House>("all");
   const [color, setColor] = useState<string | null>(null);
   const [colorOpen, setColorOpen] = useState(false);
   const drop = useCloset((s) => s.drop);
@@ -250,15 +249,6 @@ function LookbookPage() {
   const autoSeason = seasonFromWeather(drop?.weather?.f ?? 68);
   const season: Season = seasonChip === "auto" ? autoSeason : seasonChip;
   const seasonShown = seasonControlLabel(seasonChip, new Date(), drop?.weather?.f ?? 68);
-  const dressable = useMemo(
-    () => dressableHouses(garments, occasion, season),
-    [garments, occasion, season],
-  );
-  const houseLive: "all" | House =
-    houseChip !== "all" && dressable.includes(houseChip) ? houseChip : "all";
-  useEffect(() => {
-    if (houseChip !== "all" && !dressable.includes(houseChip)) setHouseChip("all");
-  }, [dressable, houseChip]);
   const seasonLabel =
     seasonChip === "auto"
       ? `Auto · ${SEASONS.find((s) => s.id === autoSeason)?.label ?? "Fall"}`
@@ -272,18 +262,17 @@ function LookbookPage() {
     look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
   const tasteKey = `${taste.vetoes.length}:${taste.techniques.map((t) => t.weight).join(",")}`;
-  const filterKey = `${occasion}:${season}:${houseLive}:${color ?? ""}:${garments.length}:${tasteKey}`;
+  const filterKey = `${occasion}:${season}:${color ?? ""}:${garments.length}:${tasteKey}`;
   const openRow = useMemo(
     () =>
       buildReshuffleRow(garments, occasion, {
-        house: houseLive === "all" ? undefined : houseLive,
         season,
         color,
         salt: 1,
         cap: 8,
         taste,
       }),
-    [garments, occasion, season, houseLive, color, taste],
+    [garments, occasion, season, color, taste],
   );
   const [shown, setShown] = useState<{ key: string; looks: Look[] } | null>(null);
   const [salt, setSalt] = useState(1);
@@ -303,11 +292,11 @@ function LookbookPage() {
     return visibleHero(hero, heroLooks, garments, {
       occasion,
       season,
-      house: houseLive,
+      house: "all",
       color,
       min: 3,
     });
-  }, [hero, heroLooks, garments, occasion, season, houseLive, color]);
+  }, [hero, heroLooks, garments, occasion, season, color]);
 
   const highlightId = focusLook ?? null;
 
@@ -437,88 +426,59 @@ function LookbookPage() {
             </div>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2" data-house-row>
+        <div className="relative" data-color-control>
           <button
             type="button"
-            onClick={() => setHouseChip("all")}
+            onClick={() => setColorOpen((v) => !v)}
             className={cn(
               "micro border px-3 py-2",
-              houseLive === "all"
+              color
                 ? "border-ink bg-ink text-paper"
                 : "border-hairline text-ink-soft",
             )}
           >
-            All
+            Color
           </button>
-          {dressable.map((id) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setHouseChip(id)}
-              className={cn(
-                "micro border px-3 py-2",
-                houseLive === id
-                  ? "border-ink bg-ink text-paper"
-                  : "border-hairline text-ink-soft",
-              )}
-            >
-              {HOUSE_LABEL[id]}
-            </button>
-          ))}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setColorOpen((v) => !v)}
-              className={cn(
-                "micro border px-3 py-2",
-                color
-                  ? "border-ink bg-ink text-paper"
-                  : "border-hairline text-ink-soft",
-              )}
-            >
-              Color
-            </button>
-            {colorOpen && (
-              <div className="absolute left-0 top-full z-20 mt-1 flex flex-wrap gap-1 border border-hairline bg-paper p-2 shadow-sm w-48">
+          {colorOpen && (
+            <div className="absolute left-0 top-full z-20 mt-1 flex flex-wrap gap-1 border border-hairline bg-paper p-2 shadow-sm w-48">
+              <button
+                type="button"
+                className="micro px-2 py-1 text-ink-soft"
+                onClick={() => {
+                  setColor(null);
+                  setColorOpen(false);
+                }}
+              >
+                Any
+              </button>
+              {colorChips.map((c) => (
                 <button
+                  key={c}
                   type="button"
-                  className="micro px-2 py-1 text-ink-soft"
+                  title={c}
                   onClick={() => {
-                    setColor(null);
+                    setColor((cur) => (cur === c ? null : c));
                     setColorOpen(false);
                   }}
-                >
-                  Any
-                </button>
-                {colorChips.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    title={c}
-                    onClick={() => {
-                      setColor((cur) => (cur === c ? null : c));
-                      setColorOpen(false);
-                    }}
-                    className={cn(
-                      "size-6 shrink-0 border",
-                      color === c ? "border-ink" : "border-hairline",
-                    )}
-                    style={{ backgroundColor: paletteCss(c) }}
-                    aria-label={c}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+                  className={cn(
+                    "size-6 shrink-0 border",
+                    color === c ? "border-ink" : "border-hairline",
+                  )}
+                  style={{ backgroundColor: paletteCss(c) }}
+                  aria-label={c}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
+      <DetectorSections garments={garments} />
       <div className="mt-6 flex flex-wrap gap-3">
       <button
         type="button"
         onClick={() => {
           const nextSalt = salt + 1;
           const next = buildReshuffleRow(garments, occasion, {
-            house: houseLive === "all" ? undefined : houseLive,
             season,
             color,
             salt: nextSalt,
@@ -552,7 +512,6 @@ function LookbookPage() {
             heading="Suggest"
             occasion={occasion}
             season={season}
-            house={houseLive === "all" ? undefined : houseLive}
           />
         </div>
       )}
@@ -591,13 +550,13 @@ function LookbookPage() {
           <p className="mt-3 text-sm text-ink-soft">Pick a colour.</p>
         ) : visible.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft">
-            {houseLive !== "all" || color
+            {color
               ? "Needs pieces from this closet."
               : (emptyFilterCopy(
                   chapterLabel,
                   seasonLabel,
                   seasonChip,
-                  houseLive,
+                  "all",
                   color,
                   canBuild,
                 ) ?? "Need a top, a bottom, and shoes.")}
@@ -638,7 +597,6 @@ function LookbookPage() {
               }
               const pieces = piecesFor(look);
               if (pieces.length < 3) return null;
-              const lead = houseLive === "all" ? leadHouse(pieces, occasion, season) : houseLive;
               return (
                 <LookCard
                   key={look.id}
@@ -647,8 +605,8 @@ function LookbookPage() {
                   index={i}
                   season={season}
                   chip={occasion}
-                  houseChip={houseLive}
-                  houseLabel={lead ? HOUSE_LABEL[lead] : "All"}
+                  houseChip="all"
+                  houseLabel={detectorTitle(pieces) ?? chapterLabel}
                   note={card.why}
                   pool={garments}
                   named={openId === look.id}
@@ -685,11 +643,7 @@ function LookbookPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const look = outfitWith(
-                        [g.id],
-                        occasion,
-                        houseLive === "all" ? undefined : houseLive,
-                      );
+                      const look = outfitWith([g.id], occasion);
                       if (!look) return;
                       setDressed(look);
                       setOpenId(look.id);
@@ -749,7 +703,7 @@ function LookbookPage() {
                       onClick={() => setOpenId(look.id)}
                     >
                       <LookKit pieces={pieces} className="pointer-events-none aspect-[4/5]" />
-                      <p className="mt-2 text-sm">{spreadTitle(pieces, look.occasion as Occasion, houseLive, season)}</p>
+                      <p className="mt-2 text-sm">{spreadTitle(pieces, look.occasion as Occasion, "all", season)}</p>
                       <p className="micro text-ink-soft">{look.occasion}</p>
                     </button>
                   </li>
@@ -773,7 +727,6 @@ function LookbookPage() {
           book={book}
           closet={garments}
           initialLocked={openLook.lookbook === false ? drop?.lockedIds : undefined}
-          house={houseLive === "all" ? undefined : houseLive}
           getCard={getOpenCard}
           onClose={() => setOpenId(null)}
           onWear={() => wearToday(openPieces.map((g) => g.id))}

@@ -85,15 +85,16 @@ describe("seasonFromWeather", () => {
     assert.equal(seasonControlLabel("auto", october, 68), "Fall");
     assert.notEqual(seasonControlLabel("auto", october, 68), "Auto");
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
-    const houseAt = book.indexOf("data-house-row");
+    assert.equal(book.includes("data-house-row"), false);
+    assert.equal(book.includes("HOUSE_CHIPS"), false);
     const seasonAt = book.indexOf("data-season-control");
-    assert.ok(seasonAt > 0 && houseAt > seasonAt);
-    const seasonCtl = book.slice(seasonAt, houseAt);
-    const houseRow = book.slice(houseAt, book.indexOf("Reshuffle", houseAt));
-    assert.match(seasonCtl, /\{seasonShown\}/);
-    assert.equal(houseRow.includes("SEASONS"), false);
-    assert.equal(houseRow.includes("Spring"), false);
-    assert.equal(houseRow.includes(">Auto<"), false);
+    const detectorsAt = book.indexOf("<DetectorSections");
+    assert.ok(seasonAt > 0 && detectorsAt > seasonAt);
+    const seasonCtl = book.slice(seasonAt, book.indexOf("</div>", book.indexOf("SEASONS.map")));
+    assert.match(book.slice(seasonAt, detectorsAt), /\{seasonShown\}/);
+    assert.equal(book.split("SEASONS.map").length - 1, 1);
+    assert.equal(seasonCtl.includes("SEASONS.map"), true);
+    assert.equal(book.slice(0, seasonAt).includes("SEASONS.map"), false);
   });
 });
 

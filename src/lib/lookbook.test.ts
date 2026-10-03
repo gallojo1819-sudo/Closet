@@ -1477,17 +1477,19 @@ describe("lookbook card stack", () => {
     assert.equal(hero.includes('layout="stack"'), false);
   });
 
-  it("the house row renders only houses this closet can dress", () => {
+  it("lookbook shows ways this closet can finish, not a house row", () => {
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
-    const houseAt = book.indexOf("data-house-row");
-    const houseRow = book.slice(houseAt, book.indexOf("Reshuffle", houseAt));
-    assert.match(houseRow, /dressable\.map/);
-    assert.match(houseRow, /HOUSE_LABEL\[id\]/);
-    assert.equal(houseRow.includes("HOUSE_CHIPS"), false);
-    assert.equal(houseRow.includes("SEASONS"), false);
-    assert.equal(/>\s*Purple\s*</.test(houseRow), false);
+    assert.equal(book.includes("data-house-row"), false);
+    assert.equal(book.includes("HOUSE_CHIPS"), false);
+    assert.equal(book.includes("HOUSE_LABEL"), false);
+    assert.equal(book.includes("dressableHouses"), false);
+    assert.match(book, /<DetectorSections garments=\{garments\} \/>/);
     assert.match(book, /heading="Suggest"/);
     assert.equal(book.includes("Make a look"), false);
+    assert.equal(
+      /\b(Polo|Purple|RRL|ALD|Faloni|545|Sweet Stable|Italian summer|Italian winter)\b/.test(book),
+      false,
+    );
   });
 
   it("three pieces render three bands, and a cached On you image stays out until it is on", async () => {
