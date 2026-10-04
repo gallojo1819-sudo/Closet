@@ -46,6 +46,7 @@ export type CellContext = {
   season?: Season | string;
   color?: string | null;
   pool?: Garment[];
+  weatherF?: number;
 };
 
 export type Way = {
@@ -756,7 +757,73 @@ export function sharedDetector(
 }
 
 export function detectorTitle(pieces: Garment[], ctx?: CellContext): string | null {
-  return sharedDetector(pieces, ctx, ctx?.pool)?.title ?? null;
+  const hit = sharedDetector(pieces, ctx, ctx?.pool);
+  if (!hit || !ctx?.occasion || !ctx.season) return null;
+  const open = visibleDetectors(ctx.pool ?? pieces, {
+    occasion: ctx.occasion,
+    season: ctx.season,
+    color: ctx.color,
+    weatherF: ctx.weatherF,
+  });
+  if (!open.some((way) => way.id === hit.id && !way.usual)) return null;
+  return hit.title;
+}
+
+function dressedLooks(way: Way, occasion: Occasion): Garment[][] {
+  return (way.looks[occasion] ?? []).filter((look) => look.length >= 3);
+}
+
+/** A chip only when this occasion already has three looks on the page. */
+export function wayChipVisible(way: Way, occasion: Occasion | string): boolean {
+  const id = (occasion || "weekday") as Occasion;
+  if (way.usual) {
+    const looks = OCCASION_ORDER.flatMap((key) => (way.looks[key] ?? []).slice(0, 3)).filter(
+      (look) => look.length >= 3,
+    );
+    return looks.length >= 3;
+  }
+  return dressedLooks(way, id).length >= 3;
+}
+
+function stampLooks(
+  id: string,
+  occasion: string,
+  looks: Garment[][],
+): { id: string; garmentIds: string[] }[] {
+  return looks.map((look, index) => ({
+    id: `way:${id}:${occasion}:${index}:${look.map((g) => g.id).join(".")}`,
+    garmentIds: look.map((g) => g.id),
+  }));
+}
+
+/** Look cards a section actually renders. A hidden chapter is absent. */
+export function renderedSectionLooks(
+  ways: readonly Way[],
+  occasion: Occasion | string,
+  activeId?: string | null,
+): { id: string; garmentIds: string[] }[] {
+  const here = (occasion || "weekday") as Occasion;
+  const usual = ways.find((way) => way.usual);
+  if (usual) {
+    const looks = OCCASION_ORDER.flatMap((key) => (usual.looks[key] ?? []).slice(0, 3)).filter(
+      (look) => look.length >= 3,
+    );
+    if (looks.length < 3) return [];
+    return stampLooks("usual", here, looks);
+  }
+  const focused = activeId ? ways.find((way) => way.id === activeId) : undefined;
+  const short = focused && (focused.counts[here] ?? 0) < 3 ? focused : undefined;
+  const nearest = short ? nearestOpen(short.counts, here) : null;
+  const list = short ? ways.filter((way) => way.id === short.id) : ways;
+  const out: { id: string; garmentIds: string[] }[] = [];
+  for (const way of list) {
+    if (way.usual) continue;
+    const show = (short && nearest ? nearest : here) as Occasion;
+    const looks = dressedLooks(way, show);
+    if (looks.length < 3) continue;
+    out.push(...stampLooks(way.id, show, looks));
+  }
+  return out;
 }
 
 export function nearestOpen(counts: Record<Occasion, number>, current: Occasion): Occasion | null {

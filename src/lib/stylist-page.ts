@@ -183,13 +183,10 @@ export function routeFromPath(pathname: string): StylistRoute {
   return "today";
 }
 
-/** Leaving a page replaces its chips. Opening /stylist keeps the page he was on. */
+/** Leaving a page replaces its chips. /stylist opens the panel and writes nothing. */
 export function noteRoute(pathname: string): void {
   const route = routeFromPath(pathname);
-  if (route === "stylist") {
-    if (!written) writeStylistPage({ route: "stylist", onScreenLookIds: [] });
-    return;
-  }
+  if (route === "stylist") return;
   if (current.route !== route) writeStylistPage({ route, onScreenLookIds: [] });
 }
 
@@ -258,10 +255,18 @@ function labelOf(kind: "occasion" | "season", id?: string): string {
 
 function speakPiece(g: Garment): string {
   const brand = (g.brand ?? "").trim();
-  let name = g.name.trim();
+  const original = g.name.trim();
+  let name = original;
   if (brand) {
     const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     name = name.replace(new RegExp(escaped, "ig"), " ");
+  }
+  name = name.replace(HOUSE, " ").replace(/\s+/g, " ").trim();
+  const subtype = (g.subtype || "").trim();
+  if (subtype) {
+    const typeWord = new RegExp(`\\b${subtype.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+    // Brand "Polo" is the house. The name's polo is the shirt.
+    if (!typeWord.test(name) && typeWord.test(original)) name = `${name} ${subtype}`.trim();
   }
   name = name.replace(HOUSE, " ").replace(/\s+/g, " ").trim();
   if (name && !HOUSE.test(name)) return name;
@@ -329,6 +334,84 @@ export function acceptStylistReply(text: string, garments: readonly Garment[]): 
     if (!phraseOwned(phrase, garments)) return null;
   }
   return clean;
+}
+
+export const NOT_IN_CLOSET = "That piece is not in this closet.";
+
+/** Lines the panel can show. A LOOK row alone is not a reply. */
+export function stylistProse(text: string): string {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !/^LOOK:/i.test(line) && !/^MISSING:/i.test(line));
+  if (lines.length) return lines.join("\n");
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (!flat || /^LOOK:/i.test(flat)) return NOT_IN_CLOSET;
+  return flat;
+}
+
+/**
+ * The dock reads the server value, including a JSON body.
+ * A missing garment list must not throw the reply away.
+ */
+export async function stylistPayload(
+  res: unknown,
+): Promise<{ ok?: boolean; text?: string; error?: string; garmentIds?: string[]; occasion?: string; technique?: string | null }> {
+  if (!res || typeof res !== "object") return { ok: false, error: NOT_IN_CLOSET };
+  const row = res as {
+    ok?: boolean;
+    text?: unknown;
+    error?: unknown;
+    garmentIds?: unknown;
+    occasion?: unknown;
+    technique?: unknown;
+    json?: unknown;
+  };
+  if (typeof row.text === "string" || typeof row.error === "string" || Array.isArray(row.garmentIds)) {
+    return {
+      ok: row.ok,
+      ...(typeof row.text === "string" ? { text: row.text } : {}),
+      ...(typeof row.error === "string" ? { error: row.error } : {}),
+      ...(Array.isArray(row.garmentIds) ? { garmentIds: row.garmentIds.filter((id): id is string => typeof id === "string") } : {}),
+      ...(typeof row.occasion === "string" ? { occasion: row.occasion } : {}),
+      ...(typeof row.technique === "string" || row.technique === null ? { technique: row.technique as string | null } : {}),
+    };
+  }
+  if (typeof row.json === "function") {
+    try {
+      const body = await (row.json as () => Promise<unknown>)();
+      return stylistPayload(body);
+    } catch {
+      return { ok: false, error: NOT_IN_CLOSET };
+    }
+  }
+  return { ok: false, error: NOT_IN_CLOSET };
+}
+
+/** A 200 is a line. An unowned garment is the rejection, not an empty thread. */
+export function replyFromStylistResult(
+  res: { ok?: boolean; text?: string; error?: string; garmentIds?: string[] } | null | undefined,
+  garments: readonly Garment[],
+): { text: string; garmentIds: string[] } {
+  const rawText = typeof res?.text === "string" ? res.text : "";
+  const rawError = typeof res?.error === "string" ? res.error : "";
+  const ids = (res?.garmentIds ?? []).filter(
+    (id) => typeof id === "string" && garments.some((g) => g.id === id),
+  );
+  const accepted = rawText.trim() ? acceptStylistReply(rawText, garments) : null;
+  if (accepted) {
+    const prose = stylistProse(accepted);
+    if (prose && prose !== NOT_IN_CLOSET) return { text: prose, garmentIds: ids };
+    const names = ids
+      .map((id) => garments.find((g) => g.id === id))
+      .filter((g): g is Garment => Boolean(g))
+      .map((g) => speakPiece(g))
+      .filter(Boolean);
+    if (names.length) return { text: names.join(", "), garmentIds: ids };
+  }
+  const err = stylistProse(rawError);
+  if (rawError.trim() && err && err !== NOT_IN_CLOSET) return { text: err, garmentIds: [] };
+  return { text: NOT_IN_CLOSET, garmentIds: [] };
 }
 
 function piecesFrom(
@@ -517,26 +600,24 @@ export function screenSentence(
   }));
   if (page.onScreenLookIds.length) {
     const index = rankIndex(rows, page);
-    if (index >= 0) {
-      const line = formatStrongest(index, rows[index]!.pieces, page);
-      if (line && acceptStylistReply(line, garments)) return line;
-    }
-    if (page.route === "lookbook") {
+    const line = index >= 0 ? formatStrongest(index, rows[index]!.pieces, page) : null;
+    if (line && acceptStylistReply(line, garments)) return line;
+    if (page.route === "lookbook" || page.route === "stylist") {
       const chips = chipSentence(page);
       if (chips) return chips.replace("Nothing is on screen.", "None of these looks holds them.");
     }
+    if (line) return line;
     return "Watching this page.";
   }
-  if (page.route === "lookbook" && page.onScreenLookIds.length === 0) {
-    return chipSentence(page) ?? "Watching this page.";
+  if ((page.route === "lookbook" || page.route === "stylist") && page.onScreenLookIds.length === 0) {
+    const chips = chipSentence(page);
+    if (chips) return chips;
   }
   if (page.openGarmentId) {
     const open = garments.find((g) => g.id === page.openGarmentId);
-    if (open) {
-      const chosen = chosenId ? garments.find((g) => g.id === chosenId) : undefined;
-      const line = openSentence(open, garments, page, chosen);
-      if (acceptStylistReply(line, garments)) return line;
-    }
+    if (!open) return "This piece does not go with the other pieces in this closet.";
+    const chosen = chosenId ? garments.find((g) => g.id === chosenId) : undefined;
+    return openSentence(open, garments, page, chosen);
   }
   return "Watching this page.";
 }
@@ -599,9 +680,14 @@ export function answerAsked(input: {
   if (page.openGarmentId) {
     const open = garments.find((g) => g.id === page.openGarmentId);
     const named = namedInPrompt(input.prompt, garments).find((g) => g.id !== page.openGarmentId);
-    if (!open) return { kind: "answer", text: "Watching this page.", garmentIds: [] };
+    if (!open) {
+      return {
+        kind: "answer",
+        text: "This piece does not go with the other pieces in this closet.",
+        garmentIds: [],
+      };
+    }
     const text = openSentence(open, garments, page, named);
-    if (!acceptStylistReply(text, garments)) return { kind: "reject" };
     return { kind: "answer", text, garmentIds: [] };
   }
   return { kind: "pass" };

@@ -7,10 +7,13 @@ import { pathToFileURL } from "node:url";
 import {
   cellGateOpen,
   cellLooks,
+  detectorTitle,
   detectorTitles,
   maxDisjoint,
+  renderedSectionLooks,
   titlesAreClothes,
   visibleDetectors,
+  wayChipVisible,
   type Way,
 } from "./detectors.ts";
 import type { Garment } from "./types.ts";
@@ -258,7 +261,7 @@ describe("detectors", () => {
     assert.equal(disjoint.length, 2);
   });
 
-  it("October weekday fall hides a shoeless way and a linen cell under three", () => {
+  it("October weekday fall hides a shoeless way and a linen cell under three", async () => {
     const noShoe = [
       ...many("tee", "graphic tee", "top", "tee", { colors: ["navy"], material: "cotton" }),
       ...many("jean", "indigo jean", "bottom", "jean", { colors: ["navy"], material: "denim" }),
@@ -273,6 +276,54 @@ describe("detectors", () => {
     ];
     const soft = visibleDetectors(linen, { occasion: "weekend", season: "fall", weatherF: 73 });
     assert.equal(soft.some((way) => way.title === "Linen and a soft jacket" && !way.usual), false);
+    const weekday = visibleDetectors(linen, { occasion: "weekday", season: "fall" });
+    assert.equal(weekday.some((way) => way.title === "Linen and a soft jacket" && !way.usual), false);
+    assert.equal(wayChipVisible(weekday[0]!, "weekday"), false);
+    assert.equal(
+      detectorTitle(linen, { occasion: "weekday", season: "fall", pool: linen }),
+      null,
+    );
+    assert.equal(renderedSectionLooks(weekday, "weekday").length, 0);
+    const html = await renderSections(linen, { occasion: "weekday", season: "fall" });
+    assert.equal(html.includes("Linen and a soft jacket"), false);
+  });
+
+  it("a rendered section look is on screen, and a hidden look is not", () => {
+    const one = [
+      g({ id: "t", name: "linen camp", category: "top", subtype: "camp" }),
+      g({ id: "b", name: "linen trouser", category: "bottom", subtype: "trouser" }),
+      g({ id: "s", name: "suede loafer", category: "footwear", subtype: "loafer" }),
+    ];
+    const weekend = [1, 2, 3].map((n) => [
+      g({ id: `t${n}`, name: `graphic tee ${n}`, category: "top", subtype: "tee" }),
+      g({ id: `b${n}`, name: `jean ${n}`, category: "bottom", subtype: "jean" }),
+      g({ id: `s${n}`, name: `sneaker ${n}`, category: "footwear", subtype: "sneaker" }),
+    ]);
+    const counts = { weekday: 1, out: 0, weekend: 3, travel: 0, comfy: 0 };
+    const way: Way = {
+      id: "8",
+      title: "Linen and a soft jacket",
+      pieces: one,
+      looks: { weekday: [one], weekend },
+      counts,
+    };
+    assert.equal(wayChipVisible(way, "weekday"), false);
+    assert.equal(renderedSectionLooks([way], "weekday").length, 0);
+    const shown = renderedSectionLooks([way], "weekend");
+    assert.equal(shown.length, 3);
+    assert.equal(shown.some((look) => look.garmentIds.includes("t")), false);
+    assert.equal(wayChipVisible(way, "weekend"), true);
+    const outOnly = [g({ id: "o", name: "out tee", category: "top", subtype: "tee" })];
+    const full: Way = {
+      id: "13",
+      title: "Graphic tee and retro sneaker",
+      pieces: weekend[0]!,
+      looks: { weekday: weekend, out: [outOnly] },
+      counts: { weekday: 3, out: 1, weekend: 0, travel: 0, comfy: 0 },
+    };
+    const onPage = renderedSectionLooks([full], "weekday");
+    assert.equal(onPage.length, 3);
+    assert.equal(onPage.some((look) => look.garmentIds.includes("o")), false);
   });
 
   it("a finished look renders plates, and an empty usual has no heading", async () => {

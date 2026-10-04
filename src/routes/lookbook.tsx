@@ -10,7 +10,7 @@ import { GarmentTile } from "@/components/closet/tile";
 import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
-import { detectorTitle, visibleDetectors, warmCellBook } from "@/lib/detectors";
+import { detectorTitle, renderedSectionLooks, visibleDetectors, warmCellBook, wayChipVisible } from "@/lib/detectors";
 import {
   buildReshuffleRow,
   comboKey,
@@ -18,6 +18,7 @@ import {
   firstWeekLooks,
   lookbookPool,
   looksForHero,
+  realWeekLooks,
   unusedFromLooks,
   visibleHero,
 } from "@/lib/lookbook";
@@ -318,44 +319,14 @@ function LookbookPage() {
       : rankedReady
         ? rankedReady.looks
         : preview.looks;
-  const weekReason = row.length
+  const ownedIds = useMemo(() => new Set(byId.keys()), [byId]);
+  const realRow = realWeekLooks(row, ownedIds);
+  const noted = row.find((look) => look.needsPieces || look.gate);
+  const weekReason = realRow.length
     ? null
-    : preview.reason || "Nothing in this closet is legal for this week.";
-  const cards = row.map((look) => ({ look, why: look.gap ?? "" }));
+    : noted?.gap || noted?.name || preview.reason || "Nothing in this closet is legal for this week.";
+  const cards = realRow.map((look) => ({ look, why: look.gap ?? "" }));
   const visible = cards;
-  const onScreenLookIds = useMemo(() => {
-    const ids: string[] = [];
-    for (const card of cards) {
-      const look = card.look;
-      if (look.gate || look.needsPieces) continue;
-      let count = 0;
-      for (const id of look.garmentIds) if (byId.has(id)) count += 1;
-      if (count < 3) continue;
-      ids.push(look.id);
-    }
-    return ids;
-  }, [cards, byId]);
-  const screenKey = onScreenLookIds.join("|");
-  const screenLooks = useMemo(
-    () =>
-      onScreenLookIds.map((id) => {
-        const look = cards.find((card) => card.look.id === id)?.look;
-        return { id, garmentIds: look ? [...look.garmentIds] : [] };
-      }),
-    [onScreenLookIds, cards],
-  );
-  useEffect(() => {
-    writeStylistPage({
-      route: "lookbook",
-      occasion,
-      season,
-      ...(color ? { color } : {}),
-      ...(heroId ? { openGarmentId: heroId } : {}),
-      onScreenLookIds,
-      screenLooks,
-      ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
-    });
-  }, [occasion, season, color, heroId, screenKey, screenLooks, onScreenLookIds, pageWeather]);
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const rack = useMemo(
@@ -411,6 +382,35 @@ function LookbookPage() {
     allOpenLooks.find((l) => l.id === openId) ??
     null;
   const openPieces = openLook ? piecesFor(openLook) : [];
+  const sectionLooks = renderedSectionLooks(shownWays, occasion, wayId);
+  const heroCards = hero && heroShown.length > 0 && !openLook ? realWeekLooks(heroShown, ownedIds) : [];
+  const screenLooks = (() => {
+    const seen = new Set<string>();
+    const out: { id: string; garmentIds: string[] }[] = [];
+    const add = (id: string, garmentIds: readonly string[]) => {
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      out.push({ id, garmentIds: [...garmentIds] });
+    };
+    for (const look of realRow) add(look.id, look.garmentIds);
+    for (const look of sectionLooks) add(look.id, look.garmentIds);
+    for (const look of heroCards) add(look.id, look.garmentIds);
+    return out;
+  })();
+  const onScreenLookIds = screenLooks.map((look) => look.id);
+  const screenKey = screenLooks.map((look) => `${look.id}=${look.garmentIds.join(",")}`).join("|");
+  useEffect(() => {
+    writeStylistPage({
+      route: "lookbook",
+      occasion,
+      season,
+      ...(color ? { color } : {}),
+      ...(heroId ? { openGarmentId: heroId } : {}),
+      onScreenLookIds,
+      screenLooks,
+      ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
+    });
+  }, [occasion, season, color, heroId, screenKey, pageWeather, onScreenLookIds, screenLooks]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-6 py-8 md:py-12 rise">
@@ -421,7 +421,7 @@ function LookbookPage() {
       {hydrated && (
         <>
           <p className="mt-3 text-ink-soft max-w-xl">
-            {row.length} looks · {chapterLabel} · {seasonLabel.replace(/^Auto · /, "")}
+            {realRow.length} looks · {chapterLabel} · {seasonLabel.replace(/^Auto · /, "")}
           </p>
           <p className="mt-1 micro text-ink-soft">{looksAll.length} saved</p>
         </>
@@ -529,7 +529,7 @@ function LookbookPage() {
         <div data-ways-row>
           <p className="micro text-ink-soft">Your ways of dressing</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {ways.map((way) => (
+            {ways.filter((way) => wayChipVisible(way, occasion)).map((way) => (
               <button
                 key={way.id}
                 type="button"
@@ -632,18 +632,16 @@ function LookbookPage() {
           <p className="mt-3 text-sm text-ink-soft">Pick a colour.</p>
         ) : visible.length === 0 ? (
           <p className="mt-3 text-sm text-ink-soft" data-week-reason>
-            {color
-              ? "Needs pieces from this closet."
-              : (weekReason ||
-                emptyFilterCopy(
-                  chapterLabel,
-                  seasonLabel,
-                  seasonChip,
-                  "all",
-                  color,
-                  canBuild,
-                ) ||
-                "Need a top, a bottom, and shoes.")}
+            {weekReason ||
+              emptyFilterCopy(
+                chapterLabel,
+                seasonLabel,
+                seasonChip,
+                "all",
+                color,
+                canBuild,
+              ) ||
+              "Need a top, a bottom, and shoes."}
           </p>
         ) : (
           <ul
@@ -690,7 +688,7 @@ function LookbookPage() {
                   season={season}
                   chip={occasion}
                   houseChip="all"
-                  houseLabel={detectorTitle(pieces, { occasion, season, color, pool: garments }) ?? chapterLabel}
+                  houseLabel={detectorTitle(pieces, { occasion, season, color, pool: garments, weatherF: pageWeather }) ?? chapterLabel}
                   note={card.why}
                   pool={garments}
                   named={openId === look.id}

@@ -65,11 +65,11 @@ export function DetectorSections({
   const usual = found.find((way) => way.usual);
   if (usual) {
     const looks = OCCASION_ORDER.flatMap((id) => (usual.looks[id] ?? []).slice(0, 3)).filter((look) => look.length >= 3);
-    if (!looks.length) {
+    if (looks.length < 3) {
       return (
         <div data-detectors className="mt-8">
           <p data-usual-reason className="text-sm text-ink-soft">
-            {usual.reason ?? "Nothing in this closet finishes a look."}
+            {usual.reason || NOTE}
           </p>
         </div>
       );

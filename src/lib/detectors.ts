@@ -10,9 +10,11 @@ export {
   maxDisjoint,
   nearestOpen,
   OCCASION_ORDER,
+  renderedSectionLooks,
   sharedDetector,
   visibleDetectors,
   warmCellBook,
+  wayChipVisible,
 } from "./detectors/cells.ts";
 
 type Detector = {

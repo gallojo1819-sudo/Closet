@@ -17,8 +17,11 @@ import {
   answerAsked,
   readStylistPage,
   rememberedLooks,
+  replyFromStylistResult,
   screenSentence,
   stylistAskFields,
+  stylistPayload,
+  stylistProse,
   subscribeStylistPage,
 } from "@/lib/stylist-page";
 import { nameLook } from "@/lib/look";
@@ -57,9 +60,10 @@ function StylistNote({ text }: { text: string }) {
     .filter(Boolean);
   const missing = lines.filter((l) => /^MISSING:/i.test(l));
   const body = lines.filter((l) => !/^MISSING:/i.test(l) && !/^LOOK:/i.test(l));
+  const shown = body.length ? body : [stylistProse(text)];
   return (
     <div className="space-y-1">
-      {body.map((l, i) => (
+      {shown.map((l, i) => (
         <p
           key={`${i}-${l}`}
           className={
@@ -281,37 +285,25 @@ export function StylistDock({ open = false }: { open?: boolean }) {
         page: here,
       }),
     });
-    if (res.ok && res.garmentIds.length) {
-      const pieces = res.garmentIds
-        .map((id) => forStylist.find((g) => g.id === id))
-        .filter((g): g is Garment => Boolean(g));
-      const ids = pieces.map((g) => g.id);
-      const occasion = pageOccasion(here.occasion, (res.occasion ?? defaultOccasion()) as Occasion);
-      const line = acceptStylistReply(res.text, owned);
-      pushMessage({
-        role: "stylist",
-        text: line ?? "That piece is not in this closet.",
-        ...(line
-          ? {
-              garmentIds: ids,
-              draftName: nameLook(pieces),
-              draftOccasion: occasion,
-              technique: res.technique ?? undefined,
-            }
-          : {}),
-      });
-    } else if (res.ok) {
-      const line = acceptStylistReply(res.text, owned);
-      pushMessage({
-        role: "stylist",
-        text: line ?? "That piece is not in this closet.",
-      });
-    } else {
-      pushMessage({
-        role: "stylist",
-        text: res.error,
-      });
-    }
+    const payload = await stylistPayload(res);
+    const painted = replyFromStylistResult(payload, owned);
+    const pieces = painted.garmentIds
+      .map((id) => owned.find((g) => g.id === id))
+      .filter((g): g is Garment => Boolean(g));
+    pushMessage({
+      role: "stylist",
+      text: painted.text,
+      ...(pieces.length
+        ? {
+            garmentIds: pieces.map((g) => g.id),
+            draftName: nameLook(pieces),
+            draftOccasion: pageOccasion(here.occasion, (payload.occasion ?? defaultOccasion()) as Occasion),
+            technique: payload.technique ?? undefined,
+          }
+        : {}),
+    });
+    } catch {
+      pushMessage({ role: "stylist", text: "That piece is not in this closet." });
     } finally {
       const undo = restoreIfAskWrote(staged, snap, useCloset.getState(), explicitWrite.current);
       if (undo) useCloset.setState(undo);
@@ -383,8 +375,8 @@ export function StylistDock({ open = false }: { open?: boolean }) {
         <p data-stylist-screen className="text-sm text-ink">
           {sentence}
         </p>
-        {last && last.text !== sentence ? (
-          <p className="mt-1 line-clamp-2 text-sm text-ink-soft">{last.text.split("\n")[0]}</p>
+        {last && stylistProse(last.text).split("\n")[0] !== sentence ? (
+          <p className="mt-1 line-clamp-2 text-sm text-ink-soft">{stylistProse(last.text).split("\n")[0]}</p>
         ) : null}
         <div className="mt-2">{form}</div>
       </aside>

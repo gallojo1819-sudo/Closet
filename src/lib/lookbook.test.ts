@@ -8,6 +8,7 @@ import {
   buildReshuffleRow,
   buildWeek,
   firstWeekLooks,
+  realWeekLooks,
   todayStripLooks,
   weekStripDays,
   CHAPTER_CAP,
@@ -1562,7 +1563,9 @@ describe("lookbook card stack", () => {
     assert.equal(book.includes("composeChapter"), false);
     assert.equal(book.includes("chapterVisible"), false);
     assert.equal(book.includes("buildReshuffleRow"), true);
-    assert.match(book, /const cards = row\.map/);
+    assert.match(book, /const realRow = realWeekLooks\(row/);
+    assert.match(book, /const cards = realRow\.map/);
+    assert.match(book, /\{realRow\.length\} looks/);
     assert.equal(book.split('layout="stack"').length - 1, 1);
     assert.equal(sheet.includes('layout="stack"'), false);
     assert.equal(book.includes('viewTransitionName: "none"'), false);
@@ -1646,6 +1649,45 @@ describe("lookbook card stack", () => {
     const empty = firstWeekLooks([], "weekday", { season: "fall" });
     assert.equal(empty.looks.length, 0);
     assert.match(empty.reason, /top, a bottom, and a shoe/);
+    const weather = { f: 73, label: "Warm", code: 1, measured: true as const };
+    const shoeOnly = firstWeekLooks(
+      [
+        piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford", colors: ["navy"] }),
+        piece({ id: "ch", name: "Tan chinos", category: "bottom", subtype: "chino", colors: ["khaki"] }),
+        piece({ id: "lf", name: "Beige loafers", category: "footwear", subtype: "loafer", colors: ["beige"] }),
+      ],
+      "weekday",
+      { season: "fall", color: "beige", weather },
+    );
+    assert.equal(shoeOnly.looks.length, 0);
+    assert.match(shoeOnly.reason, /No look leads with beige/);
+    const lead = firstWeekLooks(
+      [
+        piece({ id: "ox", name: "Beige oxford", category: "top", subtype: "oxford", colors: ["beige"] }),
+        piece({ id: "ch", name: "Tan chinos", category: "bottom", subtype: "chino", colors: ["khaki"] }),
+        piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer", colors: ["brown"] }),
+      ],
+      "weekday",
+      { season: "fall", color: "beige", weather },
+    );
+    assert.equal(lead.looks.length, 1);
+    assert.equal(realWeekLooks(lead.looks).length, 1);
+    assert.equal(
+      realWeekLooks([
+        {
+          id: "gap",
+          name: "No look leads with beige.",
+          occasion: "weekday",
+          garmentIds: [],
+          source: "ai",
+          lookbook: false,
+          createdAt: "2026-10-04",
+          needsPieces: true,
+          gap: "No look leads with beige.",
+        },
+      ]).length,
+      0,
+    );
   });
 
   it("lookbook shows ways this closet can finish, not a house row", () => {

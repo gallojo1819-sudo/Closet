@@ -1999,6 +1999,30 @@ function DELETED_HIT(pieces: Garment[]): boolean {
   return pieces.some((p) => DELETED_IDS.has(p.id));
 }
 
+/** Cards that are outfits. A gap note is not a look. */
+export function realWeekLooks(looks: Look[], owned?: ReadonlySet<string>): Look[] {
+  return looks.filter((look) => {
+    if (look.gate || look.needsPieces) return false;
+    const ids = look.garmentIds.filter((id) => typeof id === "string" && id && (!owned || owned.has(id)));
+    return new Set(ids).size >= 3;
+  });
+}
+
+function leadsWithColor(pieces: Garment[], color: string): boolean {
+  const plates = pieces.map((g) => ({
+    id: g.id,
+    name: g.name,
+    category: g.category === "dress" ? "top" : g.category,
+    subtype: g.subtype,
+    material: g.material,
+    colors: g.colors,
+    brand: g.brand,
+    fit: g.fit,
+    warmth: g.warmth,
+  }));
+  return evaluateColor(assignSlots(plates), color).passed;
+}
+
 /**
  * The first cards, before the full house rank. Bounded on purpose so the page
  * can paint. The ranked row replaces these once it returns.
@@ -2045,6 +2069,7 @@ export function firstWeekLooks(
   const color = opts?.color?.trim().toLowerCase() ?? "";
   const found: Garment[][] = [];
   const seen = new Set<string>();
+  let sawLegal = false;
   let tries = 0;
   for (let i = 0; i < tops.length && found.length < 2 && tries < 48; i++) {
     for (let j = 0; j < bottoms.length && found.length < 2 && tries < 48; j++) {
@@ -2058,10 +2083,11 @@ export function firstWeekLooks(
           candidates.push([...core, jacket]);
         }
         for (const pieces of candidates) {
-          if (color && !pieces.some((g) => (g.colors ?? []).some((c) => c.toLowerCase() === color))) continue;
           if (!lookFitsOccasion(pieces, occasion, pool)) continue;
           if (season && !lookFitsSeason(pieces, season)) continue;
           if (!isLegal(pieces, ctx)) continue;
+          sawLegal = true;
+          if (color && !leadsWithColor(pieces, color)) continue;
           const key = comboKey(pieces.map((g) => g.id));
           if (seen.has(key)) continue;
           seen.add(key);
@@ -2074,9 +2100,12 @@ export function firstWeekLooks(
   if (!found.length) {
     return {
       looks: [],
-      reason: need
-        ? `${where} still needs a jacket, and none of these jackets finish a look.`
-        : `Nothing in this closet is legal for ${where}.`,
+      reason:
+        color && sawLegal
+          ? `No look leads with ${color}.`
+          : need
+            ? `${where} still needs a jacket, and none of these jackets finish a look.`
+            : `Nothing in this closet is legal for ${where}.`,
     };
   }
   return { looks: found.map((pieces, index) => lookFromPieces(pieces, occasion, index)), reason: "" };

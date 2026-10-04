@@ -11,10 +11,15 @@ register(new URL("../../scripts/ts-ext.mjs", import.meta.url), {
 const {
   acceptStylistReply,
   answerAsked,
+  bindClosetPiece,
   formatStrongest,
+  noteRoute,
   readStylistPage,
+  replyFromStylistResult,
   screenSentence,
   stylistAskFields,
+  stylistPayload,
+  stylistProse,
   writeStylistPage,
 } = await import("./stylist-page.ts");
 const { buildStylistSystem, emptyTaste } = await import("./taste.ts");
@@ -229,5 +234,107 @@ describe("stylist page", () => {
       garments: owned,
     });
     assert.equal(swap.kind, "pass");
+  });
+
+  it("opening /stylist keeps the lookbook sentence and closet still drops it", () => {
+    const looks = [{ id: "l1", garmentIds: ["g_blazer", "g_ox", "g_chino", "g_loafer"] }];
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "fall",
+      onScreenLookIds: ["l1"],
+      screenLooks: looks,
+    });
+    const before = readStylistPage();
+    const sentence = screenSentence(before, owned, looks);
+    assert.notEqual(sentence, "Watching this page.");
+    assert.match(sentence, /oxford|blazer|chinos|loafers/i);
+    noteRoute("/stylist");
+    const kept = readStylistPage();
+    assert.equal(kept.route, "lookbook");
+    assert.equal(kept.occasion, "weekday");
+    assert.equal(kept.season, "fall");
+    assert.deepEqual(kept.onScreenLookIds, ["l1"]);
+    assert.equal(screenSentence(kept, owned, looks), sentence);
+    noteRoute("/closet");
+    const closet = readStylistPage();
+    assert.equal(closet.route, "closet");
+    assert.equal(closet.occasion, undefined);
+    assert.equal(closet.season, undefined);
+    assert.deepEqual(closet.onScreenLookIds, []);
+    assert.equal(screenSentence(closet, owned), "Watching this page.");
+  });
+
+  it("an open polo is the sentence, not Watching this page", async () => {
+    const polo = piece({
+      id: "g_polo",
+      name: "Cream long-sleeve polo",
+      category: "top",
+      subtype: "polo",
+      colors: ["cream"],
+      brand: "Polo",
+    });
+    const rack = [polo, oxford, chinos, loafers];
+    writeStylistPage({ route: "closet", onScreenLookIds: [] });
+    const release = bindClosetPiece(polo.id);
+    const sentence = screenSentence(readStylistPage(), rack);
+    assert.notEqual(sentence, "Watching this page.");
+    assert.match(sentence, /Cream long-sleeve polo/);
+    const asked = answerAsked({
+      prompt: "What goes with this?",
+      page: readStylistPage(),
+      garments: rack,
+    });
+    assert.equal(asked.kind, "answer");
+    if (asked.kind === "answer") assert.match(asked.text, /Cream long-sleeve polo/);
+    release();
+    await Promise.resolve();
+  });
+
+  it("a 200 reply is a line, and an unowned garment is the rejection", async () => {
+    const ok = replyFromStylistResult(
+      {
+        ok: true,
+        text: "The oxford with the tan chinos and the suede loafers.",
+        garmentIds: ["g_ox", "g_chino", "g_loafer"],
+      },
+      owned,
+    );
+    assert.match(ok.text, /oxford/);
+    assert.match(ok.text, /chinos/);
+    assert.deepEqual(ok.garmentIds, ["g_ox", "g_chino", "g_loafer"]);
+    assert.notEqual(stylistProse(ok.text).trim(), "");
+    const denied = replyFromStylistResult(
+      { ok: true, text: "Pair the Loro Piana cashmere sweater.", garmentIds: ["g_fake"] },
+      owned,
+    );
+    assert.equal(denied.text, "That piece is not in this closet.");
+    assert.deepEqual(denied.garmentIds, []);
+    const asked = answerAsked({
+      prompt: "Pair my Loro Piana cashmere sweater",
+      page: { route: "add", onScreenLookIds: [] },
+      garments: owned,
+    });
+    assert.equal(asked.kind, "reject");
+    const named = replyFromStylistResult(
+      { ok: true, text: "LOOK: g_ox,g_chino,g_loafer", garmentIds: ["g_ox", "g_chino", "g_loafer"] },
+      owned,
+    );
+    assert.equal(named.text.includes("LOOK:"), false);
+    assert.match(named.text, /oxford|chinos|loafers/i);
+    const body = await stylistPayload({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        text: "The oxford with the tan chinos and the suede loafers.",
+        garmentIds: ["g_ox", "g_chino", "g_loafer"],
+      }),
+    });
+    const painted = replyFromStylistResult(body, owned);
+    assert.match(painted.text, /oxford/);
+    const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
+    assert.match(dock, /replyFromStylistResult/);
+    assert.match(dock, /stylistPayload/);
+    assert.match(dock, /stylistProse/);
   });
 });
