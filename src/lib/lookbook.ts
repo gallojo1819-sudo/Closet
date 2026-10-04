@@ -1999,6 +1999,89 @@ function DELETED_HIT(pieces: Garment[]): boolean {
   return pieces.some((p) => DELETED_IDS.has(p.id));
 }
 
+/**
+ * The first cards, before the full house rank. Bounded on purpose so the page
+ * can paint. The ranked row replaces these once it returns.
+ */
+export function firstWeekLooks(
+  garments: Garment[],
+  occasion: Occasion,
+  opts?: {
+    season?: Season;
+    color?: string | null;
+    weather?: WeatherSnap | null;
+  },
+): { looks: Look[]; reason: string } {
+  const pool = lookbookPool(garments);
+  const season = opts?.season;
+  const weatherF =
+    opts?.weather?.measured === true && typeof opts.weather.f === "number" && Number.isFinite(opts.weather.f)
+      ? opts.weather.f
+      : undefined;
+  const tops = pool.filter((g) => {
+    const slot = slotOf(g);
+    return slot === "top" || slot === "dress";
+  });
+  const bottoms = pool.filter((g) => slotOf(g) === "bottom");
+  const shoes = pool.filter((g) => slotOf(g) === "footwear");
+  const sea = season ?? "fall";
+  const where = `${occasion.charAt(0).toUpperCase()}${occasion.slice(1)} · ${sea.charAt(0).toUpperCase()}${sea.slice(1)}`;
+  if (!tops.length || !bottoms.length || !shoes.length) {
+    return { looks: [], reason: `${where} needs a top, a bottom, and a shoe from this closet.` };
+  }
+  const ctx = {
+    occasion,
+    season: sea,
+    ...(weatherF !== undefined ? { weatherF } : {}),
+  };
+  const need = jacketRequired(occasion, sea, weatherF);
+  const jackets = pool.filter((g) => slotOf(g) === "outerwear" || jacketWearSlot(g) === "outer");
+  if (need && jackets.length === 0) {
+    return {
+      looks: [],
+      reason: `${where} still needs a jacket, and this closet has no jacket that finishes the look.`,
+    };
+  }
+  const color = opts?.color?.trim().toLowerCase() ?? "";
+  const found: Garment[][] = [];
+  const seen = new Set<string>();
+  let tries = 0;
+  for (let i = 0; i < tops.length && found.length < 2 && tries < 48; i++) {
+    for (let j = 0; j < bottoms.length && found.length < 2 && tries < 48; j++) {
+      for (let k = 0; k < shoes.length && found.length < 2 && tries < 48; k++) {
+        tries += 1;
+        const core = [tops[i]!, bottoms[j]!, shoes[k]!];
+        if (new Set(core.map((g) => g.id)).size < 3) continue;
+        const candidates: Garment[][] = need ? [] : [core];
+        for (const jacket of jackets) {
+          if (core.some((g) => g.id === jacket.id)) continue;
+          candidates.push([...core, jacket]);
+        }
+        for (const pieces of candidates) {
+          if (color && !pieces.some((g) => (g.colors ?? []).some((c) => c.toLowerCase() === color))) continue;
+          if (!lookFitsOccasion(pieces, occasion, pool)) continue;
+          if (season && !lookFitsSeason(pieces, season)) continue;
+          if (!isLegal(pieces, ctx)) continue;
+          const key = comboKey(pieces.map((g) => g.id));
+          if (seen.has(key)) continue;
+          seen.add(key);
+          found.push(pieces);
+          break;
+        }
+      }
+    }
+  }
+  if (!found.length) {
+    return {
+      looks: [],
+      reason: need
+        ? `${where} still needs a jacket, and none of these jackets finish a look.`
+        : `Nothing in this closet is legal for ${where}.`,
+    };
+  }
+  return { looks: found.map((pieces, index) => lookFromPieces(pieces, occasion, index)), reason: "" };
+}
+
 export function buildReshuffleRow(
   garments: Garment[],
   occasion: Occasion,

@@ -488,16 +488,30 @@ function matFam(g: Plate): string | null {
   return null;
 }
 
+function subclassOf(g: Plate): string {
+  return (BY_ID.get(g.id)?.subclass ?? "").toLowerCase();
+}
+
 function graphicOrCollegiate(g: Plate): boolean {
-  const sub = (BY_ID.get(g.id)?.subclass ?? "").toLowerCase();
-  if (sub.includes("varsity jacket")) return true;
+  const sub = subclassOf(g);
+  if (sub.includes("varsity")) return true;
   return hasText(blob(g), ["varsity", "letterman", "collegiate", "graphic"]);
 }
 
 function sportCoat(g: Plate | undefined): boolean {
   if (!g) return false;
   const cls = jacketInfo(g).class;
-  return cls === "sport_coat_soft" || cls === "sport_coat_structured";
+  if (cls === "sport_coat_soft" || cls === "sport_coat_structured") return true;
+  const sub = subclassOf(g);
+  if (sub.includes("sport coat") || sub.includes("blazer")) return true;
+  return hasText(blob(g), ["sport coat", "sportcoat", "blazer"]);
+}
+
+/** Either piece may be the jacket. The words and the jacket subclass decide, not one id. */
+export function coatSharesLookWithGraphic(pieces: Plate[]): boolean {
+  const coats = pieces.filter((g) => sportCoat(g));
+  const marks = pieces.filter((g) => graphicOrCollegiate(g));
+  return coats.some((coat) => marks.some((mark) => mark.id !== coat.id));
 }
 
 function underHit(g: Plate, worn: string, outer: Plate, ctx: JacketCtx, hits: JacketHit[]) {
@@ -599,7 +613,7 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
   }
 
   const piled = [top, mid, outer, bottom, shoe].filter((g): g is Plate => Boolean(g));
-  if (piled.some(sportCoat) && piled.some(graphicOrCollegiate)) {
+  if (coatSharesLookWithGraphic(piled)) {
     hit("JKT-LAY-8", "hard", 0, "a graphic or collegiate piece cannot share a look with a sport coat");
   }
 

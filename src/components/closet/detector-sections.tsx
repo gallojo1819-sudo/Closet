@@ -1,3 +1,4 @@
+import { LookKit } from "@/components/closet/look-kit";
 import { nearestOpen, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";
 import type { Garment, Occasion, Season } from "@/lib/types";
 
@@ -15,16 +16,29 @@ function chapterLooks(way: Way, occasion: Occasion): Garment[][] {
   return (way.looks[occasion] ?? []).filter((look) => look.length >= 3);
 }
 
+function PlateCard({ look }: { look: Garment[] }) {
+  return (
+    <div className="w-56 shrink-0">
+      <LookKit layout="stack" pieces={look} className="pointer-events-none aspect-[4/5]" />
+      <ul className="mt-2 space-y-0.5">
+        {look.map((g) => (
+          <li key={g.id} className="text-sm text-ink">
+            {g.name}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Chapter({ occasion, looks }: { occasion: Occasion; looks: Garment[][] }) {
   if (looks.length < 3) return null;
   return (
     <div>
       <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[occasion]}</p>
-      <div className="look-swipe">
+      <div className="look-swipe mt-3 flex gap-4">
         {looks.map((look, index) => (
-          <p key={`${occasion}:${index}`} className="mt-1 text-sm text-ink-soft">
-            {look.map((g) => g.name).join(" · ")}
-          </p>
+          <PlateCard key={`${occasion}:${index}`} look={look} />
         ))}
       </div>
     </div>
@@ -48,35 +62,27 @@ export function DetectorSections({
   activeId?: string | null;
 }) {
   const found = ways ?? visibleDetectors(garments, { occasion, season, color });
-  const usual = found.some((way) => way.usual);
+  const usual = found.find((way) => way.usual);
   if (usual) {
+    const looks = OCCASION_ORDER.flatMap((id) => (usual.looks[id] ?? []).slice(0, 3)).filter((look) => look.length >= 3);
+    if (!looks.length) {
+      return (
+        <div data-detectors className="mt-8">
+          <p data-usual-reason className="text-sm text-ink-soft">
+            {usual.reason ?? "Nothing in this closet finishes a look."}
+          </p>
+        </div>
+      );
+    }
     return (
       <div data-detectors className="mt-8 space-y-6">
         <section>
           <h2 className="font-editorial text-2xl tracking-tight">Your usual</h2>
-          {found
-            .filter((way) => way.id !== "usual")
-            .map((way) => (
-              <div key={way.id}>
-                <h3 className="mt-4 font-editorial text-xl tracking-tight">{way.title}</h3>
-                {OCCASION_ORDER.map((id) => {
-                  const looks = (way.looks[id] ?? []).slice(0, 3);
-                  if (!looks.length) return null;
-                  return (
-                    <div key={id}>
-                      <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[id]}</p>
-                      <div className="look-swipe">
-                        {looks.map((look, index) => (
-                          <p key={`${id}:${index}`} className="mt-1 text-sm text-ink-soft">
-                            {look.map((g) => g.name).join(" · ")}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          <div className="look-swipe mt-3 flex gap-4">
+            {looks.map((look, index) => (
+              <PlateCard key={`usual:${index}`} look={look} />
             ))}
+          </div>
         </section>
       </div>
     );
@@ -90,11 +96,11 @@ export function DetectorSections({
       {(short ? found.filter((way) => way.id === short.id) : found).map((way) => {
         const show = short && nearest ? nearest : occasion;
         const looks = chapterLooks(way, show);
-        if (!short && looks.length < 3) return null;
+        if (looks.length < 3) return null;
         return (
           <section key={way.id}>
             <h2 className="font-editorial text-2xl tracking-tight">{way.title}</h2>
-            {short && nearest ? <Chapter occasion={nearest} looks={looks} /> : <Chapter occasion={occasion} looks={looks} />}
+            <Chapter occasion={show} looks={looks} />
           </section>
         );
       })}

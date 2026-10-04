@@ -11,6 +11,7 @@ import { DELETED_SNEAKERS, isLegal } from "../stylist/legal.ts";
 import { jacketRequired } from "../stylist/jackets.ts";
 import type { Garment, Occasion } from "../types.ts";
 import { detectorColor } from "./palette.ts";
+import { usualFromCloset } from "./usual.ts";
 
 export const OCCASION_ORDER: Occasion[] = ["weekday", "out", "weekend", "travel", "comfy"];
 
@@ -54,6 +55,8 @@ export type Way = {
   looks: Partial<Record<Occasion, Garment[][]>>;
   counts: Record<Occasion, number>;
   usual?: boolean;
+  /** Why the fallback has no looks. Never a bare heading. */
+  reason?: string;
 };
 
 type Built = {
@@ -128,12 +131,12 @@ const PHRASE: Record<string, (g: Garment) => boolean> = {
   oxford: (g) => has(g, /oxford|button-down|button down|\bocbd\b/) && !blazer(g),
   cable: (g) => has(g, /\bcable\b/) && !blazer(g),
   rugby: (g) => has(g, /rugby/),
-  "pique polo": (g) => has(g, /pique/) && has(g, /polo/),
+  "pique polo": (g) => has(g, /pique/) && has(g, /\bpolos?\b/),
   pique: (g) => has(g, /pique/),
   "solid crew": (g) => has(g, /crew/) && !has(g, /graphic|hoodie/),
   collegiate: (g) => has(g, /collegiate|letterman|varsity/),
   gingham: (g) => has(g, /gingham/),
-  "knit polo": (g) => has(g, /polo/) && has(g, /knit|merino/),
+  "knit polo": (g) => has(g, /\bpolos?\b/) && has(g, /knit|merino/),
   chino: (g) => has(g, /chino/) && !has(g, /cord/),
   "light trouser": (g) => has(g, /gurkha|trouser/) && !denimBottom(g),
   cord: (g) => has(g, /\bcords?\b|corduroy/) && !has(g, /jacket|blazer/),
@@ -167,7 +170,7 @@ const PHRASE: Record<string, (g: Garment) => boolean> = {
   "polished loafer": (g) => loafer(g) && !suede(g),
   "suit jacket": (g) => has(g, /suit/) && has(g, /jacket/),
   "four-bar trim": (g) => has(g, /four[- ]bar|4-bar/),
-  polo: (g) => has(g, /polo/) && !has(g, /graphic/),
+  polo: (g) => has(g, /\bpolos?\b/) && !has(g, /graphic/),
   "cropped trouser": (g) => has(g, /crop/) && has(g, /trouser/),
   "grey wool": (g) => has(g, /grey|gray/) && has(g, /wool/) && has(g, /trouser|pant|suit/),
   brogue: (g) => has(g, /brogue/),
@@ -175,7 +178,7 @@ const PHRASE: Record<string, (g: Garment) => boolean> = {
   calf: (g) => has(g, /calf/) && !sneaker(g),
   "short narrow jacket": (g) => has(g, /short|cropped|shrunken|narrow/) && has(g, /jacket/),
   "linen shirt": (g) => has(g, /linen/) && has(g, /shirt|camp|top/) && !blazer(g) && slotOf(g) !== "bottom",
-  "short-sleeve knit polo": (g) => has(g, /polo/) && has(g, /knit/) && has(g, /short/),
+  "short-sleeve knit polo": (g) => has(g, /\bpolos?\b/) && has(g, /knit/) && has(g, /short/),
   camp: (g) => has(g, /\bcamp\b/),
   resort: (g) => has(g, /resort|\bcamp\b/),
   linen: (g) => has(g, /linen/) && !blazer(g),
@@ -248,7 +251,7 @@ function matchPhrase(g: Garment, phrase: string, slot: SlotName): boolean {
   const alts = phrase.split(/\s+or\s+/);
   return alts.some((part) => {
     const words = part.split(/\s+/).filter((w) => w.length > 2 && w !== "and" && w !== "the");
-    return words.length > 0 && words.every((w) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(textOf(g)));
+    return words.length > 0 && words.every((w) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}s?\\b`, "i").test(textOf(g)));
   });
 }
 
@@ -383,11 +386,21 @@ function seasonOk(pieces: Garment[], season: Season): boolean {
 
 const LEGAL = new Map<string, boolean>();
 
-function legalOk(pieces: Garment[], occasion: string, season: string): boolean {
-  const key = `${occasion}|${season}|${pieces.map((g) => g.id).sort().join(",")}`;
+function finiteTemp(n: unknown): number | undefined {
+  return typeof n === "number" && Number.isFinite(n) ? n : undefined;
+}
+
+function legalOk(pieces: Garment[], occasion: string, season: string, weatherF?: number): boolean {
+  const temp = finiteTemp(weatherF);
+  const key = `${occasion}|${season}|${temp ?? ""}|${pieces.map((g) => g.id).sort().join(",")}`;
   const hit = LEGAL.get(key);
   if (hit !== undefined) return hit;
-  const ok = isLegal(pieces, { house: null, occasion, season });
+  const ok = isLegal(pieces, {
+    house: null,
+    occasion,
+    season,
+    ...(temp !== undefined ? { weatherF: temp } : {}),
+  });
   LEGAL.set(key, ok);
   return ok;
 }
@@ -469,7 +482,7 @@ export function maxDisjoint(looks: Garment[][]): Garment[][] {
   return best.slice(0, 5);
 }
 
-function dressCell(cell: Cell, pool: Garment[], occasion: Occasion, season: Season): Garment[][] {
+function dressCell(cell: Cell, pool: Garment[], occasion: Occasion, season: Season, weatherF?: number): Garment[][] {
   if (!cellGateOpen(cell.key, occasion, season)) return [];
   const tops = takeBucket(
     pool
@@ -515,11 +528,11 @@ function dressCell(cell: Cell, pool: Garment[], occasion: Occasion, season: Seas
     }
   }
   const stored: Garment[][] = [];
-  const needJacket = jacketRequired(occasion, season);
+  const needJacket = jacketRequired(occasion, season, finiteTemp(weatherF));
   const remember = (pieces: Garment[]) => {
     if (stored.length >= STORE_CAP) return;
     if (stored.some((row) => idsOf(row) === idsOf(pieces))) return;
-    if (!legalOk(pieces, occasion, season)) return;
+    if (!legalOk(pieces, occasion, season, weatherF)) return;
     stored.push(pieces);
   };
   for (const core of cores) {
@@ -556,9 +569,10 @@ function stampOf(garments: Garment[], season: string): string {
   return `${season}|${body}`;
 }
 
-export function warmCellBook(garments: Garment[], season: Season): Built[] {
+export function warmCellBook(garments: Garment[], season: Season, weatherF?: number): Built[] {
   const live = livePool(garments).filter((g) => !DELETED.has(g.id));
-  const stamp = stampOf(live, season);
+  const temp = finiteTemp(weatherF);
+  const stamp = `${stampOf(live, season)}|${temp ?? ""}`;
   const hit = BOOKS.get(stamp);
   if (hit) return hit;
   const built = CELLS.map((cell) => {
@@ -569,7 +583,7 @@ export function warmCellBook(garments: Garment[], season: Season): Built[] {
       travel: [],
       comfy: [],
     } as Record<Occasion, Garment[][]>;
-    for (const occasion of OCCASION_ORDER) looks[occasion] = dressCell(cell, live, occasion, season);
+    for (const occasion of OCCASION_ORDER) looks[occasion] = dressCell(cell, live, occasion, season, temp);
     return { cell, looks };
   });
   BOOKS.set(stamp, built);
@@ -638,44 +652,56 @@ function toWay(built: Built, season: string, color: string | null, usual: boolea
   return { id: built.cell.id, title: built.cell.title, pieces: first, looks, counts, usual };
 }
 
-function yourUsual(book: Built[], season: string): Way[] {
-  const ranked = book
-    .map((built) => ({ built, rank: rankOf(built, season, null) }))
-    .filter((row) => row.rank.pooled > 0)
-    .sort(
-      (a, b) =>
-        b.rank.pooled - a.rank.pooled ||
-        b.rank.cores - a.rank.cores ||
-        a.built.cell.id.localeCompare(b.built.cell.id, undefined, { numeric: true }),
-    )
-    .slice(0, CAP);
-  if (!ranked.length) {
-    const counts = { weekday: 0, out: 0, weekend: 0, travel: 0, comfy: 0 };
-    return [{ id: "usual", title: "Your usual", pieces: [], looks: {}, counts, usual: true }];
-  }
-  return ranked.map((row) => toWay(row.built, season, null, true));
+function emptyCounts(): Record<Occasion, number> {
+  return { weekday: 0, out: 0, weekend: 0, travel: 0, comfy: 0 };
+}
+
+function yourUsual(garments: Garment[], season: string, occasion: Occasion, weatherF?: number): Way[] {
+  const built = usualFromCloset(garments, { occasion, season, weatherF });
+  const counts = emptyCounts();
+  counts[occasion] = built.looks.length;
+  const looks: Partial<Record<Occasion, Garment[][]>> = {};
+  if (built.looks.length) looks[occasion] = built.looks.slice(0, 3);
+  return [
+    {
+      id: "usual",
+      title: "Your usual",
+      pieces: built.looks[0] ?? [],
+      looks,
+      counts,
+      usual: true,
+      ...(built.looks.length ? {} : { reason: built.reason }),
+    },
+  ];
 }
 
 export function visibleDetectors(
   garments: Garment[],
-  ctx: { occasion?: Occasion | string; season?: Season | string; color?: string | null } = {},
+  ctx: { occasion?: Occasion | string; season?: Season | string; color?: string | null; weatherF?: number } = {},
 ): Way[] {
   const season = (ctx.season || "fall") as Season;
   const color = ctx.color ?? null;
-  const book = warmCellBook(garments, season);
+  const weatherF = finiteTemp(ctx.weatherF);
+  const occasion = (ctx.occasion || undefined) as Occasion | undefined;
+  const book = warmCellBook(garments, season, weatherF);
   const ranked = book
     .map((built) => ({ built, rank: rankOf(built, season, color) }))
-    .filter((row) => row.rank.cleared > 0)
-    .sort(
-      (a, b) =>
+    .filter((row) => (occasion ? (row.rank.counts[occasion] ?? 0) >= 3 : row.rank.cleared > 0))
+    .sort((a, b) => {
+      if (occasion) {
+        const onScreen = (b.rank.counts[occasion] ?? 0) - (a.rank.counts[occasion] ?? 0);
+        if (onScreen) return onScreen;
+      }
+      return (
         b.rank.cleared - a.rank.cleared ||
         b.rank.ratio - a.rank.ratio ||
         b.rank.weakest - a.rank.weakest ||
         b.rank.pooled - a.rank.pooled ||
         b.rank.cores - a.rank.cores ||
-        a.built.cell.id.localeCompare(b.built.cell.id, undefined, { numeric: true }),
-    );
-  if (!ranked.length) return yourUsual(book, season);
+        a.built.cell.id.localeCompare(b.built.cell.id, undefined, { numeric: true })
+      );
+    });
+  if (!ranked.length) return yourUsual(garments, season, occasion ?? "weekday", weatherF);
   return ranked.slice(0, CAP).map((row) => toWay(row.built, season, color, false));
 }
 

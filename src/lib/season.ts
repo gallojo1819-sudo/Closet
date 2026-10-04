@@ -61,14 +61,15 @@ export function seasonsOf(g: Garment): Season[] {
   return ["spring", "summer", "fall", "winter"];
 }
 
-/** One season name. Auto follows a real temperature, then the month. October, mild, is Fall. */
+/** Auto names the season it resolved. October, mild, is "Auto · Fall". */
 export function seasonControlLabel(
   chip: "auto" | Season,
   date = new Date(),
   weatherF?: number | null,
 ): string {
   const id = chip === "auto" ? seasonFromWeather(weatherF, date) : chip;
-  return SEASONS.find((s) => s.id === id)?.label ?? "Fall";
+  const label = SEASONS.find((s) => s.id === id)?.label ?? "Fall";
+  return chip === "auto" ? `Auto · ${label}` : label;
 }
 
 /**

@@ -62,9 +62,22 @@ async function renderSections(
   }).outputText;
   const detectorsHref = new URL("./detectors.ts", import.meta.url).href;
   const jsxHref = import.meta.resolve("react/jsx-runtime");
+  const dir = mkdtempSync(join(tmpdir(), "detectors-"));
+  const kit = join(dir, "kit.mjs");
+  writeFileSync(
+    kit,
+    `import { jsx, jsxs } from ${JSON.stringify(jsxHref)};
+export function LookKit({ pieces = [], layout }) {
+  return jsxs("div", {
+    "data-look-kit": layout ?? "",
+    children: pieces.map((g) => jsx("span", { children: g.name }, g.id)),
+  });
+}
+`,
+  );
+  js = js.replaceAll(`from "@/components/closet/look-kit"`, `from ${JSON.stringify(pathToFileURL(kit).href)}`);
   js = js.replaceAll(`from "@/lib/detectors"`, `from ${JSON.stringify(detectorsHref)}`);
   js = js.replaceAll(`from "react/jsx-runtime"`, `from ${JSON.stringify(jsxHref)}`);
-  const dir = mkdtempSync(join(tmpdir(), "detectors-"));
   const file = join(dir, "detector-sections.mjs");
   writeFileSync(file, js);
   try {
@@ -114,6 +127,9 @@ describe("detectors", () => {
     const html = await renderSections(rack, { season: "fall", occasion: "weekend" });
     const titles = titlesOf(html);
     assert.ok(titles.includes("Graphic tee and retro sneaker"));
+    assert.match(html, /data-look-kit="stack"/);
+    assert.match(html, /graphic tee 1/);
+    assert.equal(html.includes("graphic tee 1 · "), false);
     assert.equal(titles.includes("Flannel, cashmere, dark suede"), false);
     assert.equal(titles.includes("Linen and a soft jacket"), false);
     assert.equal(html.includes("None"), false);
@@ -133,7 +149,9 @@ describe("detectors", () => {
     const html = await renderSections(rack, { season: "fall" });
     const titles = titlesOf(html);
     assert.equal(titles.includes("Shrunken grey suit"), false);
-    assert.ok(titles.includes("Your usual"));
+    assert.equal(titles.includes("Your usual"), false);
+    assert.match(html, /data-usual-reason/);
+    assert.match(html, /jacket|top, a bottom, and a shoe/);
     assert.equal(html.includes("None"), false);
     const empty = visibleDetectors([], { season: "fall" });
     assert.equal(empty[0]?.title, "Your usual");
@@ -183,7 +201,8 @@ describe("detectors", () => {
     assert.equal(chip.some((way) => way.usual), true);
     assert.equal(chip.some((way) => way.id === "13" && !way.usual), false);
     const html = await renderSections(rack, { season: "fall", color: "pink" });
-    assert.ok(titlesOf(html).includes("Your usual"));
+    assert.equal(titlesOf(html).includes("Your usual"), false);
+    assert.match(html, /data-usual-reason/);
     const dead = g({
       id: "g_37e5eqjwgd3d",
       name: "white retro sneaker",
@@ -237,6 +256,62 @@ describe("detectors", () => {
       [g({ id: "d", name: "d", category: "top", subtype: "tee" }), g({ id: "e", name: "e", category: "bottom", subtype: "jean" })],
     ]);
     assert.equal(disjoint.length, 2);
+  });
+
+  it("October weekday fall hides a shoeless way and a linen cell under three", () => {
+    const noShoe = [
+      ...many("tee", "graphic tee", "top", "tee", { colors: ["navy"], material: "cotton" }),
+      ...many("jean", "indigo jean", "bottom", "jean", { colors: ["navy"], material: "denim" }),
+      ...many("lf", "brown loafers", "footwear", "loafer", { colors: ["brown"], material: "leather" }),
+    ];
+    const graphic = visibleDetectors(noShoe, { occasion: "weekend", season: "fall", weatherF: 73 });
+    assert.equal(graphic.some((way) => way.id === "13"), false);
+    const linen = [
+      g({ id: "shirt", name: "linen camp collar", category: "top", subtype: "camp shirt", material: "linen" }),
+      g({ id: "bottom", name: "linen gurkha", category: "bottom", subtype: "gurkha", material: "linen" }),
+      g({ id: "shoe", name: "suede loafer", category: "footwear", subtype: "loafer", material: "suede" }),
+    ];
+    const soft = visibleDetectors(linen, { occasion: "weekend", season: "fall", weatherF: 73 });
+    assert.equal(soft.some((way) => way.title === "Linen and a soft jacket" && !way.usual), false);
+  });
+
+  it("a finished look renders plates, and an empty usual has no heading", async () => {
+    const look = [
+      g({ id: "t", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      g({ id: "b", name: "Tan chinos", category: "bottom", subtype: "chino" }),
+      g({ id: "s", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const way: Way = {
+      id: "2",
+      title: "Oxford and chinos",
+      pieces: look,
+      looks: { weekday: [look, look, look] },
+      counts: { weekday: 3, out: 0, weekend: 0, travel: 0, comfy: 0 },
+    };
+    const html = await renderSections([], { ways: [way], occasion: "weekday", season: "fall" });
+    assert.match(html, /<h2[^>]*>Oxford and chinos<\/h2>/);
+    assert.match(html, /data-look-kit="stack"/);
+    assert.match(html, /Navy oxford/);
+    assert.match(html, /Tan chinos/);
+    assert.match(html, /Brown loafers/);
+    assert.equal(html.includes("Navy oxford · Tan chinos"), false);
+    const empty = await renderSections([], {
+      ways: [
+        {
+          id: "usual",
+          title: "Your usual",
+          pieces: [],
+          looks: {},
+          counts: { weekday: 0, out: 0, weekend: 0, travel: 0, comfy: 0 },
+          usual: true,
+          reason: "Weekday · Fall needs a top, a bottom, and a shoe from this closet.",
+        },
+      ],
+      occasion: "weekday",
+    });
+    assert.equal(titlesOf(empty).includes("Your usual"), false);
+    assert.match(empty, /data-usual-reason/);
+    assert.match(empty, /top, a bottom, and a shoe/);
   });
 
   it("section titles are clothes, at most four, and Joe's labels are not headings", () => {

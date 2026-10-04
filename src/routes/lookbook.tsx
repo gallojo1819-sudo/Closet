@@ -15,6 +15,7 @@ import {
   buildReshuffleRow,
   comboKey,
   emptyFilterCopy,
+  firstWeekLooks,
   lookbookPool,
   looksForHero,
   unusedFromLooks,
@@ -221,7 +222,6 @@ function LookbookPage() {
   const [weekPulse, setWeekPulse] = useState(0);
   const [occasion, setOccasion] = useState<(typeof OCCASIONS)[number]["id"]>("weekday");
   const [seasonChip, setSeasonChip] = useState<"auto" | Season>("auto");
-  const [seasonOpen, setSeasonOpen] = useState(false);
   const [color, setColor] = useState<string | null>(null);
   const [colorOpen, setColorOpen] = useState(false);
   const [wayId, setWayId] = useState<string | null>(null);
@@ -251,12 +251,13 @@ function LookbookPage() {
   const autoSeason = seasonFromWeather(drop?.weather?.f);
   const season: Season = seasonChip === "auto" ? autoSeason : seasonChip;
   const seasonShown = seasonControlLabel(seasonChip, new Date(), drop?.weather?.f);
+  const pageWeather = realWeatherF(drop?.weather);
   const ways = useMemo(
-    () => visibleDetectors(garments, { occasion, season, color }),
-    [garments, occasion, season, color],
+    () => visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather }),
+    [garments, occasion, season, color, pageWeather],
   );
   useEffect(() => {
-    const run = () => warmCellBook(garments, season);
+    const run = () => warmCellBook(garments, season, pageWeather);
     const idle = window.requestIdleCallback;
     if (typeof idle === "function") {
       const id = idle(run);
@@ -264,7 +265,7 @@ function LookbookPage() {
     }
     const id = window.setTimeout(run, 0);
     return () => window.clearTimeout(id);
-  }, [garments, season]);
+  }, [garments, season, pageWeather]);
   const shownWays = wayId ? ways.filter((way) => way.id === wayId) : ways;
   const seasonLabel =
     seasonChip === "auto"
@@ -279,22 +280,47 @@ function LookbookPage() {
     look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
   const tasteKey = `${taste.vetoes.length}:${taste.techniques.map((t) => t.weight).join(",")}`;
-  const filterKey = `${occasion}:${season}:${color ?? ""}:${garments.length}:${tasteKey}`;
-  const openRow = useMemo(
+  const filterKey = `${occasion}:${season}:${color ?? ""}:${garments.length}:${tasteKey}:${pageWeather ?? ""}`;
+  const preview = useMemo(
     () =>
-      buildReshuffleRow(garments, occasion, {
+      firstWeekLooks(garments, occasion, {
+        season,
+        color,
+        weather: drop?.weather?.measured ? drop.weather : null,
+      }),
+    [garments, occasion, season, color, drop?.weather],
+  );
+  const [ranked, setRanked] = useState<{ key: string; looks: Look[] } | null>(null);
+  const [shown, setShown] = useState<{ key: string; looks: Look[] } | null>(null);
+  const [salt, setSalt] = useState(1);
+  useEffect(() => {
+    let cancel = false;
+    const timer = window.setTimeout(() => {
+      const next = buildReshuffleRow(garments, occasion, {
         season,
         color,
         salt: 1,
         cap: 8,
         taste,
-      }),
-    [garments, occasion, season, color, taste],
-  );
-  const [shown, setShown] = useState<{ key: string; looks: Look[] } | null>(null);
-  const [salt, setSalt] = useState(1);
+        weather: drop?.weather?.measured ? drop.weather : undefined,
+      });
+      if (!cancel) setRanked({ key: filterKey, looks: next });
+    }, 0);
+    return () => {
+      cancel = true;
+      window.clearTimeout(timer);
+    };
+  }, [filterKey, garments, occasion, season, color, taste, drop?.weather]);
+  const rankedReady = ranked && ranked.key === filterKey ? ranked : null;
   const row =
-    shown && shown.key === filterKey && shown.looks.length > 0 ? shown.looks : openRow;
+    shown && shown.key === filterKey && shown.looks.length > 0
+      ? shown.looks
+      : rankedReady
+        ? rankedReady.looks
+        : preview.looks;
+  const weekReason = row.length
+    ? null
+    : preview.reason || "Nothing in this closet is legal for this week.";
   const cards = row.map((look) => ({ look, why: look.gap ?? "" }));
   const visible = cards;
   const onScreenLookIds = useMemo(() => {
@@ -318,7 +344,6 @@ function LookbookPage() {
       }),
     [onScreenLookIds, cards],
   );
-  const pageWeather = realWeatherF(drop?.weather);
   useEffect(() => {
     writeStylistPage({
       route: "lookbook",
@@ -427,58 +452,32 @@ function LookbookPage() {
             </button>
           ))}
         </div>
-        <div className="relative" data-season-control>
+        <div className="flex flex-wrap items-center gap-2" data-season-control>
           <button
             type="button"
-            aria-label="Season"
-            aria-haspopup="listbox"
-            aria-expanded={seasonOpen}
-            onClick={() => setSeasonOpen((v) => !v)}
-            className="micro border border-ink bg-ink px-3 py-2 text-paper"
+            aria-pressed={seasonChip === "auto"}
+            onClick={() => setSeasonChip("auto")}
+            className={cn(
+              "micro border px-3 py-2",
+              seasonChip === "auto" ? "border-ink bg-ink text-paper" : "border-hairline text-ink-soft",
+            )}
           >
             {seasonShown}
           </button>
-          {seasonOpen && (
-            <div
-              role="listbox"
-              aria-label="Season"
-              className="absolute left-0 top-full z-20 mt-1 flex flex-col border border-hairline bg-paper shadow-sm"
+          {SEASONS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              aria-pressed={seasonChip === s.id}
+              onClick={() => setSeasonChip(s.id)}
+              className={cn(
+                "micro border px-3 py-2",
+                seasonChip === s.id ? "border-ink bg-ink text-paper" : "border-hairline text-ink-soft",
+              )}
             >
-              <button
-                type="button"
-                role="option"
-                aria-selected={seasonChip === "auto"}
-                onClick={() => {
-                  setSeasonChip("auto");
-                  setSeasonOpen(false);
-                }}
-                className={cn(
-                  "micro px-3 py-2 text-left",
-                  seasonChip === "auto" ? "bg-ink text-paper" : "text-ink-soft",
-                )}
-              >
-                Auto
-              </button>
-              {SEASONS.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  role="option"
-                  aria-selected={seasonChip === s.id}
-                  onClick={() => {
-                    setSeasonChip(s.id);
-                    setSeasonOpen(false);
-                  }}
-                  className={cn(
-                    "micro px-3 py-2 text-left",
-                    seasonChip === s.id ? "bg-ink text-paper" : "text-ink-soft",
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          )}
+              {s.label}
+            </button>
+          ))}
         </div>
         <div className="relative" data-color-control>
           <button
@@ -568,6 +567,7 @@ function LookbookPage() {
             excludeKeys: row.map((look) => comboKey(look.garmentIds)),
             mustInclude: unusedFromLooks(garments, looksAll).map((g) => g.id),
             taste,
+            weather: drop?.weather?.measured ? drop.weather : undefined,
           });
           setSalt(nextSalt);
           if (next.length) {
@@ -631,17 +631,19 @@ function LookbookPage() {
         {colorOpen && !color ? (
           <p className="mt-3 text-sm text-ink-soft">Pick a colour.</p>
         ) : visible.length === 0 ? (
-          <p className="mt-3 text-sm text-ink-soft">
+          <p className="mt-3 text-sm text-ink-soft" data-week-reason>
             {color
               ? "Needs pieces from this closet."
-              : (emptyFilterCopy(
+              : (weekReason ||
+                emptyFilterCopy(
                   chapterLabel,
                   seasonLabel,
                   seasonChip,
                   "all",
                   color,
                   canBuild,
-                ) ?? "Need a top, a bottom, and shoes.")}
+                ) ||
+                "Need a top, a bottom, and shoes.")}
           </p>
         ) : (
           <ul

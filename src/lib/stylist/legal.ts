@@ -16,7 +16,7 @@ import {
 } from "../house-profiles/evaluate.ts";
 import { evaluateColor } from "./colorChip.ts";
 import { piecesFromIds, stylistHits, type StylistHit } from "./rules.ts";
-import { isJacketAddition, jacketHits, slotPieces, supersededStylist } from "./jackets.ts";
+import { coatSharesLookWithGraphic, isJacketAddition, jacketHits, slotPieces, supersededStylist } from "./jackets.ts";
 
 export const DELETED_SNEAKERS = ["g_37e5eqjwgd3d", "g_c6qdv5c3gkor", "g_x0ro1mg2gu0a"] as const;
 const DELETED = new Set<string>(DELETED_SNEAKERS);
@@ -26,6 +26,8 @@ export type LegalCtx = {
   occasion: Occasion | string;
   season?: Season | string;
   color?: string | null;
+  /** A measured reading. Omitted when the service has no temperature. Never invented. */
+  weatherF?: number;
   /** Display fill for a gated house. The gate note stays; the outfits still have to be legal. */
   ignoreGate?: boolean;
 };
@@ -46,10 +48,21 @@ function slotted(pieces: Garment[]): Partial<Record<string, Plate>> {
   return slottedPieces(pieces);
 }
 
+function measuredF(ctx: LegalCtx): number | undefined {
+  const n = ctx.weatherF;
+  return typeof n === "number" && Number.isFinite(n) ? n : undefined;
+}
+
 function activeHits(ps: Partial<Record<string, Plate>>, ctx: LegalCtx): StylistHit[] {
   const season = seasonOf(ctx);
   const stylist = stylistHits(ps, ctx.occasion, season, ctx.house ?? undefined).filter((h) => !supersededStylist(h));
-  const jacket = jacketHits(ps, { occasion: String(ctx.occasion), season, house: ctx.house ?? undefined });
+  const weatherF = measuredF(ctx);
+  const jacket = jacketHits(ps, {
+    occasion: String(ctx.occasion),
+    season,
+    house: ctx.house ?? undefined,
+    ...(weatherF !== undefined ? { tempF: weatherF } : {}),
+  });
   return [...stylist, ...jacket];
 }
 
@@ -86,6 +99,7 @@ function houseVerdict(
 
 export function isLegal(pieces: Garment[], ctx: LegalCtx): boolean {
   if (pieces.length < 3) return false;
+  if (coatSharesLookWithGraphic(pieces)) return false;
   if (deletedSneaker(pieces.map((p) => p.id))) return false;
   if (clashes(pieces)) return false;
   const ps = slotted(pieces);
@@ -135,6 +149,7 @@ export function explain(
   const hits = activeHits(ps, ctx);
   const col = ctx.color ? evaluateColor(ps, ctx.color, ctx.house ?? undefined) : null;
   const legal =
+    !coatSharesLookWithGraphic(pieces) &&
     !deletedSneaker(pieces.map((p) => p.id)) &&
     !clashes(pieces) &&
     Boolean(ps.top && ps.bottom && ps.shoe) &&
@@ -147,6 +162,7 @@ export function explain(
 /** Same rejects as isLegal, then the rank. Illegal is -Infinity. */
 export function scoreLook(pieces: Garment[], ctx: LegalCtx): number {
   if (pieces.length < 3) return Number.NEGATIVE_INFINITY;
+  if (coatSharesLookWithGraphic(pieces)) return Number.NEGATIVE_INFINITY;
   if (deletedSneaker(pieces.map((p) => p.id))) return Number.NEGATIVE_INFINITY;
   if (clashes(pieces)) return Number.NEGATIVE_INFINITY;
   const ps = slotted(pieces);

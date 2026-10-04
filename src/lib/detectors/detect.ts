@@ -1,9 +1,10 @@
 import library from "./library.json" with { type: "json" };
 import { brandHits } from "../house-profiles/evaluate.ts";
-import { jacketInfo, wearSlot } from "../stylist/jackets.ts";
+import { jacketInfo, jacketRequired, wearSlot } from "../stylist/jackets.ts";
 import { isHeavyCable, slotOf } from "../style.ts";
 import { isLegal } from "../stylist/legal.ts";
 import type { Garment, Occasion, Season } from "../types.ts";
+import { usualFromCloset } from "./usual.ts";
 
 type Detector = (typeof library.detectors)[number];
 type Role = "top" | "bottom" | "footwear" | "outer";
@@ -24,19 +25,23 @@ export type WayRank = {
   usual?: boolean;
 };
 
-const OCCASION_ORDER: Occasion[] = ["weekday", "out", "weekend", "travel", "comfy"];
 const CAP = 4;
 
 function cloth(g: Garment): string {
   return `${g.name} ${g.subtype} ${g.material ?? ""} ${g.notes ?? ""} ${(g.colors ?? []).join(" ")}`.toLowerCase();
 }
 
-function hasPhrase(text: string, phrase: string): boolean {
+/** The word, or that word plus a single trailing s. "AMI" does not match "Amiri". */
+export function phraseHits(text: string, phrase: string): boolean {
   const esc = phrase
     .toLowerCase()
     .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     .replace(/\\\s+/g, "\\s+");
-  return new RegExp(`(?<![\\p{L}\\p{N}])${esc}(?![\\p{L}\\p{N}])`, "iu").test(text);
+  return new RegExp(`(?<![\\p{L}\\p{N}])${esc}s?(?![\\p{L}\\p{N}])`, "iu").test(text);
+}
+
+function hasPhrase(text: string, phrase: string): boolean {
+  return phraseHits(text, phrase);
 }
 
 function anyPhrase(text: string, phrases: readonly string[]): boolean {
@@ -232,80 +237,97 @@ function inSeason(detector: Detector, season: Season, month?: number): boolean {
   return detector.seasons.includes(season);
 }
 
-function outfitsFor(detector: Detector, garments: Garment[]): { pieces: Garment[]; wear: number }[] {
-  const tops = garments.filter((g) => (roleOf(g) === "top" || roleOf(g) === "outer") && trips(detector, g)).slice(0, 6);
-  const bottoms = garments.filter((g) => roleOf(g) === "bottom" && trips(detector, g)).slice(0, 6);
-  const shoes = garments.filter((g) => roleOf(g) === "footwear" && trips(detector, g)).slice(0, 6);
+function finiteTemp(n: unknown): number | undefined {
+  return typeof n === "number" && Number.isFinite(n) ? n : undefined;
+}
+
+function outfitsFor(
+  detector: Detector,
+  garments: Garment[],
+  opts: { occasion: Occasion; season: Season; weatherF?: number },
+): { pieces: Garment[]; wear: number }[] {
+  const tops = garments.filter((g) => (roleOf(g) === "top" || roleOf(g) === "outer") && trips(detector, g));
+  const bottoms = garments.filter((g) => roleOf(g) === "bottom" && trips(detector, g));
+  const shoes = garments.filter((g) => roleOf(g) === "footwear" && trips(detector, g));
+  const jackets = garments.filter((g) => roleOf(g) === "outer");
+  const weatherF = finiteTemp(opts.weatherF);
+  const ctx = {
+    occasion: opts.occasion,
+    season: opts.season,
+    ...(weatherF !== undefined ? { weatherF } : {}),
+  };
+  const need = jacketRequired(opts.occasion, opts.season, weatherF);
   const found: { pieces: Garment[]; wear: number }[] = [];
+  const seen = new Set<string>();
+  let tries = 0;
   for (const top of tops) {
     for (const bottom of bottoms) {
+      if (found.length >= 3) break;
       for (const shoe of shoes) {
-        const pieces = [top, bottom, shoe];
-        if (hardBlock(pieces, detector)) continue;
-        const wear = pieces.reduce((sum, g) => sum + wearOf(g), 0);
-        found.push({ pieces, wear });
+        if (found.length >= 3 || tries >= 400) break;
+        tries += 1;
+        if (top.id === bottom.id || top.id === shoe.id || bottom.id === shoe.id) continue;
+        const core = [top, bottom, shoe];
+        const candidates: Garment[][] = need ? [] : [core];
+        for (const jacket of jackets) {
+          if (core.some((g) => g.id === jacket.id)) continue;
+          candidates.push([...core, jacket]);
+        }
+        for (const pieces of candidates) {
+          if (hardBlock(pieces, detector)) continue;
+          if (!isLegal(pieces, ctx)) continue;
+          const key = pieces
+            .map((g) => g.id)
+            .sort()
+            .join("|");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          found.push({ pieces, wear: pieces.reduce((sum, g) => sum + wearOf(g), 0) });
+          break;
+        }
       }
     }
   }
-  found.sort((a, b) => b.wear - a.wear || a.pieces[0].id.localeCompare(b.pieces[0].id));
+  found.sort((a, b) => b.wear - a.wear || a.pieces[0]!.id.localeCompare(b.pieces[0]!.id));
   return found;
-}
-
-function withOccasions(detector: Detector, rows: { pieces: Garment[]; wear: number }[]): WayOutfit[] {
-  const allowed = new Set(detector.occasions);
-  const out: WayOutfit[] = [];
-  for (const occasion of OCCASION_ORDER) {
-    if (!allowed.has(occasion)) continue;
-    const legal = rows.filter((row) => !hardBlock(row.pieces, detector));
-    for (const row of legal.slice(0, 3)) out.push({ occasion, pieces: row.pieces, wear: row.wear });
-  }
-  return out;
 }
 
 function scoreOf(rows: { wear: number }[]): number {
   return rows.reduce((sum, row) => sum + Math.max(1, row.wear), 0);
 }
 
-function yourUsual(garments: Garment[], season: Season): WayRank {
-  const tops = garments.filter((g) => roleOf(g) === "top").slice(0, 6);
-  const bottoms = garments.filter((g) => roleOf(g) === "bottom").slice(0, 6);
-  const shoes = garments.filter((g) => roleOf(g) === "footwear").slice(0, 6);
-  const rows: { pieces: Garment[]; wear: number }[] = [];
-  for (const top of tops) {
-    for (const bottom of bottoms) {
-      for (const shoe of shoes) {
-        const pieces = [top, bottom, shoe];
-        if (hardBlock(pieces)) continue;
-        if (!isLegal(pieces, { occasion: "weekday", season })) continue;
-        rows.push({ pieces, wear: pieces.reduce((sum, g) => sum + wearOf(g), 0) });
-      }
-    }
-  }
-  rows.sort((a, b) => b.wear - a.wear);
-  const outfits: WayOutfit[] = rows.slice(0, 3).map((row) => ({
-    occasion: "weekday",
-    pieces: row.pieces,
-    wear: row.wear,
+function yourUsual(
+  garments: Garment[],
+  opts: { occasion: Occasion; season: Season; weatherF?: number },
+): WayRank {
+  const built = usualFromCloset(garments, opts);
+  const outfits: WayOutfit[] = built.looks.slice(0, 3).map((pieces) => ({
+    occasion: opts.occasion,
+    pieces,
+    wear: pieces.reduce((sum, g) => sum + wearOf(g), 0),
   }));
   return {
     id: "your_usual",
     title: "Your usual",
-    count: rows.length,
-    reasons: rows.length ? ["Most-worn legal outfits."] : ["Nothing in this closet finishes a way of dressing."],
-    score: scoreOf(rows),
+    count: built.looks.length,
+    reasons: built.looks.length ? ["Most-worn legal outfits."] : [built.reason],
+    score: scoreOf(outfits),
     outfits,
     usual: true,
   };
 }
 
-/** At most four ways this closet can finish, season first, then wear. Never an empty list. */
+/** At most four ways with at least three legal looks for the occasion on screen. */
 export function rankWays(
   garments: Garment[],
-  opts: { season: Season; month?: number },
+  opts: { season: Season; occasion?: Occasion; month?: number; weatherF?: number },
 ): WayRank[] {
+  const occasion = opts.occasion ?? "weekday";
+  const weatherF = finiteTemp(opts.weatherF);
   const live = garments.filter((g) => !g.archived);
+  const page = { occasion, season: opts.season, ...(weatherF !== undefined ? { weatherF } : {}) };
   const ranked = library.detectors.map((detector) => {
-    const rows = outfitsFor(detector, live);
+    const rows = outfitsFor(detector, live, page);
     return {
       detector,
       rows,
@@ -313,18 +335,18 @@ export function rankWays(
       score: scoreOf(rows),
     };
   });
-  const ready = ranked.filter((row) => row.rows.length > 0);
+  const ready = ranked.filter((row) => row.rows.length >= 3 && row.detector.occasions.includes(occasion));
   const seasonFirst = [
     ...ready.filter((row) => row.inSeason).sort((a, b) => b.score - a.score),
     ...ready.filter((row) => !row.inSeason).sort((a, b) => b.score - a.score),
   ].slice(0, CAP);
-  if (!seasonFirst.length) return [yourUsual(live, opts.season)];
+  if (!seasonFirst.length) return [yourUsual(live, page)];
   return seasonFirst.map(({ detector, rows, score }) => ({
     id: detector.id,
     title: detector.title,
     count: rows.length,
-    reasons: [`${rows.length} complete ${rows.length === 1 ? "look" : "looks"}.`],
+    reasons: [`${rows.length} complete looks.`],
     score,
-    outfits: withOccasions(detector, rows),
+    outfits: rows.slice(0, 3).map((row) => ({ occasion, pieces: row.pieces, wear: row.wear })),
   }));
 }

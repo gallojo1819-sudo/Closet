@@ -7,6 +7,7 @@ import {
   buildLookbook,
   buildReshuffleRow,
   buildWeek,
+  firstWeekLooks,
   todayStripLooks,
   weekStripDays,
   CHAPTER_CAP,
@@ -29,7 +30,7 @@ import {
 } from "./lookbook.ts";
 import { houseKill } from "./houses.ts";
 import { lookFitsSeason } from "./season.ts";
-import { isLegal } from "./stylist/legal.ts";
+import { explain, isLegal } from "./stylist/legal.ts";
 import platesFile from "./stylist/__tests__/fixtures/plates-2026-09-30.json" with { type: "json" };
 import { isButtonDown, isCreamCable } from "./recipes.ts";
 import { isBrownSuedeOuter, isTrueOuter, isWeekendSoftJacket, pickLook, slotOf, trendScore } from "./style.ts";
@@ -875,6 +876,86 @@ describe("2026-09 stylist pack", () => {
     }
   });
 
+  it("73 waives the fall jacket, and a missing reading does not become 68", () => {
+    const look = [
+      piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford", colors: ["navy"] }),
+      piece({ id: "ch", name: "Tan chinos", category: "bottom", subtype: "chino", colors: ["khaki"] }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer", colors: ["brown"] }),
+    ];
+    assert.equal(isLegal(look, { occasion: "weekday", season: "fall", weatherF: 73 }), true);
+    assert.equal(isLegal(look, { occasion: "weekday", season: "fall" }), false);
+    assert.equal(isLegal(look, { occasion: "weekday", season: "fall", weatherF: 68 }), false);
+    const bare = explain(look, { occasion: "weekday", season: "fall" });
+    assert.equal(bare.hits.some((hit) => hit.id === "JKT-COV-1" && hit.severity === "hard"), true);
+    assert.equal(JSON.stringify(bare).includes("68"), false);
+  });
+
+  it("ALD may wear a loafer, Sweet Stable weekday stays on, and out stays off", () => {
+    const ald = [
+      piece({ id: "rg", name: "Navy rugby", category: "top", subtype: "rugby", colors: ["navy"] }),
+      piece({ id: "jean", name: "Indigo jeans", category: "bottom", subtype: "jean", material: "denim", colors: ["indigo"] }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer", colors: ["brown"] }),
+    ];
+    const aldWhy = explain(ald, { house: "ald", occasion: "weekend", season: "fall" });
+    assert.equal(aldWhy.house?.hardFails.includes("ALD-B1") ?? false, false);
+    assert.equal(
+      aldWhy.hits.some((hit) => hit.severity === "hard" && /loafer/i.test(hit.why)),
+      false,
+    );
+    assert.equal(isLegal(ald, { house: "ald", occasion: "weekend", season: "fall" }), true);
+    const sweet = [
+      piece({ id: "fi", name: "Cream fair isle", category: "top", subtype: "knit", colors: ["cream"] }),
+      piece({ id: "cord", name: "Brown cords", category: "bottom", subtype: "cord", colors: ["brown"] }),
+      piece({ id: "bt", name: "Brown boot", category: "footwear", subtype: "boot", colors: ["brown"] }),
+    ];
+    assert.equal(
+      isLegal(sweet, { house: "sweetStable", occasion: "weekday", season: "fall", weatherF: 73 }),
+      true,
+    );
+    assert.equal(
+      isLegal(sweet, { house: "sweetStable", occasion: "out", season: "fall", weatherF: 73 }),
+      false,
+    );
+  });
+
+  it("a varsity and a sport coat are illegal in either order, and linen with flannel always is", () => {
+    const base = [
+      piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
+      piece({ id: "ch", name: "Tan chinos", category: "bottom", subtype: "chino" }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+    ];
+    const varsity = piece({ id: "va", name: "Khaki varsity", category: "outerwear", subtype: "varsity" });
+    const blazer = piece({ id: "bz", name: "Navy blazer", category: "outerwear", subtype: "blazer" });
+    const graphic = piece({ id: "gr", name: "Graphic tee", category: "top", subtype: "tee" });
+    const collegiate = piece({ id: "co", name: "Collegiate sweatshirt", category: "top", subtype: "sweatshirt" });
+    for (const occasion of ["weekday", "weekend"] as const) {
+      assert.equal(isLegal([...base, varsity, blazer], { occasion, season: "fall", weatherF: 73 }), false);
+      assert.equal(isLegal([blazer, varsity, ...base], { occasion, season: "fall", weatherF: 73 }), false);
+      assert.equal(isLegal([graphic, ...base.slice(1), blazer], { occasion, season: "fall", weatherF: 73 }), false);
+      assert.equal(isLegal([blazer, collegiate, base[1]!, base[2]!], { occasion, season: "fall", weatherF: 73 }), false);
+    }
+    const linen = piece({
+      id: "li",
+      name: "Linen camp shirt",
+      category: "top",
+      subtype: "camp shirt",
+      material: "linen",
+    });
+    const flannel = piece({
+      id: "fl",
+      name: "Grey flannel trousers",
+      category: "bottom",
+      subtype: "trouser",
+      material: "flannel",
+    });
+    const shoe = piece({ id: "sh", name: "Brown loafers", category: "footwear", subtype: "loafer" });
+    for (const season of ["spring", "summer", "fall", "winter"] as const) {
+      const why = explain([linen, flannel, shoe], { occasion: "weekend", season });
+      assert.equal(why.hits.some((hit) => hit.id === "XC-SEA-5" && hit.severity === "hard"), true, season);
+      assert.equal(isLegal([linen, flannel, shoe], { occasion: "weekend", season }), false, season);
+    }
+  });
+
   it("oxford+dark jean+loafer weekday → VALID", () => {
     const look = [
       piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
@@ -1527,6 +1608,44 @@ describe("lookbook card stack", () => {
     assert.match(reduce, /\.look-kit-plate[\s\S]*transform:\s*none/);
     const hero = book.slice(book.indexOf("5 looks with"));
     assert.equal(hero.includes('layout="stack"'), false);
+  });
+
+  it("the first week cards paint before the full rank", () => {
+    const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
+    const lib = readFileSync(new URL("./lookbook.ts", import.meta.url), "utf8");
+    const preview = book.slice(book.indexOf("const preview"), book.indexOf("const [ranked"));
+    assert.match(preview, /firstWeekLooks\(/);
+    assert.equal(preview.includes("buildReshuffleRow"), false);
+    assert.match(book, /window\.setTimeout\(\(\) => \{[\s\S]*?buildReshuffleRow/);
+    assert.match(book, /data-week-reason/);
+    const fn = lib.slice(lib.indexOf("export function firstWeekLooks"), lib.indexOf("export function buildReshuffleRow"));
+    assert.equal(fn.includes("buildHouseMatrix"), false);
+    assert.equal(fn.includes("finishStyled"), false);
+    assert.equal(fn.includes("pickLook"), false);
+    assert.equal(fn.includes("68"), false);
+    const rack = [
+      piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford", colors: ["navy"] }),
+      piece({ id: "ch", name: "Tan chinos", category: "bottom", subtype: "chino", colors: ["khaki"] }),
+      piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer", colors: ["brown"] }),
+    ];
+    const warm = firstWeekLooks(rack, "weekday", {
+      season: "fall",
+      weather: { f: 73, label: "Warm", code: 1, measured: true },
+    });
+    assert.ok(warm.looks.length >= 1, warm.reason);
+    assert.equal(warm.looks.some((look) => look.garmentIds.length >= 3), true);
+    const missing = firstWeekLooks(rack, "weekday", { season: "fall" });
+    assert.equal(missing.looks.length, 0);
+    assert.match(missing.reason, /jacket/);
+    assert.equal(missing.reason.includes("68"), false);
+    const unmeasured = firstWeekLooks(rack, "weekday", {
+      season: "fall",
+      weather: { f: 73, label: "Warm", code: 1, measured: false },
+    });
+    assert.equal(unmeasured.looks.length, 0);
+    const empty = firstWeekLooks([], "weekday", { season: "fall" });
+    assert.equal(empty.looks.length, 0);
+    assert.match(empty.reason, /top, a bottom, and a shoe/);
   });
 
   it("lookbook shows ways this closet can finish, not a house row", () => {

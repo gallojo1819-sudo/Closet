@@ -82,13 +82,15 @@ describe("seasonFromWeather", () => {
     assert.equal(seasonFromWeather(null, sep), "fall");
   });
 
-  it("October Auto shows Fall, not a row of season chips", () => {
+  it("October Auto reads Auto · Fall, and the five seasons are chips", () => {
     const october = new Date(2026, 9, 15);
-    assert.equal(seasonControlLabel("auto", october, 68), "Fall");
-    assert.notEqual(seasonControlLabel("auto", october, 68), "Auto");
+    assert.equal(seasonControlLabel("auto", october, 68), "Auto · Fall");
+    assert.equal(seasonControlLabel("auto", october), "Auto · Fall");
+    assert.equal(seasonControlLabel("fall", october), "Fall");
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
     assert.equal(book.includes("data-house-row"), false);
     assert.equal(book.includes("HOUSE_CHIPS"), false);
+    assert.equal(book.includes("seasonOpen"), false);
     const seasonAt = book.indexOf("data-season-control");
     const detectorsAt = book.indexOf("<DetectorSections");
     assert.ok(seasonAt > 0 && detectorsAt > seasonAt);
@@ -96,6 +98,8 @@ describe("seasonFromWeather", () => {
     assert.match(book.slice(seasonAt, detectorsAt), /\{seasonShown\}/);
     assert.equal(book.split("SEASONS.map").length - 1, 1);
     assert.equal(seasonCtl.includes("SEASONS.map"), true);
+    assert.equal(seasonCtl.includes("seasonOpen"), false);
+    assert.equal((seasonCtl.match(/<button/g) ?? []).length, 2);
     assert.equal(book.slice(0, seasonAt).includes("SEASONS.map"), false);
   });
 });
