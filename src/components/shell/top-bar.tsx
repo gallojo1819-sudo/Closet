@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { AccountChip } from "@/components/shell/account-chip";
-import { openStylistPanel } from "@/components/shell/stylist-dock";
 import { useAccount } from "@/lib/cloud/account";
 import { compressRefBackup, putImage, refImageKey } from "@/lib/images";
 import { useCloset } from "@/lib/store";
@@ -287,13 +286,6 @@ export function TopBar() {
             )}
           >
             Fit · 5′8 reg
-          </button>
-          <button
-            type="button"
-            onClick={() => openStylistPanel()}
-            className="micro hidden md:inline-flex h-8 items-center px-3 bg-accent text-paper"
-          >
-            Stylist
           </button>
           {sample ? (
             <button

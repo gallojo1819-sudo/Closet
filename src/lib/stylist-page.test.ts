@@ -190,7 +190,7 @@ describe("stylist page", () => {
     assert.match(route, /openStylistPanel/);
     assert.match(dock, /data-stylist-dock/);
     assert.match(dock, /data-stylist-screen/);
-    assert.match(dock, /messages\.map/);
+    assert.match(dock, /replyLines/);
     assert.match(lookbook, /writeStylistPage/);
     assert.match(lookbook, /onScreenLookIds/);
     assert.match(today, /writeStylistPage/);
@@ -580,12 +580,12 @@ describe("stylist page", () => {
     }
   });
 
-  it("acceptance: the closed agent is the Ask circle, not a full-width bar", () => {
+  it("acceptance: the closed agent is the Stylist chip, not a full-width bar", () => {
     const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
     assert.equal(dock.includes("inset-x-0 bottom-14"), false);
-    assert.match(dock, /Ask/);
-    assert.match(dock, /rounded-full/);
-    // The busy line lives in the open panel only.
+    assert.match(dock, /Stylist/);
+    assert.match(dock, /text-ink/);
+    // The busy line lives in the open card only.
     const busy = dock.match(/Considering the closet…/g);
     assert.equal(busy?.length, 1);
   });

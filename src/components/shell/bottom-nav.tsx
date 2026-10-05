@@ -14,7 +14,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-40 border-t bg-paper text-ink border-hairline"
+      className="fixed bottom-0 inset-x-0 z-40 border-t bg-paper text-ink border-hairline md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="grid grid-cols-4 h-14">

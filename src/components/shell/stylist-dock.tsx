@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
-import { FlatLay } from "@/components/closet/flat-lay";
 import { Button } from "@/components/ui/button";
 import { askStylist, trendLayer } from "@/lib/ai";
 import {
@@ -54,49 +53,21 @@ export function openStylistPanel(): void {
   for (const fn of panelListeners) fn();
 }
 
-const PROMPTS = [
-  "Out, uptown, afternoon",
-  "Dinner in the West Village",
-  "Saturday, nothing planned",
-  "Wear something I keep skipping",
-];
-
-function StylistNote({ text }: { text: string }) {
+/** The visible lines of a reply: plain ink, one piece name per line. */
+function replyLines(text: string): string[] {
   const lines = text
     .split("\n")
     .map((l) => l.trim())
-    .filter(Boolean);
-  const missing = lines.filter((l) => /^MISSING:/i.test(l));
-  const body = lines.filter((l) => !/^MISSING:/i.test(l) && !/^LOOK:/i.test(l));
-  const shown = body.length ? body : [stylistProse(text)];
-  return (
-    <div className="space-y-1">
-      {shown.map((l, i) => (
-        <p
-          key={`${i}-${l}`}
-          className={
-            i === 0
-              ? "text-sm leading-relaxed text-champagne"
-              : "text-sm leading-relaxed text-champagne/80"
-          }
-        >
-          {l}
-        </p>
-      ))}
-      {missing.map((l) => (
-        <p key={l} className="mt-2 text-sm text-champagne/70">
-          {l.replace(/^MISSING:\s*/i, "Missing: ")}
-        </p>
-      ))}
-    </div>
-  );
+    .filter(Boolean)
+    .filter((l) => !/^MISSING:/i.test(l) && !/^LOOK:/i.test(l));
+  return lines.length ? lines : [stylistProse(text)];
 }
 
 function pageOccasion(value: string | undefined, fallback: Occasion): Occasion {
   return OCCASIONS.some((row) => row.id === value) ? (value as Occasion) : fallback;
 }
 
-/** One small agent on every page. The Ask circle opens the panel. */
+/** One small agent on every page. The Stylist chip opens the card. */
 export function StylistDock() {
   const hydrated = useCloset((s) => s.hydrated);
   const garmentsAll = useCloset((s) => s.garments);
@@ -402,7 +373,7 @@ export function StylistDock() {
       <input
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Wear the cream cable"
+        placeholder="Saturday, nothing planned"
         disabled={owned.length === 0}
         className="h-11 flex-1 border border-hairline bg-paper px-3 text-sm text-ink placeholder:text-ink-soft disabled:opacity-40"
       />
@@ -412,6 +383,10 @@ export function StylistDock() {
     </form>
   );
 
+  const lastStylist = [...messages].reverse().find((m) => m.role === "stylist");
+  const error = lastStylist?.text === NOT_IN_CLOSET ? lastStylist.text : null;
+  const look = lastStylist && !error ? lastStylist : null;
+
   return (
     <>
       {open ? (
@@ -419,72 +394,62 @@ export function StylistDock() {
           <button
             type="button"
             aria-label="Close the stylist"
-            className="fixed inset-0 z-30 cursor-default"
+            className="fixed inset-0 z-40 cursor-default"
             onClick={() => setOpen(false)}
           />
           <div
             data-stylist-dock
-            className="fixed right-4 bottom-[calc(3.5rem+0.75rem+2.75rem+0.5rem+env(safe-area-inset-bottom))] z-40 flex max-h-[70dvh] w-[min(100vw-2rem,20rem)] flex-col overflow-auto border border-hairline bg-paper text-ink md:right-6 md:bottom-[4.75rem]"
+            className="fixed right-4 bottom-[calc(3.5rem+0.75rem+2.75rem+0.5rem+env(safe-area-inset-bottom))] z-50 flex max-h-[70dvh] w-[min(100vw-2rem,22rem)] flex-col overflow-auto border border-hairline bg-paper text-ink md:right-6 md:bottom-[4.75rem]"
             style={{
               opacity: shown ? 1 : 0,
               transform: shown ? "translateY(0)" : "translateY(8px)",
               transition: "opacity 160ms ease-out, transform 160ms ease-out",
             }}
           >
-            <p data-stylist-screen className="border-b border-hairline px-4 py-3 text-sm text-ink">
-              {sentence}
-            </p>
-            <div className="space-y-3 px-4 py-3">
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={
-                    m.role === "user"
-                      ? "text-ink"
-                      : "border border-hairline bg-paper px-4 py-3 text-ink"
-                  }
-                >
-                  {m.role === "user" && <p className="micro text-ink-soft mb-1">You</p>}
-                  {m.role === "stylist" ? (
-                    <StylistNote text={m.text} />
-                  ) : (
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</p>
+            <div className="px-4 pt-3">
+              <p className="micro text-ink-soft">This page</p>
+              <p data-stylist-screen className="mt-1 text-sm text-ink">
+                {sentence}
+              </p>
+            </div>
+            <div className="mt-3 border-t border-hairline px-4 pt-3">
+              <p className="micro text-ink-soft">This look</p>
+              {look ? (
+                <>
+                  <div className="mt-1 space-y-1">
+                    {replyLines(look.text).map((l, i) => (
+                      <p key={`${i}-${l}`} className="text-sm leading-relaxed text-ink">
+                        {l}
+                      </p>
+                    ))}
+                  </div>
+                  {look.technique && (
+                    <p className="mt-2 text-xs text-ink-soft">{look.technique}</p>
                   )}
-                  {m.role === "stylist" && m.technique && (
-                    <p className="mt-2 text-xs text-ink-soft">{m.technique}</p>
-                  )}
-                  {m.role === "stylist" && m.garmentIds && m.garmentIds.length > 0 && (
-                    <FlatLay
-                      pieces={m.garmentIds
-                        .map((id) => forStylist.find((g) => g.id === id))
-                        .filter((g): g is Garment => Boolean(g))}
-                      className="mt-3 border border-hairline"
-                    />
-                  )}
-                  {m.role === "stylist" && (draftFromMessage(m) || m.lookId) && (
+                  {(draftFromMessage(look) || look.lookId) && (
                     <div className="mt-3 flex flex-wrap gap-3">
-                      {draftFromMessage(m) && (
+                      {draftFromMessage(look) && (
                         <button
                           type="button"
-                          onClick={() => saveDraft(m.id)}
+                          onClick={() => saveDraft(look.id)}
                           className="micro text-ink-soft hover:text-ink underline-offset-2 hover:underline"
                         >
-                          {m.lookId ? "Saved" : "Save"}
+                          {look.lookId ? "Saved" : "Save"}
                         </button>
                       )}
-                      {draftFromMessage(m) && (
+                      {draftFromMessage(look) && (
                         <button
                           type="button"
-                          onClick={() => wearDraft(m.id)}
+                          onClick={() => wearDraft(look.id)}
                           className="micro text-ink-soft hover:text-ink underline-offset-2 hover:underline"
                         >
                           Wear this
                         </button>
                       )}
-                      {m.lookId && (
+                      {look.lookId && (
                         <Link
                           to="/lookbook"
-                          search={{ look: m.lookId }}
+                          search={{ look: look.lookId }}
                           className="micro text-ink-soft hover:text-ink underline-offset-2 hover:underline"
                         >
                           See on you →
@@ -492,28 +457,21 @@ export function StylistDock() {
                       )}
                     </div>
                   )}
-                </div>
-              ))}
-              {busy && (
-                <p className="flex items-center gap-2 text-sm text-ink-soft">
+                </>
+              ) : busy ? (
+                <p className="mt-1 flex items-center gap-2 text-sm text-ink-soft">
                   <Loader2 className="size-4 animate-spin" /> Considering the closet…
                 </p>
+              ) : (
+                <p className="mt-1 text-sm text-ink-soft">Nothing yet.</p>
               )}
             </div>
-            <div className="mt-auto flex flex-wrap gap-2 border-t border-hairline px-4 pt-3">
-              {PROMPTS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => void send(p)}
-                  disabled={owned.length === 0}
-                  className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40"
-                >
-                  {p}
-                </button>
-              ))}
+            <div className="mt-3 border-t border-hairline px-4 pt-3 pb-4">
+              {form}
+              {error ? (
+                <p className="mt-2 text-sm text-accent">{error}</p>
+              ) : null}
             </div>
-            <div className="px-4 pt-3 pb-4">{form}</div>
           </div>
         </>
       ) : null}
@@ -523,11 +481,11 @@ export function StylistDock() {
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "fixed right-4 bottom-[calc(3.5rem+0.75rem+env(safe-area-inset-bottom))] z-40 size-11 rounded-full border bg-paper text-ink md:right-6 md:bottom-6",
+          "fixed right-4 bottom-[calc(3.5rem+0.75rem+env(safe-area-inset-bottom))] z-50 h-11 rounded-full border bg-paper px-4 text-sm text-ink md:right-6 md:bottom-6",
           ring ? "border-accent" : "border-hairline",
         )}
       >
-        Ask
+        Stylist
         {unread && !open ? (
           <span aria-hidden className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-accent" />
         ) : null}
