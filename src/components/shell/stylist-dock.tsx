@@ -15,6 +15,8 @@ import {
   NOT_IN_CLOSET,
   acceptStylistReply,
   answerAsked,
+  briefLine,
+  briefOccasion,
   readStylistPage,
   rememberedLooks,
   replyFromStylistResult,
@@ -31,6 +33,7 @@ import { useCloset } from "@/lib/store";
 import {
   acceptTrend,
   atlasText,
+  composeAtlasLook,
   emptyTaste,
   learnFromAsk,
   learnFromSave,
@@ -197,6 +200,33 @@ export function StylistDock() {
               draftOccasion: occasion,
             }
           : {}),
+      });
+      return;
+    }
+    const brief = briefOccasion(q);
+    if (brief) {
+      const rolled = composeAtlasLook({
+        garments: [...owned],
+        prompt: q,
+        occasion: brief,
+        taste,
+        ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
+      });
+      const pieces = rolled.garmentIds
+        .map((id) => owned.find((g) => g.id === id))
+        .filter((g): g is Garment => Boolean(g));
+      const line = briefLine(q, pieces);
+      if (!line) {
+        pushMessage({ role: "stylist", text: WHICH_PIECE });
+        return;
+      }
+      pushMessage({
+        role: "stylist",
+        text: line,
+        garmentIds: rolled.garmentIds,
+        draftName: nameLook(pieces),
+        draftOccasion: brief,
+        ...(rolled.technique ? { technique: rolled.technique } : {}),
       });
       return;
     }

@@ -12,6 +12,8 @@ const {
   acceptStylistReply,
   answerAsked,
   bindClosetPiece,
+  briefLine,
+  briefOccasion,
   formatStrongest,
   noteRoute,
   readStylistPage,
@@ -531,6 +533,46 @@ describe("stylist page", () => {
       garments: owned,
     });
     assert.equal(denied.kind, "reject");
+  });
+
+  it("acceptance: a brief dresses him, the page does not answer it", () => {
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "fall",
+      onScreenLookIds: ["l1"],
+      screenLooks: [{ id: "l1", garmentIds: ["g_blazer", "g_ox", "g_chino", "g_loafer"] }],
+    });
+    // Looks are on screen; a brief still passes through to the dresser.
+    const brief = answerAsked({
+      prompt: "tuesday, boards meeting dinner",
+      page: readStylistPage(),
+      garments: owned,
+    });
+    assert.equal(brief.kind, "pass");
+    // The page question still answers from the on-screen looks.
+    const pageAsk = answerAsked({
+      prompt: "what is the strongest look on this page?",
+      page: readStylistPage(),
+      garments: owned,
+    });
+    assert.equal(pageAsk.kind, "answer");
+    if (pageAsk.kind === "answer") assert.match(pageAsk.text, /Wear your /);
+    // Dinner outranks the day words; boards alone is out; a bare
+    // weekday is weekday; the strongest-look question is not a brief.
+    assert.equal(briefOccasion("tuesday, boards meeting dinner"), "out");
+    assert.equal(briefOccasion("boards meeting tuesday"), "out");
+    assert.equal(briefOccasion("tuesday"), "weekday");
+    assert.equal(briefOccasion("what is the strongest look on this page?"), null);
+    // The line leads with the boards, then the pieces he owns.
+    const line = briefLine("tuesday, boards meeting dinner", [blazer, oxford, chinos, loafers]);
+    assert.equal(
+      line,
+      "Boards, then dinner. Wear your oxford with the tan chinos and the suede loafers under the navy blazer.",
+    );
+    assert.equal(line?.includes("g_"), false);
+    assert.equal(line?.includes("LOOK:"), false);
+    assert.equal(briefLine("tuesday", [oxford, chinos, loafers]), "Tuesday. Wear your oxford with the tan chinos and the suede loafers.");
   });
 
   it("acceptance: a look question with nothing on screen is not a model pass", () => {

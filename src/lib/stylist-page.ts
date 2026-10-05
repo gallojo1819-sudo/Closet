@@ -487,6 +487,59 @@ function asksAboutOnScreenLooks(prompt: string): boolean {
   return /\blooks?\b/i.test(prompt) || /\b(?:this page|on screen)\b/i.test(prompt);
 }
 
+const BRIEF_WORDS =
+  /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|dinner|meeting|boards?|client|travel|weekend|comfy|outfit)\b/i;
+
+/**
+ * A brief is a request to dress him: a weekday or an occasion word, and not
+ * a question about the strongest look, this page, or what is on screen.
+ */
+function isBrief(prompt: string): boolean {
+  if (/\bstrongest\b/i.test(prompt)) return false;
+  if (asksAboutOnScreenLooks(prompt)) return false;
+  return BRIEF_WORDS.test(prompt);
+}
+
+/**
+ * A brief dresses him in an existing occasion. Dinner outranks the day
+ * words; meeting, boards, or client without dinner is out; a bare weekday
+ * is weekday.
+ */
+export function briefOccasion(prompt: string): Occasion | null {
+  if (!isBrief(prompt)) return null;
+  if (/\bdinner\b/i.test(prompt)) return "out";
+  if (/\b(?:meeting|boards?|client)\b/i.test(prompt)) return "out";
+  if (/\bweekend\b/i.test(prompt)) return "weekend";
+  if (/\bcomfy\b/i.test(prompt)) return "comfy";
+  if (/\btravel\b/i.test(prompt)) return "travel";
+  return "weekday";
+}
+
+/**
+ * The brief as one line: the lead, then the rolled pieces as a Wear
+ * sentence, jacket under at the end. Null when the closet cannot dress a
+ * top, a bottom, and a shoe.
+ */
+export function briefLine(prompt: string, pieces: readonly Garment[]): string | null {
+  const wear = wearSentence(pieces);
+  if (!wear) return null;
+  const dinner = /\bdinner\b/i.test(prompt);
+  const meeting = /\b(?:meeting|boards?|client)\b/i.test(prompt);
+  const weekday = prompt.match(
+    /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+  );
+  const lead = dinner && meeting
+    ? "Boards, then dinner."
+    : dinner
+      ? "Dinner."
+      : meeting
+        ? "For the meeting."
+        : weekday
+          ? `${weekday[0][0]!.toUpperCase()}${weekday[0].slice(1).toLowerCase()}.`
+          : `${labelOf("occasion", briefOccasion(prompt) ?? "weekday")}.`;
+  return `${lead} ${wear}`;
+}
+
 export function formatStrongest(
   index: number,
   pieces: readonly Garment[],
@@ -682,6 +735,7 @@ export function answerAsked(input: {
   const garments = input.garments;
   if (input.modelText && !acceptStylistReply(input.modelText, garments)) return { kind: "reject" };
   if (promptInventsGarment(input.prompt, garments)) return { kind: "reject" };
+  if (isBrief(input.prompt)) return { kind: "pass" };
   const looks = (input.looks ?? rememberedLooks(page)).filter((look) =>
     page.onScreenLookIds.includes(look.id),
   );
