@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Link, Navigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { FlatLay } from "@/components/closet/flat-lay";
 import { Button } from "@/components/ui/button";
@@ -43,9 +43,16 @@ import {
   trendDue,
 } from "@/lib/taste";
 import { OCCASIONS, type Garment, type Occasion } from "@/lib/types";
-import { todayISO } from "@/lib/utils";
+import { cn, todayISO } from "@/lib/utils";
 
 let trendPassStarted = false;
+
+const panelListeners = new Set<() => void>();
+
+/** Open the one agent's panel from anywhere (top bar, /stylist). No navigation. */
+export function openStylistPanel(): void {
+  for (const fn of panelListeners) fn();
+}
 
 const PROMPTS = [
   "Out, uptown, afternoon",
@@ -89,8 +96,8 @@ function pageOccasion(value: string | undefined, fallback: Occasion): Occasion {
   return OCCASIONS.some((row) => row.id === value) ? (value as Occasion) : fallback;
 }
 
-/** The same panel on every page. /stylist opens it. */
-export function StylistDock({ open = false }: { open?: boolean }) {
+/** One small agent on every page. The Ask circle opens the panel. */
+export function StylistDock() {
   const hydrated = useCloset((s) => s.hydrated);
   const garmentsAll = useCloset((s) => s.garments);
   const drop = useCloset((s) => s.drop);
@@ -113,6 +120,49 @@ export function StylistDock({ open = false }: { open?: boolean }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const explicitWrite = useRef(false);
+  const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState(false);
+  const [ring, setRing] = useState(false);
+  const [unread, setUnread] = useState(false);
+  const seenRef = useRef(messages.length);
+
+  useEffect(() => {
+    const fn = () => setOpen(true);
+    panelListeners.add(fn);
+    return () => {
+      panelListeners.delete(fn);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setShown(false);
+    const raf = requestAnimationFrame(() => setShown(true));
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!busy) return;
+    setRing(true);
+    const t = window.setTimeout(() => setRing(false), 1200);
+    return () => window.clearTimeout(t);
+  }, [busy]);
+
+  useEffect(() => {
+    if (open) {
+      seenRef.current = messages.length;
+      setUnread(false);
+      return;
+    }
+    if (messages.length > seenRef.current) setUnread(true);
+  }, [messages, open]);
 
   useEffect(() => {
     if (!hydrated || trendPassStarted) return;
@@ -354,140 +404,134 @@ export function StylistDock({ open = false }: { open?: boolean }) {
         onChange={(e) => setText(e.target.value)}
         placeholder="Wear the cream cable"
         disabled={owned.length === 0}
-        className={
-          open
-            ? "h-12 flex-1 border border-champagne/25 bg-night-elev px-3 text-sm text-champagne placeholder:text-champagne/40 disabled:opacity-40"
-            : "h-11 flex-1 border border-hairline bg-paper px-3 text-sm text-ink placeholder:text-ink-soft disabled:opacity-40"
-        }
+        className="h-11 flex-1 border border-hairline bg-paper px-3 text-sm text-ink placeholder:text-ink-soft disabled:opacity-40"
       />
-      <Button variant={open ? "night" : "primary"} type="submit" disabled={busy || owned.length === 0}>
+      <Button variant="primary" type="submit" disabled={busy || owned.length === 0}>
         Send
       </Button>
     </form>
   );
 
-  if (!open) {
-    const last = [...messages].reverse().find((m) => m.role === "stylist");
-    const lastLine = last ? stylistProse(last.text).split("\n")[0] : "";
-    return (
-      <aside
-        data-stylist-dock
-        className="fixed inset-x-0 bottom-14 z-30 border-t border-hairline bg-paper px-4 py-3 md:bottom-0"
-      >
-        <p data-stylist-screen className="text-sm text-ink">
-          {sentence}
-        </p>
-        {lastLine ? (
-          <p className="mt-1 line-clamp-2 text-sm text-ink-soft">{lastLine}</p>
-        ) : null}
-        {busy ? (
-          <p className="mt-1 flex items-center gap-2 text-sm text-ink-soft">
-            <Loader2 className="size-4 animate-spin" /> Considering the closet…
-          </p>
-        ) : null}
-        <div className="mt-2">{form}</div>
-      </aside>
-    );
-  }
-
   return (
-    <div data-stylist-dock className="mx-auto max-w-2xl px-4 md:px-6 py-8 md:py-12 rise">
-      <p className="micro text-champagne/60">Atlas</p>
-      <h1 className="mt-2 font-editorial text-4xl md:text-5xl tracking-tight text-champagne">
-        The stylist
-      </h1>
-      <p className="mt-3 text-champagne/70 text-sm">
-        Dressed from this closet. It remembers what you wear, skip, and lock.
-      </p>
-
-      {hydrated && owned.length === 0 ? <Navigate to="/add" /> : null}
-
-      <p data-stylist-screen className="mt-6 text-sm text-champagne">
-        {sentence}
-      </p>
-
-      <div className="mt-8 space-y-4 min-h-64">
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={
-              m.role === "user"
-                ? "text-champagne/90"
-                : "border border-champagne/20 bg-night-elev px-4 py-3 text-champagne"
-            }
-          >
-            {m.role === "user" && <p className="micro text-champagne/50 mb-1">You</p>}
-            {m.role === "stylist" ? (
-              <StylistNote text={m.text} />
-            ) : (
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</p>
-            )}
-            {m.role === "stylist" && m.technique && (
-              <p className="mt-2 text-xs text-champagne/50">{m.technique}</p>
-            )}
-            {m.role === "stylist" && m.garmentIds && m.garmentIds.length > 0 && (
-              <FlatLay
-                pieces={m.garmentIds
-                  .map((id) => forStylist.find((g) => g.id === id))
-                  .filter((g): g is Garment => Boolean(g))}
-                className="mt-3 max-w-sm border border-champagne/20"
-              />
-            )}
-            {m.role === "stylist" && (draftFromMessage(m) || m.lookId) && (
-              <div className="mt-3 flex flex-wrap gap-3">
-                {draftFromMessage(m) && (
-                  <button
-                    type="button"
-                    onClick={() => saveDraft(m.id)}
-                    className="micro text-champagne/80 hover:text-champagne underline-offset-2 hover:underline"
-                  >
-                    {m.lookId ? "Saved" : "Save"}
-                  </button>
-                )}
-                {draftFromMessage(m) && (
-                  <button
-                    type="button"
-                    onClick={() => wearDraft(m.id)}
-                    className="micro text-champagne/80 hover:text-champagne underline-offset-2 hover:underline"
-                  >
-                    Wear this
-                  </button>
-                )}
-                {m.lookId && (
-                  <Link
-                    to="/lookbook"
-                    search={{ look: m.lookId }}
-                    className="micro text-champagne/80 hover:text-champagne underline-offset-2 hover:underline"
-                  >
-                    See on you →
-                  </Link>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-        {busy && (
-          <p className="flex items-center gap-2 text-sm text-champagne/60">
-            <Loader2 className="size-4 animate-spin" /> Considering the closet…
-          </p>
-        )}
-      </div>
-
-      <div className="mt-6 flex flex-wrap gap-2">
-        {PROMPTS.map((p) => (
+    <>
+      {open ? (
+        <>
           <button
-            key={p}
             type="button"
-            onClick={() => void send(p)}
-            disabled={owned.length === 0}
-            className="micro border border-champagne/25 px-3 py-2 text-champagne/80 hover:border-champagne/60 disabled:opacity-40"
+            aria-label="Close the stylist"
+            className="fixed inset-0 z-30 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            data-stylist-dock
+            className="fixed right-4 bottom-[calc(3.5rem+0.75rem+2.75rem+0.5rem+env(safe-area-inset-bottom))] z-40 flex max-h-[70dvh] w-[min(100vw-2rem,20rem)] flex-col overflow-auto border border-hairline bg-paper text-ink md:right-6 md:bottom-[4.75rem]"
+            style={{
+              opacity: shown ? 1 : 0,
+              transform: shown ? "translateY(0)" : "translateY(8px)",
+              transition: "opacity 160ms ease-out, transform 160ms ease-out",
+            }}
           >
-            {p}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-4">{form}</div>
-    </div>
+            <p data-stylist-screen className="border-b border-hairline px-4 py-3 text-sm text-ink">
+              {sentence}
+            </p>
+            <div className="space-y-3 px-4 py-3">
+              {messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={
+                    m.role === "user"
+                      ? "text-ink"
+                      : "border border-hairline bg-paper px-4 py-3 text-ink"
+                  }
+                >
+                  {m.role === "user" && <p className="micro text-ink-soft mb-1">You</p>}
+                  {m.role === "stylist" ? (
+                    <StylistNote text={m.text} />
+                  ) : (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.text}</p>
+                  )}
+                  {m.role === "stylist" && m.technique && (
+                    <p className="mt-2 text-xs text-ink-soft">{m.technique}</p>
+                  )}
+                  {m.role === "stylist" && m.garmentIds && m.garmentIds.length > 0 && (
+                    <FlatLay
+                      pieces={m.garmentIds
+                        .map((id) => forStylist.find((g) => g.id === id))
+                        .filter((g): g is Garment => Boolean(g))}
+                      className="mt-3 border border-hairline"
+                    />
+                  )}
+                  {m.role === "stylist" && (draftFromMessage(m) || m.lookId) && (
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      {draftFromMessage(m) && (
+                        <button
+                          type="button"
+                          onClick={() => saveDraft(m.id)}
+                          className="micro text-ink-soft hover:text-ink underline-offset-2 hover:underline"
+                        >
+                          {m.lookId ? "Saved" : "Save"}
+                        </button>
+                      )}
+                      {draftFromMessage(m) && (
+                        <button
+                          type="button"
+                          onClick={() => wearDraft(m.id)}
+                          className="micro text-ink-soft hover:text-ink underline-offset-2 hover:underline"
+                        >
+                          Wear this
+                        </button>
+                      )}
+                      {m.lookId && (
+                        <Link
+                          to="/lookbook"
+                          search={{ look: m.lookId }}
+                          className="micro text-ink-soft hover:text-ink underline-offset-2 hover:underline"
+                        >
+                          See on you →
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {busy && (
+                <p className="flex items-center gap-2 text-sm text-ink-soft">
+                  <Loader2 className="size-4 animate-spin" /> Considering the closet…
+                </p>
+              )}
+            </div>
+            <div className="mt-auto flex flex-wrap gap-2 border-t border-hairline px-4 pt-3">
+              {PROMPTS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => void send(p)}
+                  disabled={owned.length === 0}
+                  className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <div className="px-4 pt-3 pb-4">{form}</div>
+          </div>
+        </>
+      ) : null}
+      <button
+        type="button"
+        data-stylist-fab
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "fixed right-4 bottom-[calc(3.5rem+0.75rem+env(safe-area-inset-bottom))] z-40 size-11 rounded-full border bg-paper text-ink md:right-6 md:bottom-6",
+          ring ? "border-accent" : "border-hairline",
+        )}
+      >
+        Ask
+        {unread && !open ? (
+          <span aria-hidden className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-accent" />
+        ) : null}
+      </button>
+    </>
   );
 }

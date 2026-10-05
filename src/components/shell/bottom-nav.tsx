@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookOpen, Shirt, Sparkles, SquarePlus, Sun } from "lucide-react";
+import { BookOpen, Shirt, SquarePlus, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -7,24 +7,17 @@ const TABS = [
   { to: "/closet", label: "Closet", icon: Shirt },
   { to: "/add", label: "Add", icon: SquarePlus },
   { to: "/lookbook", label: "Lookbook", icon: BookOpen },
-  { to: "/stylist", label: "Stylist", icon: Sparkles },
 ] as const;
 
 export function BottomNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const night = pathname.startsWith("/stylist");
 
   return (
     <nav
-      className={cn(
-        "fixed bottom-0 inset-x-0 z-40 border-t md:hidden",
-        night
-          ? "bg-night text-champagne border-champagne/20"
-          : "bg-paper text-ink border-hairline",
-      )}
+      className="fixed bottom-0 inset-x-0 z-40 border-t bg-paper text-ink border-hairline"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <ul className="grid grid-cols-5 h-14">
+      <ul className="grid grid-cols-4 h-14">
         {TABS.map((tab) => {
           const active =
             tab.to === "/" ? pathname === "/" : pathname.startsWith(tab.to);
@@ -35,13 +28,7 @@ export function BottomNav() {
                 to={tab.to}
                 className={cn(
                   "flex h-full flex-col items-center justify-center gap-0.5 micro",
-                  active
-                    ? night
-                      ? "text-champagne"
-                      : "text-ink"
-                    : night
-                      ? "text-champagne/45"
-                      : "text-ink-soft",
+                  active ? "text-ink" : "text-ink-soft",
                 )}
               >
                 <Icon className="size-4" strokeWidth={1.5} />

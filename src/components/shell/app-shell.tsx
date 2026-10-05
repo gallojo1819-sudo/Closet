@@ -18,7 +18,7 @@ import { BottomNav } from "./bottom-nav";
 import { StylistDock } from "./stylist-dock";
 import { TopBar } from "./top-bar";
 
-function BackupBanner({ night }: { night: boolean }) {
+function BackupBanner() {
   const account = useAccount();
   const garments = useCloset((s) => s.garments);
   const liveCount = livePool(garments).length;
@@ -50,12 +50,7 @@ function BackupBanner({ night }: { night: boolean }) {
       ? progress
       : stillOnPhoneCopy(remaining);
   return (
-    <div
-      className={cn(
-        "fixed top-12 md:top-16 inset-x-0 z-30 border-b",
-        night ? "bg-night text-champagne border-champagne/20" : "bg-paper text-ink border-hairline",
-      )}
-    >
+    <div className="fixed top-12 md:top-16 inset-x-0 z-30 border-b bg-paper text-ink border-hairline">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 md:px-6 py-2">
         <p className="micro min-w-0 truncate text-ink-soft">{label}</p>
         <button
@@ -72,7 +67,6 @@ function BackupBanner({ night }: { night: boolean }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const night = pathname.startsWith("/stylist");
   const hydrated = useCloset((s) => s.hydrated);
   const account = useAccount();
   const garments = useCloset((s) => s.garments);
@@ -143,10 +137,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [hydrated, userId]);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("vt-night", night);
-  }, [night]);
-
-  useEffect(() => {
     noteRoute(pathname);
   }, [pathname]);
 
@@ -175,24 +165,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname, hydrated]);
 
   return (
-    <div
-      className={cn(
-        "paper-grain min-h-dvh",
-        night ? "theme-night" : "bg-paper text-ink",
-      )}
-    >
+    <div className="paper-grain min-h-dvh bg-paper text-ink">
       <TopBar />
-      <BackupBanner night={night} />
+      <BackupBanner />
       <main
         className={cn(
-          night ? "pb-20 md:pb-10" : "pb-44 md:pb-36",
+          "pb-20 md:pb-10",
           backupOpen ? "pt-24 md:pt-28" : "pt-12 md:pt-16",
         )}
       >
         {cleaning ? <p className="micro px-4 py-1 text-ink-soft md:px-6">{cleaning}</p> : null}
         {children}
       </main>
-      {night ? null : <StylistDock />}
+      <StylistDock />
       <BottomNav />
     </div>
   );

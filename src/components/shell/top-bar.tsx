@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { AccountChip } from "@/components/shell/account-chip";
+import { openStylistPanel } from "@/components/shell/stylist-dock";
 import { useAccount } from "@/lib/cloud/account";
 import { compressRefBackup, putImage, refImageKey } from "@/lib/images";
 import { useCloset } from "@/lib/store";
@@ -12,7 +13,6 @@ const NAV = [
   { to: "/closet", label: "Closet" },
   { to: "/add", label: "Add" },
   { to: "/lookbook", label: "Lookbook" },
-  { to: "/stylist", label: "Stylist" },
 ];
 
 const REF_KEY = refImageKey();
@@ -224,7 +224,6 @@ function RefPhotoDialog({ onClose }: { onClose: () => void }) {
 
 export function TopBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const night = pathname.startsWith("/stylist");
   const garments = useCloset((s) => s.garments);
   const count = garments.filter((g) => !g.archived).length;
   const sample = garments.some((g) => g.demo);
@@ -242,14 +241,7 @@ export function TopBar() {
   }, []);
 
   return (
-    <header
-      className={cn(
-        "fixed top-0 inset-x-0 z-40 border-b",
-        night
-          ? "h-12 md:h-16 bg-night text-champagne border-champagne/20"
-          : "h-12 md:h-16 bg-paper text-ink border-hairline",
-      )}
-    >
+    <header className="fixed top-0 inset-x-0 z-40 border-b h-12 md:h-16 bg-paper text-ink border-hairline">
       <div className="mx-auto flex h-full max-w-6xl items-center gap-4 px-4 md:px-6">
         <Link
           to="/"
@@ -269,12 +261,7 @@ export function TopBar() {
                 to={item.to}
                 className={cn(
                   "transition-opacity",
-                  night && "text-champagne/70",
-                  active
-                    ? night
-                      ? "text-champagne"
-                      : "text-ink"
-                    : "hover:opacity-80",
+                  active ? "text-ink" : "hover:opacity-80",
                 )}
               >
                 {item.label}
@@ -283,9 +270,9 @@ export function TopBar() {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-3">
-          <AccountChip night={night} count={count} />
+          <AccountChip night={false} count={count} />
           {!(account.configured && account.user) && (
-            <span className={cn("micro hidden sm:inline", night ? "text-champagne/70" : "text-ink-soft")}>
+            <span className="micro hidden sm:inline text-ink-soft">
               {count} pieces
             </span>
           )}
@@ -295,21 +282,19 @@ export function TopBar() {
             title={refPhoto ? "Reference photo set" : "Set your reference photo"}
             className={cn(
               "micro shrink-0 border px-2 py-1",
-              night ? "border-champagne/30 text-champagne/80" : "border-hairline text-ink-soft",
+              "border-hairline text-ink-soft",
               !refPhoto && "border-dashed",
             )}
           >
             Fit · 5′8 reg
           </button>
-          <Link
-            to="/stylist"
-            className={cn(
-              "micro hidden md:inline h-8 px-3 inline-flex items-center",
-              night ? "bg-champagne text-night" : "bg-accent text-paper",
-            )}
+          <button
+            type="button"
+            onClick={() => openStylistPanel()}
+            className="micro hidden md:inline-flex h-8 items-center px-3 bg-accent text-paper"
           >
             Stylist
-          </Link>
+          </button>
           {sample ? (
             <button
               type="button"
@@ -318,10 +303,7 @@ export function TopBar() {
                   emptyCloset({ sample: true });
                 }
               }}
-              className={cn(
-                "micro opacity-60 hover:opacity-100",
-                night ? "text-champagne" : "text-ink-soft",
-              )}
+              className="micro opacity-60 hover:opacity-100 text-ink-soft"
             >
               Clear sample
             </button>
@@ -329,10 +311,7 @@ export function TopBar() {
             <button
               type="button"
               onClick={() => loadSample()}
-              className={cn(
-                "micro opacity-60 hover:opacity-100",
-                night ? "text-champagne" : "text-ink-soft",
-              )}
+              className="micro opacity-60 hover:opacity-100 text-ink-soft"
             >
               Sample rack
             </button>

@@ -186,7 +186,8 @@ describe("stylist page", () => {
     const closet = readFileSync(new URL("../routes/closet.tsx", import.meta.url), "utf8");
     const detail = readFileSync(new URL("../components/closet/detail.tsx", import.meta.url), "utf8");
     assert.match(shell, /StylistDock/);
-    assert.match(route, /StylistDock/);
+    assert.equal(shell.includes('startsWith("/stylist")'), false);
+    assert.match(route, /openStylistPanel/);
     assert.match(dock, /data-stylist-dock/);
     assert.match(dock, /data-stylist-screen/);
     assert.match(dock, /messages\.map/);
@@ -579,12 +580,13 @@ describe("stylist page", () => {
     }
   });
 
-  it("acceptance: the collapsed dock shows the last line even when it equals the sentence", () => {
+  it("acceptance: the closed agent is the Ask circle, not a full-width bar", () => {
     const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
-    assert.equal(dock.includes("!== sentence"), false);
-    assert.match(dock, /const lastLine = /);
-    // The same busy string as the open panel, now in the collapsed dock too.
+    assert.equal(dock.includes("inset-x-0 bottom-14"), false);
+    assert.match(dock, /Ask/);
+    assert.match(dock, /rounded-full/);
+    // The busy line lives in the open panel only.
     const busy = dock.match(/Considering the closet…/g);
-    assert.equal(busy?.length, 2);
+    assert.equal(busy?.length, 1);
   });
 });
