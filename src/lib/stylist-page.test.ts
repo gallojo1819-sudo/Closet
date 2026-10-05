@@ -480,4 +480,111 @@ describe("stylist page", () => {
       assert.equal(answer.garmentIds.includes("g_blazer"), false);
     }
   });
+
+  it("acceptance: the strongest-look answer is its own Wear sentence", () => {
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "fall",
+      onScreenLookIds: ["l1"],
+      screenLooks: [{ id: "l1", garmentIds: ["g_blazer", "g_ox", "g_chino", "g_loafer"] }],
+    });
+    const answer = answerAsked({
+      prompt: "What is the strongest look on this page?",
+      page: readStylistPage(),
+      garments: owned,
+    });
+    assert.equal(answer.kind, "answer");
+    if (answer.kind !== "answer") return;
+    assert.ok(answer.text.startsWith("Wear your "));
+    assert.notEqual(answer.text, screenSentence(readStylistPage(), owned));
+    assert.match(answer.text, /oxford/);
+    assert.match(answer.text, /tan chinos/);
+    assert.match(answer.text, /suede loafers/);
+    assert.match(answer.text, /under the navy blazer\.$/);
+    assert.equal(answer.text.includes("LOOK:"), false);
+    assert.equal(answer.text.includes("g_"), false);
+    assert.equal(answer.text.includes("The first look is the strongest"), false);
+    assert.deepEqual(answer.garmentIds, ["g_blazer", "g_ox", "g_chino", "g_loafer"]);
+    // A winning look without a jacket wears plain. (Fall wants a layer; summer ranks bare.)
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "summer",
+      onScreenLookIds: ["l2"],
+      screenLooks: [{ id: "l2", garmentIds: ["g_ox", "g_chino", "g_loafer"] }],
+    });
+    const plain = answerAsked({
+      prompt: "What is the strongest look on this page?",
+      page: readStylistPage(),
+      garments: owned,
+    });
+    assert.equal(plain.kind, "answer");
+    if (plain.kind === "answer") {
+      assert.equal(plain.text, "Wear your oxford with the tan chinos and the suede loafers.");
+    }
+    // A question naming a garment he does not own stays a rejection.
+    const denied = answerAsked({
+      prompt: "Pair my Loro Piana cashmere sweater",
+      page: readStylistPage(),
+      garments: owned,
+    });
+    assert.equal(denied.kind, "reject");
+  });
+
+  it("acceptance: a look question with nothing on screen is not a model pass", () => {
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "fall",
+      onScreenLookIds: [],
+      screenLooks: [],
+    });
+    const answer = answerAsked({
+      prompt: "What is the strongest look on this page?",
+      page: readStylistPage(),
+      garments: owned,
+    });
+    assert.equal(answer.kind, "answer");
+    if (answer.kind === "answer") {
+      assert.equal(answer.text, "Nothing is on screen.");
+      assert.deepEqual(answer.garmentIds, []);
+    }
+    // Dressing prompts still pass through to the local handlers.
+    const swap = answerAsked({
+      prompt: "Swap the shirt",
+      page: readStylistPage(),
+      garments: owned,
+    });
+    assert.equal(swap.kind, "pass");
+  });
+
+  it("acceptance: looks that cannot rank answer none holds them", () => {
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "fall",
+      onScreenLookIds: ["l1"],
+      screenLooks: [{ id: "l1", garmentIds: ["g_missing"] }],
+    });
+    const answer = answerAsked({
+      prompt: "What is the strongest look on this page?",
+      page: readStylistPage(),
+      garments: owned,
+    });
+    assert.equal(answer.kind, "answer");
+    if (answer.kind === "answer") {
+      assert.equal(answer.text, "None of these looks holds them.");
+      assert.deepEqual(answer.garmentIds, []);
+    }
+  });
+
+  it("acceptance: the collapsed dock shows the last line even when it equals the sentence", () => {
+    const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
+    assert.equal(dock.includes("!== sentence"), false);
+    assert.match(dock, /const lastLine = /);
+    // The same busy string as the open panel, now in the collapsed dock too.
+    const busy = dock.match(/Considering the closet…/g);
+    assert.equal(busy?.length, 2);
+  });
 });

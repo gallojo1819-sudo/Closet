@@ -60,6 +60,7 @@ const STOP = new Set([
   "with",
   "and",
   "over",
+  "under",
   "a",
   "an",
   "his",
@@ -462,6 +463,30 @@ function holdClause(page: StylistPageContext): string {
   return ` holds ${bits[0]} and ${bits[1]}`;
 }
 
+/**
+ * The winning look as a Wear sentence: one top, one bottom, one shoe, from
+ * these pieces only. A jacket goes under. Never the page line.
+ */
+function wearSentence(pieces: readonly Garment[]): string | null {
+  const top = pieces.find((g) => {
+    const slot = slotOf(g);
+    return slot === "top" || slot === "dress";
+  });
+  const bottom = pieces.find((g) => slotOf(g) === "bottom");
+  const shoe = pieces.find((g) => slotOf(g) === "footwear");
+  const jacket = pieces.find((g) => slotOf(g) === "outerwear");
+  const named = (g: Garment | undefined) => (g ? speakPiece(g) : "");
+  if (!named(top) || !named(bottom) || !named(shoe)) return null;
+  const wear = `Wear your ${named(top)} with the ${named(bottom)} and the ${named(shoe)}`;
+  if (named(jacket)) return `${wear} under the ${named(jacket)}.`;
+  return `${wear}.`;
+}
+
+/** A question about the looks on this page, not a request to dress a piece. */
+function asksAboutOnScreenLooks(prompt: string): boolean {
+  return /\blooks?\b/i.test(prompt) || /\b(?:this page|on screen)\b/i.test(prompt);
+}
+
 export function formatStrongest(
   index: number,
   pieces: readonly Garment[],
@@ -674,16 +699,19 @@ export function answerAsked(input: {
     }
     const index = rankIndex(pool, page);
     if (index < 0) {
-      return {
-        kind: "answer",
-        text: screenSentence({ ...page, onScreenLookIds: pool.map((row) => row.id) }, garments, looks),
-        garmentIds: [],
-      };
+      return { kind: "answer", text: "None of these looks holds them.", garmentIds: [] };
     }
     const winner = pool[index]!;
-    const text = formatStrongest(index, winner.pieces, page) ?? "Watching this page.";
-    if (!acceptStylistReply(text, garments)) return { kind: "reject" };
-    return { kind: "answer", text, garmentIds: winner.pieces.map((g) => g.id) };
+    const ids = winner.pieces.map((g) => g.id);
+    const wear = wearSentence(winner.pieces);
+    const accepted = wear ? acceptStylistReply(wear, garments) : null;
+    if (accepted) return { kind: "answer", text: accepted, garmentIds: ids };
+    const names = winner.pieces.map(speakPiece).filter(Boolean);
+    return {
+      kind: "answer",
+      text: names.length ? names.join(" · ") : "None of these looks holds them.",
+      garmentIds: ids,
+    };
   }
   if (page.openGarmentId) {
     const open = garments.find((g) => g.id === page.openGarmentId);
@@ -697,6 +725,9 @@ export function answerAsked(input: {
     }
     const text = openSentence(open, garments, page, named);
     return { kind: "answer", text, garmentIds: [] };
+  }
+  if (asksAboutOnScreenLooks(input.prompt)) {
+    return { kind: "answer", text: "Nothing is on screen.", garmentIds: [] };
   }
   return { kind: "pass" };
 }

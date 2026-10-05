@@ -368,6 +368,7 @@ export function StylistDock({ open = false }: { open?: boolean }) {
 
   if (!open) {
     const last = [...messages].reverse().find((m) => m.role === "stylist");
+    const lastLine = last ? stylistProse(last.text).split("\n")[0] : "";
     return (
       <aside
         data-stylist-dock
@@ -376,8 +377,13 @@ export function StylistDock({ open = false }: { open?: boolean }) {
         <p data-stylist-screen className="text-sm text-ink">
           {sentence}
         </p>
-        {last && stylistProse(last.text).split("\n")[0] !== sentence ? (
-          <p className="mt-1 line-clamp-2 text-sm text-ink-soft">{stylistProse(last.text).split("\n")[0]}</p>
+        {lastLine ? (
+          <p className="mt-1 line-clamp-2 text-sm text-ink-soft">{lastLine}</p>
+        ) : null}
+        {busy ? (
+          <p className="mt-1 flex items-center gap-2 text-sm text-ink-soft">
+            <Loader2 className="size-4 animate-spin" /> Considering the closet…
+          </p>
         ) : null}
         <div className="mt-2">{form}</div>
       </aside>
