@@ -183,8 +183,14 @@ export function routeFromPath(pathname: string): StylistRoute {
   return "today";
 }
 
-/** Leaving a page replaces its chips. /stylist opens the panel and writes nothing. */
+/**
+ * Leaving a page replaces its chips. /stylist opens the panel and writes
+ * nothing, so the page he left stays. The path is still noted for the
+ * drawer cleanup, which must not clear an open piece he carried here.
+ */
+let lastNotedPath = "";
 export function noteRoute(pathname: string): void {
+  lastNotedPath = pathname;
   const route = routeFromPath(pathname);
   if (route === "stylist") return;
   if (current.route !== route) writeStylistPage({ route, onScreenLookIds: [] });
@@ -192,7 +198,8 @@ export function noteRoute(pathname: string): void {
 
 /**
  * The closet route cannot publish the open piece. The drawer does.
- * Unmount clears it only while he is still on Closet.
+ * Unmount clears it only while he is still on the closet page; leaving for
+ * /stylist keeps the piece he was looking at.
  */
 export function bindClosetPiece(id: string): () => void {
   closetDrawer += 1;
@@ -201,6 +208,7 @@ export function bindClosetPiece(id: string): () => void {
     closetDrawer -= 1;
     queueMicrotask(() => {
       if (closetDrawer > 0) return;
+      if (routeFromPath(lastNotedPath) !== "closet") return;
       const page = readStylistPage();
       if (page.route === "closet" && page.openGarmentId === id) {
         writeStylistPage({ route: "closet", onScreenLookIds: [] });
@@ -594,6 +602,12 @@ export function screenSentence(
   looks: readonly ScreenLook[] = rememberedLooks(page),
   chosenId?: string,
 ): string {
+  if (page.openGarmentId) {
+    const open = garments.find((g) => g.id === page.openGarmentId);
+    if (!open) return "This piece does not go with the other pieces in this closet.";
+    const chosen = chosenId ? garments.find((g) => g.id === chosenId) : undefined;
+    return openSentence(open, garments, page, chosen);
+  }
   const rows = page.onScreenLookIds.map((id) => ({
     id,
     pieces: piecesFrom(id, garments, looks),
@@ -612,12 +626,6 @@ export function screenSentence(
   if ((page.route === "lookbook" || page.route === "stylist") && page.onScreenLookIds.length === 0) {
     const chips = chipSentence(page);
     if (chips) return chips;
-  }
-  if (page.openGarmentId) {
-    const open = garments.find((g) => g.id === page.openGarmentId);
-    if (!open) return "This piece does not go with the other pieces in this closet.";
-    const chosen = chosenId ? garments.find((g) => g.id === chosenId) : undefined;
-    return openSentence(open, garments, page, chosen);
   }
   return "Watching this page.";
 }

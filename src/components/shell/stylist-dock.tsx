@@ -13,6 +13,7 @@ import {
 } from "@/lib/dress";
 import { draftFromMessage, recordStylistQuestion, restoreIfAskWrote, stylistLookToSave } from "@/lib/stylist-thread";
 import {
+  NOT_IN_CLOSET,
   acceptStylistReply,
   answerAsked,
   readStylistPage,
@@ -157,7 +158,7 @@ export function StylistDock({ open = false }: { open?: boolean }) {
       looks: rememberedLooks(here),
     });
     if (local.kind === "reject") {
-      pushMessage({ role: "stylist", text: "That piece is not in this closet." });
+      pushMessage({ role: "stylist", text: NOT_IN_CLOSET });
       return;
     }
     if (local.kind === "answer") {
@@ -233,7 +234,7 @@ export function StylistDock({ open = false }: { open?: boolean }) {
         const line = atlasText({ technique, pieces, occasion: dressed.occasion, missing: null });
         pushMessage({
           role: "stylist",
-          text: acceptStylistReply(line, owned) ?? "That piece is not in this closet.",
+          text: acceptStylistReply(line, owned) ?? NOT_IN_CLOSET,
           garmentIds: pieces.map((g) => g.id),
           draftName: nameLook(pieces),
           draftOccasion: dressed.occasion,
@@ -303,7 +304,7 @@ export function StylistDock({ open = false }: { open?: boolean }) {
         : {}),
     });
     } catch {
-      pushMessage({ role: "stylist", text: "That piece is not in this closet." });
+      pushMessage({ role: "stylist", text: NOT_IN_CLOSET });
     } finally {
       const undo = restoreIfAskWrote(staged, snap, useCloset.getState(), explicitWrite.current);
       if (undo) useCloset.setState(undo);

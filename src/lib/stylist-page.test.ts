@@ -337,4 +337,147 @@ describe("stylist page", () => {
     assert.match(dock, /stylistPayload/);
     assert.match(dock, /stylistProse/);
   });
+
+  it("acceptance: /stylist keeps the lookbook context and its sentence", () => {
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "fall",
+      color: "navy",
+      onScreenLookIds: ["l1", "l2"],
+      screenLooks: [
+        { id: "l1", garmentIds: ["g_ox", "g_chino", "g_loafers"] },
+        { id: "l2", garmentIds: ["g_blazer", "g_ox", "g_chino", "g_loafers"] },
+      ],
+    });
+    const sentence = screenSentence(readStylistPage(), owned);
+    assert.notEqual(sentence, "Watching this page.");
+    noteRoute("/stylist");
+    const kept = readStylistPage();
+    assert.equal(kept.route, "lookbook");
+    assert.equal(kept.occasion, "weekday");
+    assert.equal(kept.season, "fall");
+    assert.equal(kept.color, "navy");
+    assert.deepEqual(kept.onScreenLookIds, ["l1", "l2"]);
+    assert.equal(screenSentence(kept, owned), sentence);
+  });
+
+  it("acceptance: opening closet with no piece open drops the lookbook context", () => {
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "fall",
+      onScreenLookIds: ["l1"],
+      screenLooks: [{ id: "l1", garmentIds: ["g_blazer", "g_ox", "g_chino", "g_loafers"] }],
+    });
+    noteRoute("/closet");
+    const page = readStylistPage();
+    assert.equal(page.route, "closet");
+    assert.deepEqual(page.onScreenLookIds, []);
+    assert.equal(page.openGarmentId, undefined);
+    assert.equal(page.occasion, undefined);
+    assert.equal(page.season, undefined);
+    assert.equal(screenSentence(page, owned), "Watching this page.");
+  });
+
+  it("acceptance: an open piece is the sentence, never Watching this page", () => {
+    // Zero look cards on Lookbook with chips set: the piece leads, not the chips.
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "fall",
+      openGarmentId: "g_blazer",
+      onScreenLookIds: [],
+      screenLooks: [],
+    });
+    const chips = screenSentence(readStylistPage(), owned);
+    assert.notEqual(chips, "Watching this page.");
+    assert.match(chips, /navy blazer/);
+    assert.equal(chips.includes("Nothing is on screen."), false);
+    // Looks on screen too: the piece still leads.
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "fall",
+      openGarmentId: "g_blazer",
+      onScreenLookIds: ["l1"],
+      screenLooks: [{ id: "l1", garmentIds: ["g_ox", "g_chino", "g_loafers"] }],
+    });
+    const withLooks = screenSentence(readStylistPage(), owned);
+    assert.match(withLooks, /navy blazer/);
+  });
+
+  it("acceptance: the open piece survives the drawer unmount on the way to /stylist", async () => {
+    writeStylistPage({ route: "closet", onScreenLookIds: [] });
+    const release = bindClosetPiece(blazer.id);
+    noteRoute("/stylist");
+    assert.equal(readStylistPage().openGarmentId, blazer.id);
+    release();
+    await Promise.resolve();
+    const kept = readStylistPage();
+    assert.equal(kept.openGarmentId, blazer.id);
+    assert.equal(kept.route, "closet");
+    assert.notEqual(screenSentence(kept, owned), "Watching this page.");
+    assert.match(screenSentence(kept, owned), /navy blazer/);
+    // Closing the drawer while still on Closet clears it.
+    const again = bindClosetPiece(blazer.id);
+    noteRoute("/closet");
+    again();
+    await Promise.resolve();
+    assert.equal(readStylistPage().openGarmentId, undefined);
+    assert.equal(screenSentence(readStylistPage(), owned), "Watching this page.");
+  });
+
+  it("acceptance: a 200 naming an unowned garment paints the rejection line", async () => {
+    const body = await stylistPayload({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        text: "Pair the Loro Piana cashmere sweater.",
+        garmentIds: ["g_fake"],
+      }),
+    });
+    const painted = replyFromStylistResult(body, owned);
+    assert.notEqual(painted.text.trim(), "");
+    assert.equal(painted.text, "That piece is not in this closet.");
+    assert.deepEqual(painted.garmentIds, []);
+    const denied = await stylistPayload({ ok: false, error: "That piece is not in this closet." });
+    const denial = replyFromStylistResult(denied, owned);
+    assert.equal(denial.text, "That piece is not in this closet.");
+    // The dock paints that text: it reads the body and pushes it to the thread.
+    const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
+    assert.match(dock, /stylistPayload\(res\)/);
+    assert.match(dock, /replyFromStylistResult\(payload, owned\)/);
+    assert.match(dock, /text: painted\.text/);
+    assert.match(dock, /NOT_IN_CLOSET/);
+  });
+
+  it("acceptance: screenLooks counts cards outside This week and never a hidden id", () => {
+    const lookbook = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
+    // The page builds screenLooks from This week, the detector sections, and the hero cards.
+    assert.match(lookbook, /for \(const look of realRow\) add\(/);
+    assert.match(lookbook, /for \(const look of sectionLooks\) add\(/);
+    assert.match(lookbook, /for \(const look of heroCards\) add\(/);
+    // A section card (an id This week never renders) is ranked; a hidden id is not.
+    writeStylistPage({
+      route: "lookbook",
+      occasion: "weekday",
+      season: "fall",
+      onScreenLookIds: ["l1", "way:ivy:weekday:0:g_ox.g_chino.g_loafers"],
+      screenLooks: [
+        { id: "l1", garmentIds: ["g_blazer", "g_ox", "g_chino", "g_loafers"] },
+        { id: "way:ivy:weekday:0:g_ox.g_chino.g_loafers", garmentIds: ["g_ox", "g_chino", "g_loafers"] },
+        { id: "l_hidden", garmentIds: ["g_blazer"] },
+      ],
+    });
+    const fields = stylistAskFields({ prompt: "Which look is strongest?", garments: owned });
+    assert.deepEqual(fields.page.onScreenLookIds, ["l1", "way:ivy:weekday:0:g_ox.g_chino.g_loafers"]);
+    assert.equal(fields.onScreenLooks?.some((look) => look.id === "l_hidden"), false);
+    const answer = answerAsked({ prompt: "Which look is strongest?", garments: owned });
+    assert.equal(answer.kind, "answer");
+    if (answer.kind === "answer") {
+      assert.equal(answer.text.includes("l_hidden"), false);
+      assert.equal(answer.garmentIds.includes("g_blazer"), false);
+    }
+  });
 });
