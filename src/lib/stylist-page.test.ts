@@ -458,7 +458,7 @@ describe("stylist page", () => {
   it("acceptance: screenLooks counts cards outside This week and never a hidden id", () => {
     const lookbook = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
     // The page builds screenLooks from This week, the detector sections, and the hero cards.
-    assert.match(lookbook, /for \(const look of realRow\) add\(/);
+    assert.match(lookbook, /for \(const look of weekRow\) add\(/);
     assert.match(lookbook, /for \(const look of sectionLooks\) add\(/);
     assert.match(lookbook, /for \(const look of heroCards\) add\(/);
     // A section card (an id This week never renders) is ranked; a hidden id is not.

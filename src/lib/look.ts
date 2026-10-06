@@ -173,6 +173,14 @@ export function spreadTitle(
   return nameLook(pieces);
 }
 
+/** The small line under a card: the way when there is one, then occasion and season. No word twice. */
+export function cardTag(wayTitle: string | null, occasionLabel: string, seasonLabel: string): string {
+  return [wayTitle, occasionLabel, seasonLabel]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export function spreadMicro(
   pieces: Garment[],
   occasion?: Occasion,

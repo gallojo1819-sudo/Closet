@@ -1564,8 +1564,9 @@ describe("lookbook card stack", () => {
     assert.equal(book.includes("chapterVisible"), false);
     assert.equal(book.includes("buildReshuffleRow"), true);
     assert.match(book, /const realRow = realWeekLooks\(row/);
-    assert.match(book, /const cards = realRow\.map/);
-    assert.match(book, /\{realRow\.length\} looks/);
+    assert.match(book, /const weekRow = wayFirstRow\(realRow, activeWay, occasion\)/);
+    assert.match(book, /const cards = weekRow\.map/);
+    assert.match(book, /\{weekRow\.length\} looks/);
     assert.equal(book.split('layout="stack"').length - 1, 1);
     assert.equal(sheet.includes('layout="stack"'), false);
     assert.equal(book.includes('viewTransitionName: "none"'), false);
@@ -1577,7 +1578,7 @@ describe("lookbook card stack", () => {
     assert.match(face, /showOnYou=\{onYou === "on" \|\| onYou === "out"\}/);
     assert.match(face, /On you/);
     const titleAt = book.indexOf("spreadTitle(pieces, look.occasion");
-    const lineAt = book.indexOf("{houseLabel} · {chip} · {season}");
+    const lineAt = book.indexOf("{cardTag(wayTitle, occasionLabel, seasonLabel)}");
     assert.ok(titleAt > 0 && lineAt > titleAt);
     const between = book.slice(titleAt, lineAt);
     assert.match(between, /paletteCss\(dot\.color\)/);
@@ -1697,7 +1698,8 @@ describe("lookbook card stack", () => {
     assert.equal(book.includes("HOUSE_LABEL"), false);
     assert.equal(book.includes("dressableHouses"), false);
     assert.match(book, /<DetectorSections/);
-    assert.match(book, /ways=\{shownWays\}/);
+    assert.match(book, /ways=\{ways\}/);
+    assert.equal(book.includes("shownWays"), false);
     assert.match(book, /occasion=\{occasion\}/);
     assert.match(book, /season=\{season\}/);
     assert.match(book, /color=\{color\}/);

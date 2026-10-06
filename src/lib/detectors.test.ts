@@ -227,7 +227,7 @@ describe("detectors", () => {
     assert.equal(looks.some((look) => look.some((piece) => piece.id.startsWith("g_"))), false);
   });
 
-  it("hides a chapter under three and moves a short tap to the nearest open chapter", async () => {
+  it("shows a short chapter as it is, and a way with no look here is absent", async () => {
     const look = (n: number): Garment[] => [
       g({ id: `t${n}`, name: `graphic tee ${n}`, category: "top", subtype: "tee" }),
       g({ id: `b${n}`, name: `indigo jean ${n}`, category: "bottom", subtype: "jean" }),
@@ -250,8 +250,10 @@ describe("detectors", () => {
       season: "fall",
       activeId: "13",
     });
-    assert.match(short, /Not enough of your pieces for this here yet\./);
-    assert.match(short, /Weekend/);
+    assert.match(short, /graphic tee 0/);
+    assert.match(short, /Only 1 in your closet\./);
+    assert.equal(short.includes("Not enough"), false);
+    assert.equal(short.includes("Weekend"), false);
     assert.equal(short.includes("None"), false);
     const disjoint = maxDisjoint([
       [g({ id: "a", name: "a", category: "top", subtype: "tee" }), g({ id: "b", name: "b", category: "bottom", subtype: "jean" })],
@@ -307,8 +309,13 @@ describe("detectors", () => {
       looks: { weekday: [one], weekend },
       counts,
     };
-    assert.equal(wayChipVisible(way, "weekday"), false);
-    assert.equal(renderedSectionLooks([way], "weekday").length, 0);
+    assert.equal(wayChipVisible(way, "weekday"), true);
+    assert.deepEqual(
+      renderedSectionLooks([way], "weekday").map((look) => look.garmentIds),
+      [["t", "b", "s"]],
+    );
+    assert.equal(wayChipVisible(way, "out"), false);
+    assert.equal(renderedSectionLooks([way], "out").length, 0);
     const shown = renderedSectionLooks([way], "weekend");
     assert.equal(shown.length, 3);
     assert.equal(shown.some((look) => look.garmentIds.includes("t")), false);
@@ -324,6 +331,8 @@ describe("detectors", () => {
     const onPage = renderedSectionLooks([full], "weekday");
     assert.equal(onPage.length, 3);
     assert.equal(onPage.some((look) => look.garmentIds.includes("o")), false);
+    assert.equal(wayChipVisible(full, "out"), false);
+    assert.equal(renderedSectionLooks([full], "out").length, 0);
   });
 
   it("a finished look renders plates, and an empty usual has no heading", async () => {

@@ -1,5 +1,5 @@
 import { LookKit } from "@/components/closet/look-kit";
-import { nearestOpen, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";
+import { activeFirst, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";
 import type { Garment, Occasion, Season } from "@/lib/types";
 
 const OCCASION_LABEL: Record<Occasion, string> = {
@@ -32,7 +32,7 @@ function PlateCard({ look }: { look: Garment[] }) {
 }
 
 function Chapter({ occasion, looks }: { occasion: Occasion; looks: Garment[][] }) {
-  if (looks.length < 3) return null;
+  if (looks.length < 1) return null;
   return (
     <div>
       <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[occasion]}</p>
@@ -41,11 +41,14 @@ function Chapter({ occasion, looks }: { occasion: Occasion; looks: Garment[][] }
           <PlateCard key={`${occasion}:${index}`} look={look} />
         ))}
       </div>
+      {looks.length < 3 ? (
+        <p data-way-short className="mt-3 text-sm text-ink-soft">{`Only ${looks.length} in your closet.`}</p>
+      ) : null}
     </div>
   );
 }
 
-/** Ways this closet can dress. A chapter under three looks is not rendered. */
+/** Ways this closet can dress. A short way shows what it has and says so. A way with no look is not rendered. */
 export function DetectorSections({
   garments,
   ways,
@@ -87,20 +90,15 @@ export function DetectorSections({
       </div>
     );
   }
-  const focused = activeId ? found.find((way) => way.id === activeId) : undefined;
-  const short = focused && (focused.counts[occasion] ?? 0) < 3 ? focused : undefined;
-  const nearest = short ? nearestOpen(short.counts, occasion) : null;
   return (
     <div data-detectors className="mt-8 space-y-6">
-      {short ? <p className="text-sm text-ink-soft">{NOTE}</p> : null}
-      {(short ? found.filter((way) => way.id === short.id) : found).map((way) => {
-        const show = short && nearest ? nearest : occasion;
-        const looks = chapterLooks(way, show);
-        if (looks.length < 3) return null;
+      {activeFirst(found, activeId).map((way) => {
+        const looks = chapterLooks(way, occasion);
+        if (looks.length < 1) return null;
         return (
           <section key={way.id}>
             <h2 className="font-editorial text-2xl tracking-tight">{way.title}</h2>
-            <Chapter occasion={show} looks={looks} />
+            <Chapter occasion={occasion} looks={looks} />
           </section>
         );
       })}

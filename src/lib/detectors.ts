@@ -2,19 +2,20 @@ import type { Garment } from "./types.ts";
 
 export type { CellContext, Way } from "./detectors/cells.ts";
 export {
+  activeFirst,
   cellGateOpen,
   cellLooks,
   detectorColor,
   detectorPalette,
   detectorTitle,
   maxDisjoint,
-  nearestOpen,
   OCCASION_ORDER,
   renderedSectionLooks,
   sharedDetector,
   visibleDetectors,
   warmCellBook,
   wayChipVisible,
+  wayFirstRow,
 } from "./detectors/cells.ts";
 
 type Detector = {

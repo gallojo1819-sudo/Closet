@@ -3,13 +3,14 @@
  * Keyword trips are not the predicate. Slots, gates, and isLegal are.
  */
 import library from "./library.json" with { type: "json" };
-import { lookFitsOccasion } from "../lookbook.ts";
+import { comboKey, lookFitsOccasion } from "../lookbook.ts";
 import { livePool } from "../rack.ts";
 import { lookFitsSeason, seasonsOf, type Season } from "../season.ts";
 import { slotOf } from "../style.ts";
 import { DELETED_SNEAKERS, isLegal } from "../stylist/legal.ts";
 import { jacketRequired } from "../stylist/jackets.ts";
-import type { Garment, Occasion } from "../types.ts";
+import type { Garment, Look, Occasion } from "../types.ts";
+import { todayISO } from "../utils.ts";
 import { detectorColor } from "./palette.ts";
 import { usualFromCloset } from "./usual.ts";
 
@@ -36,6 +37,8 @@ type Cell = {
   seasonOff: string[];
   ban: string[];
   fails: string[];
+  /** Pieces that make the way what its title says. At least `min` of these slots must hit. */
+  anchors?: { min: number; any: Partial<Record<SlotName, string[]>> };
   slots: Record<SlotName, { core: string[]; compatible: string[] }>;
 };
 
@@ -191,7 +194,10 @@ const PHRASE: Record<string, (g: Garment) => boolean> = {
   unstructured: (g) => has(g, /unstructured/),
   casual: (g) => has(g, /\bcasual\b/),
   "wide or regular denim": (g) => denimBottom(g) && !has(g, /skinny/),
-  "relaxed or dark trouser": (g) => has(g, /trouser/) && has(g, /relaxed|dark|black|navy|charcoal/),
+  "relaxed or dark trouser": (g) => {
+    const said = `${g.name} ${g.subtype} ${g.material}`.toLowerCase();
+    return /trouser/.test(said) && /relaxed|dark|black|navy|charcoal/.test(said) && !/pleat/.test(said);
+  },
   "plain leather or woven loafer": (g) => plainLoafer(g) || (has(g, /woven/) && loafer(g)),
   leather: (g) => has(g, /leather/) && has(g, /jacket|bomber/) && !loafer(g) && !sneaker(g),
   "flannel trouser": (g) => has(g, /flannel/) && has(g, /trouser|pant/),
@@ -358,7 +364,25 @@ export function cellGateOpen(keyOrId: string, occasion: string, season: string):
   return true;
 }
 
-function slotGradeOk(cell: Cell, pieces: { top: Garment; bottom: Garment; shoe: Garment; layer?: Garment }): boolean {
+type Dressed = { top: Garment; bottom: Garment; shoe: Garment; layer?: Garment };
+
+function anchorHits(cell: Cell, pieces: Dressed): number {
+  let hits = 0;
+  for (const slot of ["top", "bottom", "shoe", "layer"] as const) {
+    const g = pieces[slot];
+    const phrases = cell.anchors?.any[slot];
+    if (g && phrases?.some((phrase) => matchPhrase(g, phrase, slot))) hits += 1;
+  }
+  return hits;
+}
+
+/** A bare core may wait on the layer anchor. Nothing else is ever owed. */
+function layerOwed(cell: Cell): number {
+  return cell.anchors?.any.layer?.length ? 1 : 0;
+}
+
+function slotGradeOk(cell: Cell, pieces: Dressed, owed = 0): boolean {
+  if (cell.anchors && anchorHits(cell, pieces) < cell.anchors.min - owed) return false;
   const slots: [SlotName, Garment | undefined][] = [
     ["top", pieces.top],
     ["bottom", pieces.bottom],
@@ -412,6 +436,7 @@ function passesCheap(
   occasion: string,
   season: Season,
   pool: Garment[],
+  owed = 0,
 ): boolean {
   if (pieces.some((g) => DELETED.has(g.id))) return false;
   const top = pieces.find((g) => slotRole(g, cell) === "top");
@@ -420,7 +445,7 @@ function passesCheap(
   const layer = pieces.find((g) => g !== top && layerRole(g, cell));
   if (!top || !bottom || !shoe) return false;
   if (new Set(pieces.map((g) => g.id)).size !== pieces.length) return false;
-  if (!slotGradeOk(cell, { top, bottom, shoe, layer })) return false;
+  if (!slotGradeOk(cell, { top, bottom, shoe, layer }, owed)) return false;
   if (globalFail(cell, pieces) || cellFail(cell, pieces)) return false;
   if (!lookFitsOccasion(pieces, occasion, pool, undefined)) return false;
   if (!seasonOk(pieces, season)) return false;
@@ -524,7 +549,7 @@ function dressCell(cell: Cell, pool: Garment[], occasion: Occasion, season: Seas
       if (seen.has(key)) continue;
       seen.add(key);
       attempts += 1;
-      if (!passesCheap(cell, pieces, occasion, season, pool)) continue;
+      if (!passesCheap(cell, pieces, occasion, season, pool, layerOwed(cell))) continue;
       cores.push(pieces);
     }
   }
@@ -538,7 +563,9 @@ function dressCell(cell: Cell, pool: Garment[], occasion: Occasion, season: Seas
   };
   for (const core of cores) {
     if (stored.length >= STORE_CAP && maxDisjoint(stored).length >= 5) break;
-    if (!needJacket) remember(core);
+    const [top, bottom, shoe] = core as [Garment, Garment, Garment];
+    const anchored = !cell.anchors || anchorHits(cell, { top, bottom, shoe }) >= cell.anchors.min;
+    if (!needJacket && anchored) remember(core);
     for (const layer of layers) {
       if (core.some((g) => g.id === layer.id)) continue;
       const pieces = [...core, layer];
@@ -687,7 +714,7 @@ export function visibleDetectors(
   const book = warmCellBook(garments, season, weatherF);
   const ranked = book
     .map((built) => ({ built, rank: rankOf(built, season, color) }))
-    .filter((row) => (occasion ? (row.rank.counts[occasion] ?? 0) >= 3 : row.rank.cleared > 0))
+    .filter((row) => (occasion ? (row.rank.counts[occasion] ?? 0) >= 1 : row.rank.cleared > 0))
     .sort((a, b) => {
       if (occasion) {
         const onScreen = (b.rank.counts[occasion] ?? 0) - (a.rank.counts[occasion] ?? 0);
@@ -773,7 +800,7 @@ function dressedLooks(way: Way, occasion: Occasion): Garment[][] {
   return (way.looks[occasion] ?? []).filter((look) => look.length >= 3);
 }
 
-/** A chip only when this occasion already has three looks on the page. */
+/** A chip only when this occasion has a true look on the page. The usual still needs three. */
 export function wayChipVisible(way: Way, occasion: Occasion | string): boolean {
   const id = (occasion || "weekday") as Occasion;
   if (way.usual) {
@@ -782,7 +809,7 @@ export function wayChipVisible(way: Way, occasion: Occasion | string): boolean {
     );
     return looks.length >= 3;
   }
-  return dressedLooks(way, id).length >= 3;
+  return dressedLooks(way, id).length >= 1;
 }
 
 function stampLooks(
@@ -796,7 +823,7 @@ function stampLooks(
   }));
 }
 
-/** Look cards a section actually renders. A hidden chapter is absent. */
+/** Look cards a section actually renders. A way with no true look here is absent. */
 export function renderedSectionLooks(
   ways: readonly Way[],
   occasion: Occasion | string,
@@ -811,40 +838,47 @@ export function renderedSectionLooks(
     if (looks.length < 3) return [];
     return stampLooks("usual", here, looks);
   }
-  const focused = activeId ? ways.find((way) => way.id === activeId) : undefined;
-  const short = focused && (focused.counts[here] ?? 0) < 3 ? focused : undefined;
-  const nearest = short ? nearestOpen(short.counts, here) : null;
-  const list = short ? ways.filter((way) => way.id === short.id) : ways;
   const out: { id: string; garmentIds: string[] }[] = [];
-  for (const way of list) {
+  for (const way of activeFirst(ways, activeId)) {
     if (way.usual) continue;
-    const show = (short && nearest ? nearest : here) as Occasion;
-    const looks = dressedLooks(way, show);
-    if (looks.length < 3) continue;
-    out.push(...stampLooks(way.id, show, looks));
+    const looks = dressedLooks(way, here);
+    if (looks.length < 1) continue;
+    out.push(...stampLooks(way.id, here, looks));
   }
   return out;
 }
 
-export function nearestOpen(counts: Record<Occasion, number>, current: Occasion): Occasion | null {
-  const here = OCCASION_ORDER.indexOf(current);
-  let best: { id: Occasion; dist: number; n: number; index: number } | null = null;
-  for (let index = 0; index < OCCASION_ORDER.length; index += 1) {
-    if (index === here) continue;
-    const id = OCCASION_ORDER[index]!;
-    const n = counts[id] ?? 0;
-    if (n < 3) continue;
-    const dist = Math.abs(index - here);
-    if (
-      !best ||
-      dist < best.dist ||
-      (dist === best.dist && n > best.n) ||
-      (dist === best.dist && n === best.n && index < best.index)
-    ) {
-      best = { id, dist, n, index };
-    }
+/** The tapped way leads. Every other way stays where it was. */
+export function activeFirst<T extends { id: string }>(ways: readonly T[], activeId?: string | null): T[] {
+  const active = activeId ? ways.find((way) => way.id === activeId) : undefined;
+  return active ? [active, ...ways.filter((way) => way !== active)] : [...ways];
+}
+
+/**
+ * This week with the tapped way's true looks first. The rest of the row follows,
+ * one card per combination, eight at most. No way leaves the row alone.
+ */
+export function wayFirstRow(row: Look[], way: Way | undefined, occasion: Occasion): Look[] {
+  if (!way) return row;
+  const looks = dressedLooks(way, occasion);
+  const lead: Look[] = stampLooks(way.id, occasion, looks).map((look, index) => ({
+    ...look,
+    name: looks[index]!.map((g) => g.name).join(" · "),
+    occasion,
+    source: "ai",
+    lookbook: false,
+    createdAt: `${todayISO()}T00:00:00.000Z`,
+  }));
+  const seen = new Set<string>();
+  const out: Look[] = [];
+  for (const look of [...lead, ...row]) {
+    const key = comboKey(look.garmentIds);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(look);
+    if (out.length >= 8) break;
   }
-  return best?.id ?? null;
+  return out;
 }
 
 export { detectorPalette, detectorColor } from "./palette.ts";

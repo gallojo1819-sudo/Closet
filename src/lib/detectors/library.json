@@ -44,6 +44,7 @@
     "title": "Oxford, chino, navy blazer",
     "required": [],
     "minCore": 2,
+    "anchors": { "min": 2, "any": { "top": ["oxford"], "bottom": ["chino"], "layer": ["navy blazer"] } },
     "tonal": false,
     "tuck": "in",
     "occasionOff": [],
@@ -51,7 +52,7 @@
     "ban": [],
     "fails": ["IV-F1"],
     "slots": {
-      "top": { "core": ["oxford", "cable", "rugby"], "compatible": ["pique polo", "solid crew", "collegiate", "gingham", "knit polo"] },
+      "top": { "core": ["oxford", "rugby"], "compatible": ["pique polo", "solid crew", "collegiate", "gingham", "knit polo"] },
       "bottom": { "core": ["chino"], "compatible": ["work chino", "denim", "light trouser", "cord"] },
       "shoe": { "core": ["penny or boat", "plain leather loafer", "tassel"], "compatible": ["suede loafer", "clean leather sneaker"] },
       "layer": { "core": ["navy blazer"], "compatible": ["any blazer", "cardigan", "field", "chore-weight", "zip knit", "varsity"] }
@@ -61,7 +62,7 @@
     "id": "3",
     "key": "country_stable",
     "title": "Cords, gingham, boots",
-    "required": [],
+    "required": ["bottom"],
     "minCore": 2,
     "tonal": false,
     "tuck": "in",
@@ -118,7 +119,7 @@
     "id": "6",
     "key": "fine_knit_loafer",
     "title": "Fine knit and suede loafer",
-    "required": [],
+    "required": ["top", "shoe"],
     "minCore": 2,
     "tonal": false,
     "tuck": "full",
@@ -127,9 +128,9 @@
     "ban": [],
     "fails": ["FK-F1"],
     "slots": {
-      "top": { "core": ["knit polo", "fine knit", "solid crew", "linen shirt"], "compatible": ["pique", "oxford", "camp", "turtleneck", "resort"] },
+      "top": { "core": ["knit polo", "fine knit", "solid crew"], "compatible": ["linen shirt", "pique", "oxford", "camp", "turtleneck", "resort"] },
       "bottom": { "core": ["light trouser", "pleated", "linen"], "compatible": ["light or ecru denim", "wool"] },
-      "shoe": { "core": ["suede", "woven", "mule"], "compatible": ["plain leather loafer"] },
+      "shoe": { "core": ["suede loafer"], "compatible": ["suede", "woven", "mule", "plain leather loafer"] },
       "layer": { "core": ["suede jacket or bomber"], "compatible": ["unstructured", "casual", "zip knit"] }
     }
   },
@@ -137,7 +138,7 @@
     "id": "7",
     "key": "henley_denim",
     "title": "Henley and relaxed denim",
-    "required": [],
+    "required": ["top", "bottom"],
     "minCore": 2,
     "tonal": false,
     "tuck": "out",
@@ -146,8 +147,8 @@
     "ban": [],
     "fails": ["HD-F1"],
     "slots": {
-      "top": { "core": ["henley", "zip knit"], "compatible": ["solid crew", "plain tee"] },
-      "bottom": { "core": ["wide or regular denim", "dark denim"], "compatible": ["relaxed or dark trouser"] },
+      "top": { "core": ["henley"], "compatible": ["solid crew", "plain tee"] },
+      "bottom": { "core": ["wide or regular denim", "dark denim"], "compatible": [] },
       "shoe": { "core": ["plain leather or woven loafer"], "compatible": ["suede loafer", "boot"] },
       "layer": { "core": ["leather", "suede", "zip knit"], "compatible": ["shearling"] }
     }
@@ -158,6 +159,7 @@
     "title": "Linen and a soft jacket",
     "required": [],
     "minCore": 2,
+    "anchors": { "min": 1, "any": { "top": ["linen shirt"], "bottom": ["linen"] } },
     "tonal": false,
     "tuck": "shirt_in_camp_out",
     "occasionOff": ["comfy"],
@@ -177,6 +179,7 @@
     "title": "Flannel, cashmere, dark suede",
     "required": [],
     "minCore": 2,
+    "anchors": { "min": 2, "any": { "top": ["fine knit"], "bottom": ["flannel trouser"], "shoe": ["dark suede"] } },
     "tonal": false,
     "tuck": "shirt_in_knit_out",
     "occasionOff": ["comfy"],
@@ -194,7 +197,7 @@
     "id": "10",
     "key": "clean_city",
     "title": "Clean city sportswear",
-    "required": [],
+    "required": ["shoe"],
     "minCore": 2,
     "tonal": false,
     "tuck": "in",

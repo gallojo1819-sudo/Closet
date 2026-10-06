@@ -10,7 +10,14 @@ import { GarmentTile } from "@/components/closet/tile";
 import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
-import { detectorTitle, renderedSectionLooks, visibleDetectors, warmCellBook, wayChipVisible } from "@/lib/detectors";
+import {
+  detectorTitle,
+  renderedSectionLooks,
+  visibleDetectors,
+  warmCellBook,
+  wayChipVisible,
+  wayFirstRow,
+} from "@/lib/detectors";
 import {
   buildReshuffleRow,
   comboKey,
@@ -24,7 +31,7 @@ import {
 } from "@/lib/lookbook";
 import { seasonControlLabel, seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
-import { spreadTitle } from "@/lib/look";
+import { cardTag, spreadTitle } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
@@ -140,8 +147,9 @@ function LookCard({
   onOpen,
   cardRef,
   season,
-  houseLabel,
-  chip,
+  wayTitle,
+  occasionLabel,
+  seasonLabel,
   note,
   named,
   houseChip,
@@ -154,8 +162,9 @@ function LookCard({
   onOpen: () => void;
   cardRef: (el: HTMLElement | null) => void;
   season: Season;
-  houseLabel: string;
-  chip: string;
+  wayTitle: string | null;
+  occasionLabel: string;
+  seasonLabel: string;
   note?: string | null;
   named: boolean;
   houseChip: "all" | House;
@@ -203,9 +212,7 @@ function LookCard({
           ))}
         </div>
       )}
-      <p className="micro mt-2 text-ink-soft">
-        {houseLabel} · {chip} · {season}
-      </p>
+      <p className="micro mt-2 text-ink-soft">{cardTag(wayTitle, occasionLabel, seasonLabel)}</p>
       {note && <p className="micro mt-1 text-ink-soft">{note}</p>}
     </li>
   );
@@ -267,11 +274,12 @@ function LookbookPage() {
     const id = window.setTimeout(run, 0);
     return () => window.clearTimeout(id);
   }, [garments, season, pageWeather]);
-  const shownWays = wayId ? ways.filter((way) => way.id === wayId) : ways;
+  const activeWay = wayId ? ways.find((way) => way.id === wayId) : undefined;
   const seasonLabel =
     seasonChip === "auto"
       ? `Auto · ${SEASONS.find((s) => s.id === autoSeason)?.label ?? "Fall"}`
       : (SEASONS.find((s) => s.id === season)?.label ?? "Fall");
+  const seasonName = SEASONS.find((s) => s.id === season)?.label ?? "Fall";
   const colorChips = useMemo(() => {
     const set = new Set<string>();
     for (const g of garments) for (const c of g.colors) if (c) set.add(c.toLowerCase());
@@ -325,7 +333,8 @@ function LookbookPage() {
   const weekReason = realRow.length
     ? null
     : noted?.gap || noted?.name || preview.reason || "Nothing in this closet is legal for this week.";
-  const cards = realRow.map((look) => ({ look, why: look.gap ?? "" }));
+  const weekRow = wayFirstRow(realRow, activeWay, occasion);
+  const cards = weekRow.map((look) => ({ look, why: look.gap ?? "" }));
   const visible = cards;
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
@@ -382,7 +391,7 @@ function LookbookPage() {
     allOpenLooks.find((l) => l.id === openId) ??
     null;
   const openPieces = openLook ? piecesFor(openLook) : [];
-  const sectionLooks = renderedSectionLooks(shownWays, occasion, wayId);
+  const sectionLooks = renderedSectionLooks(ways, occasion, wayId);
   const heroCards = hero && heroShown.length > 0 && !openLook ? realWeekLooks(heroShown, ownedIds) : [];
   const screenLooks = (() => {
     const seen = new Set<string>();
@@ -392,7 +401,7 @@ function LookbookPage() {
       seen.add(id);
       out.push({ id, garmentIds: [...garmentIds] });
     };
-    for (const look of realRow) add(look.id, look.garmentIds);
+    for (const look of weekRow) add(look.id, look.garmentIds);
     for (const look of sectionLooks) add(look.id, look.garmentIds);
     for (const look of heroCards) add(look.id, look.garmentIds);
     return out;
@@ -421,7 +430,7 @@ function LookbookPage() {
       {hydrated && (
         <>
           <p className="mt-3 text-ink-soft max-w-xl">
-            {realRow.length} looks · {chapterLabel} · {seasonLabel.replace(/^Auto · /, "")}
+            {weekRow.length} looks · {chapterLabel} · {seasonLabel.replace(/^Auto · /, "")}
           </p>
           <p className="mt-1 micro text-ink-soft">{looksAll.length} saved</p>
         </>
@@ -548,7 +557,7 @@ function LookbookPage() {
       </div>
       <DetectorSections
         garments={garments}
-        ways={shownWays}
+        ways={ways}
         occasion={occasion}
         season={season}
         color={color}
@@ -686,9 +695,14 @@ function LookbookPage() {
                   pieces={pieces}
                   index={i}
                   season={season}
-                  chip={occasion}
                   houseChip="all"
-                  houseLabel={detectorTitle(pieces, { occasion, season, color, pool: garments, weatherF: pageWeather }) ?? chapterLabel}
+                  wayTitle={
+                    activeWay && look.id.startsWith(`way:${activeWay.id}:`)
+                      ? activeWay.title
+                      : detectorTitle(pieces, { occasion, season, color, pool: garments, weatherF: pageWeather })
+                  }
+                  occasionLabel={chapterLabel}
+                  seasonLabel={seasonName}
                   note={card.why}
                   pool={garments}
                   named={openId === look.id}
