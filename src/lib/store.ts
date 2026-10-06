@@ -486,7 +486,9 @@ export const useCloset = create<ClosetState>()(
       setDrop: (drop) => set({ drop }),
       rerollDrop: (weather, occasion, previousIds) => {
         const prev = get().drop;
-        const occ = mapOccasion(occasion ?? prev?.occasion ?? defaultOccasion());
+        const occ = mapOccasion(
+          occasion ?? (prev?.date === todayISO() ? prev?.occasion : undefined) ?? defaultOccasion(),
+        );
         const moment = momentOfDay();
         const lastWorn = get().journal.find((j) => j.verdict === "worn")?.garmentIds;
         const sameDay = prev?.date === todayISO();

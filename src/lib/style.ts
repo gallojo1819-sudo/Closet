@@ -1,5 +1,13 @@
 import { harmony } from "./color.ts";
-import type { Garment, Moment, Occasion, WearEntry, WeatherSnap } from "./types.ts";
+import {
+  mapOccasion,
+  type DailyDrop,
+  type Garment,
+  type Moment,
+  type Occasion,
+  type WearEntry,
+  type WeatherSnap,
+} from "./types.ts";
 import { lastDays, todayISO } from "./utils.ts";
 import { isLinenCampPiece, isOvercoatPiece, seasonFromWeather } from "./season.ts";
 import { jacketHits, slotPieces, wearSlot } from "./stylist/jackets.ts";
@@ -49,6 +57,16 @@ export { HOUSE_CHIPS, HOUSE_LABEL, housesOf, leadHouse, lookHouses };
 export function defaultOccasion(d = new Date()): Occasion {
   const day = d.getDay();
   return day === 0 || day === 6 ? "weekend" : "weekday";
+}
+
+/** Stored occasion counts only when that drop is dated today. */
+export function todayOccasion(
+  drop: DailyDrop | null | undefined,
+  today = todayISO(),
+  now = new Date(),
+): Occasion {
+  if (drop?.date === today && drop.occasion) return mapOccasion(drop.occasion);
+  return defaultOccasion(now);
 }
 
 export function momentOfDay(d = new Date()): Moment {

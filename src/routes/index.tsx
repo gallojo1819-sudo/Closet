@@ -15,7 +15,7 @@ import { useAccount } from "@/lib/cloud/account";
 import { persistGate } from "@/lib/store-persist";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
-import { HOUSE_LABEL, avoidedUniformLine, lastWornDays, lookHouses } from "@/lib/style";
+import { HOUSE_LABEL, avoidedUniformLine, lastWornDays, lookHouses, todayOccasion } from "@/lib/style";
 import { emptyTaste, leftOffLine, techniqueLine } from "@/lib/taste";
 import { useCloset } from "@/lib/store";
 import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
@@ -100,7 +100,7 @@ function Today() {
       inMemory(() =>
         useCloset.getState().rerollDrop(
           weather,
-          current?.occasion,
+          todayOccasion(current),
           current?.garmentIds?.length ? current.garmentIds : undefined,
         ),
       );
@@ -194,8 +194,9 @@ function Today() {
     () => unwornLine(garments, shown.map((g) => g.id)),
     [garments, shown],
   );
-  const note = dropNote(shown, weather, drop?.occasion, drop?.moment, undefined, dropSeason);
-  const houses = lookHouses(shown, drop?.occasion ?? "weekday", dropSeason);
+  const occasion = todayOccasion(drop);
+  const note = dropNote(shown, weather, occasion, drop?.moment, undefined, dropSeason);
+  const houses = lookHouses(shown, occasion, dropSeason);
   const done = drop?.worn || drop?.verdict === "worn";
   const matched = drop ? weekCells.find((cell) => cell.iso === drop.date) : undefined;
   const onScreenLookIds = matched?.look ? [matched.look.id] : [];
@@ -203,7 +204,7 @@ function Today() {
   useEffect(() => {
     writeStylistPage({
       route: "today",
-      ...(drop?.occasion ? { occasion: drop.occasion } : {}),
+      occasion,
       ...(drop ? { season: dropSeason } : {}),
       onScreenLookIds,
       screenLooks: matched?.look
@@ -211,7 +212,7 @@ function Today() {
         : [],
       ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
     });
-  }, [drop, dropSeason, matched, onScreenLookIds, pageWeather]);
+  }, [drop, dropSeason, matched, occasion, onScreenLookIds, pageWeather]);
 
   const setOccasion = (occasion: Occasion) => {
     rerollDrop(weather, occasion, drop?.garmentIds);
@@ -288,7 +289,7 @@ function Today() {
             onClick={() => setOccasion(o.id)}
             className={cn(
               "micro border px-3 py-2",
-              drop?.occasion === o.id
+              occasion === o.id
                 ? "border-ink bg-ink text-paper"
                 : "border-hairline text-ink-soft",
             )}
@@ -366,7 +367,7 @@ function Today() {
           {view === "me" && shown.length > 0 ? (
             <OnMePanel
               pieces={shown}
-              occasion={drop?.occasion}
+              occasion={occasion}
               onUsePaper={() => setView("paper")}
             />
           ) : (
@@ -489,7 +490,7 @@ function Today() {
                 if (ids.length < 2) return;
                 saveLook({
                   name: lookName,
-                  occasion: drop?.occasion ?? "weekday",
+                  occasion,
                   garmentIds: ids,
                   source: "manual",
                   lookbook: true,

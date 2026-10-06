@@ -8,8 +8,9 @@ import {
   pickLook,
   sameScaleChecks,
   slotOf,
+  todayOccasion,
 } from "./style.ts";
-import type { Garment, WearEntry } from "./types.ts";
+import type { DailyDrop, Garment, WearEntry } from "./types.ts";
 
 function piece(
   partial: Pick<Garment, "id" | "name" | "category" | "subtype"> &
@@ -40,6 +41,32 @@ const opts = {
   moment: "day" as const,
   weather: { f: 68, label: "Fair", code: 2 },
 };
+
+const tue = new Date(2026, 9, 6, 12, 0, 0);
+const sat = new Date(2026, 9, 10, 12, 0, 0);
+
+function datedDrop(partial: Pick<DailyDrop, "date"> & Partial<DailyDrop>): DailyDrop {
+  return { garmentIds: [], worn: false, ...partial };
+}
+
+describe("todayOccasion", () => {
+  it("follows the local day when the drop is missing or from another date", () => {
+    assert.equal(todayOccasion(null, "2026-10-06", tue), "weekday");
+    assert.equal(todayOccasion(null, "2026-10-10", sat), "weekend");
+    assert.equal(
+      todayOccasion(datedDrop({ date: "2026-10-05", occasion: "weekend" }), "2026-10-06", tue),
+      "weekday",
+    );
+    assert.equal(
+      todayOccasion(datedDrop({ date: "2026-10-06", occasion: "out" }), "2026-10-06", tue),
+      "out",
+    );
+    assert.equal(
+      todayOccasion(datedDrop({ date: "2026-10-06" }), "2026-10-06", tue),
+      "weekday",
+    );
+  });
+});
 
 describe("slotOf", () => {
   it("a loafer tagged bottom is still footwear, never pants", () => {
