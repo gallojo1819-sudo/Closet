@@ -16,10 +16,17 @@ function chapterLooks(way: Way, occasion: Occasion): Garment[][] {
   return (way.looks[occasion] ?? []).filter((look) => look.length >= 3);
 }
 
+/**
+ * The plate sits in its own 4:5 box. A stretched flex item counts as a definite height, so a
+ * kit sized `h-full` straight inside the card would swallow the name list below it and push
+ * the names out under the next way's heading.
+ */
 function PlateCard({ look }: { look: Garment[] }) {
   return (
     <div className="w-56 shrink-0">
-      <LookKit layout="stack" pieces={look} className="pointer-events-none aspect-[4/5]" />
+      <div className="relative aspect-[4/5] w-full">
+        <LookKit layout="stack" pieces={look} className="pointer-events-none" />
+      </div>
       <ul className="mt-2 space-y-0.5">
         {look.map((g) => (
           <li key={g.id} className="text-sm text-ink">
