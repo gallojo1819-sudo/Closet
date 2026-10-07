@@ -16,7 +16,7 @@ import {
 } from "./lookbook.ts";
 import { lookFitsSeason } from "./season.ts";
 import { HOUSE_CHIPS, leadHouse, slotOf } from "./style.ts";
-import { OCCASIONS, SEASONS, type Garment } from "./types.ts";
+import { OCCASIONS, SEASONS, type Garment, type Look } from "./types.ts";
 
 function plate(
   partial: Pick<Garment, "id" | "name" | "category" | "subtype"> & Partial<Garment>,
@@ -164,7 +164,13 @@ describe("lookbook invariants", () => {
             assert.ok(shown.length >= 3, `${occ.id} × ${season.id} × all = ${shown.length}`);
           } else {
             const real = shown.filter((l) => l.garmentIds.length >= 3 && !l.needsPieces && !l.gate);
+            const untapped = chapterVisible(book, FIXTURE, occ.id, { season: season.id, house: "all", min: 3 });
+            assert.ok(
+              real.length >= Math.min(3, untapped.length),
+              `${occ.id} × ${season.id} × ${house}: ${real.length} real, untapped ${untapped.length}`,
+            );
             if (real.length < 3) assert.ok(shown.some((l) => l.needsPieces || l.gate));
+            else assert.equal(shown.some((l) => l.needsPieces || l.gate), false);
           }
         }
       }
@@ -195,21 +201,30 @@ describe("lookbook invariants", () => {
     assert.ok(weekday545.length >= 1, `Weekday+545 ${weekday545.length}`);
   });
 
-  it("INVARIANT 2 — house is a rank; dropping lookFitsHouse must not go below 3", () => {
+  it("INVARIANT 2 — house is a rank; a tapped house never shows fewer real looks than ALL", () => {
     const book = buildLookbook(FIXTURE, "2026-09-12");
-    const shown = chapterVisible(book, FIXTURE, "weekend", {
-      season: "fall",
-      house: "polo",
-      min: 3,
-    });
-    assert.ok(shown.length >= 1);
-    const hard = shown.filter((l) => {
-      const pieces = l.garmentIds
-        .map((id) => FIXTURE.find((g) => g.id === id))
-        .filter((g): g is Garment => Boolean(g));
-      return lookFitsHouse(pieces, "polo", "weekend", FIXTURE);
-    });
-    if (hard.length < 1) assert.ok(shown.some((l) => l.needsPieces || l.gate));
+    const resolve = (l: Look) =>
+      l.garmentIds.map((id) => FIXTURE.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g));
+    const isReal = (l: Look) => l.garmentIds.length >= 3 && !l.needsPieces && !l.gate;
+    for (const [occasion, house] of [
+      ["weekend", "polo"],
+      ["weekday", "sweetStable"],
+      ["weekday", "ald"],
+    ] as const) {
+      const untapped = chapterVisible(book, FIXTURE, occasion, { season: "fall", house: "all", min: 3 });
+      const shown = chapterVisible(book, FIXTURE, occasion, { season: "fall", house, min: 3 });
+      const real = shown.filter(isReal);
+      assert.ok(real.length >= 1, `${occasion} × ${house} = ${shown.length}`);
+      if (untapped.length >= 3) {
+        assert.ok(real.length >= 3, `${occasion} × ${house}: ${real.length} real, untapped ${untapped.length}`);
+        assert.equal(shown.some((l) => l.needsPieces || l.gate), false, `${occasion} × ${house} has a note`);
+      }
+      assert.ok(real.length >= untapped.length, `${occasion} × ${house}: ${real.length} < ${untapped.length}`);
+      const fits = real.map((l) => lookFitsHouse(resolve(l), house, occasion, FIXTURE));
+      const lastFit = fits.lastIndexOf(true);
+      const firstMiss = fits.indexOf(false);
+      if (lastFit >= 0 && firstMiss >= 0) assert.ok(lastFit < firstMiss, `${occasion} × ${house}: a fit trails a miss`);
+    }
   });
 
   it("INVARIANT 3 — exhausted is never true at 0", () => {

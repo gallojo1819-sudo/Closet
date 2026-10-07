@@ -88,8 +88,8 @@ describe("seasonFromWeather", () => {
     assert.equal(seasonControlLabel("auto", october), "Auto · Fall");
     assert.equal(seasonControlLabel("fall", october), "Fall");
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
-    assert.equal(book.includes("data-house-row"), false);
-    assert.equal(book.includes("HOUSE_CHIPS"), false);
+    assert.equal(book.includes("data-house-row"), true);
+    assert.equal(book.includes("HOUSE_CHIPS"), true);
     assert.equal(book.includes("seasonOpen"), false);
     const seasonAt = book.indexOf("data-season-control");
     const detectorsAt = book.indexOf("<DetectorSections");

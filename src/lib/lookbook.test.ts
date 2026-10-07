@@ -1564,7 +1564,8 @@ describe("lookbook card stack", () => {
     assert.equal(book.includes("chapterVisible"), false);
     assert.equal(book.includes("buildReshuffleRow"), true);
     assert.match(book, /const realRow = realWeekLooks\(row/);
-    assert.match(book, /const weekRow = wayFirstRow\(realRow, activeWay, occasion\)/);
+    assert.match(book, /const houseRow = houseFirstRow\(realRow, houseChip, garments, occasion, season\)/);
+    assert.match(book, /const weekRow = wayFirstRow\(houseRow, activeWay, occasion\)/);
     assert.match(book, /const cards = weekRow\.map/);
     assert.match(book, /\{weekRow\.length\} looks/);
     assert.equal(book.split('layout="stack"').length - 1, 1);
@@ -1691,10 +1692,15 @@ describe("lookbook card stack", () => {
     );
   });
 
-  it("lookbook shows ways this closet can finish, not a house row", () => {
+  it("lookbook shows ways this closet can finish, and every house as a rank", () => {
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
-    assert.equal(book.includes("data-house-row"), false);
-    assert.equal(book.includes("HOUSE_CHIPS"), false);
+    assert.match(book, /data-house-row/);
+    assert.match(book, /\.\.\.HOUSE_CHIPS\]/);
+    assert.match(book, /useState<"all" \| House>\("all"\)/);
+    assert.match(book, /setHouseChip\(/);
+    assert.match(book, /houseChip=\{houseChip\}/);
+    assert.match(book, /houseFirstRow\(realRow, houseChip/);
+    assert.match(book, /wayFirstRow\(/);
     assert.equal(book.includes("HOUSE_LABEL"), false);
     assert.equal(book.includes("dressableHouses"), false);
     assert.match(book, /<DetectorSections/);
@@ -1710,6 +1716,9 @@ describe("lookbook card stack", () => {
     assert.match(book, /data-ways-row/);
     assert.match(book, /heading="Suggest"/);
     assert.equal(book.includes("Make a look"), false);
+    const houseRow = book.slice(book.indexOf("data-house-row"), book.indexOf("data-ways-row"));
+    assert.match(houseRow, />Houses</);
+    assert.match(houseRow, /label: "All"/);
     assert.equal(
       /\b(Polo|Purple|RRL|ALD|Faloni|545|Sweet Stable|Italian summer|Italian winter)\b/.test(book),
       false,
@@ -1940,13 +1949,24 @@ describe("house chips dress the row", () => {
       cap: 8,
       salt: 1,
     });
-    const keyOf = (looks: Look[]) =>
-      looks
-        .filter((look) => look.garmentIds.length >= 3)
-        .slice(0, 3)
-        .map((look) => comboKey(look.garmentIds))
-        .join("||");
-    if (keyOf(row) && keyOf(polo)) assert.notEqual(keyOf(row), keyOf(polo));
+    /* House ranks. With no RRL look in the matrix, the row is the ALL row, never a lone note. */
+    for (const [house, looks] of [
+      ["rrl", row],
+      ["polo", polo],
+    ] as const) {
+      const real = realWeekLooks(looks);
+      assert.ok(real.length >= 3, `${house} ${real.length} real of ${looks.length}`);
+      assert.equal(looks.some((look) => look.needsPieces || look.gate), false, house);
+      const fits = (look: Look) =>
+        lookFitsHouse(
+          look.garmentIds.map((id) => rack.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g)),
+          house,
+          "weekday",
+          rack,
+          "fall",
+        );
+      if (real.some(fits)) assert.ok(fits(real[0]!), `${house} leads with a look that fits`);
+    }
   });
 
   it("RRL without a legal fill shows the approved gap, not a padded row", () => {

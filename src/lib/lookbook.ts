@@ -127,6 +127,39 @@ export function comboKey(ids: string[]): string {
   return [...ids].sort().join("|");
 }
 
+/**
+ * This week with the tapped house's looks first. House ranks; it never drops a real look
+ * from the row. One card per combination, eight at most. No house leaves the row alone.
+ */
+export function houseFirstRow(
+  row: Look[],
+  house: House | "all" | null | undefined,
+  garments: Garment[],
+  occasion: Occasion,
+  season?: Season,
+): Look[] {
+  if (!house || house === "all") return row;
+  const pool = lookbookPool(garments);
+  const byId = new Map(pool.map((g) => [g.id, g]));
+  const real = row.filter((look) => !look.gate && !look.needsPieces && look.garmentIds.length >= 3);
+  const fits = (look: Look) => {
+    const pieces = look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    return pieces.length >= 3 && lookFitsHouse(pieces, house, occasion, pool, season);
+  };
+  const lead = real.filter(fits);
+  const rest = real.filter((look) => !lead.includes(look));
+  const seen = new Set<string>();
+  const out: Look[] = [];
+  for (const look of [...lead, ...rest]) {
+    const key = comboKey(look.garmentIds);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(look);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 function isBlazer(g: Garment): boolean {
   return /blazer|sport\s*coats?/.test(blobOf(g));
 }
@@ -1483,7 +1516,7 @@ export function emptyFilterCopy(
 
 /**
  * Shown-equivalent for one chapter.
- * Occasion is the chapter key. House and season rank; they must not zero the grid.
+ * Occasion is the chapter key. House and season rank; they never return fewer looks than the untapped chapter.
  */
 export function chapterVisible(
   looks: Look[],
@@ -1515,45 +1548,62 @@ export function chapterVisible(
     return true;
   });
 
-  const ranked = [...rows].sort((a, b) => {
-    const pa = resolve(a);
-    const pb = resolve(b);
-    if (house) {
-      const ha = lookFitsHouse(pa, house, occasion, pool) ? 1 : 0;
-      const hb = lookFitsHouse(pb, house, occasion, pool) ? 1 : 0;
-      if (hb !== ha) return hb - ha;
-    }
-    if (opts?.color) {
-      const ca = lookHasColor(pa, opts.color) ? 1 : 0;
-      const cb = lookHasColor(pb, opts.color) ? 1 : 0;
-      if (cb !== ca) return cb - ca;
-    }
-    if (season) return seasonRank(pb, season) - seasonRank(pa, season);
-    return 0;
-  });
+  const fit = new Map<string, number>();
+  const hard = new Map<string, number>();
   if (house) {
-    const hard = ranked.filter((l) =>
-      isLegal(resolve(l), { house, occasion, season: season ?? "fall", color: opts?.color }),
-    );
-    if (opts?.pad === false || hard.length >= min) return hard;
-    const note = houseGapNote(house, pool, occasion) || "Needs pieces from this house.";
-    return [
-      ...hard,
-      {
-        id: `needs_${house}_${occasion}`,
-        name: note,
-        occasion,
-        garmentIds: [],
-        source: "ai" as const,
-        lookbook: false,
-        gap: note,
-        needsPieces: true,
-        createdAt: `${todayISO()}T00:00:00.000Z`,
-      },
-    ];
+    for (const look of rows) {
+      const pieces = resolve(look);
+      fit.set(look.id, lookFitsHouse(pieces, house, occasion, pool) ? 1 : 0);
+      hard.set(
+        look.id,
+        isLegal(pieces, { house, occasion, season: season ?? "fall", color: opts?.color }) ? 1 : 0,
+      );
+    }
   }
+  const order = (byHouse: boolean) =>
+    [...rows].sort((a, b) => {
+      const pa = resolve(a);
+      const pb = resolve(b);
+      if (byHouse) {
+        const fits = (fit.get(b.id) ?? 0) - (fit.get(a.id) ?? 0);
+        if (fits) return fits;
+        const legal = (hard.get(b.id) ?? 0) - (hard.get(a.id) ?? 0);
+        if (legal) return legal;
+      }
+      if (opts?.color) {
+        const ca = lookHasColor(pa, opts.color) ? 1 : 0;
+        const cb = lookHasColor(pb, opts.color) ? 1 : 0;
+        if (cb !== ca) return cb - ca;
+      }
+      if (season) return seasonRank(pb, season) - seasonRank(pa, season);
+      return 0;
+    });
+  const shown = (byHouse: boolean) => enforcePieceCap(stripRepeatBlazers(order(byHouse), garments), garments);
+  if (!house) return shown(false);
 
-  return enforcePieceCap(stripRepeatBlazers(ranked, garments), garments);
+  /* House ranks. The untapped chapter is the floor; a note only when the rack itself is short. */
+  let out = shown(true);
+  const untapped = shown(false);
+  if (out.length < untapped.length) {
+    const have = new Set(out.map((look) => look.id));
+    out = [...out, ...untapped.filter((look) => !have.has(look.id))];
+  }
+  if (opts?.pad === false || out.length >= min) return out;
+  const note = houseGapNote(house, pool, occasion) || "Needs pieces from this house.";
+  return [
+    ...out,
+    {
+      id: `needs_${house}_${occasion}`,
+      name: note,
+      occasion,
+      garmentIds: [],
+      source: "ai" as const,
+      lookbook: false,
+      gap: note,
+      needsPieces: true,
+      createdAt: `${todayISO()}T00:00:00.000Z`,
+    },
+  ];
 }
 
 /** Exhausted only after a full chapter was shown and shuffle-after-reset added nothing. */
@@ -1921,18 +1971,18 @@ function finishStyled(
   };
 
   if (color && house) {
-    const cell = matrix.houses[house];
-    if (cell?.gate) {
-      return [
-        lookFromPieces([], occasion, 0, house, {
-          name: cell.gate.text,
-          gap: cell.gate.text,
-          gate: { occasion: cell.gate.occasion, season: cell.gate.season, text: cell.gate.text },
-        }),
-      ];
+    /*
+     * House ranks here too. The row is the colour row, re-ordered so the looks that fit
+     * the house lead. Same count as colour alone; never a gate card.
+     */
+    const row = publish(matrix.all);
+    if (row.length) {
+      const fits = (look: Look) => {
+        const pieces = look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+        return pieces.length >= 3 && lookFitsHouse(pieces, house, occasion, pool, season);
+      };
+      return [...row.filter(fits), ...row.filter((look) => !fits(look))];
     }
-    const palette = publish(cell?.pool ?? [], house);
-    if (palette.length) return palette;
     const label = HOUSE_LABEL[house];
     const note = colorEmptyCopy(label, color, house);
     return [lookFromPieces([], occasion, 0, house, { name: note, gap: note, needsPieces: true })];
@@ -1953,28 +2003,21 @@ function finishStyled(
   if (house) {
     const cell = matrix.houses[house];
     if (!cell) return [];
-    if (cell.gate && cell.looks.length === 0) {
-      return [
-        lookFromPieces([], occasion, 0, house, {
-          name: cell.gate.text,
-          gap: cell.gate.text,
-          gate: { occasion: cell.gate.occasion, season: cell.gate.season, text: cell.gate.text },
-        }),
-      ];
-    }
-    const filled = fillHouseRow(cell.looks, cell.pool, cap, opts?.salt ?? 1);
-    let row = publish(filled, house);
-    if (!cell.gate) row = rotateJackets(row, pool, house, occasion, season, opts?.taste);
+    /* House ranks. Its looks lead; the ALL row fills in behind. A gate is a note, never an empty page. */
+    let lead = publish(fillHouseRow(cell.looks, cell.pool, cap, opts?.salt ?? 1), house);
+    if (!cell.gate) lead = rotateJackets(lead, pool, house, occasion, season, opts?.taste);
     if (cell.gate) {
       const note = cell.gate.text;
-      row = row.map((look) => ({ ...look, gap: look.gap || note }));
+      lead = lead.map((look) => ({ ...look, gap: look.gap || note }));
     }
-    if (row.length < 3 && !cell.gate) {
-      const note = cell.gap || houseGapNote(house, pool, occasion) || "Needs pieces from this house.";
-      row = [
-        ...row,
-        lookFromPieces([], occasion, row.length, house, { name: note, gap: note, needsPieces: true }),
-      ];
+    const seen = new Set<string>();
+    const row: Look[] = [];
+    for (const look of [...lead, ...publish(matrix.all)]) {
+      const key = comboKey(look.garmentIds);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      row.push(look);
+      if (row.length >= cap) break;
     }
     if (row.length === 0 && cell.gate) {
       return [
@@ -1985,7 +2028,14 @@ function finishStyled(
         }),
       ];
     }
-    return row.slice(0, cap);
+    if (row.length < 3 && !cell.gate) {
+      const note = cell.gap || houseGapNote(house, pool, occasion) || "Needs pieces from this house.";
+      return [
+        ...row,
+        lookFromPieces([], occasion, row.length, house, { name: note, gap: note, needsPieces: true }),
+      ];
+    }
+    return row;
   }
 
   const all = publish(matrix.all);
