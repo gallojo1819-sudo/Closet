@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   guessSeason,
   lookFitsSeason,
+  seasonChipRow,
   seasonControlLabel,
   seasonFromWeather,
   seasonsOf,
@@ -82,11 +83,21 @@ describe("seasonFromWeather", () => {
     assert.equal(seasonFromWeather(null, sep), "fall");
   });
 
-  it("October Auto reads Auto · Fall, and the five seasons are chips", () => {
+  it("October Auto reads Auto · Fall, and Fall is one chip, not two", () => {
     const october = new Date(2026, 9, 15);
     assert.equal(seasonControlLabel("auto", october, 68), "Auto · Fall");
     assert.equal(seasonControlLabel("auto", october), "Auto · Fall");
     assert.equal(seasonControlLabel("fall", october), "Fall");
+    const auto = seasonChipRow("auto", "fall");
+    assert.deepEqual(auto.map((s) => s.id), ["spring", "summer", "winter"]);
+    assert.deepEqual(seasonChipRow("auto", "summer").map((s) => s.id), ["spring", "fall", "winter"]);
+    for (const chip of ["spring", "summer", "fall", "winter"] as const) {
+      assert.deepEqual(seasonChipRow(chip, "fall").map((s) => s.id), ["spring", "summer", "fall", "winter"]);
+    }
+    const labels = [seasonControlLabel("auto", october, 68), ...auto.map((s) => s.label)].map((l) =>
+      l.replace(/^Auto · /, "").toUpperCase(),
+    );
+    assert.equal(new Set(labels).size, labels.length, labels.join(" "));
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
     assert.equal(book.includes("data-house-row"), true);
     assert.equal(book.includes("HOUSE_CHIPS"), true);
@@ -94,13 +105,16 @@ describe("seasonFromWeather", () => {
     const seasonAt = book.indexOf("data-season-control");
     const detectorsAt = book.indexOf("<DetectorSections");
     assert.ok(seasonAt > 0 && detectorsAt > seasonAt);
-    const seasonCtl = book.slice(seasonAt, book.indexOf("</div>", book.indexOf("SEASONS.map")));
+    const rowCall = "seasonChipRow(seasonChip, autoSeason).map";
+    const seasonCtl = book.slice(seasonAt, book.indexOf("</div>", book.indexOf(rowCall)));
     assert.match(book.slice(seasonAt, detectorsAt), /\{seasonShown\}/);
-    assert.equal(book.split("SEASONS.map").length - 1, 1);
-    assert.equal(seasonCtl.includes("SEASONS.map"), true);
+    assert.match(seasonCtl, /micro whitespace-nowrap border/);
+    assert.equal(book.split(rowCall).length - 1, 1);
+    assert.equal(book.includes("SEASONS.map"), false);
+    assert.equal(seasonCtl.includes(rowCall), true);
     assert.equal(seasonCtl.includes("seasonOpen"), false);
     assert.equal((seasonCtl.match(/<button/g) ?? []).length, 2);
-    assert.equal(book.slice(0, seasonAt).includes("SEASONS.map"), false);
+    assert.equal(book.slice(0, seasonAt).includes(rowCall), false);
   });
 });
 
