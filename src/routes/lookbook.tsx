@@ -23,6 +23,7 @@ import {
   comboKey,
   emptyFilterCopy,
   firstWeekLooks,
+  houseFirstRow,
   lookbookPool,
   looksForHero,
   realWeekLooks,
@@ -36,7 +37,7 @@ import { pieceLabel } from "@/lib/piece-label";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
-import { daysIdle, slotOf, type House } from "@/lib/style";
+import { HOUSE_CHIPS, daysIdle, slotOf, type House } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
 import { emptyTaste } from "@/lib/taste";
@@ -233,6 +234,7 @@ function LookbookPage() {
   const [color, setColor] = useState<string | null>(null);
   const [colorOpen, setColorOpen] = useState(false);
   const [wayId, setWayId] = useState<string | null>(null);
+  const [houseChip, setHouseChip] = useState<"all" | House>("all");
   const drop = useCloset((s) => s.drop);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dressed, setDressed] = useState<Look | null>(null);
@@ -333,7 +335,8 @@ function LookbookPage() {
   const weekReason = realRow.length
     ? null
     : noted?.gap || noted?.name || preview.reason || "Nothing in this closet is legal for this week.";
-  const weekRow = wayFirstRow(realRow, activeWay, occasion);
+  const houseRow = houseFirstRow(realRow, houseChip, garments, occasion, season);
+  const weekRow = wayFirstRow(houseRow, activeWay, occasion);
   const cards = weekRow.map((look) => ({ look, why: look.gap ?? "" }));
   const visible = cards;
 
@@ -535,6 +538,25 @@ function LookbookPage() {
         </div>
           </div>
         </div>
+        <div data-house-row>
+          <p className="micro text-ink-soft">Houses</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {[{ id: "all" as const, label: "All" }, ...HOUSE_CHIPS].map((house) => (
+              <button
+                key={house.id}
+                type="button"
+                aria-pressed={houseChip === house.id}
+                onClick={() => setHouseChip((current) => (current === house.id ? "all" : house.id))}
+                className={cn(
+                  "micro border px-3 py-2",
+                  houseChip === house.id ? "border-ink bg-ink text-paper" : "border-hairline text-ink-soft",
+                )}
+              >
+                {house.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div data-ways-row>
           <p className="micro text-ink-soft">Your ways of dressing</p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -646,7 +668,7 @@ function LookbookPage() {
                 chapterLabel,
                 seasonLabel,
                 seasonChip,
-                "all",
+                houseChip,
                 color,
                 canBuild,
               ) ||
@@ -695,7 +717,7 @@ function LookbookPage() {
                   pieces={pieces}
                   index={i}
                   season={season}
-                  houseChip="all"
+                  houseChip={houseChip}
                   wayTitle={
                     activeWay && look.id.startsWith(`way:${activeWay.id}:`)
                       ? activeWay.title

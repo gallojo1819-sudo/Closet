@@ -385,7 +385,7 @@ describe("detectors", () => {
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
     assert.match(sections, /<h2[^>]*>\{way\.title\}<\/h2>/);
     assert.equal(BANNED.test(sections), false);
-    assert.equal(book.includes("data-house-row"), false);
+    assert.equal(book.includes("data-house-row"), true);
     assert.equal(BANNED.test(book), false);
   });
 });
