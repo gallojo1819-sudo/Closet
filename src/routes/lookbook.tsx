@@ -29,7 +29,7 @@ import {
   unusedFromLooks,
   visibleHero,
 } from "@/lib/lookbook";
-import { seasonControlLabel, seasonFromWeather } from "@/lib/season";
+import { seasonChipRow, seasonControlLabel, seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { cardTag, spreadTitle } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
@@ -258,7 +258,8 @@ function LookbookPage() {
   const chapterLabel = OCCASIONS.find((o) => o.id === occasion)?.label ?? "Weekday";
   const autoSeason = seasonFromWeather(drop?.weather?.f);
   const season: Season = seasonChip === "auto" ? autoSeason : seasonChip;
-  const seasonShown = seasonControlLabel(seasonChip, new Date(), drop?.weather?.f);
+  /* The Auto chip always names what Auto resolves, so a tapped season never gets a twin. */
+  const seasonShown = seasonControlLabel("auto", new Date(), drop?.weather?.f);
   const pageWeather = realWeatherF(drop?.weather);
   const ways = useMemo(
     () => visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather }),
@@ -467,13 +468,13 @@ function LookbookPage() {
             aria-pressed={seasonChip === "auto"}
             onClick={() => setSeasonChip("auto")}
             className={cn(
-              "micro border px-3 py-2",
+              "micro whitespace-nowrap border px-3 py-2",
               seasonChip === "auto" ? "border-ink bg-ink text-paper" : "border-hairline text-ink-soft",
             )}
           >
             {seasonShown}
           </button>
-          {SEASONS.map((s) => (
+          {seasonChipRow(seasonChip, autoSeason).map((s) => (
             <button
               key={s.id}
               type="button"

@@ -61,6 +61,15 @@ export function seasonsOf(g: Garment): Season[] {
   return ["spring", "summer", "fall", "winter"];
 }
 
+/** The season chips beside Auto. While Auto is on, the season it resolved is Auto's chip, not a twin. */
+export function seasonChipRow(
+  chip: "auto" | Season,
+  autoSeason: Season,
+): readonly { id: Season; label: string }[] {
+  if (chip !== "auto") return SEASONS;
+  return SEASONS.filter((s) => s.id !== autoSeason);
+}
+
 /** Auto names the season it resolved. October, mild, is "Auto · Fall". */
 export function seasonControlLabel(
   chip: "auto" | Season,
