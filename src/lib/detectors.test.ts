@@ -374,6 +374,44 @@ describe("detectors", () => {
     assert.match(empty, /top, a bottom, and a shoe/);
   });
 
+  it("a plate keeps its own 4:5 box, names follow it in flow, and the short note sits after the row", async () => {
+    const look = (n: number): Garment[] => [
+      g({ id: `t${n}`, name: `Navy oxford ${n}`, category: "top", subtype: "oxford" }),
+      g({ id: `b${n}`, name: `Tan chinos ${n}`, category: "bottom", subtype: "chino" }),
+      g({ id: `s${n}`, name: `Brown loafers ${n}`, category: "footwear", subtype: "loafer" }),
+    ];
+    const way: Way = {
+      id: "2",
+      title: "Oxford and chinos",
+      pieces: look(1),
+      looks: { weekday: [look(1), look(2)] },
+      counts: { weekday: 2, out: 0, weekend: 0, travel: 0, comfy: 0 },
+    };
+    const html = await renderSections([], { ways: [way], occasion: "weekday", season: "fall" });
+    // Heading, then the chapter label, then the row: in-flow siblings inside one section.
+    assert.match(html, /<section><h2[^>]*>Oxford and chinos<\/h2><div><p[^>]*>Weekday<\/p><div class="look-swipe[^"]*">/);
+    // Every kit sits in a definite 4:5 box; the name list comes after that box, not inside it.
+    const cards = html.split('<div class="w-56 shrink-0">').slice(1);
+    assert.equal(cards.length, 2);
+    for (const card of cards) {
+      assert.match(card, /^<div class="relative aspect-\[4\/5\] w-full"><div data-look-kit="stack">/);
+      assert.match(card, /<\/div><\/div><ul class="mt-2 space-y-0\.5"><li/);
+    }
+    // The short note closes the row and the last card first; it is never inside a card.
+    assert.match(
+      html,
+      /<\/ul><\/div><\/div><p data-way-short="true" class="[^"]*">Only 2 in your closet\.<\/p><\/div><\/section>/,
+    );
+    assert.equal(html.split("data-way-short").length - 1, 1);
+    const source = readFileSync(
+      new URL("../components/closet/detector-sections.tsx", import.meta.url),
+      "utf8",
+    );
+    const plateCard = source.slice(source.indexOf("function PlateCard"), source.indexOf("function Chapter"));
+    assert.match(plateCard, /<div className="relative aspect-\[4\/5\] w-full">\s*<LookKit layout="stack"/);
+    assert.equal(/<LookKit[^>]*className="[^"]*(h-full|aspect-)/.test(plateCard), false);
+  });
+
   it("section titles are clothes, at most four, and Joe's labels are not headings", () => {
     assert.equal(titlesAreClothes(), true);
     assert.ok(detectorTitles().length <= 15);
