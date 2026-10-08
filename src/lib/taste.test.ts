@@ -2,8 +2,9 @@ import { register } from "node:module";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import type { Garment, Look } from "./types.ts";
+import type { Garment, Look, Occasion, WeatherSnap } from "./types.ts";
 import type { CloudMeta } from "./cloud/merge.ts";
+import platesFile from "./stylist/__tests__/fixtures/plates-2026-09-30.json" with { type: "json" };
 
 register(new URL("../../scripts/ts-ext.mjs", import.meta.url), {
   parentURL: import.meta.url,
@@ -27,7 +28,11 @@ const {
 const { mergeAccount } = await import("./cloud/merge.ts");
 const { rowToCloud } = await import("./cloud/commit.ts");
 const { recordStylistQuestion } = await import("./stylist-thread.ts");
-const { useCloset } = await import("./store.ts");
+const { useCloset, pickDrop } = await import("./store.ts");
+const { explain, isLegal } = await import("./stylist/legal.ts");
+const { defaultOccasion, isTrueOuter, slotOf, todayOccasion } = await import("./style.ts");
+const { comboKey } = await import("./lookbook.ts");
+const { todayISO } = await import("./utils.ts");
 
 const NOW = Date.parse("2026-10-02T15:00:00.000Z");
 const DAY = 24 * 60 * 60 * 1000;
@@ -310,5 +315,228 @@ describe("taste memory", () => {
     const merged = mergeAccount({ local, cloud, lastCloudIds: null });
     assert.ok(merged.next.taste?.vetoes.some((v) => v.kind === "piece" && v.id === "g_field"));
     assert.equal(merged.next.garments.length >= 2, true);
+  });
+});
+
+describe("today skip", () => {
+  type Raw = {
+    id: string;
+    name?: string | null;
+    category?: string;
+    subtype?: string;
+    material?: string;
+    colors?: string[];
+    brand?: string;
+    fit?: string | null;
+    warmth?: number;
+    archived?: boolean;
+    tombstone?: boolean;
+  };
+  function plate(p: Raw): Garment {
+    const fit = p.fit === "slim" || p.fit === "relaxed" || p.fit === "regular" ? p.fit : undefined;
+    return {
+      id: p.id,
+      name: p.name ?? "",
+      category: (p.category ?? "top") as Garment["category"],
+      subtype: p.subtype ?? "",
+      colors: p.colors ?? [],
+      material: p.material ?? "",
+      brand: p.brand ?? "",
+      notes: "",
+      formality: 3,
+      warmth: Math.min(5, Math.max(1, p.warmth ?? 3)) as Garment["warmth"],
+      seasons: [],
+      imageSrc: "",
+      cutoutSrc: "",
+      imageSource: "photo",
+      matteQuality: "ok",
+      demo: false,
+      wornOn: [],
+      ...(fit ? { fit } : {}),
+      archived: false,
+      createdAt: "2026-09-30T00:00:00.000Z",
+    };
+  }
+  const GONE = new Set<string>(platesFile.deleted_garments as string[]);
+  const RACK: Garment[] = (platesFile.plates as Raw[])
+    .filter((p) => p.id && !p.tombstone && !p.archived && !GONE.has(p.id))
+    .map(plate);
+  const BY = new Map(RACK.map((g) => [g.id, g]));
+  const DELETED = ["g_37e5eqjwgd3d", "g_c6qdv5c3gkor", "g_x0ro1mg2gu0a"];
+  const SUMMER = ["g_zh2l854ghu1t", "g_lqf1mrlsure9", "g_jkj2nzfzpf1o"];
+  const VARSITY = "g_j5og5jmzh5tx";
+  /* A Thursday in October: fall with no reading, weekday by default. */
+  const OCT = new Date(2026, 9, 8, 9);
+  /* A true outer in the outerwear slot. isTrueOuter alone reads "suede" on a loafer. */
+  const isOuter = (g: Garment) => slotOf(g) === "outerwear" && isTrueOuter(g);
+  const resolve = (ids: readonly string[]) => ids.map((id) => BY.get(id)).filter((g): g is Garment => Boolean(g));
+  const names = (ids: readonly string[]) => ids.map((id) => BY.get(id)?.name ?? id).join(" / ");
+  const slots = (pieces: Garment[]) => ({
+    tops: pieces.filter((g) => slotOf(g) === "top" || slotOf(g) === "dress").length,
+    bottoms: pieces.filter((g) => slotOf(g) === "bottom").length,
+    shoes: pieces.filter((g) => slotOf(g) === "footwear").length,
+    outers: pieces.filter(isOuter).length,
+  });
+  const hasCore = (ids: readonly string[]) => {
+    const s = slots(resolve(ids));
+    return s.tops >= 1 && s.bottoms >= 1 && s.shoes >= 1;
+  };
+  function clean(ids: readonly string[], at: string) {
+    for (const id of ids) {
+      assert.equal(SUMMER.includes(id), false, `${at}: summer shirt ${names([id])}`);
+      assert.equal(DELETED.includes(id), false, `${at}: deleted sneaker ${id}`);
+      if (id === VARSITY) assert.equal(slotOf(BY.get(id)!), "top", `${at}: varsity is not a top`);
+    }
+  }
+  const pick = (weather: WeatherSnap | undefined, occasion: Occasion, rack: Garment[] = RACK) =>
+    pickDrop(rack, weather, occasion, undefined, undefined, undefined, undefined, undefined, { salt: 1 }, OCT);
+  const mild: WeatherSnap = { f: 62, label: "Mild", code: 2, measured: true };
+  const warm: WeatherSnap = { f: 73, label: "Warm", code: 1, measured: true };
+  const cold: WeatherSnap = { f: 40, label: "Cold", code: 3, measured: true };
+
+  it("pickDrop dresses weekday and out with a jacket at no reading and at 62, and legally at 73", (t) => {
+    for (const occasion of ["weekday", "out"] as const) {
+      for (const [label, weather] of [["no reading", undefined], ["62", mild], ["73", warm]] as const) {
+        const t0 = performance.now();
+        const ids = pick(weather, occasion);
+        const ms = Math.round(performance.now() - t0);
+        const pieces = resolve(ids);
+        const at = `${occasion} @ ${label}`;
+        t.diagnostic(`pickDrop ${at}: ${names(ids)} (${ms} ms)`);
+        const s = slots(pieces);
+        assert.equal(s.tops, 1, `${at}: ${s.tops} tops`);
+        assert.equal(s.bottoms, 1, `${at}: ${s.bottoms} bottoms`);
+        assert.equal(s.shoes, 1, `${at}: ${s.shoes} shoes`);
+        assert.ok(s.outers <= 1, `${at}: ${s.outers} outers`);
+        const ctx = { occasion, season: "fall" as const, ...(weather ? { weatherF: weather.f } : {}) };
+        assert.equal(isLegal(pieces, ctx), true, `${at}: not legal`);
+        clean(ids, at);
+        if (label !== "73") {
+          /* A jacket day. The outer is there, and the core alone was not enough: no reading became 68. */
+          assert.equal(s.outers, 1, `${at}: no true outer`);
+          assert.equal(isLegal(pieces.filter((g) => !isOuter(g)), ctx), false, `${at}: legal without the jacket`);
+          const why = explain(pieces, ctx).hits.map((h) => h.why).join(" | ");
+          assert.equal(why.includes("68"), false, why);
+        }
+      }
+    }
+  });
+
+  it("five skips on weekday and five on out never leave Today empty and never repeat", (t) => {
+    for (const occasion of ["weekday", "out"] as const) {
+      const first = pick(undefined, occasion);
+      assert.ok(hasCore(first), `${occasion}: no first look`);
+      useCloset.setState({
+        garments: RACK,
+        looks: [],
+        thisWeek: [],
+        journal: [],
+        avoid: {},
+        skipCount: 0,
+        reshuffleCount: 0,
+        taste: emptyTaste(),
+        drop: { date: todayISO(), garmentIds: first, worn: false, verdict: "pending", occasion },
+      });
+      const keys = new Set([comboKey(first)]);
+      t.diagnostic(`${occasion} open: ${names(first)}`);
+      for (let i = 1; i <= 5; i += 1) {
+        useCloset.getState().skipDrop();
+        const d = useCloset.getState().drop!;
+        const at = `${occasion} skip ${i}`;
+        assert.ok(d.garmentIds.length >= 3, `${at}: ${d.garmentIds.length} ids`);
+        assert.ok(hasCore(d.garmentIds), `${at}: no core`);
+        assert.equal(d.date, todayISO(), at);
+        assert.equal(todayOccasion(d), occasion, at);
+        clean(d.garmentIds, at);
+        keys.add(comboKey(d.garmentIds));
+        t.diagnostic(`${at}: ${names(d.garmentIds)}${d.lockNote ? ` (${d.lockNote})` : ""}`);
+      }
+      assert.equal(keys.size, 6, `${occasion}: ${keys.size} distinct looks of 6`);
+      assert.equal(useCloset.getState().skipCount, 5, occasion);
+    }
+  });
+
+  it("the occasion chip survives a skip: out stays out", () => {
+    const first = pick(undefined, "weekday");
+    useCloset.setState({
+      garments: RACK,
+      looks: [],
+      thisWeek: [],
+      journal: [],
+      avoid: {},
+      skipCount: 0,
+      taste: emptyTaste(),
+      drop: { date: todayISO(), garmentIds: first, worn: false, verdict: "pending", occasion: "weekday" },
+    });
+    const wrote = useCloset.getState().rerollDrop(undefined, "out", first);
+    assert.equal(wrote, true);
+    assert.equal(useCloset.getState().drop?.occasion, "out");
+    useCloset.getState().skipDrop();
+    const d = useCloset.getState().drop!;
+    assert.equal(d.occasion, "out");
+    assert.equal(todayOccasion(d), "out");
+    assert.ok(d.garmentIds.length >= 3);
+  });
+
+  it("a pick that finds nothing keeps today's look with a note and logs no skip", () => {
+    /* No outerwear on a fall weekday: no core at all, never an empty list written. */
+    const bare = RACK.filter((g) => slotOf(g) !== "outerwear" && !isTrueOuter(g));
+    const none = pick(mild, "weekday", bare);
+    assert.equal(hasCore(none), false, names(none));
+    /* Three pieces and a cold reading: winter in any month, a jacket required, none to find. */
+    const top = RACK.find((g) => slotOf(g) === "top" && !SUMMER.includes(g.id))!;
+    const bottom = RACK.find((g) => slotOf(g) === "bottom")!;
+    const shoe = RACK.find((g) => slotOf(g) === "footwear" && !DELETED.includes(g.id))!;
+    const prior = {
+      date: todayISO(),
+      garmentIds: [top.id, bottom.id, shoe.id],
+      worn: false,
+      verdict: "pending" as const,
+      occasion: "weekday" as const,
+      weather: cold,
+    };
+    useCloset.setState({
+      garments: [top, bottom, shoe],
+      looks: [],
+      thisWeek: [],
+      journal: [],
+      avoid: {},
+      skipCount: 0,
+      taste: emptyTaste(),
+      drop: prior,
+    });
+    useCloset.getState().skipDrop();
+    const s = useCloset.getState();
+    assert.deepEqual(s.drop?.garmentIds, prior.garmentIds);
+    assert.equal(s.drop?.lockNote, "No other look fits right now. This one stays.");
+    assert.equal(s.journal.some((j) => j.verdict === "skipped"), false);
+    assert.equal(s.skipCount, 0);
+    assert.deepEqual(s.avoid, {});
+    /* The occasion chip still moves, even when nothing else fits. */
+    assert.equal(s.rerollDrop(cold, "out", prior.garmentIds), false);
+    assert.equal(useCloset.getState().drop?.occasion, "out");
+    assert.deepEqual(useCloset.getState().drop?.garmentIds, prior.garmentIds);
+  });
+
+  it("skip on a past Saturday drop makes today's drop and logs no skip", () => {
+    const first = pick(undefined, "weekend");
+    useCloset.setState({
+      garments: RACK,
+      looks: [],
+      thisWeek: [],
+      journal: [],
+      avoid: {},
+      skipCount: 0,
+      taste: emptyTaste(),
+      drop: { date: "2026-10-03", garmentIds: first, worn: false, verdict: "pending", occasion: "weekend" },
+    });
+    useCloset.getState().skipDrop();
+    const s = useCloset.getState();
+    assert.equal(s.drop?.date, todayISO());
+    assert.equal(s.drop?.occasion, defaultOccasion());
+    assert.equal(todayOccasion(s.drop), defaultOccasion());
+    assert.ok((s.drop?.garmentIds.length ?? 0) >= 3, names(s.drop?.garmentIds ?? []));
+    assert.equal(s.journal.some((j) => j.verdict === "skipped"), false);
+    assert.equal(s.skipCount, 0);
   });
 });

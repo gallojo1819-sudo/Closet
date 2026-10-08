@@ -6,10 +6,10 @@ import { lookbookPool } from "@/lib/lookbook";
 import { lookOpinion, suggestLine } from "@/lib/look-opinion";
 import { nameLook } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
-import { defaultOccasion, slotOf } from "@/lib/style";
+import { slotOf, todayOccasion } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { emptyTaste } from "@/lib/taste";
-import { mapOccasion, type Garment, type Occasion, type Season } from "@/lib/types";
+import type { Garment, Occasion, Season } from "@/lib/types";
 import type { House } from "@/lib/houses";
 import { cn, todayISO } from "@/lib/utils";
 
@@ -66,7 +66,7 @@ export function LookBuilder({
   const pieces = SLOTS.map((s) => byId.get(picked[s.id] ?? ""))
     .filter((g): g is Garment => Boolean(g));
   const opinionOpts = {
-    occasion: occasion ?? mapOccasion(drop?.occasion),
+    occasion: occasion ?? todayOccasion(drop),
     season,
     house,
     taste,
@@ -105,7 +105,7 @@ export function LookBuilder({
       worn: false,
       verdict: "pending",
       weather: drop?.weather,
-      occasion: drop?.occasion ?? defaultOccasion(),
+      occasion: todayOccasion(drop),
       moment: drop?.moment,
     });
     onClose?.();
@@ -273,7 +273,7 @@ export function LookBuilder({
           onClick={() =>
             saveLook({
               name: lookName,
-              occasion: mapOccasion(drop?.occasion),
+              occasion: todayOccasion(drop),
               garmentIds: ids,
               source: "manual",
               lookbook: true,

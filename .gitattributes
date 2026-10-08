@@ -1,0 +1,5 @@
+# Hashed data files stay LF on every checkout. Their sha256 pins were taken from LF bytes.
+src/lib/stylist/data/*.json text eol=lf
+src/lib/house-profiles/approved/*.json text eol=lf
+src/lib/stylist/__tests__/fixtures/*.json text eol=lf
+docs/stylist/*.md text eol=lf

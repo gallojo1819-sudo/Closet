@@ -28,7 +28,7 @@ import {
 } from "@/lib/stylist-page";
 import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
-import { daysIdle, defaultOccasion, momentOfDay } from "@/lib/style";
+import { daysIdle, defaultOccasion, momentOfDay, todayOccasion } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import {
   acceptTrend,
@@ -234,7 +234,7 @@ export function StylistDock() {
     if (slot && previous?.garmentIds?.length) {
       const occasion = pageOccasion(
         here.occasion,
-        (previous.draftOccasion ?? drop?.occasion ?? defaultOccasion()) as Occasion,
+        (previous.draftOccasion ?? todayOccasion(drop)) as Occasion,
       );
       const edited = swapDraft({
         ids: previous.garmentIds,
@@ -268,7 +268,7 @@ export function StylistDock() {
     if (named.length > 0) {
       const occasion = occasionFromDressPrompt(
         q,
-        pageOccasion(here.occasion, (drop?.occasion ?? defaultOccasion()) as Occasion),
+        pageOccasion(here.occasion, todayOccasion(drop)),
       );
       const pool = owned.filter((g) => !vetoed.has(g.id) || named.some((n) => n.id === g.id));
       const dressed = dressThisPiece({

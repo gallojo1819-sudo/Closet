@@ -1743,6 +1743,11 @@ describe("lookbook card stack", () => {
     const gaps = readFileSync(new URL("./gaps.ts", import.meta.url), "utf8");
     assert.equal(gaps.includes("houseOf("), false);
     assert.equal(gaps.includes("Faloni in summer"), false);
+    // Today keeps today's look. The open effect rerolls only without a sound today drop, never as a skip.
+    const effect = today.slice(today.indexOf("if (!hydrated) return;"), today.indexOf("}, [hydrated, ownedCount]);"));
+    const guard = effect.indexOf("current.date === todayISO()");
+    assert.ok(guard >= 0 && guard < effect.indexOf("rerollDrop("), "date-today guard before the reroll");
+    assert.equal(/rerollDrop\([^;]*garmentIds/.test(effect), false, "open never passes previousIds");
   });
 
   it("three pieces render three bands, and a cached On you image stays out until it is on", async () => {

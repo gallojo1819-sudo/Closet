@@ -147,6 +147,8 @@ export type DailyDrop = {
   lockedIds?: string[];
   /** Quiet line when a lock forced the rest of the look to move. */
   lockNote?: string | null;
+  /** ISO time of the last write the user made to this drop on a device. Older drops have none. */
+  setAt?: string;
 };
 
 export type WearEntry = {

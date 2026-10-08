@@ -803,6 +803,11 @@ export function pickLook(
     requireSilhouetteChange?: boolean;
     /** Atlas. A piece veto leaves the pool unless that piece is locked. */
     taste?: TasteMemory;
+    /**
+     * A jacket day. The winner is the first ranked combo a legal outer finishes, and it wears
+     * that outer. A combo no outer can finish is dropped. None: no core. Today only.
+     */
+    requireOuter?: boolean;
   },
 ): string[] {
   const pool = livePool(garments);
@@ -1097,8 +1102,29 @@ export function pickLook(
     const changed = poolC.filter((c) => silhouetteKey(c.ids, pool, opts.occasion) !== prevSilh);
     if (changed.length) poolC = changed;
   }
-  const win = poolC[0];
+  let win: Combo | undefined = poolC[0];
+  let forcedOuter: Garment | undefined;
+  if (opts.requireOuter && !pin.get("outerwear")) {
+    win = undefined;
+    const outers = by("outerwear");
+    for (const c of poolC) {
+      const outer = pickTrueOuter(outers, c.pieces, recipe, {
+        occasion: opts.occasion,
+        house: opts.house,
+        f,
+        tempF: measuredF,
+        legalCombo: opts.legalCombo,
+        usedOuters: chapter?.usedOuters,
+        taste,
+      });
+      if (!outer) continue;
+      win = c;
+      forcedOuter = outer;
+      break;
+    }
+  }
   const ids: string[] = win ? [...win.ids] : lockedGs.map((g) => g.id);
+  if (forcedOuter && !ids.includes(forcedOuter.id)) ids.push(forcedOuter.id);
   const corePieces = ids
     .map((id) => pool.find((g) => g.id === id))
     .filter((g): g is Garment => Boolean(g));
@@ -1112,7 +1138,7 @@ export function pickLook(
   if (pin.get("outerwear")) {
     const o = pin.get("outerwear")!;
     if (hasCore && !ids.includes(o.id) && isTrueOuter(o) && !clashes([...corePieces, o])) ids.push(o.id);
-  } else if (hasCore) {
+  } else if (hasCore && !forcedOuter) {
     const want =
       outerRequired(opts.occasion, f, recipe, house) ||
       (cool && !warm && recipe.outer !== "none") ||
