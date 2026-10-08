@@ -298,16 +298,52 @@ function hasWord(blob: string, word: string): boolean {
   return false;
 }
 
-function phraseOwned(phrase: string, garments: readonly Garment[]): boolean {
-  const words = phrase
+/* Question words, auxiliaries and care verbs. A qualifier never reaches past one of these. */
+const ASK_WORDS = new Set([
+  "how", "what", "why", "when", "where", "which", "who", "does", "did", "can", "could", "should", "would", "will",
+  "keep", "care", "clean", "protect", "store", "wash", "brush", "spray", "polish", "treat", "dry", "look", "looking",
+  "good", "get", "make", "need", "for", "about", "from", "into", "them", "these", "those", "own", "have", "has",
+  "are", "was", "were", "goes", "pair", "match",
+]);
+
+function cleanWords(text: string): string[] {
+  return text
     .toLowerCase()
     .split(/[\s-]+/)
     .map((word) => word.replace(/[^a-z0-9]/g, ""))
-    .filter((word) => word.length > 2 && !STOP.has(word));
-  if (!words.length) return true;
+    .filter(Boolean);
+}
+
+/**
+ * The words that describe a garment noun, read right to left from the noun. A stop
+ * word or an ask word ends the qualifier; a word of two letters or fewer is skipped.
+ * "i keep suede" gives ["suede"]; "the camel" gives ["camel"]; "swap the" gives [].
+ */
+function qualifierWords(qual: string): string[] {
+  const kept: string[] = [];
+  for (const word of cleanWords(qual).reverse()) {
+    if (word.length <= 2) continue;
+    if (STOP.has(word) || ASK_WORDS.has(word)) break;
+    kept.unshift(word);
+  }
+  return kept;
+}
+
+const GENERIC_SHOE = /^shoes?$/;
+
+/**
+ * A qualified garment phrase, as "<qualifiers> <noun>". Owned when one piece carries the
+ * noun and every qualifier. The generic noun "shoes" is any footwear piece.
+ */
+function phraseOwned(phrase: string, garments: readonly Garment[]): boolean {
+  const words = cleanWords(phrase);
+  const noun = words.pop() ?? "";
+  const qualifiers = qualifierWords(words.join(" "));
+  if (!noun || !qualifiers.length) return true;
   return garments.some((g) => {
     const blob = pieceBlob(g);
-    return words.every((word) => hasWord(blob, word));
+    const nounOk = GENERIC_SHOE.test(noun) ? slotOf(g) === "footwear" : hasWord(blob, noun);
+    return nounOk && qualifiers.every((word) => hasWord(blob, word));
   });
 }
 
@@ -317,11 +353,7 @@ function promptInventsGarment(text: string, garments: readonly Garment[]): boole
   let match: RegExpExecArray | null;
   while ((match = GARMENT_NOUN.exec(text.toLowerCase()))) {
     const qual = (match[1] ?? "").trim();
-    const words = qual
-      .split(/[\s-]+/)
-      .map((word) => word.replace(/[^a-z0-9]/g, ""))
-      .filter((word) => word.length > 2 && !STOP.has(word));
-    if (!words.length) continue;
+    if (!qualifierWords(qual).length) continue;
     const phrase = `${qual} ${match[2] ?? ""}`.trim();
     if (!phraseOwned(phrase, garments)) return true;
   }
@@ -375,18 +407,41 @@ export function isOccasionLine(line: string): boolean {
   return Boolean(dash && OCCASION_ID.test(dash[1] ?? ""));
 }
 
-/** The lines a reply may paint: no LOOK or MISSING row, and never a bare occasion id on top. */
+const GARMENT_ID = /\bg_[a-z0-9_]+/gi;
+
+/** A line with any LOOK tail and any garment id taken out. */
+function scrubLine(line: string): string {
+  const cut = line.search(/LOOK:/i);
+  const kept = cut >= 0 ? line.slice(0, cut) : line;
+  return kept.replace(GARMENT_ID, " ").replace(/\s+/g, " ").trim();
+}
+
+/** The lines a reply may paint: no LOOK or MISSING row, no id, and never a bare occasion id on top. */
 export function visibleReplyLines(text: string): string[] {
   return text
     .split("\n")
     .map((line) => line.trim())
+    .filter((line) => !/^MISSING:/i.test(line) && !/^LOOK:/i.test(line))
+    .map(scrubLine)
     .filter(Boolean)
-    .filter((line) => !/^MISSING:/i.test(line) && !/^LOOK:/i.test(line) && !isOccasionLine(line));
+    .filter((line) => !isOccasionLine(line));
 }
 
-/** A raw atlas block rather than prose: it carries a LOOK row, or opens on an occasion id. */
+/** The owned ids on a LOOK row, in order. */
+export function lookRowIds(text: string, garments: readonly Garment[]): string[] {
+  const m = text.match(/LOOK:\s*([^\n]+)/i);
+  if (!m?.[1]) return [];
+  const owned = new Set(garments.map((g) => g.id));
+  return m[1]
+    .split(/[,|\s]+/)
+    .map((id) => id.trim())
+    .filter((id) => id && owned.has(id));
+}
+
+/** A raw atlas block rather than prose: a LOOK row or an id anywhere, or an occasion id on top. */
 export function looksLikeAtlasBlock(text: string): boolean {
-  if (/^\s*LOOK:/im.test(text)) return true;
+  if (/LOOK:/i.test(text)) return true;
+  if (new RegExp(GARMENT_ID.source, "i").test(text)) return true;
   const first = text.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
   return isOccasionLine(first);
 }
@@ -441,11 +496,21 @@ export function replyFromStylistResult(
   );
   const accepted = rawText.trim() ? acceptStylistReply(rawText, garments) : null;
   if (accepted) {
-    const prose = stylistProse(accepted);
+    const resolve = (list: readonly string[]) =>
+      list.map((id) => garments.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g));
+    if (looksLikeAtlasBlock(rawText)) {
+      /* A raw block becomes one sentence from its pieces: the sent ids, else the LOOK row. */
+      let pieces = resolve(ids);
+      if (!pieces.length) pieces = resolve(lookRowIds(rawText, garments));
+      const sentence = pieces.length ? lookReply(pieces) : null;
+      if (sentence) return { text: sentence, garmentIds: pieces.map((g) => g.id) };
+      const scrubbed = visibleReplyLines(rawText).join("\n");
+      if (scrubbed) return { text: scrubbed, garmentIds: ids };
+      return { text: NOT_IN_CLOSET, garmentIds: [] };
+    }
+    const prose = stylistProse(rawText);
     if (prose && prose !== NOT_IN_CLOSET) return { text: prose, garmentIds: ids };
-    const names = ids
-      .map((id) => garments.find((g) => g.id === id))
-      .filter((g): g is Garment => Boolean(g))
+    const names = resolve(ids)
       .map((g) => speakPiece(g))
       .filter(Boolean);
     if (names.length) return { text: names.join(", "), garmentIds: ids };
@@ -591,6 +656,50 @@ export function answerTodayAsk(input: {
     .map((id) => owned.find((g) => g.id === id))
     .filter((g): g is Garment => Boolean(g));
   return { text: wearLine(pieces), garmentIds: pieces.map((g) => g.id), occasion };
+}
+
+const ADVICE_ASK = /\b(?:how (?:do|can|should|would) i|how to|best way to|tips? (?:for|on))\b/i;
+const CARE_WORD = /\b(?:care|clean|cleaning|protect|waterproof|polish|store|wash|rain|wet)\b/i;
+/* "looking" is not "look": \blooks?\b stops at the s. */
+const DRESS_WORD = /\b(?:wear|wearing|outfit|looks?|swap|change|switch|replace)\b/i;
+
+/**
+ * A how or care question that is not a dressing ask: "How do I keep suede shoes looking
+ * good in the rain?". It passes the page and goes to the server with nothing locked.
+ */
+export function isAdviceAsk(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (DRESS_WORD.test(t)) return false;
+  return ADVICE_ASK.test(t) || CARE_WORD.test(t);
+}
+
+/**
+ * The look a swap edits: the last stylist look, else the first look on this page, else
+ * today's drop when it is dated today. Owned ids only; empty when none holds two.
+ */
+export function swapBaseIds(input: {
+  previousIds?: readonly string[] | null;
+  page?: StylistPageContext;
+  looks?: readonly ScreenLook[];
+  drop?: { date: string; garmentIds: readonly string[] } | null;
+  garments: readonly Garment[];
+  today?: string;
+}): string[] {
+  const owned = new Set(input.garments.filter((g) => !g.archived).map((g) => g.id));
+  const keep = (ids: readonly string[] | null | undefined) => (ids ?? []).filter((id) => owned.has(id));
+  const page = input.page ?? readStylistPage();
+  const today = input.today ?? todayISO();
+  const candidates: (readonly string[] | null | undefined)[] = [
+    input.previousIds,
+    (input.looks ?? rememberedLooks(page))[0]?.garmentIds,
+    input.drop?.date === today ? input.drop.garmentIds : [],
+  ];
+  for (const ids of candidates) {
+    const held = keep(ids);
+    if (held.length >= 2) return held;
+  }
+  return [];
 }
 
 /** A question about the looks on this page, not a request to dress a piece. */
@@ -849,6 +958,7 @@ export function answerAsked(input: {
   if (input.modelText && !acceptStylistReply(input.modelText, garments)) return { kind: "reject" };
   if (promptInventsGarment(input.prompt, garments)) return { kind: "reject" };
   if (isBrief(input.prompt)) return { kind: "pass" };
+  if (isAdviceAsk(input.prompt)) return { kind: "pass" };
   const looks = (input.looks ?? rememberedLooks(page)).filter((look) =>
     page.onScreenLookIds.includes(look.id),
   );
@@ -862,7 +972,11 @@ export function answerAsked(input: {
       ? rows.filter((row) => wanted.every((g) => row.pieces.some((piece) => piece.id === g.id)))
       : rows;
     if (wanted.length && !pool.length) {
-      return { kind: "answer", text: "That piece is not in the looks on this page.", garmentIds: [] };
+      /* An owned piece that is off this page: the page cannot answer, the dress branch can. */
+      if (asksAboutOnScreenLooks(input.prompt)) {
+        return { kind: "answer", text: "That piece is not in the looks on this page.", garmentIds: [] };
+      }
+      return { kind: "pass" };
     }
     const index = rankIndex(pool, page);
     if (index < 0) {
