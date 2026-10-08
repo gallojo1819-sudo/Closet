@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { callerGate, closetCaller } from "./auth/closet-caller";
 import { CAMERA_TAG_RULES, cameraPieceCategory } from "./camera-tag";
 import { CRITIC_MAX, CRITIC_SYSTEM, parseCriticVerdict, type CriticRow } from "./critic";
 import {
@@ -97,8 +98,11 @@ const CATEGORY_SET = new Set([
 ]);
 
 export const tagGarment = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { image: string; context?: string }) => input)
-  .handler(async ({ data }): Promise<TagResult> => {
+  .handler(async ({ data, context }): Promise<TagResult> => {
+    const gate = await callerGate(context, "tagGarment");
+    if (!gate.ok) return { ok: false, error: gate.error };
     const apiKey = process.env.XAI_API_KEY;
     if (!apiKey) return { ok: false, error: "AI tagging is unavailable here." };
 
@@ -224,7 +228,12 @@ const STATUS_TTL = 60_000;
 let statusMemo: { t: number; v: { print: boolean; chat: boolean } } | null = null;
 let clientStatus: { t: number; v: { print: boolean; chat: boolean } } | null = null;
 
-export const aiStatus = createServerFn({ method: "GET" }).handler(async () => {
+export const aiStatus = createServerFn({ method: "GET" })
+  .middleware([closetCaller])
+  .handler(async ({ context }) => {
+  /* Signed out: nothing, and nothing is memoized. The memo only ever holds a signed-in answer. */
+  const gate = await callerGate(context, "aiStatus");
+  if (!gate.ok) return { print: false, chat: false };
   if (statusMemo && Date.now() - statusMemo.t < STATUS_TTL) return statusMemo.v;
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) return { print: false, chat: false };
@@ -273,8 +282,11 @@ export const HELD_JACKET_RETRY =
   "The last plate still showed a person. Fail if any skin remains.";
 
 export const printGarment = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { image: string; held?: boolean; retry?: boolean }) => input)
-  .handler(async ({ data }): Promise<EditResult> => {
+  .handler(async ({ data, context }): Promise<EditResult> => {
+    const gate = await callerGate(context, "printGarment");
+    if (!gate.ok) return { ok: false, error: gate.error };
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Set XAI_API_KEY for catalog covers." };
     const prompt = data.held
       ? data.retry
@@ -296,8 +308,11 @@ export type ClassifyScanResult =
   | { ok: false; error: string };
 
 export const classifyScan = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { image: string }) => input)
-  .handler(async ({ data }): Promise<ClassifyScanResult> => {
+  .handler(async ({ data, context }): Promise<ClassifyScanResult> => {
+    const gate = await callerGate(context, "classifyScan");
+    if (!gate.ok) return { ok: false, error: gate.error };
     if (!process.env.XAI_API_KEY) {
       return { ok: true, kind: "garment", reason: "no-key", pieces: [], boxes: [] };
     }
@@ -333,8 +348,11 @@ export const classifyScan = createServerFn({ method: "POST" })
   });
 
 export const extractGarment = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { image: string; slot: ScanSlot | string; label: string }) => input)
-  .handler(async ({ data }): Promise<EditResult> => {
+  .handler(async ({ data, context }): Promise<EditResult> => {
+    const gate = await callerGate(context, "extractGarment");
+    if (!gate.ok) return { ok: false, error: gate.error };
     if (!process.env.XAI_API_KEY) {
       return { ok: false, error: "Set XAI_API_KEY to pull a garment off a look." };
     }
@@ -353,8 +371,11 @@ If this piece is not clearly visible as its own item, leave the paper blank — 
   });
 
 export const recolorCover = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { image: string; color: string }) => input)
-  .handler(async ({ data }): Promise<EditResult> => {
+  .handler(async ({ data, context }): Promise<EditResult> => {
+    const gate = await callerGate(context, "recolorCover");
+    if (!gate.ok) return { ok: false, error: gate.error };
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Set XAI_API_KEY to recolor a cover." };
     const color = data.color.trim();
     if (!color) return { ok: false, error: "Pick a color first." };
@@ -367,8 +388,11 @@ Lay on #F4EFE6 paper, 4:5, fill ~80%. No extra garments, no model, no text.`,
   });
 
 export const describeCover = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { image: string; notes: string }) => input)
-  .handler(async ({ data }): Promise<EditResult> => {
+  .handler(async ({ data, context }): Promise<EditResult> => {
+    const gate = await callerGate(context, "describeCover");
+    if (!gate.ok) return { ok: false, error: gate.error };
     if (!process.env.XAI_API_KEY) {
       return { ok: false, error: "Set XAI_API_KEY to match a cover." };
     }
@@ -386,8 +410,11 @@ If you leave hanging ties, you failed.`,
   });
 
 export const onMePreview = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { refImage: string; cutouts: string[]; pieces: string; tuck?: string }) => input)
-  .handler(async ({ data }): Promise<EditResult> => {
+  .handler(async ({ data, context }): Promise<EditResult> => {
+    const gate = await callerGate(context, "onMePreview");
+    if (!gate.ok) return { ok: false, error: gate.error };
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
     if (!data.refImage) return { ok: false, error: "No reference photo." };
     const prompt = `Image 1 is THIS man. Same face, hair, beard or none. Forbidden: stock campaign model, different man.
@@ -456,10 +483,13 @@ const CHAT_MODELS = ["grok-4.5", "grok-4.3", "grok-4"] as const;
 
 /** The stylist composes the chapter. grok-4.5, no images, no second model. */
 export const composeChapter = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { message: string }) => input)
-  .handler(async ({ data }): Promise<
+  .handler(async ({ data, context }): Promise<
     { ok: true; looks: { ids: string[]; name: string; why: string }[] } | { ok: false; error: string }
   > => {
+    const gate = await callerGate(context, "composeChapter");
+    if (!gate.ok) return { ok: false, error: gate.error };
     const message = (data.message ?? "").trim();
     if (!message) return { ok: false, error: "empty" };
     const ask = async (prompt: string) => {
@@ -496,10 +526,13 @@ export const composeChapter = createServerFn({ method: "POST" })
 
 /** One chapter, one call. grok-4.5 only. No images. */
 export const judgeChapter = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { rows: CriticRow[] }) => input)
-  .handler(async ({ data }): Promise<
+  .handler(async ({ data, context }): Promise<
     { ok: true; keep: string[]; reject: string[]; why: string } | { ok: false; error: string }
   > => {
+    const gate = await callerGate(context, "judgeChapter");
+    if (!gate.ok) return { ok: false, error: gate.error };
     const rows = (data.rows ?? []).slice(0, CRITIC_MAX).map((row) => ({
       pieces: (row.pieces ?? []).map((piece) => ({
         id: piece.id,
@@ -533,6 +566,7 @@ export const judgeChapter = createServerFn({ method: "POST" })
   });
 
 export const askStylist = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator(
     (input: {
       prompt: string;
@@ -550,10 +584,13 @@ export const askStylist = createServerFn({ method: "POST" })
   .handler(
     async ({
       data,
+      context,
     }): Promise<
       | { ok: true; text: string; garmentIds: string[]; occasion: Occasion; technique: string | null }
       | { ok: false; error: string }
     > => {
+    const gate = await callerGate(context, "askStylist");
+    if (!gate.ok) return { ok: false, error: gate.error };
     const rack = livePool(data.garments ?? []);
     const page = data.page;
     const f = finiteTemp(page?.weatherF) ?? finiteTemp(data.weatherF);
@@ -639,8 +676,11 @@ export const askStylist = createServerFn({ method: "POST" })
 
 /** One sentence about layering. Off the ask path. A missing key skips it. */
 export const trendLayer = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { now?: number }) => input)
-  .handler(async (): Promise<{ ok: true; sentence: string } | { ok: false; skipped?: boolean }> => {
+  .handler(async ({ context }): Promise<{ ok: true; sentence: string } | { ok: false; skipped?: boolean }> => {
+    const gate = await callerGate(context, "trendLayer");
+    if (!gate.ok) return { ok: false, skipped: true };
     if (!process.env.XAI_API_KEY) return { ok: false, skipped: true };
     const r = await xaiFetch("https://api.x.ai/v1/chat/completions", {
       model: "grok-4.5",

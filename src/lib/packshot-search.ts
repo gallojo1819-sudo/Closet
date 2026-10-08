@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { callerGate, closetCaller } from "./auth/closet-caller.ts";
 import {
   attachCitation,
   maySearchOfficial,
@@ -98,8 +99,11 @@ function parseJudge(text: string): PlateJudge {
 
 /** clean:false when a person, face, hand, arm, skin, or hanger is visible. No JSON is not a cover. */
 export const judgeHeldPlate = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { image: string }) => input)
-  .handler(async ({ data }): Promise<PlateJudge> => {
+  .handler(async ({ data, context }): Promise<PlateJudge> => {
+    const gate = await callerGate(context, "judgeHeldPlate");
+    if (!gate.ok) return UNREADABLE;
     if (!process.env.XAI_API_KEY || !data.image) return UNREADABLE;
     const messages = [
       {
@@ -218,6 +222,7 @@ async function compareToPhoto(photo: string, pack: string): Promise<PackshotVerd
  * No match returns ok:false so the caller can keep a plate. It does not fail the tile.
  */
 export const findOfficialCover = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator(
     (input: {
       id?: string;
@@ -229,7 +234,9 @@ export const findOfficialCover = createServerFn({ method: "POST" })
       photo: string;
     }) => input,
   )
-  .handler(async ({ data }): Promise<OfficialCover> => {
+  .handler(async ({ data, context }): Promise<OfficialCover> => {
+    const gate = await callerGate(context, "findOfficialCover");
+    if (!gate.ok) return { ok: false };
     if (!maySearchOfficial(data.id, data.brand)) return { ok: false };
     const plan = packshotPlan(data);
     if (!plan || !data.photo) return { ok: false };
