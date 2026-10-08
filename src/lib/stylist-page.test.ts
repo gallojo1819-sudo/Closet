@@ -11,7 +11,9 @@ register(new URL("../../scripts/ts-ext.mjs", import.meta.url), {
 const {
   acceptStylistReply,
   answerAsked,
+  answerTodayAsk,
   bindClosetPiece,
+  isTodayOutfitAsk,
   briefLine,
   briefOccasion,
   formatStrongest,
@@ -199,6 +201,75 @@ describe("stylist page", () => {
     assert.match(add, /route: "add"/);
     assert.equal(closet.includes("writeStylistPage"), false);
     assert.match(detail, /bindClosetPiece/);
+  });
+
+  it("c) a line break ends a garment qualifier: the occasion never glues onto the piece", () => {
+    const plaid = piece({ id: "g_plaid", name: "Grey plaid shirt", category: "top", subtype: "shirt", colors: ["grey"] });
+    const rack = [...owned, plaid];
+    assert.ok(acceptStylistReply("weekday\nGrey plaid shirt", rack));
+    assert.ok(acceptStylistReply("weekend\nGrey plaid shirt\ntan chinos\nsuede loafers", rack));
+    assert.equal(acceptStylistReply("weekday\nGrey plaid shirt", owned), null, "still rejected when unowned");
+  });
+
+  it("d) isTodayOutfitAsk is the whole-outfit ask about today", () => {
+    for (const ask of [
+      "What should I wear today?",
+      "what do I wear",
+      "what should i wear",
+      "Outfit for today",
+      "today's outfit",
+      "What's today's look?",
+    ]) {
+      assert.equal(isTodayOutfitAsk(ask), true, ask);
+    }
+    for (const ask of ["what goes with my olive field jacket", "do I own a Loro Piana sweater", "swap the shoes", "what do I wear with the grey plaid shirt"]) {
+      assert.equal(isTodayOutfitAsk(ask), false, ask);
+    }
+  });
+
+  it("e) a today drop answers with exactly its pieces", () => {
+    const drop = {
+      date: "2026-10-08",
+      garmentIds: ["g_ox", "g_chino", "g_loafer"],
+      worn: false,
+      verdict: "pending" as const,
+      occasion: "weekday" as const,
+    };
+    const answer = answerTodayAsk({ drop, garments: owned, today: "2026-10-08" });
+    assert.deepEqual(answer.garmentIds, drop.garmentIds);
+    assert.equal(answer.occasion, "weekday");
+    assert.match(answer.text, /^Wear your oxford with the tan chinos and the suede loafers\.$/);
+    assert.equal(answer.text.includes("navy blazer"), false, "exactly the drop, no extra piece");
+    for (const bad of ["That piece is not in this closet.", "LOOK:", "g_"]) assert.equal(answer.text.includes(bad), false, bad);
+  });
+
+  it("f) no drop or a stale drop still dresses him from the real rack", () => {
+    const stale = {
+      date: "2026-10-07",
+      garmentIds: ["g_ox", "g_chino"],
+      worn: false,
+      verdict: "pending" as const,
+      occasion: "out" as const,
+    };
+    for (const [label, drop] of [["no drop", null], ["yesterday", stale]] as const) {
+      const answer = answerTodayAsk({ drop, garments: owned, today: "2026-10-08", weatherF: 55 });
+      assert.ok(answer.garmentIds.length >= 3, `${label}: ${answer.garmentIds.length} pieces`);
+      for (const id of answer.garmentIds) assert.ok(owned.some((g) => g.id === id), `${label}: ${id} not owned`);
+      assert.match(answer.text, /^Wear your /, label);
+      for (const bad of ["That piece is not in this closet.", "LOOK:", "g_"]) assert.equal(answer.text.includes(bad), false, `${label}: ${bad}`);
+    }
+  });
+
+  it("g) the dock answers the today ask first and its catch is neutral", () => {
+    const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
+    const send = dock.slice(dock.indexOf("const send = async"), dock.indexOf("const wearDraft"));
+    const todayAt = send.indexOf("isTodayOutfitAsk(q)");
+    const askedAt = send.indexOf("answerAsked(");
+    assert.ok(todayAt >= 0 && askedAt >= 0 && todayAt < askedAt, "today ask before answerAsked");
+    const caught = send.slice(send.indexOf("} catch {"), send.indexOf("} finally {"));
+    assert.equal(caught.includes("NOT_IN_CLOSET"), false, "the catch is neutral");
+    assert.match(caught, /Couldn't answer\. Try again\./);
+    assert.equal(send.includes("acceptStylistReply(line, owned) ?? NOT_IN_CLOSET"), false, "no raw block fallback");
   });
 
   it("a reply that names a garment he does not own is rejected", () => {

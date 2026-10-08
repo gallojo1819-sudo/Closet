@@ -1,7 +1,8 @@
-import { clashes, daysIdle, slotOf } from "./style.ts";
+import { clashes, daysIdle, slotOf, todayOccasion } from "./style.ts";
 import { scoreLook } from "./stylist/legal.ts";
-import { OCCASIONS, SEASONS, type Garment, type Occasion, type Season } from "./types.ts";
-import type { TasteMemory } from "./taste.ts";
+import { OCCASIONS, SEASONS, type DailyDrop, type Garment, type Occasion, type Season } from "./types.ts";
+import { composeAtlasLook, emptyTaste, type TasteMemory } from "./taste.ts";
+import { todayISO } from "./utils.ts";
 
 /** The page he is on. Replaced wholesale so a previous page cannot leak. */
 export type StylistRoute = "today" | "closet" | "lookbook" | "add" | "stylist";
@@ -51,8 +52,9 @@ const REFUSE =
 const DETECTOR =
   /\b(?:western_work|ivy_prep|country_stable|glossy_formal|shrunken_suit|fine_knit_loafer|henley_denim|linen_soft|flannel_cashmere|clean_city|boxy_tonal|print_plain|graphic_street|worn_paris|soft_outdoor)\b|\b(?:WW|IV|CS|GF|SS|FK|HD|LS|FC|CC|BT|PP|GS|WP|SO|JKT|ALD|XC)-[A-Z0-9]+(?:-[A-Z0-9]+)?\b/;
 
+/* The qualifier stays on one line. "weekday" on line one never glues onto the piece on line two. */
 const GARMENT_NOUN =
-  /((?:[a-z0-9]+[\s-]+){0,3})(blazers?|jackets?|coats?|overcoats?|shirts?|oxfords?|tees?|t-shirts?|polos?|knits?|sweaters?|hoodies?|chinos?|trousers?|jeans?|cords?|corduroys?|shorts?|loafers?|sneakers?|boots?|shoes?|derbies)\b/gi;
+  /((?:[a-z0-9]+[ \t-]+){0,3})(blazers?|jackets?|coats?|overcoats?|shirts?|oxfords?|tees?|t-shirts?|polos?|knits?|sweaters?|hoodies?|chinos?|trousers?|jeans?|cords?|corduroys?|shorts?|loafers?|sneakers?|boots?|shoes?|derbies)\b/gi;
 
 const STOP = new Set([
   "the",
@@ -336,11 +338,14 @@ export function acceptStylistReply(text: string, garments: readonly Garment[]): 
     const asType = garments.some((g) => /\bpolo\b/i.test(`${g.subtype} ${g.name}`) && !/\bpolo\b/i.test(g.brand ?? ""));
     if (!asType) return null;
   }
-  GARMENT_NOUN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = GARMENT_NOUN.exec(clean.toLowerCase()))) {
-    const phrase = `${match[1] ?? ""}${match[2] ?? ""}`.trim();
-    if (!phraseOwned(phrase, garments)) return null;
+  /* Garment phrases are read line by line, so a line break ends a qualifier. */
+  for (const line of text.toLowerCase().split(/\r?\n/)) {
+    GARMENT_NOUN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = GARMENT_NOUN.exec(line))) {
+      const phrase = `${match[1] ?? ""}${match[2] ?? ""}`.trim();
+      if (!phraseOwned(phrase, garments)) return null;
+    }
   }
   return clean;
 }
@@ -467,7 +472,7 @@ function holdClause(page: StylistPageContext): string {
  * The winning look as a Wear sentence: one top, one bottom, one shoe, from
  * these pieces only. A jacket goes under. Never the page line.
  */
-function wearSentence(pieces: readonly Garment[]): string | null {
+export function wearSentence(pieces: readonly Garment[]): string | null {
   const top = pieces.find((g) => {
     const slot = slotOf(g);
     return slot === "top" || slot === "dress";
@@ -480,6 +485,70 @@ function wearSentence(pieces: readonly Garment[]): string | null {
   const wear = `Wear your ${named(top)} with the ${named(bottom)} and the ${named(shoe)}`;
   if (named(jacket)) return `${wear} under the ${named(jacket)}.`;
   return `${wear}.`;
+}
+
+const TODAY_ASK =
+  /\b(?:what(?:'s|s| is| should| do| can| could| would| will)?\s+(?:i|should i|do i|can i)?\s*(?:wear|put on)(?:\s+today|\s+this morning|\s+now)?|outfit\s+(?:for\s+)?today|today'?s\s+(?:outfit|look)|look\s+for\s+today|what(?:'s|s| is)\s+(?:my\s+)?(?:look|outfit)\s+(?:for\s+)?today|what(?:'s|s| is)\s+today'?s\s+(?:look|outfit)|dress\s+me\s+(?:for\s+)?today)\b/i;
+const NAMES_A_PIECE =
+  /\b(?:with|goes with|go with|under|over|pair|match|own|have|swap|change|switch|replace)\b|\bmy\s+[a-z]/i;
+
+/**
+ * A whole-outfit ask about today: "what should I wear today", "what do I wear",
+ * "outfit for today", "today's outfit", "what's today's look". An ask that names a
+ * piece or asks what goes with one is not this.
+ */
+export function isTodayOutfitAsk(text: string): boolean {
+  const t = text.replace(/[^\w\s']/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  if (!t) return false;
+  if (!TODAY_ASK.test(t)) return false;
+  return !NAMES_A_PIECE.test(t);
+}
+
+export type TodayAnswer = { text: string; garmentIds: string[]; occasion: Occasion };
+
+function wearLine(pieces: readonly Garment[]): string {
+  const wear = wearSentence(pieces);
+  if (wear) return wear;
+  const names = pieces.map(speakPiece).filter(Boolean);
+  if (!names.length) return "Nothing in this closet dresses today.";
+  if (names.length === 1) return `Wear your ${names[0]}.`;
+  return `Wear your ${names[0]} with the ${names.slice(1).join(", the ")}.`;
+}
+
+/**
+ * Today's look, as a Wear sentence. The drop when it is dated today and holds two or
+ * more owned pieces; otherwise one look composed from the real rack for today's occasion.
+ * Never a refusal, never a raw block, never a LOOK line.
+ */
+export function answerTodayAsk(input: {
+  drop: DailyDrop | null | undefined;
+  garments: readonly Garment[];
+  today?: string;
+  taste?: TasteMemory;
+  weatherF?: number;
+}): TodayAnswer {
+  const today = input.today ?? todayISO();
+  const owned = input.garments.filter((g) => !g.archived);
+  const occasion = todayOccasion(input.drop, today);
+  if (input.drop?.date === today) {
+    const pieces = input.drop.garmentIds
+      .map((id) => owned.find((g) => g.id === id))
+      .filter((g): g is Garment => Boolean(g));
+    if (pieces.length >= 2) {
+      return { text: wearLine(pieces), garmentIds: pieces.map((g) => g.id), occasion };
+    }
+  }
+  const rolled = composeAtlasLook({
+    garments: [...owned],
+    prompt: "",
+    occasion,
+    taste: input.taste ?? emptyTaste(),
+    ...(typeof input.weatherF === "number" && Number.isFinite(input.weatherF) ? { weatherF: input.weatherF } : {}),
+  });
+  const pieces = rolled.garmentIds
+    .map((id) => owned.find((g) => g.id === id))
+    .filter((g): g is Garment => Boolean(g));
+  return { text: wearLine(pieces), garmentIds: pieces.map((g) => g.id), occasion };
 }
 
 /** A question about the looks on this page, not a request to dress a piece. */

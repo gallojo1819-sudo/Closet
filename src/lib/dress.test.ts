@@ -111,6 +111,32 @@ describe("resolvePiecesFromText", () => {
     assert.equal(hit.length, 0);
     assert.ok(WHICH_PIECE.includes("Closet"));
   });
+  it("a) a whole-outfit ask names no piece: wear never matches inside outerwear", () => {
+    const field = piece({
+      id: "field",
+      name: "Olive field jacket",
+      category: "outerwear",
+      subtype: "field jacket",
+      colors: ["olive"],
+    });
+    assert.deepEqual(resolvePiecesFromText("What should I wear today?", rack()), []);
+    assert.deepEqual(resolvePiecesFromText("What should I wear today?", [...rack(), field]), []);
+    assert.deepEqual(resolvePiecesFromText("what do I wear", [...rack(), field]), []);
+  });
+  it("b) a piece ask still finds the piece by whole words", () => {
+    const field = piece({
+      id: "field",
+      name: "Olive field jacket",
+      category: "outerwear",
+      subtype: "field jacket",
+      colors: ["olive"],
+    });
+    const hit = resolvePiecesFromText("what goes with my olive field jacket", [...rack(), field]);
+    assert.equal(hit[0]?.id, "field");
+    assert.equal(hit.length, 1);
+    const loafer = resolvePiecesFromText("what do I wear with the navy loafer", rack());
+    assert.equal(loafer[0]?.id, "loafer");
+  });
 });
 
 describe("dressThisPiece", () => {
