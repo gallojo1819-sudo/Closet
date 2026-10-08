@@ -17,7 +17,6 @@ import {
   jacketHits,
   jacketInfo,
   jacketRequired,
-  varsityOnlyTop,
   wearSlot,
   type JacketHit,
 } from "./jackets.ts";
@@ -137,7 +136,8 @@ describe("T2 screenshot cards", () => {
 });
 
 describe("T3 classification", () => {
-  it("counts 4 sport coats, 17 casual, 5 mid, 0 coats", () => {
+  // 16 casual, not 17: Joe overruled the Sep 30 call; the Khaki varsity is a top, so it left plates[].
+  it("counts 4 sport coats, 16 casual, 5 mid, 0 coats", () => {
     const counts = { sport_coat_soft: 0, sport_coat_structured: 0, casual: 0, coat: 0, mid: 0 };
     for (const row of classFile.plates as { id: string }[]) {
       const g = by.get(row.id);
@@ -145,19 +145,20 @@ describe("T3 classification", () => {
       const info = jacketInfo(g!);
       if (info.class && info.class !== null) counts[info.class] += 1;
     }
-    expect(counts).toEqual({ sport_coat_soft: 2, sport_coat_structured: 2, casual: 17, coat: 0, mid: 5 });
+    expect(counts).toEqual({ sport_coat_soft: 2, sport_coat_structured: 2, casual: 16, coat: 0, mid: 5 });
   });
 
-  it("varsity is outer and the zip knit is mid despite the stored category", () => {
+  // Flipped: the Khaki varsity is a crew-neck top, not a jacket. No id row, no wear-slot override.
+  it("varsity is a top, and the zip knit is mid despite the stored category", () => {
     const varsity = by.get("g_j5og5jmzh5tx")!;
     const zip = by.get("g_j2id379jo424")!;
     expect(varsity.category).toBe("top");
-    expect(wearSlot(varsity)).toBe("outer");
-    expect(jacketInfo(varsity).class).toBe("casual");
+    expect(wearSlot(varsity)).toBeNull();
+    expect(jacketInfo(varsity).class).toBeNull();
+    expect(jacketInfo(varsity).countsAsJacket).toBe(false);
     expect(zip.category).toBe("outerwear");
     expect(wearSlot(zip)).toBe("mid");
     expect(jacketInfo(zip).countsAsJacket).toBe(false);
-    expect(varsityOnlyTop({ top: varsity, bottom: by.get("g_6xkkzn06sbdm"), shoe: by.get("g_8ukg5mi9r3fc") })).toBe(true);
   });
 
   it("flags the four cuts Joe still has to confirm", () => {
@@ -180,7 +181,8 @@ describe("T3 classification", () => {
       "474b455e7d01a93da73e12e81087c5ae46f7d2c2a02235fbc02958331b8df983",
     );
     expect(sha("src/lib/stylist/data/2026-09-30-jacket-classification.json")).toBe(
-      "8c3cdbe8e0a534e6674cfeb42c96a5d3200265ffe43f90b2931c7c99cf797177",
+      // Re-pinned: the Khaki varsity left plates[] and misfiled[] (it is a top), casual count 17 -> 16.
+      "184ffd3fd7b8ad77ae809bc5c3b8ab7e5ddf7743d54dee78a94be9615d1a83a0",
     );
     expect(sha("docs/stylist/2026-09-30-jacket-rules.md")).toBe(
       "14efdc9e217bbb995f9a01097bd961efc2f151c7e3bbeff41395d0fec5a51cb1",
@@ -307,7 +309,7 @@ describe("T5 caps on the fixture", () => {
     const sportOverChunky: string[] = [];
     const rot1: string[] = [];
     const rot2: string[] = [];
-    const varsityBare: string[] = [];
+    const varsityOuter: string[] = [];
     const seenDeleted: string[] = [];
     const fwOuters = new Set<string>();
 
@@ -324,7 +326,7 @@ describe("T5 caps on the fixture", () => {
           for (const id of [look.top, look.bottom, look.shoe, look.outer]) {
             if (id && DELETED.includes(id)) seenDeleted.push(`${key}:${id}`);
           }
-          if (look.top === VARSITY && !look.outer) varsityBare.push(key);
+          if (look.outer === VARSITY) varsityOuter.push(key);
           if (look.demoted) demoted.push(`${key}:${look.top}|${look.bottom}|${look.shoe}`);
           if (jacketRequired(occasion, season) && !look.outer && !look.demoted) misses.push(key);
           if (look.outer) {
@@ -358,10 +360,10 @@ describe("T5 caps on the fixture", () => {
     expect(missing, "ROT-4").toEqual([]);
     expect(misses, "required jacket").toEqual([]);
     expect(sportOverChunky, "sport coat over chunky").toEqual([]);
-    expect(varsityBare, "varsity as the only top").toEqual([]);
+    // Flipped: the varsity is a top now, so it may stand alone and must never be the outer.
+    expect(varsityOuter, "varsity as the outer").toEqual([]);
     expect(seenDeleted, "deleted sneakers").toEqual([]);
     expect(distinct).toBeGreaterThanOrEqual(18);
-    expect(varsityOnlyTop({ top: rackBy.get(VARSITY) })).toBe(true);
 
     const grey = jacketHits(
       pieces({ top: "g_gp53xkrmem9b", outer: "g_juk45cokjxxy", bottom: "g_rvrs9hibr981", shoe: "g_8ukg5mi9r3fc" }),

@@ -3,17 +3,11 @@
  "status": "PROPOSED classification (read-only analysis of closet_meta snapshot 2026-09-30 16:51:00.360093+00, 147 rows, 142 live).",
  "counts": {
   "a) tailored sport coat/blazer": 4,
-  "b) casual jacket": 17,
+  "b) casual jacket": 16,
   "MID layer (not a jacket)": 5
  },
  "outer_coats": "none (no overcoat/topcoat/peacoat/parka in the closet; TNF toggle jacket is the closest, treated as casual)",
  "misfiled": [
-  {
-   "id": "g_j5og5jmzh5tx",
-   "name": "Khaki varsity",
-   "filed": "top/",
-   "should_be": "b) casual jacket - varsity jacket"
-  },
   {
    "id": "g_j2id379jo424",
    "name": "Blue zip-up knit jacket",
@@ -562,41 +556,6 @@
    "brown_suede_family": true,
    "misfiled": false,
    "notes": "Brown-suede family (T17 cap). Field cut = roomy: the one suede jacket that goes over a chunky knit."
-  },
-  {
-   "id": "g_j5og5jmzh5tx",
-   "name": "Khaki varsity",
-   "filed_category": "top",
-   "filed_subtype": "",
-   "material": "",
-   "colors": [
-    "khaki",
-    "beige"
-   ],
-   "brand": "",
-   "warmth": 3,
-   "fit": "regular",
-   "class": "b) casual jacket",
-   "subclass": "varsity jacket",
-   "cut": "waist",
-   "weight": "mid",
-   "seasons": [
-    "spring",
-    "fall",
-    "winter"
-   ],
-   "formality": 2,
-   "houses_now": [],
-   "houses_after": [
-    "polo",
-    "ald"
-   ],
-   "over_chunky_knit_ok": "no (yes only if the knit is regular fit)",
-   "tee_under_ok": "yes",
-   "counts_as_jacket": true,
-   "brown_suede_family": false,
-   "misfiled": true,
-   "notes": "MISFILED as top (blank subtype/material). Recategorise to outerwear / varsity jacket. Prod ships it as the top on PURPLE Weekend #2 with no shirt under it."
   },
   {
    "id": "g_vtbi91noucd3",

@@ -228,9 +228,10 @@ describe("today agrees", () => {
 });
 
 describe("kitBand", () => {
-  it("files the khaki varsity as a jacket, not a sweater", () => {
+  // Flipped: Joe overruled the Sep 30 jacket call. The Khaki varsity is a crew-neck top.
+  it("files the khaki varsity as a top, not a jacket", () => {
     const varsity = g({ id: "g_j5og5jmzh5tx", name: "Khaki varsity", category: "top", subtype: "" });
-    assert.equal(kitBand(varsity), "jacket");
+    assert.equal(kitBand(varsity), "top");
   });
 });
 

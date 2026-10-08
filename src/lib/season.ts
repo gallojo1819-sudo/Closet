@@ -110,6 +110,22 @@ export function weatherForSeason(season: Season): { f: number; label: string; co
   return { f: 64, label: "Mild", code: 2 };
 }
 
+/**
+ * Summer shirts the record does not describe. Same id-table pattern as the jacket classification.
+ * g_zh2l854ghu1t: Green herringbone knit shirt, a short-sleeve camp-collar shirt filed as a plain shirt.
+ */
+export const SUMMER_SHIRTS: readonly string[] = ["g_zh2l854ghu1t"];
+const SUMMER_SHIRT_IDS = new Set<string>(SUMMER_SHIRTS);
+
+/** A camp, bowling, resort, or short-sleeve shirt, or a top the user chipped summer-only. */
+export function isSummerShirt(g: Garment): boolean {
+  if (SUMMER_SHIRT_IDS.has(g.id)) return true;
+  const b = `${g.name} ${g.subtype}`.toLowerCase();
+  if (/\bcamp\b|\bbowling\b|\bresort\b/.test(b)) return true;
+  if (/short[- ]?sleeved?\b/.test(b) && /\bshirts?\b/.test(b)) return true;
+  return isSummerOnly(g);
+}
+
 function isLayerTop(g: Garment): boolean {
   const b = blobOf(g);
   if (/\b(hoodies?|sweatshirts?)\b/.test(b)) return true;
@@ -132,13 +148,17 @@ export function lookMixesSolstice(pieces: Garment[]): boolean {
 }
 
 /**
- * Hard clashes only: linen-only top in winter, overcoat in summer.
+ * Hard clashes only: linen-only top in winter, overcoat in summer, shorts in winter,
+ * and a summer shirt as a top in fall or winter, whatever is layered over it.
  * Fall + knit/chino/loafer/oxford always passes.
  */
 export function lookFitsSeason(pieces: Garment[], season: Season): boolean {
   if (pieces.length < 2) return false;
   if (lookMixesSolstice(pieces)) return false;
   if (season === "summer" && pieces.some(isOvercoatPiece)) return false;
+  if ((season === "fall" || season === "winter") && pieces.filter(isLayerTop).some(isSummerShirt)) {
+    return false;
+  }
   if (season === "winter") {
     if (pieces.some((g) => /\bshorts?\b/.test(blobOf(g)))) return false;
     const tops = pieces.filter(isLayerTop);

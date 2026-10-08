@@ -105,7 +105,6 @@ const SUEDE = new Set<string>(SUEDE_FAMILY);
 /** Not in the brown-suede cap. */
 export const SHEARLING_BOMBER = "g_wwy9b2pusds3";
 const OVERSHIRT = "g_v7uvadckh79p";
-const VARSITY = "g_j5og5jmzh5tx";
 
 /** Code overlays from the detector. Not written into the approved profiles. */
 export const JACKET_DEFAULTS: Record<string, { id: string; seasons?: string[] }[]> = jacketDefaults();
@@ -330,12 +329,6 @@ export function slotPieces(pieces: Plate[]): Partial<Record<string, Plate>> {
   return ps;
 }
 
-export function varsityOnlyTop(ps: Partial<Record<string, Plate>>): boolean {
-  const top = ps.top;
-  if (!top || ps.outer) return false;
-  return top.id === VARSITY || (jacketInfo(top).countsAsJacket && wearSlot(top) === "outer");
-}
-
 function countsAsOuter(g: Plate | undefined): boolean {
   if (!g) return false;
   const info = jacketInfo(g);
@@ -383,7 +376,9 @@ export function allowedJackets(house: string, season: string): string[] {
   const ids: string[] = [];
   for (const [id, limit] of map) {
     const plate = BY_ID.get(id);
-    let seasons = plate?.seasons?.length ? [...plate.seasons] : ["spring", "summer", "fall", "winter"];
+    /* Only a classified jacket can be allowed. The Khaki varsity is a top; its addition rows are moot. */
+    if (!plate) continue;
+    let seasons = plate.seasons?.length ? [...plate.seasons] : ["spring", "summer", "fall", "winter"];
     if (limit?.length) seasons = seasons.filter((s) => limit.includes(s));
     if (!seasons.includes(season)) continue;
     ids.push(id);

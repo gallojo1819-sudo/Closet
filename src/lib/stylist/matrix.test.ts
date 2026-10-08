@@ -4,7 +4,7 @@ import { kitCells } from "../look.ts";
 import { buildReshuffleRow, dressableHouses } from "../lookbook.ts";
 import type { Garment, Look } from "../types.ts";
 import { buildHouseMatrix, clearMatrixCache } from "./matrix.ts";
-import { isLegal } from "./legal.ts";
+import { isLegal, rankLook } from "./legal.ts";
 import { rep4Same } from "./row.ts";
 import platesFile from "./__tests__/fixtures/plates-2026-09-30.json" with { type: "json" };
 
@@ -139,13 +139,11 @@ describe("fixture matrix", () => {
     const sweetReal = sweetRow.filter((look) => look.garmentIds.length >= 3 && !look.gate && !look.needsPieces);
     expect(sweetReal, "SweetStable cards").toHaveLength(3);
     expect(sweetRow.some((look) => (look.gap ?? "").toLowerCase().includes("not an office"))).toBe(false);
-    const ald2 = fall.houses.ald!.looks[1]!;
-    expect(ald2.top, "varsity is not a sweater").not.toBe("g_j5og5jmzh5tx");
-    const aldPieces = [ald2.top, ald2.bottom, ald2.shoe, ald2.outer]
-      .filter((id): id is string => Boolean(id))
-      .map((id) => by.get(id))
-      .filter((g): g is Garment => Boolean(g));
-    expect(kitCells(aldPieces)[0]?.id).not.toBe("g_j5og5jmzh5tx");
+    // Flipped: the Khaki varsity is a top. It may be a look's top; it is never the outer.
+    for (const { occ, season, matrix } of matrices) {
+      const rows = [...HOUSES.flatMap((house) => matrix.houses[house]!.looks), ...matrix.all];
+      for (const look of rows) expect(look.outer, `${occ}/${season}`).not.toBe("g_j5og5jmzh5tx");
+    }
     for (const { occ, season, matrix } of matrices) {
       if (season !== "fall" && season !== "winter") continue;
       const rows = [
@@ -199,6 +197,17 @@ describe("fixture matrix", () => {
         expect(colorKey, `${house} ${occ} ${season}`).not.toBe(key);
       }
     }
+  });
+
+  it("rankLook rejects a season clash outright: a summer shirt tops no fall look", () => {
+    const by = new Map(RACK.map((g) => [g.id, g]));
+    const camp = by.get("g_lqf1mrlsure9")!;
+    const chino = RACK.find((g) => /chino/.test(g.name.toLowerCase()) && g.category === "bottom")!;
+    const loafer = RACK.find((g) => /loafer/.test(g.name.toLowerCase()) && g.category === "footwear")!;
+    expect(camp.name).toBe("Ivory camp collar shirt");
+    expect(rankLook([camp, chino, loafer], { occasion: "weekend", season: "fall" })).toBe(Number.NEGATIVE_INFINITY);
+    expect(rankLook([camp, chino, loafer], { occasion: "weekend", season: "winter" })).toBe(Number.NEGATIVE_INFINITY);
+    expect(Number.isFinite(rankLook([camp, chino, loafer], { occasion: "weekend", season: "summer" }))).toBe(true);
   });
 
   it("a house that cannot dress three looks is not in the row", () => {
