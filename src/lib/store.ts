@@ -56,7 +56,7 @@ import {
   type House,
 } from "./style";
 import { isLinenCampPiece, seasonFromWeather } from "./season";
-import { isLegal, missingJacketOnly } from "./stylist/legal";
+import { legalWithJacket } from "./stylist/legal";
 import { jacketRequired } from "./stylist/jackets";
 import { mapOccasion, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
@@ -201,9 +201,7 @@ function pickDrop(
       ) {
         return false;
       }
-      if (isLegal(pieces, ctx)) return true;
-      /* A bare core whose only hard miss is the jacket still gets one. Same pattern as the matrix. */
-      return needJacket && !pieces.some((g) => slotOf(g) === "outerwear") && missingJacketOnly(pieces, ctx);
+      return legalWithJacket(pieces, ctx);
     },
   });
 }

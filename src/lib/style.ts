@@ -805,7 +805,7 @@ export function pickLook(
     taste?: TasteMemory;
     /**
      * A jacket day. The winner is the first ranked combo a legal outer finishes, and it wears
-     * that outer. A combo no outer can finish is dropped. None: no core. Today only.
+     * that outer. A combo no outer can finish is dropped. None: no core. Today and Check.
      */
     requireOuter?: boolean;
   },
