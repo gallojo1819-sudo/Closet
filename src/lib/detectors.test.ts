@@ -423,7 +423,8 @@ describe("detectors", () => {
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
     assert.match(sections, /<h2[^>]*>\{way\.title\}<\/h2>/);
     assert.equal(BANNED.test(sections), false);
-    assert.equal(book.includes("data-house-row"), true);
+    // Joe removed the Houses and ways chip rows; the app is for everyone.
+    assert.equal(book.includes("data-house-row"), false);
     assert.equal(BANNED.test(book), false);
   });
 });

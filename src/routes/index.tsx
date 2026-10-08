@@ -15,7 +15,7 @@ import { useAccount } from "@/lib/cloud/account";
 import { persistGate } from "@/lib/store-persist";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
-import { HOUSE_LABEL, avoidedUniformLine, lastWornDays, lookHouses, todayOccasion } from "@/lib/style";
+import { avoidedUniformLine, lastWornDays, todayOccasion } from "@/lib/style";
 import { emptyTaste, leftOffLine, techniqueLine } from "@/lib/taste";
 import { useCloset } from "@/lib/store";
 import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
@@ -196,7 +196,6 @@ function Today() {
   );
   const occasion = todayOccasion(drop);
   const note = dropNote(shown, weather, occasion, drop?.moment, undefined, dropSeason);
-  const houses = lookHouses(shown, occasion, dropSeason);
   const done = drop?.worn || drop?.verdict === "worn";
   const matched = drop ? weekCells.find((cell) => cell.iso === drop.date) : undefined;
   const onScreenLookIds = matched?.look ? [matched.look.id] : [];
@@ -376,9 +375,7 @@ function Today() {
         </div>
         <div className="space-y-6">
           <div>
-            <p className="micro text-ink-soft">
-              {houses.map((h) => HOUSE_LABEL[h]).join(" · ") || "Today’s look"}
-            </p>
+            <p className="micro text-ink-soft">Today’s look</p>
             <h2 className="mt-1 font-editorial text-3xl tracking-tight">{lookName}</h2>
             <p className="mt-3 text-sm text-ink-soft leading-relaxed">{note}</p>
             {drop?.lockNote && (

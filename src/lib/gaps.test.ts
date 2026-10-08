@@ -4,6 +4,9 @@ import { lookMissing, rackLine, rackNotes } from "./gaps.ts";
 import type { Garment } from "./types.ts";
 import { todayISO } from "./utils.ts";
 
+/* Joe took house names out of the UI. Case-sensitive, so a garment word like "knit polo" does not trip it. */
+const HOUSE_NAMES = /\b(Polo|Purple Label|RRL|ALD|Faloni|545|Sweet Stable|Italian summer|Italian winter|Ralph)\b/;
+
 function piece(
   partial: Pick<Garment, "id" | "name" | "category" | "subtype"> & Partial<Garment>,
 ): Garment {
@@ -79,7 +82,8 @@ describe("rackNotes", () => {
     assert.equal(first.title, "White oxford");
     assert.ok(first.body.includes("Cream trousers"), first.body);
     assert.ok(first.body.includes("Navy loafers"), first.body);
-    assert.ok(/polo/i.test(first.body), first.body);
+    // Flipped: the note no longer names a house.
+    assert.equal(HOUSE_NAMES.test(first.body), false, first.body);
     assert.deepEqual(first.finishes, ["Cream trousers + Navy loafers"]);
     assert.equal(
       rackLine(g),
@@ -212,7 +216,8 @@ describe("rackNotes", () => {
     const linen = notes.find((n) => n.title === "Linen camp shirt");
     assert.ok(linen, notes.map((n) => n.title).join(","));
     assert.ok(linen!.body.includes("Cream trousers"), linen!.body);
-    assert.ok(/faloni/i.test(linen!.body), linen!.body);
+    // Flipped: the note no longer names a house.
+    assert.equal(HOUSE_NAMES.test(linen!.body), false, linen!.body);
   });
 
   it("idle sitting is first when five or more", () => {

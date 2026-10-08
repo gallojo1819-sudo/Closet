@@ -26,7 +26,7 @@ import {
 } from "@/lib/images";
 import { costPerWear, money } from "@/lib/look";
 import { PALETTE, nameWithColor } from "@/lib/color";
-import { HOUSE_LABEL, daysIdle, housesOf } from "@/lib/style";
+import { daysIdle } from "@/lib/style";
 import { CATEGORIES, SEASONS, type Category, type Garment } from "@/lib/types";
 import { seasonsOf } from "@/lib/season";
 import { findThisHref } from "@/lib/scan";
@@ -539,7 +539,7 @@ export function GarmentDetail({
                   ))}
                 </div>
                 <p className="text-sm text-ink-soft">
-                  Ralph client tucks the oxford. Camp collar stays out.
+                  An oxford tucks in. A camp collar stays out.
                 </p>
               </dd>
             </div>
@@ -667,10 +667,6 @@ export function GarmentDetail({
                   ? " · never"
                   : ` · last ${daysIdle(garment)}d ago`}
               </dd>
-            </div>
-            <div>
-              <dt className="micro text-ink-soft">House</dt>
-              <dd>{housesOf(garment).map((h) => HOUSE_LABEL[h]).join(" · ")}</dd>
             </div>
           </dl>
           <div>

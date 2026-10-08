@@ -100,8 +100,9 @@ describe("seasonFromWeather", () => {
     );
     assert.equal(new Set(labels).size, labels.length, labels.join(" "));
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
-    assert.equal(book.includes("data-house-row"), true);
-    assert.equal(book.includes("HOUSE_CHIPS"), true);
+    // Joe removed the Houses and ways chip rows; the app is for everyone.
+    assert.equal(book.includes("data-house-row"), false);
+    assert.equal(book.includes("HOUSE_CHIPS"), false);
     assert.equal(book.includes("seasonOpen"), false);
     const seasonAt = book.indexOf("data-season-control");
     const detectorsAt = book.indexOf("<DetectorSections");

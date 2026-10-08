@@ -210,13 +210,15 @@ describe("a house and a way compose", () => {
     }
   });
 
-  it("the page ranks the base row by house, then by way, and shows every house chip", () => {
+  // Joe removed the Houses and ways chip rows; the app is for everyone. houseFirstRow stays as library.
+  it("the page has no house chips and does not rank This week by house", () => {
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
-    assert.match(book, /const houseRow = houseFirstRow\(realRow, houseChip, garments, occasion, season\)/);
-    assert.match(book, /const weekRow = wayFirstRow\(houseRow, activeWay, occasion\)/);
-    assert.match(book, /data-house-row/);
-    assert.match(book, /\.\.\.HOUSE_CHIPS\]/);
-    assert.match(book, /setHouseChip/);
+    assert.match(book, /const weekRow = realRow;/);
+    assert.equal(book.includes("houseFirstRow"), false);
+    assert.equal(book.includes("wayFirstRow"), false);
+    assert.equal(book.includes("data-house-row"), false);
+    assert.equal(book.includes("HOUSE_CHIPS"), false);
+    assert.equal(book.includes("setHouseChip"), false);
     assert.equal(book.includes("dressableHouses"), false);
     assert.equal(/filterKey = `[^`]*houseChip/.test(book), false);
     const effect = book.slice(book.indexOf("buildReshuffleRow(garments, occasion, {"), book.indexOf("setRanked("));

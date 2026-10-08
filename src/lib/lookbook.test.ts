@@ -1564,8 +1564,10 @@ describe("lookbook card stack", () => {
     assert.equal(book.includes("chapterVisible"), false);
     assert.equal(book.includes("buildReshuffleRow"), true);
     assert.match(book, /const realRow = realWeekLooks\(row/);
-    assert.match(book, /const houseRow = houseFirstRow\(realRow, houseChip, garments, occasion, season\)/);
-    assert.match(book, /const weekRow = wayFirstRow\(houseRow, activeWay, occasion\)/);
+    // Joe removed the Houses and ways chip rows; the app is for everyone. This week is the plain row.
+    assert.match(book, /const weekRow = realRow;/);
+    assert.equal(book.includes("houseFirstRow"), false);
+    assert.equal(book.includes("wayFirstRow"), false);
     assert.match(book, /const cards = weekRow\.map/);
     assert.match(book, /\{weekRow\.length\} looks/);
     assert.equal(book.split('layout="stack"').length - 1, 1);
@@ -1692,15 +1694,20 @@ describe("lookbook card stack", () => {
     );
   });
 
-  it("lookbook shows ways this closet can finish, and every house as a rank", () => {
+  // Joe removed the Houses and ways chip rows; the app is for everyone. The way sections stay.
+  it("lookbook has no house row and no ways chip row; the way sections stay", () => {
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
-    assert.match(book, /data-house-row/);
-    assert.match(book, /\.\.\.HOUSE_CHIPS\]/);
-    assert.match(book, /useState<"all" \| House>\("all"\)/);
-    assert.match(book, /setHouseChip\(/);
-    assert.match(book, /houseChip=\{houseChip\}/);
-    assert.match(book, /houseFirstRow\(realRow, houseChip/);
-    assert.match(book, /wayFirstRow\(/);
+    assert.equal(book.includes("data-house-row"), false);
+    assert.equal(/\.\.\.HOUSE_CHIPS\]/.test(book), false);
+    assert.equal(/useState<"all" \| House>\("all"\)/.test(book), false);
+    assert.equal(book.includes("setHouseChip("), false);
+    assert.equal(book.includes("houseChip={houseChip}"), false);
+    assert.equal(book.includes("houseFirstRow(realRow, houseChip"), false);
+    assert.equal(book.includes("wayFirstRow("), false);
+    assert.equal(book.includes("HOUSE_CHIPS"), false);
+    assert.equal(book.includes("houseChip"), false);
+    assert.equal(book.includes("setWayId"), false);
+    assert.equal(book.includes("wayChipVisible"), false);
     assert.equal(book.includes("HOUSE_LABEL"), false);
     assert.equal(book.includes("dressableHouses"), false);
     assert.match(book, /<DetectorSections/);
@@ -1709,20 +1716,33 @@ describe("lookbook card stack", () => {
     assert.match(book, /occasion=\{occasion\}/);
     assert.match(book, /season=\{season\}/);
     assert.match(book, /color=\{color\}/);
-    assert.match(book, /activeId=\{wayId\}/);
-    assert.match(book, /Your ways of dressing/);
+    assert.equal(book.includes("activeId={wayId}"), false);
+    assert.equal(book.includes("Your ways of dressing"), false);
     assert.match(book, />Context</);
     assert.equal(book.includes("rankWays"), false);
-    assert.match(book, /data-ways-row/);
+    assert.equal(book.includes("data-ways-row"), false);
+    assert.equal(book.includes(">Houses<"), false);
     assert.match(book, /heading="Suggest"/);
     assert.equal(book.includes("Make a look"), false);
-    const houseRow = book.slice(book.indexOf("data-house-row"), book.indexOf("data-ways-row"));
-    assert.match(houseRow, />Houses</);
-    assert.match(houseRow, /label: "All"/);
     assert.equal(
       /\b(Polo|Purple|RRL|ALD|Faloni|545|Sweet Stable|Italian summer|Italian winter)\b/.test(book),
       false,
     );
+    // House names stay out of the UI for everyone: the hero label, the piece detail, card titles, gap notes.
+    const today = readFileSync(new URL("../routes/index.tsx", import.meta.url), "utf8");
+    assert.equal(today.includes("HOUSE_LABEL"), false);
+    assert.equal(today.includes("lookHouses"), false);
+    const detail = readFileSync(new URL("../components/closet/detail.tsx", import.meta.url), "utf8");
+    assert.equal(detail.includes("housesOf"), false);
+    assert.equal(detail.includes("HOUSE_LABEL"), false);
+    assert.equal(detail.includes(">House<"), false);
+    assert.equal(detail.includes("Ralph"), false);
+    const look = readFileSync(new URL("./look.ts", import.meta.url), "utf8");
+    assert.equal(look.includes("HOUSE_LABEL["), false);
+    assert.equal(look.includes("lookHouses("), false);
+    const gaps = readFileSync(new URL("./gaps.ts", import.meta.url), "utf8");
+    assert.equal(gaps.includes("houseOf("), false);
+    assert.equal(gaps.includes("Faloni in summer"), false);
   });
 
   it("three pieces render three bands, and a cached On you image stays out until it is on", async () => {

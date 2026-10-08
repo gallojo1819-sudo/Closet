@@ -1,17 +1,15 @@
 import type { Garment, Moment, Occasion, Season, WeatherSnap } from "./types.ts";
 import { colorLine } from "./color.ts";
 import {
-  HOUSE_LABEL,
   daysIdle,
   lastWornDays,
   isCampCollar,
   isFairIsle,
   isHoodiePiece,
   isTrueOuter,
-  lookHouses,
   slotOf,
 } from "./style.ts";
-import { houseFingerprintOk, type House } from "./houses.ts";
+import type { House } from "./houses.ts";
 import { pieceLabel } from "./piece-label.ts";
 import { hasCleanCover } from "./plate.ts";
 import { wearSlot } from "./stylist/jackets.ts";
@@ -212,15 +210,11 @@ export function dropNote(
 ): string {
   void weather;
   void moment;
-  const occ = occasion ?? "weekday";
-  let label = "";
-  if (house && house !== "all") {
-    label = HOUSE_LABEL[house];
-  } else {
-    const named = lookHouses(pieces, occ, season)[0];
-    if (named && houseFingerprintOk(pieces, named, occ, undefined, season)) label = HOUSE_LABEL[named];
-  }
-  return colorLine(pieces, label) || (label ? label : "From the closet.");
+  void occasion;
+  /* A card never names a house. The app is for everyone. */
+  void house;
+  void season;
+  return colorLine(pieces) || "From the closet.";
 }
 
 /** A piece with a real wear at least 30 days ago, not on this look. No date is invented. */

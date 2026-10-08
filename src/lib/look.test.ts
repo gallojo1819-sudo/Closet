@@ -242,11 +242,18 @@ describe("spreadTitle", () => {
       g({ id: "ch", name: "Cream chino", category: "bottom", subtype: "chino", colors: ["cream"] }),
       g({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer", colors: ["brown"] }),
     ];
+    // A passed house no longer names the card: Joe took house names out of the UI.
+    const HOUSE_NAMES = /\b(Polo|Purple Label|RRL|ALD|Faloni|545|Sweet Stable|Italian summer|Italian winter|Ralph)\b/;
     const week = spreadTitle(look, "weekday");
     assert.ok(!week.includes("Navy oxford ·"), week);
-    assert.ok(/Ralph|cream|navy|Quiet office/i.test(week), week);
+    assert.ok(/cream|navy|Quiet office/i.test(week), week);
+    assert.equal(HOUSE_NAMES.test(week), false, week);
     const out = spreadTitle(look, "out");
     assert.ok(!out.includes("Navy oxford ·"), out);
-    assert.ok(/Ralph|cream|navy|Out/i.test(out), out);
+    assert.ok(/cream|navy|Out/i.test(out), out);
+    assert.equal(HOUSE_NAMES.test(out), false, out);
+    const polo = spreadTitle(look, "weekday", "polo");
+    assert.equal(polo.includes("Polo"), false, polo);
+    assert.equal(HOUSE_NAMES.test(polo), false, polo);
   });
 });
