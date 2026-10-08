@@ -1,5 +1,5 @@
 import { canonicalize, type PaletteColor } from "./color.ts";
-import { daysIdle, HOUSE_LABEL, housesOf, lookHouses, slotOf } from "./style.ts";
+import { daysIdle, housesOf, slotOf } from "./style.ts";
 import type { Garment } from "./types.ts";
 
 export type RackNote = {
@@ -110,25 +110,6 @@ function pair(a: Garment, b: Garment): string {
   return `${a.name} + ${b.name}`;
 }
 
-function houseOf(pieces: Garment[]): string {
-  const passed = lookHouses(pieces)[0];
-  if (passed) return HOUSE_LABEL[passed];
-  const counts = new Map<string, number>();
-  for (const g of pieces) {
-    for (const h of housesOf(g)) counts.set(h, (counts.get(h) ?? 0) + 1);
-  }
-  let best: string | null = null;
-  let n = 0;
-  for (const [h, c] of counts) {
-    if (c > n) {
-      best = h;
-      n = c;
-    }
-  }
-  if ((counts.get("polo") ?? 0) === n && n > 0) best = "polo";
-  return best ? HOUSE_LABEL[best as keyof typeof HOUSE_LABEL] : "Ralph";
-}
-
 const EVEN: RackNote = {
   title: "The rack is even",
   body: "Wear what’s sitting.",
@@ -200,7 +181,6 @@ export function rackNotes(garments: Garment[]): RackNote[] {
     creamTrousers[0] ?? trousers[0] ?? chinos[0] ?? cords[0];
   const dressedShoe = navyLoafers[0] ?? leather[0];
   if (dressedBottom && dressedShoe && paleOx.length === 0) {
-    const house = houseOf([dressedBottom, dressedShoe]);
     const knit = knits[0];
     const navyOx = oxfords.find((g) => hasColor(g, "navy"));
     const extra = navyOx
@@ -210,7 +190,7 @@ export function rackNotes(garments: Garment[]): RackNote[] {
         : "";
     push({
       title: "White oxford",
-      body: `Tucked into the ${dressedBottom.name} with the ${dressedShoe.name} — ${house} weekday. You have the bottom and the shoe.${extra}`,
+      body: `Tucked into the ${dressedBottom.name} with the ${dressedShoe.name} for a weekday. You have the bottom and the shoe.${extra}`,
       finishes: [pair(dressedBottom, dressedShoe)],
     });
   }
@@ -268,7 +248,7 @@ export function rackNotes(garments: Garment[]): RackNote[] {
     const sh = leather[0] ?? sneakers[0];
     push({
       title: "Linen camp shirt",
-      body: `Heat would put the ${heatBottom.name} with a linen camp collar, not a knit. Faloni in summer. The knits are doing that job now.`,
+      body: `Heat would put the ${heatBottom.name} with a linen camp collar, not a knit. The knits are doing that job now.`,
       finishes: [sh ? pair(heatBottom, sh) : heatBottom.name],
     });
   }
