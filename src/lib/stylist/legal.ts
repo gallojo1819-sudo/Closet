@@ -1,7 +1,7 @@
 /**
  * One legality check and one rank. A house chip never borrows another house's row.
  */
-import { clashes } from "../style.ts";
+import { clashes, slotOf } from "../style.ts";
 import { seasonRank } from "../season.ts";
 import type { Garment, Occasion, Season } from "../types.ts";
 import type { House } from "../houses.ts";
@@ -16,7 +16,7 @@ import {
 } from "../house-profiles/evaluate.ts";
 import { evaluateColor } from "./colorChip.ts";
 import { piecesFromIds, stylistHits, type StylistHit } from "./rules.ts";
-import { coatSharesLookWithGraphic, isJacketAddition, jacketHits, slotPieces, supersededStylist } from "./jackets.ts";
+import { coatSharesLookWithGraphic, isJacketAddition, jacketHits, jacketRequired, slotPieces, supersededStylist } from "./jackets.ts";
 
 export const DELETED_SNEAKERS = ["g_37e5eqjwgd3d", "g_c6qdv5c3gkor", "g_x0ro1mg2gu0a"] as const;
 const DELETED = new Set<string>(DELETED_SNEAKERS);
@@ -138,6 +138,19 @@ export function missingJacketOnly(pieces: Garment[], ctx: LegalCtx): boolean {
       .map((pr) => String(pr.id)),
   );
   return ev.hardFails.every((id) => outerRules.has(id));
+}
+
+/**
+ * Legal as worn, or a bare core whose only hard miss is the jacket on a day that needs one.
+ * Today and Check share this. The jacket itself is chosen by the caller.
+ */
+export function legalWithJacket(pieces: Garment[], ctx: LegalCtx): boolean {
+  if (isLegal(pieces, ctx)) return true;
+  return (
+    jacketRequired(String(ctx.occasion), seasonOf(ctx), measuredF(ctx)) &&
+    !pieces.some((g) => slotOf(g) === "outerwear") &&
+    missingJacketOnly(pieces, ctx)
+  );
 }
 
 export function explain(

@@ -778,7 +778,7 @@ export function acceptTrend(
   return { ...base, trendNote: clean, lastTrendAt: new Date(now).toISOString(), vetoes: base.vetoes };
 }
 
-function pieceLine(g: Garment): string {
+export function pieceLine(g: Garment): string {
   const tags = readTags(g);
   const bits = [
     tags.brand || null,
