@@ -174,6 +174,8 @@ export function rankLook(pieces: Garment[], ctx: LegalCtx): number {
   const ps = slotted(pieces);
   const season = seasonOf(ctx) as Season;
   let score = seasonRank(pieces, season);
+  /* A season clash is a reject, not a penalty. The matrix drops the look. */
+  if (score < 0) return Number.NEGATIVE_INFINITY;
   const verdict = houseVerdict(ps, ctx);
   if (!verdict.passed) return Number.NEGATIVE_INFINITY;
   score += verdict.score;

@@ -18,6 +18,9 @@ import {
   type Way,
 } from "../detectors.ts";
 import { cardTag } from "../look.ts";
+import { buildReshuffleRow, realWeekLooks } from "../lookbook.ts";
+import { slotOf } from "../style.ts";
+import { slotPieces } from "../stylist/jackets.ts";
 import type { Garment, Look, Occasion, Season } from "../types.ts";
 
 type Raw = {
@@ -249,6 +252,61 @@ describe("a way holds only looks with that way's pieces", () => {
         });
       }
     }
+  }
+});
+
+/*
+ * Slots are counted the way This week and legality count them: slotPieces. A "mid" is a second
+ * top stacked on the first. The denim overshirt is dual-use by classification: a top alone, the
+ * outer when it sits over another top. slotOf alone would call that two tops.
+ */
+describe("a way look is one top, one bottom, one shoe, at most one outer; summer shirts sit out fall and winter", () => {
+  const VARSITY = "g_j5og5jmzh5tx";
+  const SUMMER_SHIRTS = ["g_zh2l854ghu1t", "g_lqf1mrlsure9", "g_jkj2nzfzpf1o"];
+  for (const id of [VARSITY, ...SUMMER_SHIRTS]) assert.ok(BY.has(id), `fixture lost ${id}`);
+  const cold: { occasion: Occasion; season: Season }[] = (["weekday", "weekend", "out"] as const).flatMap((occasion) =>
+    (["fall", "winter"] as const).map((season) => ({ occasion, season })),
+  );
+  for (const { occasion, season } of cold) {
+    const at = `${occasion} · ${season}`;
+    it(`${at}: every way look is one of each slot, the varsity is a top, no summer shirt`, () => {
+      const wrong: string[] = [];
+      for (const way of waysAt(occasion, season)) {
+        if (way.usual) continue;
+        for (const look of way.looks[occasion] ?? []) {
+          const ps = slotPieces(look);
+          const bottoms = look.filter((g) => slotOf(g) === "bottom").length;
+          const shoes = look.filter((g) => slotOf(g) === "footwear").length;
+          const outers = look.filter((g) => slotOf(g) === "outerwear").length;
+          if (!ps.top || ps.mid || !ps.bottom || !ps.shoe || bottoms !== 1 || shoes !== 1 || outers > 1) {
+            const stacked = [ps.top, ps.mid].filter(Boolean).length;
+            wrong.push(`${way.title}: ${names(look)} (${stacked} top, ${bottoms} bottom, ${shoes} shoe, ${outers} outer)`);
+          }
+          if (look.some((g) => g.id === VARSITY && slotOf(g) !== "top")) wrong.push(`${way.title}: varsity is not a top`);
+          for (const g of look) if (SUMMER_SHIRTS.includes(g.id)) wrong.push(`${way.title}: ${g.name} in ${at}`);
+        }
+      }
+      assert.deepEqual(wrong, []);
+    });
+
+    it(`${at}: no This week card wears a summer shirt or the varsity as its outer`, () => {
+      const row = realWeekLooks(buildReshuffleRow(RACK, occasion, { season, cap: 8, salt: 1 }));
+      assert.ok(row.length >= 3, `${at}: ${row.length} cards`);
+      const wrong: string[] = [];
+      for (const look of row) {
+        const pieces = look.garmentIds.map((id) => BY.get(id)).filter((g): g is Garment => Boolean(g));
+        for (const g of pieces) {
+          if (SUMMER_SHIRTS.includes(g.id)) wrong.push(`${look.name}: ${g.name}`);
+          if (g.id === VARSITY && slotOf(g) !== "top") wrong.push(`${look.name}: varsity is not a top`);
+        }
+        const ps = slotPieces(pieces);
+        const outers = pieces.filter((g) => slotOf(g) === "outerwear").length;
+        if (!ps.top || ps.mid || !ps.bottom || !ps.shoe || outers > 1) {
+          wrong.push(`${look.name}: ${[ps.top, ps.mid].filter(Boolean).length} top, ${outers} outer`);
+        }
+      }
+      assert.deepEqual(wrong, []);
+    });
   }
 });
 

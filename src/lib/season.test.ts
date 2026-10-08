@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   guessSeason,
+  isSummerShirt,
   lookFitsSeason,
   seasonChipRow,
   seasonControlLabel,
@@ -180,6 +181,33 @@ describe("lookFitsSeason", () => {
     ];
     assert.deepEqual(seasonsOf(look[0]!), ["spring", "summer", "fall", "winter"]);
     assert.equal(lookFitsSeason(look, "summer"), true);
+  });
+
+  it("fall and winter reject a short-sleeve knit camp shirt as the top; summer and spring take it", () => {
+    const camp = g({ id: "camp", name: "Green herringbone knit shirt", subtype: "short-sleeve camp shirt", warmth: 2 });
+    const chino = g({ id: "ch", name: "Khaki chino", subtype: "chino", category: "bottom", warmth: 3 });
+    const loafer = g({ id: "lf", name: "Navy loafers", subtype: "loafer", category: "footwear", warmth: 2 });
+    const jacket = g({ id: "jk", name: "Navy chore jacket", subtype: "jacket", category: "outerwear", warmth: 3 });
+    assert.equal(isSummerShirt(camp), true);
+    assert.equal(lookFitsSeason([camp, chino, loafer], "fall"), false);
+    assert.equal(lookFitsSeason([camp, chino, loafer], "winter"), false);
+    assert.equal(lookFitsSeason([camp, chino, loafer], "summer"), true);
+    assert.equal(lookFitsSeason([camp, chino, loafer], "spring"), true);
+    // A jacket over it changes nothing. The rule is about the top.
+    assert.equal(lookFitsSeason([camp, chino, loafer, jacket], "fall"), false);
+    // The id table catches the green shirt even when its record says only "shirt".
+    const plain = g({ id: "g_zh2l854ghu1t", name: "Green herringbone knit shirt", subtype: "shirt", warmth: 2 });
+    assert.equal(isSummerShirt(plain), true);
+    assert.equal(lookFitsSeason([plain, chino, loafer], "fall"), false);
+    // Bowling and resort shirts, and a summer-only chip, read the same way.
+    assert.equal(isSummerShirt(g({ id: "b", name: "Black bowling shirt", subtype: "bowling shirt", warmth: 2 })), true);
+    assert.equal(isSummerShirt(g({ id: "r", name: "Printed resort shirt", subtype: "shirt", warmth: 2 })), true);
+    assert.equal(isSummerShirt(g({ id: "s", name: "White shirt", subtype: "shirt", seasons: ["summer"] })), true);
+    // An oxford with seasons [] is not a summer shirt and still passes fall.
+    const grey = g({ id: "ox-grey", name: "Grey oxford", subtype: "oxford", seasons: [], warmth: 2 });
+    assert.equal(isSummerShirt(grey), false);
+    assert.equal(lookFitsSeason([grey, chino, loafer], "fall"), true);
+    assert.equal(lookFitsSeason([grey, chino, loafer], "winter"), true);
   });
 
   it("fall + oxford/chino/loafer always passes", () => {
