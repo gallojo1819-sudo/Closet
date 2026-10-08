@@ -51,11 +51,13 @@ import {
   momentOfDay,
   pickLook,
   slotOf,
+  todayOccasion,
   weekUniformKeys,
   type House,
 } from "./style";
 import { isLinenCampPiece, seasonFromWeather } from "./season";
-import { isLegal } from "./stylist/legal";
+import { isLegal, missingJacketOnly } from "./stylist/legal";
+import { jacketRequired } from "./stylist/jackets";
 import { mapOccasion, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
 import { forgetCoverSha } from "./cloud/blobs";
@@ -105,11 +107,12 @@ type ClosetState = {
   saveLook: (look: Omit<Look, "id" | "createdAt">) => string;
   removeLook: (id: string) => void;
   setDrop: (drop: DailyDrop) => void;
+  /** True when a new look was written. Never writes an empty drop. */
   rerollDrop: (
     weather?: WeatherSnap,
     occasion?: Occasion,
     previousIds?: string[],
-  ) => void;
+  ) => boolean;
   swapDropPiece: (id: string) => void;
   removeDropPiece: (id: string) => void;
   toggleLock: (id: string) => void;
@@ -161,14 +164,20 @@ function pickDrop(
     skip?: boolean;
     taste?: TasteMemory;
   },
+  now: Date = new Date(),
 ): string[] {
-  const occ = occasion ?? defaultOccasion();
-  const season = seasonFromWeather(weather?.f);
+  const occ = occasion ?? defaultOccasion(now);
+  /* A measured reading only. A missing reading stays missing; pickLook's 68 is for scoring. */
+  const tempF = weather?.measured ? weather.f : undefined;
+  const season = seasonFromWeather(weather?.f, now);
   const cold = season === "fall" || season === "winter";
+  const ctx = { occasion: occ, season, ...(tempF !== undefined ? { weatherF: tempF } : {}) };
+  const needJacket = jacketRequired(occ, season, tempF);
   return pickLook(garments, {
     weather,
     occasion: occ,
-    moment: momentOfDay(),
+    moment: momentOfDay(now),
+    requireOuter: needJacket,
     avoid,
     recentWorn,
     previousIds,
@@ -192,9 +201,20 @@ function pickDrop(
       ) {
         return false;
       }
-      return isLegal(pieces, { occasion: occ, season });
+      if (isLegal(pieces, ctx)) return true;
+      /* A bare core whose only hard miss is the jacket still gets one. Same pattern as the matrix. */
+      return needJacket && !pieces.some((g) => slotOf(g) === "outerwear") && missingJacketOnly(pieces, ctx);
     },
   });
+}
+
+/** Marks a drop the user set on this device. Stamped only while the persist gate is open. */
+function stampDrop<T extends DailyDrop>(drop: T): T {
+  return persistGate.open ? { ...drop, setAt: new Date().toISOString() } : drop;
+}
+
+function liveCount(ids: readonly string[], garments: Garment[]): number {
+  return ids.filter((id) => garments.some((g) => g.id === id && !g.archived)).length;
 }
 
 const guardedStorage: StateStorage = {
@@ -369,7 +389,7 @@ export const useCloset = create<ClosetState>()(
                 ? { ...g, wornOn: [...g.wornOn, day] }
                 : g,
             ),
-            drop: s.drop ? { ...s.drop, worn: true, verdict: "worn" } : s.drop,
+            drop: s.drop ? stampDrop({ ...s.drop, worn: true, verdict: "worn" }) : s.drop,
             journal: [entry, ...s.journal.filter((j) => j.date !== day)].slice(0, 60),
             avoid,
             taste: logWear(s.taste ?? emptyTaste(), s.garments, ids, Date.now()),
@@ -379,10 +399,22 @@ export const useCloset = create<ClosetState>()(
       },
       skipDrop: () => {
         const drop = get().drop;
-        if (!drop || drop.worn) return;
+        if (drop?.worn) return;
+        if (!drop || drop.date !== todayISO() || liveCount(drop.garmentIds, get().garments) < 2) {
+          /* Nothing real to skip. Make today's drop; log no skip. */
+          get().rerollDrop(drop?.weather, todayOccasion(drop));
+          noteUserEdit();
+          return;
+        }
+        const before = {
+          avoid: get().avoid,
+          journal: get().journal,
+          skipCount: get().skipCount,
+          taste: get().taste,
+        };
         try {
           const skipped = drop.garmentIds;
-          const avoid = { ...get().avoid };
+          const avoid = { ...before.avoid };
           const locked = new Set(drop.lockedIds ?? []);
           for (const id of skipped) {
             if (!locked.has(id)) avoid[id] = (avoid[id] ?? 0) + 1;
@@ -391,22 +423,28 @@ export const useCloset = create<ClosetState>()(
             date: todayISO(),
             garmentIds: skipped,
             verdict: "skipped",
-            occasion: drop.occasion,
+            occasion: todayOccasion(drop),
           };
           set({
             avoid,
-            journal: [entry, ...get().journal.filter((j) => j.date !== todayISO())].slice(0, 60),
-            skipCount: get().skipCount + 1,
-            taste: learnFromSkip(get().taste ?? emptyTaste(), skipped, get().garments, Date.now()),
+            journal: [entry, ...before.journal.filter((j) => j.date !== todayISO())].slice(0, 60),
+            skipCount: before.skipCount + 1,
+            taste: learnFromSkip(before.taste ?? emptyTaste(), skipped, get().garments, Date.now()),
           });
-          get().rerollDrop(drop.weather, drop.occasion, skipped);
+          const wrote = get().rerollDrop(drop.weather, todayOccasion(drop), skipped);
+          if (!wrote) {
+            /* The look stays, and its lockNote says so. No skip was taken. */
+            set(before);
+            return;
+          }
           noteUserEdit();
         } catch {
           set({
-            drop: {
+            ...before,
+            drop: stampDrop({
               ...get().drop!,
               lockNote: "Couldn't reshuffle — try again.",
-            },
+            }),
           });
         }
       },
@@ -483,7 +521,7 @@ export const useCloset = create<ClosetState>()(
         noteUserEdit();
         notifyLookRemoved(id);
       },
-      setDrop: (drop) => set({ drop }),
+      setDrop: (drop) => set({ drop: stampDrop(drop) }),
       rerollDrop: (weather, occasion, previousIds) => {
         const prev = get().drop;
         const occ = mapOccasion(
@@ -530,6 +568,27 @@ export const useCloset = create<ClosetState>()(
             taste: get().taste,
           },
         );
+        const picked = ids
+          .map((id) => get().garments.find((g) => g.id === id))
+          .filter((g): g is Garment => Boolean(g));
+        const hasCore =
+          picked.some((g) => slotOf(g) === "top" || slotOf(g) === "dress") &&
+          picked.some((g) => slotOf(g) === "bottom") &&
+          picked.some((g) => slotOf(g) === "footwear");
+        if (!hasCore) {
+          /* Nothing legal. Never save an empty drop. Today's sound look stays, on the asked occasion. */
+          if (prev && sameDay && liveCount(prev.garmentIds, get().garments) >= 2) {
+            set({
+              drop: stampDrop({
+                ...prev,
+                occasion: occ,
+                weather: weather ?? prev.weather,
+                lockNote: "No other look fits right now. This one stays.",
+              }),
+            });
+          }
+          return false;
+        }
         let lockNote: string | null = null;
         if (lockedIds.length && previousIds?.length) {
           const unlockedPrev = previousIds.filter((id) => !lockedIds.includes(id));
@@ -545,7 +604,7 @@ export const useCloset = create<ClosetState>()(
           }
         }
         set({
-          drop: {
+          drop: stampDrop({
             date: todayISO(),
             garmentIds: ids,
             worn: false,
@@ -555,8 +614,9 @@ export const useCloset = create<ClosetState>()(
             moment,
             lockedIds,
             lockNote,
-          },
+          }),
         });
+        return true;
       },
       toggleLock: (id) => {
         const drop = get().drop;
@@ -571,7 +631,7 @@ export const useCloset = create<ClosetState>()(
             ? learnFromLock(get().taste ?? emptyTaste(), piece, drop.garmentIds, get().garments, Date.now())
             : get().taste;
         set({
-          drop: { ...drop, lockedIds: [...locked], lockNote: drop.lockNote ?? null },
+          drop: stampDrop({ ...drop, lockedIds: [...locked], lockNote: drop.lockNote ?? null }),
           taste,
         });
         noteUserEdit();
@@ -583,11 +643,11 @@ export const useCloset = create<ClosetState>()(
         if (!drop.garmentIds.includes(id)) return;
         const locked = (drop.lockedIds ?? []).filter((x) => x !== id);
         set({
-          drop: {
+          drop: stampDrop({
             ...drop,
             garmentIds: drop.garmentIds.filter((gid) => gid !== id),
             lockedIds: locked,
-          },
+          }),
         });
       },
       swapDropPiece: (id) => {
@@ -611,12 +671,12 @@ export const useCloset = create<ClosetState>()(
         if (!next) return;
         set({
           avoid: { ...get().avoid, [id]: (get().avoid[id] ?? 0) + 1 },
-          drop: {
+          drop: stampDrop({
             ...drop,
             worn: false,
             verdict: "pending",
             garmentIds: drop.garmentIds.map((gid) => (gid === id ? next.id : gid)),
-          },
+          }),
         });
         noteUserEdit();
       },

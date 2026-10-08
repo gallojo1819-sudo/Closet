@@ -59,7 +59,10 @@ describe("approved profile sha256", () => {
   it("copied JSON matches the law file hashes", () => {
     for (const [rel, hex] of Object.entries(HASHES)) {
       const path = new URL(rel, import.meta.url);
-      const digest = createHash("sha256").update(readFileSync(path)).digest("hex");
+      /* LF bytes, whatever the checkout did to line endings. The pins were taken from LF. */
+      const digest = createHash("sha256")
+        .update(readFileSync(path, "utf8").replace(/\r\n/g, "\n"))
+        .digest("hex");
       expect(digest, rel).toBe(hex);
     }
   });

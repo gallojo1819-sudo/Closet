@@ -176,7 +176,9 @@ describe("T3 classification", () => {
   });
 
   it("sha256 of the copied jacket files matches", () => {
-    const sha = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+    /* LF bytes, whatever the checkout did to line endings. The pins were taken from LF. */
+    const sha = (path: string) =>
+      createHash("sha256").update(readFileSync(path, "utf8").replace(/\r\n/g, "\n")).digest("hex");
     expect(sha("src/lib/stylist/data/2026-09-30-jacket-rules.json")).toBe(
       "474b455e7d01a93da73e12e81087c5ae46f7d2c2a02235fbc02958331b8df983",
     );

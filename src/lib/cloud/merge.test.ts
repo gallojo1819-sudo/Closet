@@ -4,6 +4,7 @@ import {
   accountPool,
   decideLink,
   mergeAccount,
+  mergeDrop,
   mergeGarments,
   shouldApplyCloud,
   unionById,
@@ -287,5 +288,51 @@ describe("mergeAccount", () => {
     const die = result.next.looks.find((l) => l.id === "die");
     assert.equal(die?.broken, true);
     assert.ok(!die?.garmentIds.includes("g_x"));
+  });
+});
+
+describe("mergeDrop", () => {
+  const allowed = new Set(["a", "b", "c", "d"]);
+  const drop = (date: string, garmentIds: string[], extra: { setAt?: string; occasion?: string } = {}) => ({
+    date,
+    garmentIds,
+    ...extra,
+  });
+
+  it("the later date wins, whichever side holds it", () => {
+    const old = drop("2026-10-07", ["a", "b"]);
+    const fresh = drop("2026-10-08", ["c", "d"]);
+    assert.deepEqual(mergeDrop(old, fresh, allowed), fresh);
+    assert.deepEqual(mergeDrop(fresh, old, allowed), fresh);
+  });
+
+  it("same date: the newer setAt wins, setAt beats none, and with neither local stays", () => {
+    const earlier = drop("2026-10-08", ["a", "b"], { setAt: "2026-10-08T09:00:00.000Z" });
+    const later = drop("2026-10-08", ["c", "d"], { setAt: "2026-10-08T10:00:00.000Z" });
+    const unstamped = drop("2026-10-08", ["c", "d"]);
+    assert.deepEqual(mergeDrop(earlier, later, allowed), later);
+    assert.deepEqual(mergeDrop(later, earlier, allowed), later);
+    assert.deepEqual(mergeDrop(unstamped, earlier, allowed), earlier);
+    assert.deepEqual(mergeDrop(earlier, unstamped, allowed), earlier);
+    const local = drop("2026-10-08", ["a", "b"]);
+    assert.deepEqual(mergeDrop(local, unstamped, allowed), local);
+  });
+
+  it("a side with fewer than two allowed pieces never nulls a sound drop", () => {
+    const sound = drop("2026-10-08", ["a", "b"]);
+    assert.deepEqual(mergeDrop(drop("2026-10-08", ["a"]), sound, allowed), sound);
+    assert.deepEqual(mergeDrop(sound, drop("2026-10-08", ["zzz", "b"]), allowed), sound);
+    assert.deepEqual(mergeDrop(null, sound, allowed), sound);
+    assert.deepEqual(mergeDrop(sound, null, allowed), sound);
+    assert.equal(mergeDrop(drop("2026-10-09", ["a"]), drop("2026-10-08", ["zzz"]), allowed), null);
+    assert.equal(mergeDrop(null, null, allowed), null);
+  });
+
+  it("a skipped out drop with setAt survives a same-date weekday cloud drop without one", () => {
+    const local = drop("2026-10-08", ["a", "b"], { occasion: "out", setAt: "2026-10-08T12:00:00.000Z" });
+    const cloud = drop("2026-10-08", ["c", "d"], { occasion: "weekday" });
+    const merged = mergeDrop(local, cloud, allowed);
+    assert.equal(merged?.occasion, "out");
+    assert.deepEqual(merged?.garmentIds, ["a", "b"]);
   });
 });

@@ -97,13 +97,19 @@ function Today() {
         }
         return;
       }
-      inMemory(() =>
-        useCloset.getState().rerollDrop(
-          weather,
-          todayOccasion(current),
-          current?.garmentIds?.length ? current.garmentIds : undefined,
-        ),
-      );
+      const liveToday =
+        current &&
+        current.date === todayISO() &&
+        current.garmentIds.filter((id) => owned.some((g) => g.id === id)).length >= 2;
+      if (liveToday) {
+        /* Today's look stays. Only its weather is refreshed, in memory. */
+        if (weather && current.weather?.f !== weather.f) {
+          inMemory(() => setDrop({ ...current, weather }));
+        }
+        return;
+      }
+      /* No look for today, or a broken one. A new day's pick, never a skip. */
+      inMemory(() => useCloset.getState().rerollDrop(weather, todayOccasion(current)));
     })();
     return () => {
       cancelled = true;

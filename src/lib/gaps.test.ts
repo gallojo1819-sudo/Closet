@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { lookMissing, rackLine, rackNotes } from "./gaps.ts";
 import type { Garment } from "./types.ts";
 import { todayISO } from "./utils.ts";
@@ -122,6 +123,7 @@ describe("rackNotes", () => {
     assert.ok(loafer, notes.map((n) => n.title).join(","));
     assert.ok(loafer!.body.includes("Charcoal trousers"), loafer!.body);
     assert.ok(!/another knit/i.test(loafer!.title));
+    for (const n of notes) assert.equal(HOUSE_NAMES.test(`${n.title} ${n.body}`), false, n.body);
   });
 
   it("cords with only sneakers want a brown loafer", () => {
@@ -152,6 +154,7 @@ describe("rackNotes", () => {
     const blob = notes.map((n) => `${n.title} ${n.body}`).join(" | ");
     assert.ok(/loafer/i.test(blob), blob);
     assert.ok(blob.includes("Burgundy cords"), blob);
+    for (const n of notes) assert.equal(HOUSE_NAMES.test(`${n.title} ${n.body}`), false, n.body);
   });
 
   it("4+ navy knits never recommend another navy knit; khaki chino instead", () => {
@@ -183,6 +186,7 @@ describe("rackNotes", () => {
     const notes = rackNotes(g);
     assert.ok(notes.some((n) => n.title === "Khaki chino"), notes.map((n) => n.title).join(","));
     assert.ok(!notes.some((n) => /navy knit/i.test(n.title)));
+    for (const n of notes) assert.equal(HOUSE_NAMES.test(`${n.title} ${n.body}`), false, n.body);
   });
 
   it("linen camp shirt unlocks cream trousers in heat", () => {
@@ -346,5 +350,13 @@ describe("rackNotes", () => {
     assert.ok(hole);
     assert.equal(hole!.title, "White oxford");
     assert.ok(hole!.finishes.includes("Cream trousers"));
+  });
+});
+
+describe("rack notes name no house", () => {
+  it("gaps.ts carries no Ralph and no Sweet Stable", () => {
+    const src = readFileSync(new URL("./gaps.ts", import.meta.url), "utf8");
+    assert.equal(src.includes("Ralph"), false);
+    assert.equal(src.includes("Sweet Stable"), false);
   });
 });

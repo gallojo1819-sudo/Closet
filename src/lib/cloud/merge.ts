@@ -31,7 +31,7 @@ export type CloudLook = {
 
 export type CloudJournal = { date: string; garmentIds: string[] };
 
-export type CloudDrop = { date: string; garmentIds: string[] } | null;
+export type CloudDrop = { date: string; garmentIds: string[]; setAt?: string } | null;
 
 export type CloudMeta = {
   garments: CloudGarment[];
@@ -239,12 +239,28 @@ export function mergeAvoid(
   return out;
 }
 
+/**
+ * A side with fewer than two allowed pieces is not a drop. Of two drops, the later date wins.
+ * On the same date the newer setAt wins, a drop with setAt beats one without, and with neither
+ * the local one stays. Null only when neither side is a drop.
+ */
 export function mergeDrop<T extends CloudDrop>(local: T, cloud: T, allowed: Set<string>): T {
-  const pick = local ?? cloud;
-  if (!pick) return null as T;
-  const ids = pick.garmentIds.filter((id) => allowed.has(id));
-  if (ids.length < 2) return null as T;
-  return { ...pick, garmentIds: ids } as T;
+  const sound = (drop: T): { drop: NonNullable<T>; ids: string[] } | null => {
+    if (!drop) return null;
+    const ids = drop.garmentIds.filter((id) => allowed.has(id));
+    return ids.length >= 2 ? { drop, ids } : null;
+  };
+  const l = sound(local);
+  const c = sound(cloud);
+  if (!l && !c) return null as T;
+  let pick = l ?? c!;
+  if (l && c) {
+    if (l.drop.date !== c.drop.date) pick = l.drop.date > c.drop.date ? l : c;
+    else if (l.drop.setAt && c.drop.setAt) pick = c.drop.setAt > l.drop.setAt ? c : l;
+    else if (c.drop.setAt) pick = c;
+    else pick = l;
+  }
+  return { ...pick.drop, garmentIds: pick.ids } as T;
 }
 
 export type MergeResult<T extends CloudMeta> = {

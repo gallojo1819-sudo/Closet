@@ -205,7 +205,7 @@ export function rackNotes(garments: Garment[]): RackNote[] {
     const shoeNow = sn ? ` ${sn.name} is the only shoe on them now.` : "";
     push({
       title: "Brown loafer",
-      body: `The ${t.name} are waiting on leather. ${why}${shoeNow} Ralph doesn’t sit on a sneaker.`,
+      body: `The ${t.name} are waiting on leather. ${why}${shoeNow} Trousers like these don’t sit on a sneaker.`,
       finishes: [knit ? pair(t, knit) : t.name],
     });
   }
@@ -216,13 +216,13 @@ export function rackNotes(garments: Garment[]): RackNote[] {
     if (!seen.has("Brown loafer")) {
       push({
         title: "Brown loafer",
-        body: `The ${c.name} want brown or burgundy leather, not ${sn.name}. Sweet Stable doesn’t sit on a sneaker. You have the cords; the shoe is the hole.`,
+        body: `The ${c.name} want brown or burgundy leather, not ${sn.name}. Cords don’t sit on a sneaker. You have the cords; the shoe is the hole.`,
         finishes: [c.name],
       });
     } else {
       push({
         title: "Burgundy loafer",
-        body: `The ${c.name} want brown or burgundy leather. ${sn.name} is the only shoe on them now. Sweet Stable, not a trainer.`,
+        body: `The ${c.name} want brown or burgundy leather. ${sn.name} is the only shoe on them now. Leather, not a trainer.`,
         finishes: [c.name],
       });
     }
@@ -233,7 +233,7 @@ export function rackNotes(garments: Garment[]): RackNote[] {
     const sh = leather[0] ?? sneakers[0];
     push({
       title: "Khaki chino",
-      body: `${k.name} and the rest of the navy knits have no khaki or olive bottom — weekday is navy-on-navy. Ralph wants earth under navy. Not another navy knit.`,
+      body: `${k.name} and the rest of the navy knits have no khaki or olive bottom — weekday is navy-on-navy. Earth tones sit better under navy. Not another navy knit.`,
       finishes: [sh ? pair(k, sh) : k.name],
     });
   }
