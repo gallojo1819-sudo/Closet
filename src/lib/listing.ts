@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { callerGate, closetCaller } from "./auth/closet-caller";
 import type { Category } from "./types";
 
 export type OfficialHit = {
@@ -180,14 +181,18 @@ function pickImage(html: string, pageUrl: string): string | null {
 }
 
 export const fetchListing = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { url: string }) => input)
   .handler(
     async ({
       data,
+      context,
     }): Promise<
       | { ok: true; title: string; brand: string; source: string; pageUrl: string; image: string }
       | { ok: false; error: string }
     > => {
+      const gate = await callerGate(context, "fetchListing");
+      if (!gate.ok) return { ok: false, error: gate.error };
       let pageUrl = data.url.trim();
       if (!/^https?:\/\//i.test(pageUrl)) pageUrl = `https://${pageUrl}`;
       let parsed: URL;
@@ -248,10 +253,12 @@ export const fetchListing = createServerFn({ method: "POST" })
   );
 
 export const identifyPiece = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { image: string; mode: "photo" | "hangtag" }) => input)
   .handler(
     async ({
       data,
+      context,
     }): Promise<
       | {
           ok: true;
@@ -263,6 +270,8 @@ export const identifyPiece = createServerFn({ method: "POST" })
         }
       | { ok: false; error: string }
     > => {
+      const gate = await callerGate(context, "identifyPiece");
+      if (!gate.ok) return { ok: false, error: gate.error };
       const apiKey = process.env.XAI_API_KEY;
       if (!apiKey) return { ok: false, error: "Set XAI_API_KEY to identify the make." };
       const hangtag = data.mode === "hangtag";
@@ -422,11 +431,15 @@ async function scrapeFarfetch(query: string): Promise<OfficialHit[]> {
 }
 
 export const searchOfficial = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
   .validator((input: { query: string }) => input)
   .handler(
     async ({
       data,
+      context,
     }): Promise<{ ok: true; hits: OfficialHit[] } | { ok: false; error: string }> => {
+      const gate = await callerGate(context, "searchOfficial");
+      if (!gate.ok) return { ok: false, error: gate.error };
       const query = data.query.trim();
       if (!query) return { ok: false, error: "Nothing to search." };
       const serp = await serpShopping(query);
