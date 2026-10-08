@@ -14,6 +14,10 @@ const {
   answerTodayAsk,
   bindClosetPiece,
   isTodayOutfitAsk,
+  lookReply,
+  looksLikeAtlasBlock,
+  visibleReplyLines,
+  wearSentence,
   briefLine,
   briefOccasion,
   formatStrongest,
@@ -201,6 +205,74 @@ describe("stylist page", () => {
     assert.match(add, /route: "add"/);
     assert.equal(closet.includes("writeStylistPage"), false);
     assert.match(detail, /bindClosetPiece/);
+  });
+
+  it("replies a) lookReply is the one Wear sentence, never a block", () => {
+    const field = piece({ id: "g_field", name: "Olive field jacket", category: "outerwear", subtype: "field jacket", colors: ["olive"] });
+    const look = [oxford, chinos, loafers, field];
+    const reply = lookReply(look);
+    assert.equal(reply, wearSentence(look));
+    assert.equal(reply, "Wear your oxford with the tan chinos and the suede loafers under the Olive field jacket.");
+    assert.equal(reply!.includes("\n"), false);
+    for (const bad of ["LOOK:", "g_", "out\n", "weekday\n"]) assert.equal(reply!.includes(bad), false, bad);
+    assert.equal(/^(?:out|weekday|weekend|comfy|travel)\b/i.test(reply!), false);
+    assert.equal(lookReply([oxford, loafers]), "Wear your oxford with the suede loafers.");
+    assert.equal(lookReply([oxford]), "Wear your oxford.");
+    assert.equal(lookReply([]), null);
+  });
+
+  it("replies b) a look built as an atlas block still replies as a sentence", () => {
+    const pieces = [oxford, chinos, loafers, blazer];
+    const block = `weekday\n${pieces.map((g) => g.name).join("\n")}\nLOOK: ${pieces.map((g) => g.id).join(",")}`;
+    assert.equal(looksLikeAtlasBlock(block), true);
+    assert.equal(looksLikeAtlasBlock("Wear your oxford with the tan chinos and the suede loafers."), false);
+    assert.equal(looksLikeAtlasBlock("clean city — out\noxford"), true);
+    const reply = lookReply(pieces)!;
+    assert.equal(/^(?:out|weekday|weekend|comfy|travel)\b/i.test(reply), false, reply);
+    assert.match(reply, /^Wear your /);
+  });
+
+  it("replies c) a brief word beats the today ask, and the today phrasings still hold", () => {
+    for (const ask of [
+      "what should I wear to dinner tonight",
+      "what should I wear to the client meeting",
+      "what should I wear this weekend",
+      "what should I wear on Saturday",
+    ]) {
+      assert.equal(isTodayOutfitAsk(ask), false, ask);
+    }
+    for (const ask of ["What should I wear today?", "what do I wear", "what should i wear", "Outfit for today", "today's outfit", "What's today's look?"]) {
+      assert.equal(isTodayOutfitAsk(ask), true, ask);
+    }
+  });
+
+  it("replies d) the dinner ask is a brief for out", () => {
+    assert.equal(briefOccasion("what should I wear to dinner tonight"), "out");
+    assert.equal(briefOccasion("what should I wear to the client meeting"), "out");
+    assert.equal(briefOccasion("What should I wear today?"), null);
+  });
+
+  it("replies e) the dock's look branches push one sentence, never a block", () => {
+    const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
+    const send = dock.slice(dock.indexOf("const send = async"), dock.indexOf("const wearDraft"));
+    assert.ok(send.split("lookReply(pieces)").length - 1 >= 3, "dress, swap and server branches use lookReply");
+    assert.equal(send.includes("stylistProse(line)"), false);
+    assert.equal(send.includes("edited?.text"), false);
+    assert.equal(send.includes("text: atlasText("), false);
+    assert.equal(send.includes("atlasText({ technique, pieces"), false);
+    assert.match(send, /looksLikeAtlasBlock\(painted\.text\)/);
+  });
+
+  it("replies f) the visible lines drop the occasion id and the LOOK row", () => {
+    const block = "out\nBrown knit polo\nBeige trousers\nBrown leather tassel loafers\nOlive field jacket\nLOOK: g_a,g_b";
+    const lines = visibleReplyLines(block);
+    assert.deepEqual(lines, ["Brown knit polo", "Beige trousers", "Brown leather tassel loafers", "Olive field jacket"]);
+    assert.deepEqual(visibleReplyLines("henley denim — weekend\nMISSING: shoes\nNavy henley"), ["Navy henley"]);
+    assert.deepEqual(visibleReplyLines("Wear your oxford with the tan chinos and the suede loafers."), [
+      "Wear your oxford with the tan chinos and the suede loafers.",
+    ]);
+    const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
+    assert.match(dock, /visibleReplyLines\(text\)/);
   });
 
   it("c) a line break ends a garment qualifier: the occasion never glues onto the piece", () => {
