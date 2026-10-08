@@ -13,12 +13,13 @@ import {
 import { draftFromMessage, recordStylistQuestion, restoreIfAskWrote, stylistLookToSave } from "@/lib/stylist-thread";
 import {
   NOT_IN_CLOSET,
-  acceptStylistReply,
   answerAsked,
   answerTodayAsk,
   briefLine,
   briefOccasion,
   isTodayOutfitAsk,
+  lookReply,
+  looksLikeAtlasBlock,
   readStylistPage,
   rememberedLooks,
   replyFromStylistResult,
@@ -27,7 +28,7 @@ import {
   stylistPayload,
   stylistProse,
   subscribeStylistPage,
-  wearSentence,
+  visibleReplyLines,
 } from "@/lib/stylist-page";
 import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
@@ -35,7 +36,6 @@ import { daysIdle, defaultOccasion, momentOfDay, todayOccasion } from "@/lib/sty
 import { useCloset } from "@/lib/store";
 import {
   acceptTrend,
-  atlasText,
   composeAtlasLook,
   emptyTaste,
   learnFromAsk,
@@ -59,13 +59,9 @@ export function openStylistPanel(): void {
   for (const fn of panelListeners) fn();
 }
 
-/** The visible lines of a reply: plain ink, one piece name per line. */
+/** The visible lines of a reply: plain ink, never a LOOK row or a bare occasion id on top. */
 function replyLines(text: string): string[] {
-  const lines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .filter((l) => !/^MISSING:/i.test(l) && !/^LOOK:/i.test(l));
+  const lines = visibleReplyLines(text);
   return lines.length ? lines : [stylistProse(text)];
 }
 
@@ -272,9 +268,10 @@ export function StylistDock() {
         .map((id) => owned.find((g) => g.id === id))
         .filter((g): g is Garment => Boolean(g));
       const technique = edited?.technique ?? techniqueUsed(taste, pieces);
+      /* One sentence for the look, never the raw block. */
       pushMessage({
         role: "stylist",
-        text: edited?.text ?? atlasText({ technique, pieces, occasion, missing: null }),
+        text: lookReply(pieces) ?? WHICH_PIECE,
         garmentIds,
         draftName: nameLook(pieces),
         draftOccasion: occasion,
@@ -305,13 +302,10 @@ export function StylistDock() {
       if (dressed) {
         const pieces = dressed.pieces.filter((g) => !vetoed.has(g.id) || named.some((n) => n.id === g.id));
         const technique = techniqueUsed(taste, pieces);
-        const line = atlasText({ technique, pieces, occasion: dressed.occasion, missing: null });
-        /* The prose only, never the raw block or its LOOK line. The pieces are owned, so a Wear sentence is the floor. */
-        const prose = stylistProse(line);
-        const accepted = acceptStylistReply(prose, owned) ? prose : (wearSentence(pieces) ?? WHICH_PIECE);
+        /* One sentence for the look, never the raw block. The pieces are owned. */
         pushMessage({
           role: "stylist",
-          text: accepted,
+          text: lookReply(pieces) ?? WHICH_PIECE,
           garmentIds: pieces.map((g) => g.id),
           draftName: nameLook(pieces),
           draftOccasion: dressed.occasion,
@@ -368,9 +362,11 @@ export function StylistDock() {
     const pieces = painted.garmentIds
       .map((id) => owned.find((g) => g.id === id))
       .filter((g): g is Garment => Boolean(g));
+    /* Real prose stays as written. A raw block with resolvable pieces becomes one sentence. */
+    const sentence = pieces.length && looksLikeAtlasBlock(painted.text) ? lookReply(pieces) : null;
     pushMessage({
       role: "stylist",
-      text: painted.text,
+      ...(sentence ? { text: sentence } : { text: painted.text }),
       ...(pieces.length
         ? {
             garmentIds: pieces.map((g) => g.id),

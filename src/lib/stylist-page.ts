@@ -364,6 +364,33 @@ export function stylistProse(text: string): string {
   return flat;
 }
 
+const OCCASION_ID = new RegExp(`^(?:${OCCASIONS.map((row) => row.id).join("|")})$`, "i");
+
+/** A bare occasion id, or "<technique> — <occasion>": the first line of a raw atlas block. */
+export function isOccasionLine(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  if (OCCASION_ID.test(t)) return true;
+  const dash = t.match(/^.+?\s+[—–-]\s+(\S+)$/);
+  return Boolean(dash && OCCASION_ID.test(dash[1] ?? ""));
+}
+
+/** The lines a reply may paint: no LOOK or MISSING row, and never a bare occasion id on top. */
+export function visibleReplyLines(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^MISSING:/i.test(line) && !/^LOOK:/i.test(line) && !isOccasionLine(line));
+}
+
+/** A raw atlas block rather than prose: it carries a LOOK row, or opens on an occasion id. */
+export function looksLikeAtlasBlock(text: string): boolean {
+  if (/^\s*LOOK:/im.test(text)) return true;
+  const first = text.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
+  return isOccasionLine(first);
+}
+
 /**
  * The dock reads the server value, including a JSON body.
  * A missing garment list must not throw the reply away.
@@ -487,6 +514,24 @@ export function wearSentence(pieces: readonly Garment[]): string | null {
   return `${wear}.`;
 }
 
+/**
+ * One look as one sentence. The Wear sentence when a top, bottom and shoe are there;
+ * otherwise a short line naming the pieces. Never an occasion id, a technique line,
+ * a LOOK or MISSING row, or a garment id. Null only with no pieces.
+ */
+export function lookReply(pieces: readonly Garment[]): string | null {
+  const wear = wearSentence(pieces);
+  if (wear) return wear;
+  const names = pieces.map(speakPiece).filter(Boolean);
+  if (!names.length) return null;
+  if (names.length === 1) return `Wear your ${names[0]}.`;
+  const rest = names.slice(1);
+  const last = rest.pop()!;
+  return rest.length
+    ? `Wear your ${names[0]} with the ${rest.join(", the ")} and the ${last}.`
+    : `Wear your ${names[0]} with the ${last}.`;
+}
+
 const TODAY_ASK =
   /\b(?:what(?:'s|s| is| should| do| can| could| would| will)?\s+(?:i|should i|do i|can i)?\s*(?:wear|put on)(?:\s+today|\s+this morning|\s+now)?|outfit\s+(?:for\s+)?today|today'?s\s+(?:outfit|look)|look\s+for\s+today|what(?:'s|s| is)\s+(?:my\s+)?(?:look|outfit)\s+(?:for\s+)?today|what(?:'s|s| is)\s+today'?s\s+(?:look|outfit)|dress\s+me\s+(?:for\s+)?today)\b/i;
 const NAMES_A_PIECE =
@@ -500,6 +545,8 @@ const NAMES_A_PIECE =
 export function isTodayOutfitAsk(text: string): boolean {
   const t = text.replace(/[^\w\s']/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
   if (!t) return false;
+  /* A brief word (dinner, a meeting, the weekend, a weekday name) is a brief, not today's drop. */
+  if (BRIEF_OCCASION_WORDS.test(t)) return false;
   if (!TODAY_ASK.test(t)) return false;
   return !NAMES_A_PIECE.test(t);
 }
@@ -507,12 +554,7 @@ export function isTodayOutfitAsk(text: string): boolean {
 export type TodayAnswer = { text: string; garmentIds: string[]; occasion: Occasion };
 
 function wearLine(pieces: readonly Garment[]): string {
-  const wear = wearSentence(pieces);
-  if (wear) return wear;
-  const names = pieces.map(speakPiece).filter(Boolean);
-  if (!names.length) return "Nothing in this closet dresses today.";
-  if (names.length === 1) return `Wear your ${names[0]}.`;
-  return `Wear your ${names[0]} with the ${names.slice(1).join(", the ")}.`;
+  return lookReply(pieces) ?? "Nothing in this closet dresses today.";
 }
 
 /**
@@ -556,8 +598,10 @@ function asksAboutOnScreenLooks(prompt: string): boolean {
   return /\blooks?\b/i.test(prompt) || /\b(?:this page|on screen)\b/i.test(prompt);
 }
 
-const BRIEF_WORDS =
-  /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|dinner|meeting|boards?|client|travel|weekend|comfy|outfit)\b/i;
+/** The occasion words of a brief. Shared with isTodayOutfitAsk so the two lists cannot drift. */
+const BRIEF_OCCASION_WORDS =
+  /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|dinner|meeting|boards?|client|travel|weekend|comfy)\b/i;
+const BRIEF_WORDS = new RegExp(`${BRIEF_OCCASION_WORDS.source}|\\boutfit\\b`, "i");
 
 /**
  * A brief is a request to dress him: a weekday or an occasion word, and not
