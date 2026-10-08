@@ -13,7 +13,9 @@ const {
   answerAsked,
   answerTodayAsk,
   bindClosetPiece,
+  isAdviceAsk,
   isTodayOutfitAsk,
+  swapBaseIds,
   lookReply,
   looksLikeAtlasBlock,
   visibleReplyLines,
@@ -30,7 +32,8 @@ const {
   stylistProse,
   writeStylistPage,
 } = await import("./stylist-page.ts");
-const { buildStylistSystem, emptyTaste } = await import("./taste.ts");
+const { atlasText, buildStylistSystem, emptyTaste, swapDraft, swapSlot } = await import("./taste.ts");
+const { dressThisPiece, resolvePiecesFromText } = await import("./dress.ts");
 
 function piece(partial: Pick<Garment, "id" | "name" | "category"> & Partial<Garment>): Garment {
   return {
@@ -773,5 +776,125 @@ describe("stylist page", () => {
     // The busy line lives in the open card only.
     const busy = dock.match(/Considering the closet…/g);
     assert.equal(busy?.length, 1);
+  });
+});
+
+describe("stylist routing", () => {
+  /* His real piece names, invented ids. Never a live SKU. */
+  const polo = piece({ id: "r_polo", name: "Cream long-sleeve polo", category: "top", subtype: "polo", colors: ["cream"] });
+  const cords = piece({ id: "r_cords", name: "Navy corduroy trousers", category: "bottom", subtype: "trousers", colors: ["navy"], material: "corduroy" });
+  const woven = piece({ id: "r_woven", name: "Black woven loafers", category: "footwear", subtype: "loafers", colors: ["black"] });
+  const field = piece({ id: "r_field", name: "Olive field jacket", category: "outerwear", subtype: "field jacket", colors: ["olive"] });
+  const oxfordShirt = piece({ id: "r_ox", name: "White oxford shirt", category: "top", subtype: "oxford", colors: ["white"] });
+  const tan = piece({ id: "r_tan", name: "Tan chinos", category: "bottom", subtype: "chinos", colors: ["tan"] });
+  const tassel = piece({ id: "r_tassel", name: "Brown suede tassel loafers", category: "footwear", subtype: "loafers", colors: ["brown"], material: "suede" });
+  const mules = piece({ id: "r_mules", name: "Brown suede mules", category: "footwear", subtype: "mules", colors: ["brown"], material: "suede" });
+  const rack = [polo, cords, woven, field, oxfordShirt, tan, tassel, mules];
+  const onScreen = [oxfordShirt.id, tan.id, tassel.id];
+  const banned = (s: string) => assert.equal(/LOOK:|\bg_[a-z0-9_]+/i.test(s), false, s);
+  function todayPage() {
+    writeStylistPage({
+      route: "today",
+      occasion: "weekday",
+      onScreenLookIds: ["today"],
+      screenLooks: [{ id: "today", garmentIds: onScreen }],
+    });
+    return readStylistPage();
+  }
+
+  it("1) a named piece off the page passes to the dress branch and gets its look", () => {
+    const page = todayPage();
+    const q = "what goes with my olive field jacket";
+    assert.deepEqual(answerAsked({ prompt: q, page, garments: rack }), { kind: "pass" });
+    assert.equal(swapSlot(q), null);
+    const named = resolvePiecesFromText(q, rack);
+    assert.equal(named[0]?.id, field.id);
+    const dressed = dressThisPiece({ lockedIds: [field.id], garments: rack, looks: [], occasion: "weekday", weather: undefined, journal: [] });
+    assert.ok(dressed, "dressThisPiece built nothing");
+    const reply = lookReply(dressed!.pieces)!;
+    assert.match(reply, /^Wear your /);
+    assert.ok(reply.includes("Olive field jacket"), reply);
+    banned(reply);
+    const which = answerAsked({ prompt: "which look has my olive field jacket", page, garments: rack });
+    assert.deepEqual(which, { kind: "answer", text: "That piece is not in the looks on this page.", garmentIds: [] });
+  });
+
+  it("2) swap the shoes on a fresh Today edits the on-screen look", () => {
+    const page = todayPage();
+    const q = "swap the shoes";
+    const slot = swapSlot(q);
+    assert.equal(slot, "footwear");
+    const base = swapBaseIds({ previousIds: undefined, page, looks: [{ id: "today", garmentIds: onScreen }], drop: null, garments: rack });
+    assert.deepEqual(base, onScreen);
+    const edited = swapDraft({ ids: base, slot: slot!, garments: rack, taste: emptyTaste(), occasion: "weekday" });
+    const ids = edited?.garmentIds ?? base;
+    const pieces = ids.map((id) => rack.find((g) => g.id === id)!).filter(Boolean);
+    const reply = lookReply(pieces)!;
+    assert.match(reply, /^Wear your /);
+    assert.ok(reply.includes("White oxford shirt") && reply.includes("Tan chinos"), reply);
+    assert.equal(reply.includes("Brown suede tassel loafers"), false, reply);
+    banned(reply);
+    assert.deepEqual(swapBaseIds({ previousIds: [polo.id, cords.id, woven.id], page, looks: [], drop: null, garments: rack }), [polo.id, cords.id, woven.id]);
+    assert.deepEqual(swapBaseIds({ previousIds: [], page, looks: [], drop: { date: "2026-10-08", garmentIds: [polo.id, cords.id] }, garments: rack, today: "2026-10-08" }), [polo.id, cords.id]);
+    assert.deepEqual(swapBaseIds({ previousIds: [], page, looks: [], drop: { date: "2026-10-07", garmentIds: [polo.id, cords.id] }, garments: rack, today: "2026-10-08" }), []);
+    const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
+    const send = dock.slice(dock.indexOf("const send = async"), dock.indexOf("const wearDraft"));
+    const todayAt = send.indexOf("isTodayOutfitAsk(q)");
+    const swapAt = send.indexOf("swapSlot(q)");
+    const askedAt = send.indexOf("answerAsked(");
+    assert.ok(todayAt >= 0 && todayAt < swapAt && swapAt < askedAt, "today, then swap, then the page");
+    assert.equal(send.split("swapSlot(").length - 1, 1, "one swap branch");
+  });
+
+  it("3) a care question passes the page, and the qualifier logic reads suede shoes as owned", () => {
+    const page = todayPage();
+    const q = "How do I keep suede shoes looking good in the rain?";
+    assert.equal(isAdviceAsk(q), true);
+    assert.deepEqual(answerAsked({ prompt: q, page, garments: rack }), { kind: "pass" });
+    for (const ask of ["what goes with my olive field jacket", "swap the shoes", "What should I wear today?", "what should I wear to dinner tonight"]) {
+      assert.equal(isAdviceAsk(ask), false, ask);
+    }
+    for (const ask of ["suede shoes", "care for suede loafers", "brown shoes"]) {
+      assert.notEqual(answerAsked({ prompt: ask, page, garments: rack }).kind, "reject", ask);
+    }
+    assert.ok(acceptStylistReply("Brush your suede loafers dry and spray them.", rack));
+    for (const ask of ["Wear the camel overcoat.", "Pair my Loro Piana cashmere sweater", "do I own a Loro Piana sweater", "how do I clean my camel overcoat"]) {
+      assert.equal(answerAsked({ prompt: ask, page, garments: rack }).kind, "reject", ask);
+    }
+    assert.equal(acceptStylistReply("Wear the camel overcoat.", rack), null);
+    assert.equal(acceptStylistReply("Pair the Loro Piana cashmere sweater.", rack), null);
+    const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
+    const send = dock.slice(dock.indexOf("const send = async"), dock.indexOf("const wearDraft"));
+    assert.ok(send.indexOf("isAdviceAsk(q)") >= 0 && send.indexOf("isAdviceAsk(q)") < send.indexOf("dressThisPiece("), "advice is checked before the dress branch");
+  });
+
+  it("4) a server block paints as one sentence, in every shape", () => {
+    const pieces = [polo, cords, woven, field];
+    const ids = pieces.map((g) => g.id);
+    const block = atlasText({ technique: null, pieces, occasion: "weekday", missing: null });
+    const want = "Wear your Cream long-sleeve polo with the Navy corduroy trousers and the Black woven loafers under the Olive field jacket.";
+    assert.deepEqual(replyFromStylistResult({ ok: true, text: block, garmentIds: ids }, rack), { text: want, garmentIds: ids });
+    assert.deepEqual(replyFromStylistResult({ ok: true, text: block }, rack), { text: want, garmentIds: ids });
+    const oneLine = block.replace(/\n/g, " ");
+    assert.deepEqual(replyFromStylistResult({ ok: true, text: oneLine, garmentIds: ids }, rack), { text: want, garmentIds: ids });
+    assert.equal(looksLikeAtlasBlock(oneLine), true);
+    for (const line of visibleReplyLines(oneLine)) banned(line);
+    assert.ok(visibleReplyLines(oneLine).length >= 1);
+    const prose = replyFromStylistResult({ ok: true, text: "The oxford with the tan chinos and the suede loafers.", garmentIds: [oxfordShirt.id] }, rack);
+    assert.equal(prose.text, "The oxford with the tan chinos and the suede loafers.");
+  });
+
+  it("5) the today ask and the dinner brief are unchanged", () => {
+    const page = todayPage();
+    assert.equal(isTodayOutfitAsk("What should I wear today?"), true);
+    const drop = { date: "2026-10-08", garmentIds: onScreen, worn: false, verdict: "pending" as const, occasion: "weekday" as const };
+    const today = answerTodayAsk({ drop, garments: rack, today: "2026-10-08" });
+    assert.equal(today.text, "Wear your White oxford shirt with the Tan chinos and the Brown suede tassel loafers.");
+    const dinner = "what should I wear to dinner tonight";
+    assert.equal(isTodayOutfitAsk(dinner), false);
+    assert.deepEqual(answerAsked({ prompt: dinner, page, garments: rack }), { kind: "pass" });
+    assert.equal(briefOccasion(dinner), "out");
+    const line = briefLine(dinner, [polo, cords, woven, field]);
+    assert.match(line ?? "", /^Dinner\. Wear your /);
   });
 });

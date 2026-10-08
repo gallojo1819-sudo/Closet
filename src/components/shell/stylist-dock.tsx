@@ -17,6 +17,7 @@ import {
   answerTodayAsk,
   briefLine,
   briefOccasion,
+  isAdviceAsk,
   isTodayOutfitAsk,
   lookReply,
   looksLikeAtlasBlock,
@@ -28,6 +29,7 @@ import {
   stylistPayload,
   stylistProse,
   subscribeStylistPage,
+  swapBaseIds,
   visibleReplyLines,
 } from "@/lib/stylist-page";
 import { nameLook } from "@/lib/look";
@@ -194,6 +196,46 @@ export function StylistDock() {
       });
       return;
     }
+    /* A swap edits the last stylist look, else the look on this page, else today's drop. */
+    const slot = swapSlot(q);
+    const base = slot
+      ? swapBaseIds({
+          previousIds: previous?.garmentIds,
+          page: here,
+          looks: rememberedLooks(here),
+          drop,
+          garments: owned,
+        })
+      : [];
+    if (slot && base.length) {
+      const occasion = pageOccasion(
+        here.occasion,
+        (previous?.draftOccasion ?? todayOccasion(drop)) as Occasion,
+      );
+      const edited = swapDraft({
+        ids: base,
+        slot,
+        garments: owned,
+        taste,
+        occasion,
+        ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
+      });
+      const garmentIds = edited?.garmentIds ?? base;
+      const pieces = garmentIds
+        .map((id) => owned.find((g) => g.id === id))
+        .filter((g): g is Garment => Boolean(g));
+      const technique = edited?.technique ?? techniqueUsed(taste, pieces);
+      /* One sentence for the look, never the raw block. */
+      pushMessage({
+        role: "stylist",
+        text: lookReply(pieces) ?? WHICH_PIECE,
+        garmentIds,
+        draftName: nameLook(pieces),
+        draftOccasion: occasion,
+        technique: technique ?? undefined,
+      });
+      return;
+    }
     const local = answerAsked({
       prompt: q,
       page: here,
@@ -249,39 +291,11 @@ export function StylistDock() {
       });
       return;
     }
-    const slot = swapSlot(q);
-    if (slot && previous?.garmentIds?.length) {
-      const occasion = pageOccasion(
-        here.occasion,
-        (previous.draftOccasion ?? todayOccasion(drop)) as Occasion,
-      );
-      const edited = swapDraft({
-        ids: previous.garmentIds,
-        slot,
-        garments: owned,
-        taste,
-        occasion,
-        ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
-      });
-      const garmentIds = edited?.garmentIds ?? previous.garmentIds;
-      const pieces = garmentIds
-        .map((id) => owned.find((g) => g.id === id))
-        .filter((g): g is Garment => Boolean(g));
-      const technique = edited?.technique ?? techniqueUsed(taste, pieces);
-      /* One sentence for the look, never the raw block. */
-      pushMessage({
-        role: "stylist",
-        text: lookReply(pieces) ?? WHICH_PIECE,
-        garmentIds,
-        draftName: nameLook(pieces),
-        draftOccasion: occasion,
-        technique: technique ?? undefined,
-      });
-      return;
-    }
     const askText = q.replace(/(?:\bnot the\b|\bdon't use\b|\bdo not use\b|\bdont use\b|\bwithout the\b|\bno\b)\s+[^.,\n]+/gi, " ");
-    const named = resolvePiecesFromText(askText, owned).filter((g) => !vetoed.has(g.id));
-    if (named.length === 0 && looksLikePieceAsk(q) && !vetoed.size && !slot) {
+    /* A care or how question is not a dressing ask: nothing is locked, the server answers it. */
+    const advice = isAdviceAsk(q);
+    const named = advice ? [] : resolvePiecesFromText(askText, owned).filter((g) => !vetoed.has(g.id));
+    if (!advice && named.length === 0 && looksLikePieceAsk(q) && !vetoed.size && !slot) {
       pushMessage({ role: "stylist", text: "Tap the piece on Closet." });
       return;
     }
