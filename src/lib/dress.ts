@@ -23,12 +23,22 @@ export const WHICH_PIECE = "Which piece? Tap it on Closet.";
 const OCCASION_TOKEN =
   /^(out|dinner|weekday|weekend|comfy|travel|saturday|sunday|office|work|client|tonight|afternoon)$/i;
 
+/** Question and filler words. "wear" is never a piece, and never matches inside "outerwear". */
+const QUERY_STOP =
+  /\b(what|whats|should|i|wear|wearing|today|tonight|outfit|look|do|does|goes|the|a|an|for|my|me|this)\b/g;
+
 export function tokenizeDressQuery(q: string): string[] {
   return q
     .toLowerCase()
     .replace(/^(wear|put on|outfit with|dress|style)\s+(the\s+)?/i, "")
     .split(/[,&+/]| and | with /i)
-    .map((s) => s.replace(/\b(the|a|an|my|this)\b/g, " ").replace(/\s+/g, " ").trim())
+    .map((s) =>
+      s
+        .replace(/[?!.;:]+/g, " ")
+        .replace(QUERY_STOP, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
     .filter((s) => s.length >= 2 && !OCCASION_TOKEN.test(s));
 }
 
@@ -36,15 +46,36 @@ export function pieceSearchBlob(g: Garment): string {
   return `${g.name} ${g.subtype} ${g.colors.join(" ")} ${g.category} ${g.notes ?? ""}`.toLowerCase();
 }
 
+function stemWord(w: string): string {
+  if (w.length > 3 && w.endsWith("ies")) return `${w.slice(0, -3)}y`;
+  if (w.length > 3 && w.endsWith("es") && /[sxz]es$|[cs]hes$/.test(w)) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
+  return w;
+}
+
+function blobWords(blob: string): string[] {
+  return blob.split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function wordIn(words: readonly string[], w: string): boolean {
+  const s = stemWord(w);
+  return words.some((bw) => bw === w || stemWord(bw) === s);
+}
+
+/** Whole words only, plural-tolerant. A phrase scores only as a whole-word sequence in the blob. */
 export function scoreNameMatch(query: string, g: Garment): number {
   const blob = pieceSearchBlob(g);
   const q = query.toLowerCase().trim();
   if (!q) return 0;
-  if (blob.includes(q)) return 10 + q.length;
-  const words = q.split(/\s+/).filter((w) => w.length >= 3);
+  const words = q.split(/\s+/).filter(Boolean);
+  if (words.length > 1) {
+    const seq = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^a-z0-9]+");
+    if (new RegExp(`(?:^|[^a-z0-9])${seq}(?:[^a-z0-9]|$)`).test(blob)) return 10 + q.length;
+  }
+  const bag = blobWords(blob);
   let n = 0;
   for (const w of words) {
-    if (blob.includes(w)) n += 3;
+    if (w.length >= 3 && wordIn(bag, w)) n += 3;
   }
   return n;
 }

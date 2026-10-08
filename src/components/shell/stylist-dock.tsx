@@ -15,8 +15,10 @@ import {
   NOT_IN_CLOSET,
   acceptStylistReply,
   answerAsked,
+  answerTodayAsk,
   briefLine,
   briefOccasion,
+  isTodayOutfitAsk,
   readStylistPage,
   rememberedLooks,
   replyFromStylistResult,
@@ -25,6 +27,7 @@ import {
   stylistPayload,
   stylistProse,
   subscribeStylistPage,
+  wearSentence,
 } from "@/lib/stylist-page";
 import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
@@ -175,6 +178,26 @@ export function StylistDock() {
     setTaste(taste);
     const vetoed = pieceVetoIds(taste);
     const here = readStylistPage();
+    /* "What should I wear today?" is today's look, on every page, before the page answers. */
+    if (isTodayOutfitAsk(q)) {
+      const today = answerTodayAsk({
+        drop,
+        garments: owned,
+        taste,
+        ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
+      });
+      const pieces = today.garmentIds
+        .map((id) => owned.find((g) => g.id === id))
+        .filter((g): g is Garment => Boolean(g));
+      pushMessage({
+        role: "stylist",
+        text: today.text,
+        ...(pieces.length
+          ? { garmentIds: pieces.map((g) => g.id), draftName: nameLook(pieces), draftOccasion: today.occasion }
+          : {}),
+      });
+      return;
+    }
     const local = answerAsked({
       prompt: q,
       page: here,
@@ -283,9 +306,12 @@ export function StylistDock() {
         const pieces = dressed.pieces.filter((g) => !vetoed.has(g.id) || named.some((n) => n.id === g.id));
         const technique = techniqueUsed(taste, pieces);
         const line = atlasText({ technique, pieces, occasion: dressed.occasion, missing: null });
+        /* The prose only, never the raw block or its LOOK line. The pieces are owned, so a Wear sentence is the floor. */
+        const prose = stylistProse(line);
+        const accepted = acceptStylistReply(prose, owned) ? prose : (wearSentence(pieces) ?? WHICH_PIECE);
         pushMessage({
           role: "stylist",
-          text: acceptStylistReply(line, owned) ?? NOT_IN_CLOSET,
+          text: accepted,
           garmentIds: pieces.map((g) => g.id),
           draftName: nameLook(pieces),
           draftOccasion: dressed.occasion,
@@ -355,7 +381,7 @@ export function StylistDock() {
         : {}),
     });
     } catch {
-      pushMessage({ role: "stylist", text: NOT_IN_CLOSET });
+      pushMessage({ role: "stylist", text: "Couldn't answer. Try again." });
     } finally {
       const undo = restoreIfAskWrote(staged, snap, useCloset.getState(), explicitWrite.current);
       if (undo) useCloset.setState(undo);
