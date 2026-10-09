@@ -14,9 +14,18 @@ import { cn } from "@/lib/utils";
  *
  * Stacking is rackPose's z as z-index on the slide, but set from the centred index on that
  * re-render rather than per scroll frame: the order only changes when the centre does, and
- * every z-index write repaints the page's stacking context (measured: ~40 root repaints per
- * flick when written per frame, 6 when written per centre change), while transform and
- * opacity writes on the composited pose cost no paint at all.
+ * every z-index write repaints the slides' stacking context (measured: ~40 repaints per flick
+ * when written per frame, 6 when written per centre change), while transform and opacity
+ * writes on the composited pose cost no paint at all. That stacking context is the track
+ * (styles.css), so those 6 repaints cover one row, not the page.
+ *
+ * Measured and rejected (4x CPU throttle, fast flick, 15-card row): sorting the slides by a
+ * 3D depth translate instead of z-index. A depth in the pose under a plain slide never sorts
+ * in Chrome (the slide flattens it; the cards paint in DOM order), and the variants that do
+ * sort (3D slides, or the depth on the slide inside a 3D row) double Chrome's layerization
+ * and triple the long tasks. Dropping z-index from the slides altogether is worse still (15x
+ * the long tasks): without a high z-index the rack's ~75 composited layers sit low in the
+ * page's paint order and every later paint chunk is overlap-tested against them.
  */
 const PERSPECTIVE = "perspective(1200px)";
 const DRAG_SLOP = 6;

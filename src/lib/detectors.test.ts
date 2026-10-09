@@ -400,12 +400,16 @@ describe("detectors", () => {
     const html = await renderSections([], { ways: [way], occasion: "weekday", season: "fall" });
     // Heading, then the chapter label, then the row: in-flow siblings inside one section.
     assert.match(html, /<section><h2[^>]*>Oxford and chinos<\/h2><div><p[^>]*>Weekday<\/p><div data-plate-rack="Oxford and chinos outfits">/);
-    // Every kit sits in a definite 4:5 box; the name list comes after that box, not inside it.
+    // Every lay-down sits in a definite 2:3 art box, inset from its sides so the trouser hems and
+    // shoes stay inside it; the name list comes after that box, never inside or under the clothes.
     const cards = html.split('<div class="w-full">').slice(1);
     assert.equal(cards.length, 2);
     for (const card of cards) {
-      assert.match(card, /^<div class="relative aspect-\[4\/5\] w-full"><button type="button"[^>]*><div data-flat-lay="">/);
-      assert.match(card, /<\/div><\/button><\/div><ul class="mt-2 space-y-0\.5"><li/);
+      assert.match(
+        card,
+        /^<div class="relative aspect-\[2\/3\] w-full overflow-hidden"><button type="button"[^>]*><div class="absolute inset-x-\[9%\] top-\[7%\] bottom-0"><div data-flat-lay="">/,
+      );
+      assert.match(card, /<\/div><\/div><\/button><\/div><ul class="mt-2 space-y-0\.5"><li/);
     }
     // The short note closes the row and the last card first; it is never inside a card.
     assert.match(
@@ -418,9 +422,19 @@ describe("detectors", () => {
       "utf8",
     );
     const plateCard = source.slice(source.indexOf("function PlateCard"), source.indexOf("function Chapter"));
-    assert.match(plateCard, /<div className="relative aspect-\[4\/5\] w-full">\s*<button[\s\S]*?<FlatLay pieces=\{look\} passive/);
+    assert.match(
+      plateCard,
+      /<div className="relative aspect-\[2\/3\] w-full overflow-hidden">\s*<button[\s\S]*?<div className="absolute inset-x-\[9%\] top-\[7%\] bottom-0">\s*<FlatLay pieces=\{look\} passive className="absolute inset-0 aspect-auto overflow-visible border-0 bg-transparent" \/>\s*<\/div>\s*<\/button>/,
+    );
+    // The art box clips, so the button's focus ring has to be drawn inside it.
+    assert.match(plateCard, /<button[\s\S]*?className="[^"]*focus-visible:-outline-offset-1[^"]*"/);
+    // Without aspect-auto the lay keeps the flat-lay's own 4:5 even with insets on every side, and clips as before;
+    // without overflow-visible a fanned piece's rotated corner is cut at the lay's side.
+    assert.match(plateCard, /<FlatLay[^>]*className="[^"]*\baspect-auto\b/);
+    assert.match(plateCard, /<FlatLay[^>]*className="[^"]*\boverflow-visible\b/);
     // The fan needs hover on the FlatLay root itself; clicks still bubble to the button.
     assert.equal(/<FlatLay[^>]*pointer-events-none/.test(plateCard), false);
+    assert.equal(plateCard.includes("aspect-[4/5]"), false, "the rack's art box is taller than Today's paper");
     assert.equal(plateCard.includes("<LookKit"), false);
   });
 
@@ -480,7 +494,7 @@ describe("detectors", () => {
       g({ id: `b${n}`, name: `Tan chinos ${n}`, category: "bottom", subtype: "chino" }),
       g({ id: `s${n}`, name: `Brown loafers ${n}`, category: "footwear", subtype: "loafer" }),
     ];
-    const card = /^<div class="relative aspect-\[4\/5\] w-full"><button type="button"[^>]*><div data-flat-lay="">/;
+    const card = /^<div class="relative aspect-\[2\/3\] w-full overflow-hidden"><button type="button"[^>]*><div class="absolute inset-x-\[9%\] top-\[7%\] bottom-0"><div data-flat-lay="">/;
     const titled: Way = {
       id: "2",
       title: "Oxford and chinos",

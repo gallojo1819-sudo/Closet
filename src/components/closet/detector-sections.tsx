@@ -18,9 +18,19 @@ function chapterLooks(way: Way, occasion: Occasion): Garment[][] {
 }
 
 /**
- * The plate sits in its own 4:5 box. A stretched flex item counts as a definite height, so a
- * kit sized `h-full` straight inside the card would swallow the name list below it and push
- * the names out under the next way's heading.
+ * The plate sits in its own box above the names. A stretched flex item counts as a definite
+ * height, so a kit sized `h-full` straight inside the card would swallow the name list below
+ * it and push the names out under the next way's heading.
+ *
+ * The box is 2:3, taller than Today's 4:5 paper, and it is the one that clips. The lay-down
+ * inside it is inset from the sides and the top: the flat-lay places its pieces as percentages
+ * of its own box (tops of the height, widths of the width), so on 4:5 the trouser hems and the
+ * shoes ran past the bottom, and a fanned jacket lifts ~16px and turns, so its corner needs
+ * headroom. A narrower, taller lay keeps the whole outfit inside the box at rest and fanned;
+ * nothing can reach the names below. `aspect-auto` matters: an absolutely positioned box with
+ * insets on every side still takes the flat-lay's own 4:5 ratio for its height, which would
+ * clip exactly as before; `overflow-visible` lets a fanned corner use the inset instead of
+ * being cut at the lay's edge.
  */
 type OpenPlate = (pieces: Garment[], occasion: Occasion, el: HTMLElement) => void;
 
@@ -35,14 +45,16 @@ function PlateCard({
 }) {
   return (
     <div className="w-full">
-      <div className="relative aspect-[4/5] w-full">
+      <div className="relative aspect-[2/3] w-full overflow-hidden">
         <button
           type="button"
           onClick={(e) => onOpen?.(look, occasion, e.currentTarget)}
           aria-label={`Open ${look.map((g) => g.name).join(", ")}`}
-          className="absolute inset-0 block focus-visible:outline focus-visible:outline-1 focus-visible:outline-ink"
+          className="absolute inset-0 block focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-ink"
         >
-          <FlatLay pieces={look} passive className="absolute inset-0 border-0 bg-transparent" />
+          <div className="absolute inset-x-[9%] top-[7%] bottom-0">
+            <FlatLay pieces={look} passive className="absolute inset-0 aspect-auto overflow-visible border-0 bg-transparent" />
+          </div>
         </button>
       </div>
       <ul className="mt-2 space-y-0.5">

@@ -125,6 +125,12 @@ describe("plate rack component and styles", () => {
     for (const banned of ["translateZ", "DEPTH", "depthOf", "saturate", "style.filter", "filter:"]) {
       assert.equal(source.includes(banned), false, banned);
     }
+    // The centre-change z-index write repaints the slides' stacking context: the track makes
+    // itself that context, high in the page's order (cheap layerization), so the repaint covers
+    // one row, not the page container. The dots overlap the track's bottom padding and sit above it.
+    assert.match(css, /\.plate-rack-track\s*\{[^}]*position: relative;\s*isolation: isolate;\s*z-index: 90;/);
+    assert.match(css, /\.plate-rack-dots\s*\{\s*position: relative;\s*z-index: 91;/);
+    assert.match(css, /\.plate-rack-arrow\s*\{[^}]*z-index: 120;/);
   });
 
   it("hover tilt reads the slide's own rect and is rAF-throttled", () => {
@@ -175,13 +181,15 @@ describe("plate rack component and styles", () => {
     assert.match(css, /\.group:hover \.flat-piece,\s*\.group:focus-visible \.flat-piece,\s*\.group:focus-within \.flat-piece\s*\{\s*transform: translate\(var\(--sx, 0\), var\(--sy, 0\)\) rotate\(var\(--sr, 0deg\)\);/);
   });
 
-  it("the rack never animates paint: no filter, no box-shadow transition, no 3D row", () => {
+  it("the rack never animates paint: no filter, no box-shadow transition, no 3D row, no isolated row", () => {
     const rack = css.slice(css.indexOf("/* Lookbook rack:"), css.indexOf("@media (prefers-reduced-motion: reduce)", css.indexOf("/* Lookbook rack:")));
     assert.ok(rack.length > 0);
     for (const banned of ["filter", "saturate", "preserve-3d", "translateZ", "-webkit-overflow-scrolling"]) {
       assert.equal(rack.includes(banned), false, banned);
     }
-    assert.equal(rack.includes("isolation: isolate"), false, "an isolated row janks the composited poses");
+    // Only the track isolates (with a high z-index); an isolated row or slide janks the composited poses.
+    assert.equal(rack.split("isolation: isolate").length - 1, 1);
+    assert.equal(/\.plate-rack-(row|slide|pose|card)\s*\{[^}]*isolation/.test(rack), false);
     // The centre card's deeper shadow is a pseudo-element that fades in by opacity.
     assert.match(rack, /\.plate-rack-card::after\s*\{[^}]*box-shadow:[^}]*transition: opacity 300ms/);
     assert.match(rack, /\.is-center \.plate-rack-card::after\s*\{\s*opacity: 1;/);

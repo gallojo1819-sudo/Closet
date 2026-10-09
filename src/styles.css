@@ -300,13 +300,23 @@
   }
 }
 
-/* Lookbook rack: slide (z-index) → .plate-rack-pose (JS transform + opacity) → .plate-rack-card (the plate). */
+/* Lookbook rack: slide → .plate-rack-pose (JS transform with depth, plus opacity) → .plate-rack-card (the plate). */
 .plate-rack-stage {
   position: relative; /* the arrows sit on it */
 }
+/* The track is its own stacking context, high in the page's order. Two reasons, both measured
+   on the 15-card row under 4x CPU throttle: (1) the z-index React sets on a slide when the
+   centre changes now repaints this track, not the page container; (2) Chrome's layerization
+   (overlap-testing every paint chunk that comes after the rack's ~75 composited layers) is
+   3-4x cheaper when those layers sit near the top of the page's paint order. The arrows
+   (z-index 120) stay above it; the dots, which overlap its bottom padding, get their own
+   z-index so they are still clickable. */
 .plate-rack-track {
   --rack-card: min(72vw, 300px);
   --rack-tuck: 14px;
+  position: relative;
+  isolation: isolate;
+  z-index: 90;
   display: flex;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
@@ -340,7 +350,10 @@
   outline: 1px solid var(--color-ink);
   outline-offset: 2px;
 }
-/* No stacking context of its own: isolating the row made the composited poses jank (3x the long tasks). */
+/* No stacking context of its own, and no 3D: isolating the row made the composited poses jank
+   (3x the long tasks), and sorting the slides by a 3D depth instead of z-index costs about the
+   same (Chrome's layerization doubles once a 3D sorting context is involved), while a depth in
+   the pose under a plain slide never sorts at all. The track above is the stacking context. */
 .plate-rack-row {
   display: flex;
 }
@@ -448,6 +461,8 @@
   }
 }
 .plate-rack-dots {
+  position: relative;
+  z-index: 91; /* above the track they overlap (see .plate-rack-track) */
   display: flex;
   justify-content: center;
   gap: 6px;
