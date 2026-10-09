@@ -364,7 +364,7 @@ describe("taste memory", () => {
     });
     const wire = embedTasteAvoid({ g_ox: 1 }, taste);
     const peeled = peelTasteAvoid(wire);
-    assert.equal(peeled.avoid.g_ox, 1);
+    assert.deepEqual(peeled.avoid, {});
     assert.equal((peeled.avoid as { __taste?: unknown }).__taste, undefined);
     assert.ok(peeled.taste?.vetoes.some((v) => v.kind === "piece" && v.id === "g_field"));
 
@@ -377,7 +377,7 @@ describe("taste memory", () => {
       ref_photo: false,
       v: 6,
     });
-    assert.equal(row?.avoid.g_ox, 1);
+    assert.deepEqual(row?.avoid, {});
     assert.equal((row?.avoid as { __taste?: unknown }).__taste, undefined);
     assert.ok(row?.taste?.vetoes.some((v) => v.kind === "piece" && v.id === "g_field"));
 
@@ -394,6 +394,42 @@ describe("taste memory", () => {
     const merged = mergeAccount({ local, cloud, lastCloudIds: null });
     assert.ok(merged.next.taste?.vetoes.some((v) => v.kind === "piece" && v.id === "g_field"));
     assert.equal(merged.next.garments.length >= 2, true);
+  });
+
+  it("old skip counts do not load from the account; an ask-made veto does", () => {
+    const taste = { ...emptyTaste(), vetoes: [{ kind: "piece" as const, id: "g1", source: "ask" as const }] };
+    const peeled = peelTasteAvoid({ g1: 3, g2: 1, __taste: taste });
+    assert.deepEqual(peeled.avoid, {});
+    assert.deepEqual(peeled.taste?.vetoes, [{ kind: "piece", id: "g1", source: "ask" }]);
+  });
+
+  it("the next write after a load carries __taste and no skip counts", () => {
+    const taste = { ...emptyTaste(), vetoes: [{ kind: "piece" as const, id: "g1", source: "ask" as const }] };
+    const row = rowToCloud({
+      garments: [{ id: "g1" }, { id: "g2" }],
+      looks: [],
+      journal: [],
+      avoid: { g1: 3, g2: 1, __taste: taste },
+      drop: null,
+      ref_photo: false,
+      v: 6,
+    });
+    const local: CloudMeta = {
+      garments: [{ id: "g1" }, { id: "g2" }],
+      looks: [],
+      journal: [],
+      avoid: { g2: 4 },
+      drop: null,
+      refPhoto: false,
+      v: 6,
+    };
+    const state = mergeAccount({ local, cloud: row, lastCloudIds: null }).next;
+    const wire = embedTasteAvoid(state.avoid, state.taste);
+    assert.deepEqual(Object.keys(wire), ["__taste"]);
+    assert.deepEqual(
+      (wire.__taste as { vetoes: unknown }).vetoes,
+      [{ kind: "piece", id: "g1", source: "ask" }],
+    );
   });
 });
 

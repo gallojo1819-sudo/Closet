@@ -1,5 +1,5 @@
 import { isCloudSrc } from "./src.ts";
-import { mergeTaste, type TasteMemory } from "../taste.ts";
+import { clearSkipCounts, mergeTaste, type TasteMemory } from "../taste.ts";
 
 /**
  * Account merge. closet.v6 + IDB stay a cache.
@@ -223,20 +223,13 @@ export function mergeJournal<T extends CloudJournal>(local: T[], cloud: T[], all
     .filter((row) => row.garmentIds.length > 0);
 }
 
+/** Both sides only hold stale skip counts. A max of the two would bring them back, so neither survives. */
 export function mergeAvoid(
-  local: Record<string, number>,
-  cloud: Record<string, number>,
-  allowed: Set<string>,
+  _local: Record<string, number>,
+  _cloud: Record<string, number>,
+  _allowed: Set<string>,
 ): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const [id, n] of Object.entries(cloud)) {
-    if (allowed.has(id)) out[id] = n;
-  }
-  for (const [id, n] of Object.entries(local)) {
-    if (!allowed.has(id)) continue;
-    out[id] = Math.max(out[id] ?? 0, n);
-  }
-  return out;
+  return clearSkipCounts();
 }
 
 /**

@@ -1,6 +1,6 @@
 import { readTombstones } from "./cloud/tombstone.ts";
 import { scrubRack } from "./rack.ts";
-import { normalizeTaste, type TasteMemory } from "./taste.ts";
+import { clearSkipCounts, normalizeTaste, type TasteMemory } from "./taste.ts";
 import type { DailyDrop, Garment, Look, Occasion, StylistMessage, WearEntry } from "./types.ts";
 
 export type SeenLooks = Record<string, string[]>;
@@ -40,7 +40,7 @@ export function unpackPersist(raw: string | null): PersistedCloset | null {
     const parsed = JSON.parse(raw) as { state?: PersistedCloset } | PersistedCloset;
     const state = "state" in parsed && parsed.state ? parsed.state : (parsed as PersistedCloset);
     if (!state || !Array.isArray(state.garments)) return null;
-    return state;
+    return { ...state, avoid: clearSkipCounts() };
   } catch {
     return null;
   }
@@ -86,7 +86,7 @@ export function mergeClosetPersist<T extends ClosetSnapshot>(
     garments: added.length > 0 ? [...keptStored, ...added] : keptStored,
     looks: Array.isArray(p.looks) ? p.looks : current.looks,
     journal: Array.isArray(p.journal) ? p.journal : current.journal,
-    avoid: p.avoid && typeof p.avoid === "object" ? p.avoid : current.avoid,
+    avoid: clearSkipCounts(),
     drop: "drop" in p ? (p.drop ?? null) : current.drop,
     refPhoto,
     refPhotoBackup,

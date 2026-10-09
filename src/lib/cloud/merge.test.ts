@@ -4,6 +4,7 @@ import {
   accountPool,
   decideLink,
   mergeAccount,
+  mergeAvoid,
   mergeDrop,
   mergeGarments,
   shouldApplyCloud,
@@ -38,6 +39,19 @@ describe("accountPool", () => {
       pool.map((x) => x.id).sort(),
       ["old", "real"],
     );
+  });
+});
+
+describe("mergeAvoid", () => {
+  it("old skip counts on either side do not come back", () => {
+    assert.deepEqual(mergeAvoid({ g1: 2 }, { g2: 5 }, new Set(["g1", "g2"])), {});
+    const merged = mergeAccount({
+      local: meta(["g1", "g2"], { avoid: { g1: 2 } }),
+      cloud: meta(["g1", "g2"], { avoid: { g2: 5 } }),
+      lastCloudIds: null,
+    });
+    assert.equal(merged.appliedCloud, true);
+    assert.deepEqual(merged.next.avoid, {});
   });
 });
 

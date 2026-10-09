@@ -201,19 +201,18 @@ export function embedTasteAvoid(
   return { ...avoid, [TASTE_AVOID_KEY]: taste };
 }
 
+/**
+ * Every stored avoid number came from a skip or swap before skips meant "not today".
+ * Nothing adds to avoid now, so whatever loads is stale: it starts empty on every load and merge.
+ */
+export function clearSkipCounts(): Record<string, number> {
+  return {};
+}
+
 export function peelTasteAvoid(raw: unknown): { avoid: Record<string, number>; taste?: TasteMemory } {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { avoid: {} };
-  const avoid: Record<string, number> = {};
-  let taste: TasteMemory | undefined;
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (key === TASTE_AVOID_KEY) {
-      const parsed = normalizeTaste(value);
-      if (!tasteBlank(parsed)) taste = parsed;
-      continue;
-    }
-    if (typeof value === "number" && Number.isFinite(value)) avoid[key] = value;
-  }
-  return { avoid, taste };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { avoid: clearSkipCounts() };
+  const parsed = normalizeTaste((raw as Record<string, unknown>)[TASTE_AVOID_KEY]);
+  return { avoid: clearSkipCounts(), taste: tasteBlank(parsed) ? undefined : parsed };
 }
 
 export function mergeTaste(local?: TasteMemory, cloud?: TasteMemory): TasteMemory | undefined {

@@ -68,6 +68,7 @@ import { EMPTY_ACCOUNT_CONFIRM } from "./cloud/copy";
 import { dressThisPiece } from "./dress";
 import { notifyGarmentRemoved, notifyLookRemoved, notifyLookSaved } from "./data/v2-port";
 import {
+  clearSkipCounts,
   emptyTaste,
   learnFromLock,
   logWear,
@@ -927,10 +928,7 @@ export const useCloset = create<ClosetState>()(
           garments: meta.garments as Garment[],
           looks: Array.isArray(meta.looks) ? (meta.looks as Look[]) : get().looks,
           journal: Array.isArray(meta.journal) ? (meta.journal as WearEntry[]) : get().journal,
-          avoid:
-            meta.avoid && typeof meta.avoid === "object"
-              ? (meta.avoid as Record<string, number>)
-              : get().avoid,
+          avoid: clearSkipCounts(),
           drop: "drop" in meta ? ((meta.drop as DailyDrop | null) ?? null) : get().drop,
           seenLooks:
             meta.seenLooks && typeof meta.seenLooks === "object"
@@ -1028,7 +1026,7 @@ export const useCloset = create<ClosetState>()(
           garments: rest.garments,
           looks: rest.looks,
           journal: rest.journal,
-          avoid: payload.avoid,
+          avoid: clearSkipCounts(),
           drop: rest.drop,
         });
         get().ensureLookbook();

@@ -127,6 +127,21 @@ describe("mergeClosetPersist", () => {
     assert.equal(next.garments[0]?.id, "a");
     assert.deepEqual(next.seenLooks, { out: ["a"] });
   });
+
+  it("old skip counts do not rehydrate", () => {
+    const persisted: PersistedCloset = {
+      garments: [g("g1")],
+      looks: [],
+      journal: [],
+      avoid: { g1: 4 },
+      drop: null,
+      refPhoto: null,
+      refPhotoBackup: null,
+      messages: [],
+    };
+    assert.deepEqual(mergeClosetPersist(persisted, empty).avoid, {});
+    assert.deepEqual(readClosetSeed(packPersist(persisted))?.avoid, {});
+  });
 });
 
 describe("readClosetSeed", () => {
