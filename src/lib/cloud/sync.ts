@@ -61,7 +61,6 @@ import {
   backupFailedCopy,
   backingUpCopy,
   cloudErrorCopy,
-  pulledCopy,
   savedAccountCopy,
 } from "./copy.ts";
 import { supabaseConfigured } from "./env.ts";
@@ -699,7 +698,9 @@ async function firstLink(userId: string) {
       }
     }
     const n = accountPool(useCloset.getState().garments).length;
-    if (n > 0 && getAccount().progress !== SAVE_RETRY) setAccountProgress(pulledCopy(n));
+    if (n > 0 && getAccount().progress !== SAVE_RETRY && !getAccount().localOnly) {
+      setAccountProgress(savedAccountCopy(n));
+    }
   } finally {
     linking = false;
     if (deferEdit) finishDeferredEdit();
@@ -745,6 +746,7 @@ export function resetCloudSyncForTests(): void {
   rpcOk = null;
   refDirty = false;
   backupRunning = false;
+  setLocalOnly(false);
   clearPendingEdit();
   if (pushTimer !== undefined && typeof window !== "undefined") {
     window.clearTimeout(pushTimer);

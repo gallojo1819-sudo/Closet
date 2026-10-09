@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -9,7 +10,8 @@ register(new URL("../../../scripts/ts-ext.mjs", import.meta.url), {
 const { setSupabaseForTests } = await import("./client.ts");
 const { peekPendingEdit } = await import("./edit.ts");
 const { resetCloudSyncForTests, startCloudSync } = await import("./sync.ts");
-const { getAccount, setAccountProgress } = await import("./account.ts");
+const { getAccount, patchAccount, setAccountProgress } = await import("./account.ts");
+const { isSavedAccountCopy } = await import("./copy.ts");
 const { useCloset } = await import("../store.ts");
 
 let online = true;
@@ -321,7 +323,7 @@ describe("startCloudSync idle", () => {
     const stop = startCloudSync();
     try {
       await waitUntil(
-        () => getAccount().progress === "1 pieces on this phone.",
+        () => getAccount().progress === "1 pieces · Saved to your account",
         "pull did not finish",
       );
       useCloset.getState().updateGarment("g1", { name: "First" });
@@ -446,7 +448,7 @@ describe("startCloudSync idle", () => {
     const stop = startCloudSync();
     try {
       await waitUntil(
-        () => getAccount().progress === "3 pieces on this phone.",
+        () => getAccount().progress === "3 pieces · Saved to your account",
         "pull did not finish",
       );
       row = {
@@ -613,7 +615,7 @@ describe("startCloudSync idle", () => {
     const stop = startCloudSync();
     try {
       await waitUntil(
-        () => getAccount().progress === "1 pieces on this phone.",
+        () => getAccount().progress === "1 pieces · Saved to your account",
         "pull did not finish",
       );
       useCloset.getState().updateGarment("g1", { name: "Kept" });
@@ -628,5 +630,93 @@ describe("startCloudSync idle", () => {
       stop();
       setSupabaseForTests(null);
     }
+  });
+
+  it("a failed thumb count keeps its error, not the saved line", async () => {
+    resetCloudSyncForTests();
+    setAccountProgress(null);
+    patchAccount({ localOnly: false });
+    setOnline(true);
+    installDom();
+    const calls: Calls = { rpc: 0, update: 0, upload: 0 };
+    let lists = 0;
+    const base = fakeSupabase(calls);
+    const pending = {
+      ...cloudRow(),
+      garments: cloudRow().garments.map((g) => ({
+        ...g,
+        imageSrc: "idb:g1:o",
+        cutoutSrc: "idb:g1:c",
+      })),
+    };
+    const chain = {
+      select() {
+        return chain;
+      },
+      eq() {
+        return chain;
+      },
+      maybeSingle: async () => ({ data: pending, error: null }),
+      insert() {
+        calls.update += 1;
+        return chain;
+      },
+      update() {
+        calls.update += 1;
+        return chain;
+      },
+    };
+    setSupabaseForTests({
+      ...base,
+      from() {
+        return chain;
+      },
+      storage: {
+        from() {
+          return {
+            list: async () => {
+              lists += 1;
+              return { data: null, error: { statusCode: 403, message: "list refused" } };
+            },
+            upload: async () => {
+              calls.upload += 1;
+              return { error: null };
+            },
+            remove: async () => ({ error: null }),
+            download: async () => ({ data: null, error: null }),
+          };
+        },
+      },
+    } as never);
+    useCloset.setState({
+      garments: [{ ...(oxford("Navy oxford") as object), imageSrc: "idb:g1:o", cutoutSrc: "idb:g1:c" }] as never,
+      looks: [],
+    });
+    const stop = startCloudSync();
+    try {
+      await waitUntil(() => lists >= 1, "thumb count did not run");
+      await waitUntil(() => getAccount().localOnly === true, "thumb failure not flagged");
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      const progress = getAccount().progress ?? "";
+      assert.equal(isSavedAccountCopy(progress), false);
+      assert.equal(progress.includes("Saved to your account"), false);
+      assert.equal(progress.includes("on this phone."), false);
+      assert.equal(progress, "Backup failed · 403 list refused");
+    } finally {
+      stop();
+      setSupabaseForTests(null);
+      setAccountProgress(null);
+      patchAccount({ localOnly: false });
+    }
+  });
+});
+
+describe("header saved copy", () => {
+  it("app shell keeps the count-first saved line off the banner", () => {
+    const shell = readFileSync(
+      new URL("../../components/shell/app-shell.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.equal(shell.includes("isSavedAccountCopy(progress)"), true);
   });
 });

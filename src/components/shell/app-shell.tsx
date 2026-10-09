@@ -5,7 +5,7 @@ import { bindLiveCopies, reconcileAccountCopies } from "@/lib/data/copies-live";
 import { setCopyParity } from "@/lib/data/copies";
 import { setV2Port } from "@/lib/data/v2-port";
 import { accountPool } from "@/lib/cloud/merge";
-import { stillOnPhoneCopy } from "@/lib/cloud/copy";
+import { isSavedAccountCopy, stillOnPhoneCopy } from "@/lib/cloud/copy";
 import { backupRemaining, idbCount, shouldShowBackupBanner } from "@/lib/cloud/src";
 import { backupPhotos, startCloudSync } from "@/lib/cloud/sync";
 import { scheduleOuterwearPlates, usePlatePassNote } from "@/lib/plate-pass";
@@ -47,7 +47,7 @@ function BackupBanner() {
     ? progress && !/still on this phone/i.test(progress)
       ? progress
       : ""
-    : progress && !progress.startsWith("Saved")
+    : progress && !(progress.startsWith("Saved") || isSavedAccountCopy(progress))
       ? progress
       : stillOnPhoneCopy(remaining);
   return (

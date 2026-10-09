@@ -7,7 +7,11 @@ export const EMPTY_DEVICE_COPY =
 export const SIGN_IN_PROMPT = "Sign in so this closet is on your phone";
 
 export function savedAccountCopy(count: number): string {
-  return `Saved to your account · ${count} pieces`;
+  return `${count} pieces · Saved to your account`;
+}
+
+export function isSavedAccountCopy(s: string | null | undefined): boolean {
+  return typeof s === "string" && /^\d+ pieces · Saved to your account$/.test(s);
 }
 
 export function savedFlashCopy(count: number): string {
@@ -47,10 +51,6 @@ export function cloudErrorCopy(error: unknown): string {
         : String(error);
   const line = `Backup failed · ${status} ${msg}`.replace(/\s+/g, " ").trim();
   return line.endsWith("·") ? "Backup failed" : line;
-}
-
-export function pulledCopy(count: number): string {
-  return `${count} pieces on this phone.`;
 }
 
 export const EMPTY_ACCOUNT_CONFIRM = "Remove from this phone and your account?";

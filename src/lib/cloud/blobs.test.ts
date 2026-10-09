@@ -1,7 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { cloudErrorCopy } from "./copy.ts";
+import {
+  LOCAL_ONLY_CAPTION,
+  backupFailedCopy,
+  cloudErrorCopy,
+  isSavedAccountCopy,
+  savedAccountCopy,
+  stillOnPhoneCopy,
+} from "./copy.ts";
 import { countTjpgFromLists, needsJpegConvert, uploadBlobKeys } from "./blobs.ts";
 
 /** Fake user — tests never read or write closet.v6. */
@@ -32,6 +39,18 @@ describe("cloudErrorCopy", () => {
     assert.equal(line.includes("403"), true);
     assert.equal(line.includes("row-level"), true);
     assert.equal(/saved/i.test(line), false);
+  });
+});
+
+describe("savedAccountCopy", () => {
+  it("puts the count first and is the only shape isSavedAccountCopy accepts", () => {
+    assert.equal(savedAccountCopy(142), "142 pieces · Saved to your account");
+    assert.equal(isSavedAccountCopy(savedAccountCopy(142)), true);
+    assert.equal(isSavedAccountCopy(stillOnPhoneCopy(3)), false);
+    assert.equal(isSavedAccountCopy(LOCAL_ONLY_CAPTION), false);
+    assert.equal(isSavedAccountCopy(backupFailedCopy(2)), false);
+    assert.equal(isSavedAccountCopy("Saved on this phone · 3 pieces"), false);
+    assert.equal(isSavedAccountCopy(null), false);
   });
 });
 
