@@ -21,11 +21,28 @@ function chapterLooks(way: Way, occasion: Occasion): Garment[][] {
  * kit sized `h-full` straight inside the card would swallow the name list below it and push
  * the names out under the next way's heading.
  */
-function PlateCard({ look }: { look: Garment[] }) {
+type OpenPlate = (pieces: Garment[], occasion: Occasion, el: HTMLElement) => void;
+
+function PlateCard({
+  look,
+  occasion,
+  onOpen,
+}: {
+  look: Garment[];
+  occasion: Occasion;
+  onOpen?: OpenPlate;
+}) {
   return (
     <div className="w-56 shrink-0">
       <div className="relative aspect-[4/5] w-full">
-        <LookKit layout="stack" pieces={look} className="pointer-events-none" />
+        <button
+          type="button"
+          onClick={(e) => onOpen?.(look, occasion, e.currentTarget)}
+          aria-label={`Open ${look.map((g) => g.name).join(", ")}`}
+          className="absolute inset-0 block focus-visible:outline focus-visible:outline-1 focus-visible:outline-ink"
+        >
+          <LookKit layout="stack" pieces={look} className="pointer-events-none" />
+        </button>
       </div>
       <ul className="mt-2 space-y-0.5">
         {look.map((g) => (
@@ -38,14 +55,22 @@ function PlateCard({ look }: { look: Garment[] }) {
   );
 }
 
-function Chapter({ occasion, looks }: { occasion: Occasion; looks: Garment[][] }) {
+function Chapter({
+  occasion,
+  looks,
+  onOpen,
+}: {
+  occasion: Occasion;
+  looks: Garment[][];
+  onOpen?: OpenPlate;
+}) {
   if (looks.length < 1) return null;
   return (
     <div>
       <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[occasion]}</p>
       <div className="look-swipe mt-3 flex gap-4">
         {looks.map((look, index) => (
-          <PlateCard key={`${occasion}:${index}`} look={look} />
+          <PlateCard key={`${occasion}:${index}`} look={look} occasion={occasion} onOpen={onOpen} />
         ))}
       </div>
       {looks.length < 3 ? (
@@ -63,6 +88,7 @@ export function DetectorSections({
   season = "fall",
   color = null,
   activeId = null,
+  onOpen,
 }: {
   garments: Garment[];
   ways?: Way[];
@@ -70,11 +96,14 @@ export function DetectorSections({
   season?: Season;
   color?: string | null;
   activeId?: string | null;
+  onOpen?: OpenPlate;
 }) {
   const found = ways ?? visibleDetectors(garments, { occasion, season, color });
   const usual = found.find((way) => way.usual);
   if (usual) {
-    const looks = OCCASION_ORDER.flatMap((id) => (usual.looks[id] ?? []).slice(0, 3)).filter((look) => look.length >= 3);
+    const looks = OCCASION_ORDER.flatMap((id) =>
+      (usual.looks[id] ?? []).map((look) => ({ look, occasion: id })).slice(0, 3),
+    ).filter((plate) => plate.look.length >= 3);
     if (looks.length < 3) {
       return (
         <div data-detectors className="mt-8">
@@ -89,8 +118,8 @@ export function DetectorSections({
         <section>
           <h2 className="font-editorial text-2xl tracking-tight">Your usual</h2>
           <div className="look-swipe mt-3 flex gap-4">
-            {looks.map((look, index) => (
-              <PlateCard key={`usual:${index}`} look={look} />
+            {looks.map((plate, index) => (
+              <PlateCard key={`usual:${index}`} look={plate.look} occasion={plate.occasion} onOpen={onOpen} />
             ))}
           </div>
         </section>
@@ -105,7 +134,7 @@ export function DetectorSections({
         return (
           <section key={way.id}>
             <h2 className="font-editorial text-2xl tracking-tight">{way.title}</h2>
-            <Chapter occasion={occasion} looks={looks} />
+            <Chapter occasion={occasion} looks={looks} onOpen={onOpen} />
           </section>
         );
       })}

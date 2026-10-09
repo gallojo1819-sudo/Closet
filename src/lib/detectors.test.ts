@@ -394,8 +394,8 @@ describe("detectors", () => {
     const cards = html.split('<div class="w-56 shrink-0">').slice(1);
     assert.equal(cards.length, 2);
     for (const card of cards) {
-      assert.match(card, /^<div class="relative aspect-\[4\/5\] w-full"><div data-look-kit="stack">/);
-      assert.match(card, /<\/div><\/div><ul class="mt-2 space-y-0\.5"><li/);
+      assert.match(card, /^<div class="relative aspect-\[4\/5\] w-full"><button type="button"[^>]*><div data-look-kit="stack">/);
+      assert.match(card, /<\/div><\/button><\/div><ul class="mt-2 space-y-0\.5"><li/);
     }
     // The short note closes the row and the last card first; it is never inside a card.
     assert.match(
@@ -408,8 +408,57 @@ describe("detectors", () => {
       "utf8",
     );
     const plateCard = source.slice(source.indexOf("function PlateCard"), source.indexOf("function Chapter"));
-    assert.match(plateCard, /<div className="relative aspect-\[4\/5\] w-full">\s*<LookKit layout="stack"/);
+    assert.match(plateCard, /<div className="relative aspect-\[4\/5\] w-full">\s*<button[\s\S]*?<LookKit layout="stack"/);
     assert.equal(/<LookKit[^>]*className="[^"]*(h-full|aspect-)/.test(plateCard), false);
+  });
+
+  it("every plate is one button that opens its exact pieces", async () => {
+    const look = (n: number): Garment[] => [
+      g({ id: `t${n}`, name: `Navy oxford ${n}`, category: "top", subtype: "oxford" }),
+      g({ id: `b${n}`, name: `Tan chinos ${n}`, category: "bottom", subtype: "chino" }),
+      g({ id: `s${n}`, name: `Brown loafers ${n}`, category: "footwear", subtype: "loafer" }),
+    ];
+    const titled: Way = {
+      id: "2",
+      title: "Oxford and chinos",
+      pieces: look(1),
+      looks: { weekday: [look(1), look(2)] },
+      counts: { weekday: 2, out: 0, weekend: 0, travel: 0, comfy: 0 },
+    };
+    const html = await renderSections([], { ways: [titled], occasion: "weekday", season: "fall" });
+    assert.equal(html.split('<button type="button"').length - 1, 2);
+    for (const n of [1, 2]) {
+      assert.equal(
+        html.split(`aria-label="Open Navy oxford ${n}, Tan chinos ${n}, Brown loafers ${n}"`).length - 1,
+        1,
+      );
+    }
+    const usual: Way = {
+      id: "usual",
+      title: "Your usual",
+      pieces: [],
+      looks: { weekday: [look(1), look(2)], weekend: [look(3), look(4)] },
+      counts: { weekday: 2, out: 0, weekend: 2, travel: 0, comfy: 0 },
+      usual: true,
+    };
+    const usualHtml = await renderSections([], { ways: [usual], occasion: "weekday", season: "fall" });
+    const plates = usualHtml.split('<div class="w-56 shrink-0">').length - 1;
+    assert.equal(plates, 4);
+    assert.equal(usualHtml.split('<button type="button"').length - 1, plates);
+    const source = readFileSync(
+      new URL("../components/closet/detector-sections.tsx", import.meta.url),
+      "utf8",
+    );
+    const plateCard = source.slice(source.indexOf("function PlateCard"), source.indexOf("function Chapter"));
+    for (const bit of ["<button", 'type="button"', "onOpen", "aria-label"]) {
+      assert.equal(plateCard.includes(bit), true, bit);
+    }
+    const imports = source.split("\n").filter((line) => line.startsWith("import "));
+    assert.deepEqual(imports, [
+      'import { LookKit } from "@/components/closet/look-kit";',
+      'import { activeFirst, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";',
+      'import type { Garment, Occasion, Season } from "@/lib/types";',
+    ]);
   });
 
   it("section titles are clothes, at most four, and Joe's labels are not headings", () => {

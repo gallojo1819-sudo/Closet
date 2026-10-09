@@ -46,6 +46,7 @@ function Today() {
   const hydrated = useCloset((s) => s.hydrated);
   const account = useAccount();
   const [view, setView] = useState<"paper" | "me">("paper");
+  const [pick, setPick] = useState<string | null>(null);
   const [play, setPlay] = useState(false);
   const [dressed, setDressed] = useState<Look | null>(null);
 
@@ -208,6 +209,18 @@ function Today() {
   const occasion = todayOccasion(drop);
   const note = dropNote(shown, weather, occasion, drop?.moment, undefined, dropSeason);
   const done = drop?.worn || drop?.verdict === "worn";
+  const picked = shown.find((g) => g.id === pick) ?? null;
+  const swapBlocked = (g: Garment) =>
+    !alternatives(garments, g, shown.map((p) => p.id)).length ||
+    done ||
+    (drop?.lockedIds ?? []).includes(g.id) ||
+    !drop?.garmentIds?.includes(g.id);
+  const swapOn = (g: Garment) => {
+    const i = drop?.garmentIds.indexOf(g.id) ?? -1;
+    swapDropPiece(g.id);
+    const next = i >= 0 ? useCloset.getState().drop?.garmentIds[i] : undefined;
+    setPick((cur) => (cur === g.id ? (next ?? null) : cur));
+  };
   const matched = drop ? weekCells.find((cell) => cell.iso === drop.date) : undefined;
   const onScreenLookIds = matched?.look ? [matched.look.id] : [];
   const pageWeather = realWeatherF(weather);
@@ -361,7 +374,10 @@ function Today() {
                 <button
                   key={v.id}
                   type="button"
-                  onClick={() => setView(v.id)}
+                  onClick={() => {
+                    setView(v.id);
+                    setPick(null);
+                  }}
                   className={cn(
                     "micro border px-3 py-2",
                     view === v.id
@@ -381,7 +397,26 @@ function Today() {
               onUsePaper={() => setView("paper")}
             />
           ) : (
-            <FlatLay pieces={shown} />
+            <FlatLay
+              pieces={shown}
+              activeId={picked?.id ?? null}
+              onPick={setPick}
+              caption={
+                picked ? (
+                  <div className="flex items-center justify-between gap-2 border border-hairline bg-paper px-3 py-2">
+                    <p className="min-w-0 truncate text-sm">{pieceLabel(picked, garments)}</p>
+                    <button
+                      type="button"
+                      disabled={swapBlocked(picked)}
+                      onClick={() => swapOn(picked)}
+                      className="micro text-ink-soft hover:text-ink disabled:opacity-30"
+                    >
+                      Swap
+                    </button>
+                  </div>
+                ) : null
+              }
+            />
           )}
         </div>
         <div className="space-y-6">
@@ -404,13 +439,16 @@ function Today() {
           </div>
           <ol className="space-y-3">
             {shown.map((g) => {
-              const canSwap = alternatives(garments, g, shown.map((p) => p.id)).length > 0;
               const wornAgo = lastWornDays(g);
               const locked = (drop?.lockedIds ?? []).includes(g.id);
               return (
                 <li
                   key={g.id}
-                  className="flex items-center gap-3 border-b border-hairline pb-3"
+                  data-piece-row={g.id}
+                  className={cn(
+                    "flex items-center gap-3 border-b border-hairline pb-3",
+                    g.id === picked?.id && "bg-paper-deep",
+                  )}
                 >
                   <div className="relative">
                     <GarmentImg
@@ -456,8 +494,8 @@ function Today() {
                   </button>
                   <button
                     type="button"
-                    disabled={!canSwap || done || locked || !drop?.garmentIds?.includes(g.id)}
-                    onClick={() => swapDropPiece(g.id)}
+                    disabled={swapBlocked(g)}
+                    onClick={() => swapOn(g)}
                     className="micro text-ink-soft hover:text-ink disabled:opacity-30"
                   >
                     Swap

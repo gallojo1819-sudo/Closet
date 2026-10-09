@@ -28,18 +28,35 @@ export function FlatLay({
   className,
   passive,
   thumb = true,
+  activeId = null,
+  onPick,
+  caption,
 }: {
   pieces: Garment[];
   className?: string;
   passive?: boolean;
   thumb?: boolean;
+  /** With onPick, each piece is a button. Tap lifts it; tap again, the paper, or Escape lets go. */
+  activeId?: string | null;
+  onPick?: (id: string | null) => void;
+  caption?: React.ReactNode;
 }) {
   const seen: Record<string, number> = {};
+  const picking = Boolean(onPick && activeId);
   return (
     <div
       tabIndex={passive ? undefined : 0}
+      onClick={onPick ? () => onPick(null) : undefined}
+      onKeyDown={
+        onPick
+          ? (e: React.KeyboardEvent) => {
+              if (e.key === "Escape") onPick(null);
+            }
+          : undefined
+      }
       className={cn(
         "group relative aspect-[4/5] border border-hairline bg-paper overflow-hidden outline-none",
+        picking && "has-pick",
         className,
       )}
     >
@@ -50,15 +67,26 @@ export function FlatLay({
         const h = hash(g.id);
         const jit = ((h % 1000) / 1000 - 0.5) * 3;
         const shift = (n - 1) * 5;
+        const picked = picking && activeId === g.id;
+        const img = (
+          <GarmentImg
+            garment={g}
+            thumb={thumb}
+            eager={!thumb}
+            nudge={false}
+            className="w-full aspect-page object-contain drop-shadow-sm"
+          />
+        );
         return (
           <div
             key={g.id}
-            className="flat-piece absolute"
+            data-piece={onPick ? g.id : undefined}
+            className={cn("flat-piece absolute", picked && "is-picked")}
             style={{
               left: `${base.left + shift + jit}%`,
               top: `${base.top + shift * 0.6 + jit}%`,
               width: `${base.w}%`,
-              zIndex: base.z + n,
+              zIndex: picked ? 50 : base.z + n,
               ["--rx" as string]: "0px",
               ["--ry" as string]: "0px",
               ["--rr" as string]: `${base.r + jit}deg`,
@@ -67,16 +95,30 @@ export function FlatLay({
               ["--sr" as string]: `${base.r + (h % 2 ? 4 : -4)}deg`,
             }}
           >
-            <GarmentImg
-              garment={g}
-              thumb={thumb}
-              eager={!thumb}
-              nudge={false}
-              className="w-full aspect-page object-contain drop-shadow-sm"
-            />
+            {onPick ? (
+              <button
+                type="button"
+                aria-label={g.name}
+                aria-pressed={activeId === g.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPick(activeId === g.id ? null : g.id);
+                }}
+                className="block w-full focus-visible:outline focus-visible:outline-1 focus-visible:outline-ink"
+              >
+                {img}
+              </button>
+            ) : (
+              img
+            )}
           </div>
         );
       })}
+      {picking && caption ? (
+        <div className="absolute inset-x-2 bottom-2 z-[60]" onClick={(e) => e.stopPropagation()}>
+          {caption}
+        </div>
+      ) : null}
     </div>
   );
 }

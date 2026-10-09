@@ -14,6 +14,7 @@ import {
   CHAPTER_CAP,
   chapterVisible,
   comboKey,
+  draftFromPlate,
   emptyFilterCopy,
   enforcePieceCap,
   fillOccasionLooks,
@@ -2006,5 +2007,129 @@ describe("house chips dress the row", () => {
     const note = row.map((look) => look.gap ?? look.name).join(" ");
     assert.equal(/None in/i.test(note), false);
     assert.notEqual(note.includes(RRL_GAP), true);
+  });
+});
+
+describe("Lookbook plates open a draft; Today's paper pieces are tappable", () => {
+  const oxford = piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" });
+  const chinos = piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" });
+  const loafers = piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer" });
+  const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
+
+  it("draftFromPlate is a pure, order-stable draft of the plate's exact pieces", () => {
+    const a = draftFromPlate([loafers, oxford, chinos], "dinner", "2026-10-09");
+    const b = draftFromPlate([chinos, oxford, loafers].reverse(), "dinner", "2026-10-09");
+    const id = `draft_${["ox", "ch", "lf"].sort().join("_")}`;
+    assert.equal(a.id, id);
+    assert.equal(b.id, id);
+    assert.deepEqual(a.garmentIds, ["lf", "ox", "ch"]);
+    assert.equal(a.source, "ai");
+    assert.equal(a.lookbook, false);
+    assert.equal(a.occasion, "out");
+    assert.equal(a.name, "Navy oxford · Khaki chinos · Brown loafers");
+    assert.equal(a.createdAt, "2026-10-09T00:00:00.000Z");
+    assert.deepEqual(a, draftFromPlate([loafers, oxford, chinos], "dinner", "2026-10-09"));
+  });
+
+  it("opening a plate writes nothing, Wear closes the sheet, Save only adds a new look", () => {
+    const book = read("../routes/lookbook.tsx");
+    const sheet = read("../components/closet/look-sheet.tsx");
+    assert.match(book, /<DetectorSections[^>]*onOpen=\{openPlate\}[^>]*\/>/);
+    const open = book.slice(book.indexOf("const openPlate"), book.indexOf("};", book.indexOf("const openPlate")));
+    for (const bit of ["draftFromPlate", "setDressed(", "setOpenId("]) assert.equal(open.includes(bit), true, bit);
+    assert.equal(/saveLook|keepLook|ensureLookbook|wearToday|setState|useCloset/.test(open), false);
+    const sheetAt = book.indexOf("<LookSheet");
+    const wear = book.slice(book.indexOf("onWear={", sheetAt), book.indexOf("onOpenLook=", sheetAt));
+    assert.equal(wear.includes("wearToday("), true);
+    assert.equal(wear.includes("setOpenId(null)"), true);
+    assert.equal(sheet.includes("keepLook"), false);
+    const save = sheet.slice(sheet.indexOf("disabled={comboSaved}"), sheet.indexOf("Save look"));
+    assert.equal(save.includes("saveLook("), true);
+    assert.equal(save.includes("disabled={comboSaved}"), true);
+    assert.equal(save.includes("looks.some((l) => l.id === look.id)"), false);
+  });
+
+  it("FlatLay is unchanged without onPick, and a picked piece lifts with its caption", async () => {
+    const ts = await import("typescript");
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { pathToFileURL } = await import("node:url");
+    const dir = mkdtempSync(join(tmpdir(), "flat-lay-"));
+    try {
+      let js = ts.transpileModule(read("../components/closet/flat-lay.tsx"), {
+        compilerOptions: {
+          jsx: ts.JsxEmit.ReactJSX,
+          target: ts.ScriptTarget.ES2022,
+          module: ts.ModuleKind.ESNext,
+        },
+        fileName: "flat-lay.tsx",
+      }).outputText;
+      const reactHref = import.meta.resolve("react");
+      const jsxHref = import.meta.resolve("react/jsx-runtime");
+      const stub = join(dir, "gimg.mjs");
+      writeFileSync(
+        stub,
+        `import { createElement } from ${JSON.stringify(reactHref)};
+export function GarmentImg(props) {
+  return createElement("img", { "data-img": props.garment.id, alt: props.garment.name || "" });
+}
+`,
+      );
+      js = js.replaceAll('from "react/jsx-runtime"', `from ${JSON.stringify(jsxHref)}`);
+      for (const [spec, target] of [
+        ["@/components/closet/gimg", pathToFileURL(stub).href],
+        ["@/lib/style", new URL("./style.ts", import.meta.url).href],
+        ["@/lib/utils", new URL("./utils.ts", import.meta.url).href],
+      ]) {
+        js = js.replaceAll(`from "${spec}"`, `from ${JSON.stringify(target)}`);
+      }
+      assert.equal(js.includes("@/"), false, js);
+      const file = join(dir, "flat-lay.mjs");
+      writeFileSync(file, js);
+      const { FlatLay } = await import(pathToFileURL(file).href);
+      const pieces = [oxford, chinos, loafers];
+      const passive = renderToStaticMarkup(createElement(FlatLay, { pieces }));
+      assert.equal(passive.includes("<button"), false);
+      assert.equal(passive.includes("data-piece="), false);
+      assert.equal(passive.includes("has-pick"), false);
+      const html = renderToStaticMarkup(
+        createElement(FlatLay, {
+          pieces,
+          activeId: "lf",
+          onPick: () => {},
+          caption: createElement("p", { "data-caption": "" }, "Brown loafers"),
+        }),
+      );
+      assert.equal(html.split("<button").length - 1, 3);
+      for (const g of pieces) assert.equal(html.includes(`aria-label="${g.name}"`), true, g.name);
+      assert.equal(html.split('aria-pressed="true"').length - 1, 1);
+      assert.match(html, /aria-label="Brown loafers" aria-pressed="true"/);
+      assert.match(html, /^<div[^>]*class="[^"]*\bhas-pick\b/);
+      assert.match(html, /<div data-piece="lf" class="flat-piece absolute is-picked"/);
+      assert.equal(html.split("is-picked").length - 1, 1);
+      assert.equal(html.split("data-caption").length - 1, 1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("Today's paper model picks a piece and swaps it under the list's own rule", () => {
+    const today = read("../routes/index.tsx");
+    assert.match(today, /<FlatLay[^>]*onPick=\{setPick\}/);
+    const flatAt = today.indexOf("<FlatLay");
+    const flatEnd = today.indexOf('<div className="space-y-6">', flatAt);
+    assert.ok(flatAt > 0 && flatEnd > flatAt);
+    const flat = today.slice(flatAt, flatEnd);
+    assert.equal(flat.includes("<OnMePanel"), false);
+    assert.equal(flat.includes("swapBlocked("), true);
+    assert.equal(flat.includes("swapOn("), true);
+    const row = today.slice(today.indexOf("data-piece-row"), today.indexOf("Remove", today.indexOf("data-piece-row")));
+    const swap = row.slice(row.indexOf("Outfit with this"));
+    assert.equal(swap.includes("disabled={swapBlocked(g)}"), true);
+    assert.equal(swap.includes("onClick={() => swapOn(g)}"), true);
+    for (const banned of ["keepLook", "setTaste", "learnFrom"]) assert.equal(today.includes(banned), false, banned);
   });
 });

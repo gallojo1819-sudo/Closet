@@ -89,7 +89,9 @@
 
 .flat-piece {
   transform: translate(var(--rx, 0), var(--ry, 0)) rotate(var(--rr, 0deg));
-  transition: transform 280ms var(--ease-atelier);
+  transition:
+    transform 280ms var(--ease-atelier),
+    opacity 200ms var(--ease-atelier);
   will-change: transform;
 }
 
@@ -99,9 +101,26 @@
   transform: translate(var(--sx, 0), var(--sy, 0)) rotate(var(--sr, 0deg));
 }
 
+/* Tap a piece: it lifts and straightens, the rest dim. 0,4,0 beats .group:focus-within (0,3,0). */
+.has-pick .flat-piece:not(.is-picked) {
+  opacity: 0.45;
+}
+
+.group.has-pick .flat-piece.is-picked {
+  transform: translate(var(--sx, 0), var(--sy, 0)) rotate(0deg) scale(1.04);
+}
+
+.flat-piece button:active {
+  transform: scale(0.98);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .flat-piece {
     transition: none;
+  }
+
+  .flat-piece button:active {
+    transform: none;
   }
 }
 

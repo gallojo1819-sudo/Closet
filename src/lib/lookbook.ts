@@ -240,6 +240,20 @@ function nameOf(pieces: Garment[]): string {
     .join(" · ");
 }
 
+/** A Lookbook plate opened in the sheet: a temporary look with the plate's exact pieces. Writes nothing. */
+export function draftFromPlate(pieces: Garment[], occasion: Occasion | string, today = todayISO()): Look {
+  const ids = pieces.map((p) => p.id);
+  return {
+    id: `draft_${comboKey(ids).replace(/\|/g, "_")}`,
+    name: nameOf(pieces),
+    occasion: mapOccasion(occasion),
+    garmentIds: ids,
+    source: "ai",
+    lookbook: false,
+    createdAt: `${today}T00:00:00.000Z`,
+  };
+}
+
 function maxBlazerLooks(occasion?: Occasion): number {
   if (occasion === "comfy") return 0;
   if (occasion === "weekend") return 2;

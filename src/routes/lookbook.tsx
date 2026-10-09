@@ -21,6 +21,7 @@ import { engineCacheReady } from "@/lib/engine-cache";
 import {
   buildReshuffleRow,
   comboKey,
+  draftFromPlate,
   emptyFilterCopy,
   firstWeekLooks,
   lookbookPool,
@@ -413,6 +414,13 @@ function LookbookPage() {
     setHeroLooks(looksForHero(g, garments));
   };
 
+  const openPlate = (pieces: Garment[], plateOccasion: Occasion, el: HTMLElement) => {
+    lastAnchor.current = el;
+    const look = draftFromPlate(pieces, plateOccasion);
+    setDressed(look);
+    setOpenId(look.id);
+  };
+
   const getAnchor = useCallback(() => lastAnchor.current, []);
 
   const getOpenCard = useCallback(() => {
@@ -578,6 +586,7 @@ function LookbookPage() {
         occasion={occasion}
         season={season}
         color={color}
+        onOpen={openPlate}
       />
       <div className="mt-6 flex flex-wrap gap-3">
       <button
@@ -840,7 +849,11 @@ function LookbookPage() {
           initialLocked={openLook.lookbook === false ? drop?.lockedIds : undefined}
           getCard={getOpenCard}
           onClose={() => setOpenId(null)}
-          onWear={() => wearToday(openPieces.map((g) => g.id))}
+          onWear={() => {
+            wearToday(openPieces.map((g) => g.id));
+            setOpenId(null);
+            setDressed(null);
+          }}
           onOpenLook={(next) => {
             setDressed(next);
             setOpenId(next.id);
