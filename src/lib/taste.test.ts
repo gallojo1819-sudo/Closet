@@ -2,7 +2,7 @@ import { register } from "node:module";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import type { Garment, Look, Occasion, WeatherSnap } from "./types.ts";
+import type { DailyDrop, Garment, Look, Occasion, WearEntry, WeatherSnap } from "./types.ts";
 import type { CloudMeta } from "./cloud/merge.ts";
 import platesFile from "./stylist/__tests__/fixtures/plates-2026-09-30.json" with { type: "json" };
 
@@ -18,6 +18,7 @@ const {
   embedTasteAvoid,
   learnFromAsk,
   logWear,
+  normalizeTaste,
   peelTasteAvoid,
   swapDraft,
   swapSlot,
@@ -256,6 +257,84 @@ describe("taste memory", () => {
     assert.equal(look.occasion, "weekday");
   });
 
+  it("only a typed veto survives a read: no source is dropped, source ask stays, the newest 40 are kept", () => {
+    const bare = normalizeTaste({
+      vetoes: [
+        { kind: "pairing", a: "shirt", b: "loafer" },
+        { kind: "piece", id: "x" },
+      ],
+    });
+    assert.deepEqual(bare.vetoes, []);
+    const typed = normalizeTaste({
+      vetoes: [
+        { kind: "pairing", a: "shirt", b: "loafer", source: "ask" },
+        { kind: "piece", id: "x", source: "ask" },
+      ],
+    });
+    assert.deepEqual(typed.vetoes, [
+      { kind: "pairing", a: "shirt", b: "loafer", source: "ask" },
+      { kind: "piece", id: "x", source: "ask" },
+    ]);
+
+    const garments = rack();
+    const pair = learnFromAsk(emptyTaste(), { text: "no shirt with sneakers", garments, now: NOW });
+    assert.deepEqual(pair.vetoes, [{ kind: "pairing", a: "shirt", b: "sneaker", source: "ask" }]);
+    const piece = learnFromAsk(emptyTaste(), { text: "not the field jacket", garments, now: NOW });
+    assert.deepEqual(piece.vetoes, [{ kind: "piece", id: "g_field", source: "ask" }]);
+    assert.deepEqual(normalizeTaste(pair).vetoes, pair.vetoes);
+
+    const many = normalizeTaste({
+      vetoes: Array.from({ length: 45 }, (_, i) => ({ kind: "piece", id: `g_${i}`, source: "ask" })),
+    });
+    assert.equal(many.vetoes.length, 40);
+    assert.deepEqual(many.vetoes[0], { kind: "piece", id: "g_5", source: "ask" });
+    assert.deepEqual(many.vetoes[39], { kind: "piece", id: "g_44", source: "ask" });
+  });
+
+  it("every top-and-shoe pairing vetoed still dresses a full look, and a shoe swap moves the shoe", (t) => {
+    const small = [
+      g({ id: "g_s1", name: "Navy oxford shirt", category: "top", subtype: "shirt" }),
+      g({ id: "g_s2", name: "White poplin shirt", category: "top", subtype: "shirt" }),
+      g({ id: "g_k1", name: "Grey merino knit", category: "top", subtype: "knit" }),
+      g({ id: "g_ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
+      g({ id: "g_lo", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
+      g({ id: "g_sn", name: "White sneakers", category: "footwear", subtype: "sneaker" }),
+      g({ id: "g_bt", name: "Brown boots", category: "footwear", subtype: "boot" }),
+    ];
+    const ask = (a: string, b: string) => ({ kind: "pairing" as const, a, b, source: "ask" as const });
+    const taste = {
+      ...emptyTaste(),
+      vetoes: [
+        ask("shirt", "loafer"),
+        ask("shirt", "sneaker"),
+        ask("shirt", "boot"),
+        ask("knit", "loafer"),
+        ask("knit", "sneaker"),
+        ask("knit", "boot"),
+      ],
+    };
+    const byId = new Map(small.map((item) => [item.id, item]));
+    const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((item): item is Garment => Boolean(item));
+    const look = composeAtlasLook({ garments: small, prompt: "dinner", occasion: "out", taste, weatherF: 62 });
+    const pieces = resolve(look.garmentIds);
+    t.diagnostic(`out look: ${pieces.map((item) => item.name).join(" / ")}`);
+    assert.ok(pieces.some((item) => slotOf(item) === "top"), `no top: ${look.garmentIds.join(",")}`);
+    assert.ok(pieces.some((item) => slotOf(item) === "bottom"), `no bottom: ${look.garmentIds.join(",")}`);
+    assert.ok(pieces.some((item) => slotOf(item) === "footwear"), `no shoe: ${look.garmentIds.join(",")}`);
+    assert.ok(look.garmentIds.every((id) => byId.has(id)));
+
+    const baseShoe = pieces.find((item) => slotOf(item) === "footwear")!;
+    const swapped = swapDraft({ ids: look.garmentIds, slot: "footwear", garments: small, taste, occasion: "out", weatherF: 62 });
+    assert.ok(swapped, "swap found nothing");
+    const nextShoe = resolve(swapped.garmentIds).find((item) => slotOf(item) === "footwear");
+    t.diagnostic(`swapped shoe: ${baseShoe.name} -> ${nextShoe?.name}`);
+    assert.ok(nextShoe, "no shoe after the swap");
+    assert.notEqual(nextShoe.id, baseShoe.id);
+    for (const id of look.garmentIds.filter((x) => x !== baseShoe.id)) {
+      assert.ok(swapped.garmentIds.includes(id), `the rest moved: ${id}`);
+    }
+  });
+
   it("a trend sentence cannot name a brand he does not own or clear a veto", () => {
     const garments = rack();
     assert.equal(trendSentenceOk("A light knit over a shirt still works.", garments), true);
@@ -454,6 +533,125 @@ describe("today skip", () => {
       assert.equal(keys.size, 6, `${occasion}: ${keys.size} distinct looks of 6`);
       assert.equal(useCloset.getState().skipCount, 5, occasion);
     }
+  });
+
+  it("a skip writes nothing lasting: taste and avoid stay, the journal and skipCount move, the combo is kept off today", () => {
+    const first = pick(undefined, "weekday");
+    const avoidBefore = { [first[0]!]: 2, g_other: 1 };
+    const tasteBefore = emptyTaste();
+    useCloset.setState({
+      garments: RACK,
+      looks: [],
+      thisWeek: [],
+      journal: [],
+      avoid: { ...avoidBefore },
+      skipCount: 0,
+      reshuffleCount: 0,
+      taste: structuredClone(tasteBefore),
+      drop: { date: todayISO(), garmentIds: first, worn: false, verdict: "pending", occasion: "weekday" },
+    });
+    useCloset.getState().skipDrop();
+    const s = useCloset.getState();
+    assert.deepEqual(s.taste, tasteBefore);
+    assert.deepEqual(s.avoid, avoidBefore);
+    const skips = s.journal.filter((j) => j.verdict === "skipped");
+    assert.equal(skips.length, 1);
+    assert.equal(skips[0]?.date, todayISO());
+    assert.deepEqual(skips[0]?.garmentIds, first);
+    assert.equal(s.skipCount, 1);
+    assert.ok(s.drop?.skippedKeys?.includes(comboKey(first)), `skippedKeys: ${s.drop?.skippedKeys?.join(" ")}`);
+    assert.notEqual(comboKey(s.drop!.garmentIds), comboKey(first));
+  });
+
+  it("three skips in one day remember three combos and none of the four looks repeat", () => {
+    const first = pick(undefined, "weekday");
+    useCloset.setState({
+      garments: RACK,
+      looks: [],
+      thisWeek: [],
+      journal: [],
+      avoid: {},
+      skipCount: 0,
+      reshuffleCount: 0,
+      taste: emptyTaste(),
+      drop: { date: todayISO(), garmentIds: first, worn: false, verdict: "pending", occasion: "weekday" },
+    });
+    const keys = [comboKey(first)];
+    for (let i = 0; i < 3; i += 1) {
+      useCloset.getState().skipDrop();
+      keys.push(comboKey(useCloset.getState().drop!.garmentIds));
+    }
+    const d = useCloset.getState().drop!;
+    assert.equal(d.skippedKeys?.length, 3, `skippedKeys: ${d.skippedKeys?.join(" ")}`);
+    assert.deepEqual([...(d.skippedKeys ?? [])].sort(), keys.slice(0, 3).sort());
+    assert.equal(new Set(keys).size, 4, `looks: ${keys.join(" | ")}`);
+    assert.equal(useCloset.getState().journal.filter((j) => j.verdict === "skipped").length, 1);
+    assert.deepEqual(useCloset.getState().avoid, {});
+  });
+
+  it("a skip dated an earlier day does not keep that combo off today", () => {
+    const EARLIER = "2026-10-01";
+    const reroll = (journal: WearEntry[], drop: DailyDrop | null) => {
+      useCloset.setState({
+        garments: RACK,
+        looks: [],
+        thisWeek: [],
+        journal,
+        avoid: {},
+        skipCount: 0,
+        reshuffleCount: 0,
+        taste: emptyTaste(),
+        drop,
+      });
+      assert.equal(useCloset.getState().rerollDrop(undefined, "weekday"), true);
+      return useCloset.getState().drop!;
+    };
+    const fresh = reroll([], null);
+    const key = comboKey(fresh.garmentIds);
+    assert.ok(hasCore(fresh.garmentIds));
+    /* The same best pick comes back after an earlier day's skip, in the journal or on the drop. */
+    const afterOldJournal = reroll(
+      [{ date: EARLIER, garmentIds: fresh.garmentIds, verdict: "skipped", occasion: "weekday" }],
+      null,
+    );
+    assert.equal(comboKey(afterOldJournal.garmentIds), key);
+    const afterOldKeys = reroll([], {
+      date: EARLIER,
+      garmentIds: [],
+      worn: false,
+      verdict: "pending",
+      occasion: "weekday",
+      skippedKeys: [key],
+    });
+    assert.equal(comboKey(afterOldKeys.garmentIds), key);
+    assert.equal(afterOldKeys.skippedKeys, undefined);
+    /* Today's skip does keep it off. */
+    const afterTodaySkip = reroll(
+      [{ date: todayISO(), garmentIds: fresh.garmentIds, verdict: "skipped", occasion: "weekday" }],
+      null,
+    );
+    assert.notEqual(comboKey(afterTodaySkip.garmentIds), key);
+  });
+
+  it("swapDropPiece moves the piece and leaves avoid unchanged", () => {
+    const first = pick(undefined, "weekday");
+    const avoidBefore = { g_other: 3 };
+    useCloset.setState({
+      garments: RACK,
+      looks: [],
+      thisWeek: [],
+      journal: [],
+      avoid: { ...avoidBefore },
+      skipCount: 0,
+      taste: emptyTaste(),
+      drop: { date: todayISO(), garmentIds: first, worn: false, verdict: "pending", occasion: "weekday" },
+    });
+    const shoe = first.find((id) => slotOf(BY.get(id)!) === "footwear")!;
+    useCloset.getState().swapDropPiece(shoe);
+    const s = useCloset.getState();
+    assert.deepEqual(s.avoid, avoidBefore);
+    assert.equal(s.drop?.garmentIds.includes(shoe), false);
+    assert.equal(s.drop?.garmentIds.length, first.length);
   });
 
   it("the occasion chip survives a skip: out stays out", () => {

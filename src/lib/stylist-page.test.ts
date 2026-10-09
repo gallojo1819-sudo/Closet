@@ -897,4 +897,19 @@ describe("stylist routing", () => {
     const line = briefLine(dinner, [polo, cords, woven, field]);
     assert.match(line ?? "", /^Dinner\. Wear your /);
   });
+
+  it("6) when a swap or a brief finds nothing, the dock says so instead of re-sending or asking which piece", () => {
+    const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
+    const send = dock.slice(dock.indexOf("const send = async"), dock.indexOf("const wearDraft"));
+    const swap = send.slice(send.indexOf("swapSlot(q)"), send.indexOf("answerAsked("));
+    assert.ok(swap.length > 0, "swap branch found");
+    assert.equal(swap.includes("edited?.garmentIds ?? base"), false, "a failed swap re-sends the base look");
+    assert.ok(swap.includes("No other "), "a failed swap says no other piece works");
+    const brief = send.slice(send.indexOf("briefOccasion(q)"), send.indexOf("const askText"));
+    const nullAt = brief.indexOf("if (!line)");
+    assert.ok(nullAt >= 0, "brief null case found");
+    const nullCase = brief.slice(nullAt, brief.indexOf("return;", nullAt));
+    assert.equal(nullCase.includes("WHICH_PIECE"), false, "a brief with no look asks which piece");
+    assert.ok(nullCase.includes("Nothing in your closet makes a full"));
+  });
 });

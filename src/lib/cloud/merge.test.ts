@@ -10,6 +10,7 @@ import {
   unionById,
   type CloudMeta,
 } from "./merge.ts";
+import { emptyTaste, type TasteVeto } from "../taste.ts";
 
 /** Fake user — tests never read or write closet.v6. */
 const FAKE_USER = "fake-user-joe";
@@ -288,6 +289,23 @@ describe("mergeAccount", () => {
     const die = result.next.looks.find((l) => l.id === "die");
     assert.equal(die?.broken, true);
     assert.ok(!die?.garmentIds.includes("g_x"));
+  });
+
+  it("source-less vetoes on the cloud side do not come back; a typed one is kept", () => {
+    const local: CloudMeta = { ...meta(["a", "b"]), taste: emptyTaste() };
+    const old: TasteVeto[] = [
+      { kind: "pairing", a: "shirt", b: "loafer" },
+      { kind: "pairing", a: "knit", b: "sneaker" },
+      { kind: "piece", id: "a" },
+    ];
+    const cloud: CloudMeta = { ...meta(["a", "b"]), taste: { ...emptyTaste(), vetoes: old } };
+    const merged = mergeAccount({ local, cloud, lastCloudIds: null });
+    assert.equal(merged.next.taste?.vetoes.length ?? 0, 0);
+
+    const typed: TasteVeto = { kind: "piece", id: "b", source: "ask" };
+    const cloudTyped: CloudMeta = { ...meta(["a", "b"]), taste: { ...emptyTaste(), vetoes: [...old, typed] } };
+    const mergedTyped = mergeAccount({ local, cloud: cloudTyped, lastCloudIds: null });
+    assert.deepEqual(mergedTyped.next.taste?.vetoes, [typed]);
   });
 });
 

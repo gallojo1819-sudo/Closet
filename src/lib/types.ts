@@ -149,6 +149,8 @@ export type DailyDrop = {
   lockNote?: string | null;
   /** ISO time of the last write the user made to this drop on a device. Older drops have none. */
   setAt?: string;
+  /** comboKeys skipped today; cleared when the date changes. */
+  skippedKeys?: string[];
 };
 
 export type WearEntry = {

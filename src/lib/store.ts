@@ -70,7 +70,6 @@ import { notifyGarmentRemoved, notifyLookRemoved, notifyLookSaved } from "./data
 import {
   emptyTaste,
   learnFromLock,
-  learnFromSkip,
   logWear,
   normalizeTaste,
   type TasteMemory,
@@ -107,11 +106,12 @@ type ClosetState = {
   saveLook: (look: Omit<Look, "id" | "createdAt">) => string;
   removeLook: (id: string) => void;
   setDrop: (drop: DailyDrop) => void;
-  /** True when a new look was written. Never writes an empty drop. */
+  /** True when a new look was written. Never writes an empty drop. skippedKeys: today's skipped combos, carried onto the new drop. */
   rerollDrop: (
     weather?: WeatherSnap,
     occasion?: Occasion,
     previousIds?: string[],
+    skippedKeys?: string[],
   ) => boolean;
   swapDropPiece: (id: string) => void;
   removeDropPiece: (id: string) => void;
@@ -405,18 +405,15 @@ export const useCloset = create<ClosetState>()(
           return;
         }
         const before = {
-          avoid: get().avoid,
           journal: get().journal,
           skipCount: get().skipCount,
-          taste: get().taste,
         };
         try {
           const skipped = drop.garmentIds;
-          const avoid = { ...before.avoid };
-          const locked = new Set(drop.lockedIds ?? []);
-          for (const id of skipped) {
-            if (!locked.has(id)) avoid[id] = (avoid[id] ?? 0) + 1;
-          }
+          /* A skip means "not today", never a dislike: no avoid count, no taste veto. The combo is only kept off until the date changes. */
+          const skippedKeys = [
+            ...new Set([...(drop.date === todayISO() ? drop.skippedKeys ?? [] : []), comboKey(skipped)]),
+          ];
           const entry: WearEntry = {
             date: todayISO(),
             garmentIds: skipped,
@@ -424,12 +421,10 @@ export const useCloset = create<ClosetState>()(
             occasion: todayOccasion(drop),
           };
           set({
-            avoid,
             journal: [entry, ...before.journal.filter((j) => j.date !== todayISO())].slice(0, 60),
             skipCount: before.skipCount + 1,
-            taste: learnFromSkip(before.taste ?? emptyTaste(), skipped, get().garments, Date.now()),
           });
-          const wrote = get().rerollDrop(drop.weather, todayOccasion(drop), skipped);
+          const wrote = get().rerollDrop(drop.weather, todayOccasion(drop), skipped, skippedKeys);
           if (!wrote) {
             /* The look stays, and its lockNote says so. No skip was taken. */
             set(before);
@@ -520,7 +515,7 @@ export const useCloset = create<ClosetState>()(
         notifyLookRemoved(id);
       },
       setDrop: (drop) => set({ drop: stampDrop(drop) }),
-      rerollDrop: (weather, occasion, previousIds) => {
+      rerollDrop: (weather, occasion, previousIds, skippedKeys) => {
         const prev = get().drop;
         const occ = mapOccasion(
           occasion ?? (prev?.date === todayISO() ? prev?.occasion : undefined) ?? defaultOccasion(),
@@ -537,10 +532,20 @@ export const useCloset = create<ClosetState>()(
           .journal.filter((j) => j.verdict === "worn")
           .slice(0, 7)
           .map((j) => comboKey(j.garmentIds));
-        const skipKeys = get()
-          .journal.filter((j) => j.verdict === "skipped")
-          .slice(0, 7)
-          .map((j) => comboKey(j.garmentIds));
+        /* Only today's skips stay off. Yesterday's skip was "not that day", so it can come back. */
+        const todaySkipped = [
+          ...new Set(sameDay ? [...(prev?.skippedKeys ?? []), ...(skippedKeys ?? [])] : (skippedKeys ?? [])),
+        ];
+        const skippedToday = [
+          ...get()
+            .journal.filter((j) => j.verdict === "skipped" && j.date === todayISO())
+            .map((j) => j.garmentIds),
+          ...todaySkipped.map((key) => key.split("|")),
+        ];
+        /* pickLook bans by core key, so the jacket must not hide a skipped look. */
+        const skipKeys = [
+          ...new Set(skippedToday.flatMap((ids) => [comboKey(ids), coreComboKey(ids, get().garments)])),
+        ];
         const currentKey = prev?.garmentIds?.length ? comboKey(prev.garmentIds) : "";
         const currentCore = prev?.garmentIds?.length
           ? coreComboKey(prev.garmentIds, get().garments)
@@ -612,6 +617,7 @@ export const useCloset = create<ClosetState>()(
             moment,
             lockedIds,
             lockNote,
+            ...(sameDay && todaySkipped.length ? { skippedKeys: todaySkipped } : {}),
           }),
         });
         return true;
@@ -668,7 +674,6 @@ export const useCloset = create<ClosetState>()(
         const next = pool[0];
         if (!next) return;
         set({
-          avoid: { ...get().avoid, [id]: (get().avoid[id] ?? 0) + 1 },
           drop: stampDrop({
             ...drop,
             worn: false,

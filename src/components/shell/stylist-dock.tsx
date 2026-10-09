@@ -71,6 +71,14 @@ function pageOccasion(value: string | undefined, fallback: Occasion): Occasion {
   return OCCASIONS.some((row) => row.id === value) ? (value as Occasion) : fallback;
 }
 
+/** The slot as he says it, for the line when no swap exists. */
+const SWAP_WORD: Record<"top" | "bottom" | "footwear" | "outerwear", string> = {
+  footwear: "shoes",
+  top: "top",
+  bottom: "trousers",
+  outerwear: "jacket",
+};
+
 /** One small agent on every page. The Stylist chip opens the card. */
 export function StylistDock() {
   const hydrated = useCloset((s) => s.hydrated);
@@ -220,11 +228,19 @@ export function StylistDock() {
         occasion,
         ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
       });
-      const garmentIds = edited?.garmentIds ?? base;
+      if (!edited) {
+        /* Nothing else fits the slot. Say so; never re-send the same look as if it moved. */
+        pushMessage({
+          role: "stylist",
+          text: `No other ${SWAP_WORD[slot]} in your closet works with this look.`,
+        });
+        return;
+      }
+      const garmentIds = edited.garmentIds;
       const pieces = garmentIds
         .map((id) => owned.find((g) => g.id === id))
         .filter((g): g is Garment => Boolean(g));
-      const technique = edited?.technique ?? techniqueUsed(taste, pieces);
+      const technique = edited.technique ?? techniqueUsed(taste, pieces);
       /* One sentence for the look, never the raw block. */
       pushMessage({
         role: "stylist",
@@ -278,7 +294,12 @@ export function StylistDock() {
         .filter((g): g is Garment => Boolean(g));
       const line = briefLine(q, pieces);
       if (!line) {
-        pushMessage({ role: "stylist", text: WHICH_PIECE });
+        /* No full look for the brief. The piece-ask line is not the answer here. */
+        const label = OCCASIONS.find((row) => row.id === brief)?.label.toLowerCase() ?? brief;
+        pushMessage({
+          role: "stylist",
+          text: `Nothing in your closet makes a full ${label} look right now.`,
+        });
         return;
       }
       pushMessage({

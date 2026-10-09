@@ -36,10 +36,11 @@ export type TasteTechnique = {
   decayedAt?: string;
 };
 
+/** A veto only comes from what he typed. Rows without a source are dropped on every read. */
 export type TasteVeto =
-  | { kind: "piece"; id: string }
-  | { kind: "pairing"; a: string; b: string }
-  | { kind: "habit"; id: string; habit: "never tuck" };
+  | { kind: "piece"; id: string; source?: "ask" }
+  | { kind: "pairing"; a: string; b: string; source?: "ask" }
+  | { kind: "habit"; id: string; habit: "never tuck"; source?: "ask" };
 
 export type TasteWear = {
   /** Look id, or the garment ids, scoped to one technique. */
@@ -135,14 +136,17 @@ function sanitizeVetoes(raw: unknown): TasteVeto[] {
   for (const v of raw) {
     if (!v || typeof v !== "object") continue;
     const row = v as TasteVeto;
-    if (row.kind === "piece" && typeof row.id === "string" && row.id) out.push({ kind: "piece", id: row.id });
-    else if (row.kind === "habit" && row.habit === "never tuck" && typeof row.id === "string" && row.id) {
-      out.push({ kind: "habit", id: row.id, habit: "never tuck" });
+    /* Skip-made vetoes had no source. They are not his taste, so they do not survive a read. */
+    if (row.source !== "ask") continue;
+    if (row.kind === "piece" && typeof row.id === "string" && row.id) {
+      out.push({ kind: "piece", id: row.id, source: "ask" });
+    } else if (row.kind === "habit" && row.habit === "never tuck" && typeof row.id === "string" && row.id) {
+      out.push({ kind: "habit", id: row.id, habit: "never tuck", source: "ask" });
     } else if (row.kind === "pairing" && typeof row.a === "string" && typeof row.b === "string" && row.a && row.b) {
-      out.push({ kind: "pairing", a: row.a, b: row.b });
+      out.push({ kind: "pairing", a: row.a, b: row.b, source: "ask" });
     }
   }
-  return dedupeVetoes(out).slice(0, 40);
+  return dedupeVetoes(out).slice(-40);
 }
 
 function sanitizeWears(raw: unknown): TasteWear[] {
@@ -235,7 +239,7 @@ export function mergeTaste(local?: TasteMemory, cloud?: TasteMemory): TasteMemor
   const trend = Date.parse(left.lastTrendAt || "0") >= Date.parse(right.lastTrendAt || "0") ? left : right;
   return {
     techniques,
-    vetoes: dedupeVetoes([...left.vetoes, ...right.vetoes]).slice(0, 40),
+    vetoes: dedupeVetoes([...left.vetoes, ...right.vetoes]).slice(-40),
     wears,
     trendNote: trend.trendNote,
     lastTrendAt: trend.lastTrendAt,
@@ -452,29 +456,6 @@ export function pairingBlocked(pieces: Garment[], taste: TasteMemory): boolean {
   return false;
 }
 
-function kindWord(g: Garment): string {
-  const t = textOf(g);
-  const keys = [
-    "hoodie",
-    "loafer",
-    "oxford",
-    "tee",
-    "chino",
-    "jean",
-    "boot",
-    "blazer",
-    "field",
-    "chore",
-    "camp",
-    "polo",
-    "sneaker",
-    "trouser",
-    "flannel",
-    "knit",
-  ];
-  return keys.find((k) => t.includes(k)) ?? stem(g.subtype || g.category);
-}
-
 function captureNegations(text: string): string[] {
   const out: string[] = [];
   const re =
@@ -510,24 +491,24 @@ export function learnFromAsk(
   let next = decayTaste(normalizeTaste(memory), opts.now);
   const previous = opts.previousIds ?? [];
   const tuck = tuckTarget(opts.text, opts.garments, previous);
-  if (tuck) next = addVeto(next, { kind: "habit", id: tuck, habit: "never tuck" });
+  if (tuck) next = addVeto(next, { kind: "habit", id: tuck, habit: "never tuck", source: "ask" });
 
   if (/^(no|nope|nah)\b[.!]?$/i.test(opts.text.trim())) {
     const prev = piecesFromIds(opts.garments, previous);
     const jacket = prev.find(isSeparateJacket);
-    if (jacket) next = addVeto(next, { kind: "piece", id: jacket.id });
-    else if (prev[0]) next = addVeto(next, { kind: "piece", id: prev[0].id });
+    if (jacket) next = addVeto(next, { kind: "piece", id: jacket.id, source: "ask" });
+    else if (prev[0]) next = addVeto(next, { kind: "piece", id: prev[0].id, source: "ask" });
   }
 
   for (const phrase of captureNegations(opts.text)) {
     const pair = phrase.match(/^(\w+)\s+with\s+(?:a\s+|the\s+)?(\w+)/i);
     if (pair?.[1] && pair[2]) {
-      next = addVeto(next, { kind: "pairing", a: stem(pair[1]), b: stem(pair[2]) });
+      next = addVeto(next, { kind: "pairing", a: stem(pair[1]), b: stem(pair[2]), source: "ask" });
       continue;
     }
     const found = resolvePiecesFromText(phrase, opts.garments);
     const piece = found[0];
-    if (piece) next = addVeto(next, { kind: "piece", id: piece.id });
+    if (piece) next = addVeto(next, { kind: "piece", id: piece.id, source: "ask" });
   }
 
   const again = opts.text.match(/(?:you can use|use|tuck)\s+(?:the\s+)?(.+?)\s+again/i);
@@ -540,24 +521,6 @@ export function learnFromAsk(
   }
 
   for (const g of resolvePiecesFromText(opts.text, opts.garments)) readTags(g);
-  return next;
-}
-
-export function learnFromSkip(
-  memory: TasteMemory,
-  ids: string[],
-  garments: Garment[],
-  now: number,
-): TasteMemory {
-  let next = decayTaste(normalizeTaste(memory), now);
-  const pieces = piecesFromIds(garments, ids);
-  for (const g of pieces) readTags(g);
-  const jacket = pieces.find(isSeparateJacket);
-  if (jacket) return addVeto(next, { kind: "piece", id: jacket.id });
-  const top = pieces.find((g) => slotOf(g) === "top" || slotOf(g) === "dress");
-  const shoe = pieces.find((g) => slotOf(g) === "footwear");
-  if (top && shoe) return addVeto(next, { kind: "pairing", a: kindWord(top), b: kindWord(shoe) });
-  if (top) return addVeto(next, { kind: "piece", id: top.id });
   return next;
 }
 
@@ -981,32 +944,50 @@ export function composeAtlasLook(opts: {
   const dressable = pool.filter((g) => !banned.has(g.id));
   const avoid: Record<string, number> = { ...(opts.avoid ?? {}) };
   for (const id of banned) avoid[id] = Math.max(avoid[id] ?? 0, 8);
-  let ids = pickLook(dressable, {
-    occasion,
-    moment: momentOfDay(),
-    ...(typeof opts.weatherF === "number" && Number.isFinite(opts.weatherF)
-      ? { weather: { f: opts.weatherF, label: "Fair", code: 2 } }
-      : {}),
-    avoid,
-    lockedIds: locked,
-    previousIds: opts.previousIds,
-    taste,
-    legalCombo: (pieces) => !pairingBlocked(pieces, taste) && houseMixPenalty(pieces) >= -8,
-  });
-  ids = ids.filter((id) => owned.has(id) && !banned.has(id));
-  let pieces = ids
-    .map((id) => dressable.find((g) => g.id === id))
-    .filter((g): g is Garment => Boolean(g));
-  if (pairingBlocked(pieces, taste) || pieces.some((g) => banned.has(g.id))) {
-    pieces = pieces.filter((g) => !banned.has(g.id));
-  }
-  for (const id of locked) {
-    if (!pieces.some((g) => g.id === id)) {
-      const g = dressable.find((item) => item.id === id);
-      if (g) pieces.push(g);
+  const dress = (memory: TasteMemory, legalCombo: (pieces: Garment[]) => boolean): Garment[] => {
+    let ids = pickLook(dressable, {
+      occasion,
+      moment: momentOfDay(),
+      ...(typeof opts.weatherF === "number" && Number.isFinite(opts.weatherF)
+        ? { weather: { f: opts.weatherF, label: "Fair", code: 2 } }
+        : {}),
+      avoid,
+      lockedIds: locked,
+      previousIds: opts.previousIds,
+      taste: memory,
+      legalCombo,
+    });
+    ids = ids.filter((id) => owned.has(id) && !banned.has(id));
+    let pieces = ids
+      .map((id) => dressable.find((g) => g.id === id))
+      .filter((g): g is Garment => Boolean(g));
+    if (pairingBlocked(pieces, memory) || pieces.some((g) => banned.has(g.id))) {
+      pieces = pieces.filter((g) => !banned.has(g.id));
     }
+    for (const id of locked) {
+      if (!pieces.some((g) => g.id === id)) {
+        const g = dressable.find((item) => item.id === id);
+        if (g) pieces.push(g);
+      }
+    }
+    return pieces;
+  };
+  let pieces = dress(taste, (p) => !pairingBlocked(p, taste) && houseMixPenalty(p) >= -8);
+  if (!coreDressed(pieces) && taste.vetoes.some((v) => v.kind === "pairing")) {
+    /* Every legal pair is vetoed. A pairing is soft, as in pickLook: never an empty look. Piece vetoes still hold. */
+    const open = { ...taste, vetoes: taste.vetoes.filter((v) => v.kind !== "pairing") };
+    pieces = dress(open, (p) => houseMixPenalty(p) >= -8);
   }
   return finishLook(pieces, taste, occasion, pool);
+}
+
+/** A top (or dress), a bottom and a shoe. */
+function coreDressed(pieces: Garment[]): boolean {
+  return (
+    pieces.some((g) => slotOf(g) === "top" || slotOf(g) === "dress") &&
+    pieces.some((g) => slotOf(g) === "bottom") &&
+    pieces.some((g) => slotOf(g) === "footwear")
+  );
 }
 
 function acceptModelIds(ids: string[], pool: Garment[], taste: TasteMemory, locked: string[]): boolean {

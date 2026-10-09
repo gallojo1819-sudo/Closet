@@ -240,7 +240,7 @@ describe("outfit check", () => {
     const first = checkSwaps(HOODIE, RACK, HOODIE_CTX);
     assert.ok(first.length >= 1, "the hoodie look has a swap");
     const best = first[0]!;
-    const vetoed = normalizeTaste({ vetoes: [{ kind: "piece", id: best.inId }] });
+    const vetoed = normalizeTaste({ vetoes: [{ kind: "piece", id: best.inId, source: "ask" }] });
     const again = checkSwaps(HOODIE, RACK, HOODIE_CTX, vetoed);
     for (const s of again) {
       assert.notEqual(s.inId, best.inId);
@@ -250,7 +250,7 @@ describe("outfit check", () => {
     const other = HOODIE.find((g) => g.id !== best.outId && slotOf(g) === "footwear")!;
     /* A pairing veto is one word a side, stemmed. The last word of each name is that piece's kind. */
     const word = (g: Garment) => g.name.trim().split(/\s+/).pop() ?? g.name;
-    const pairVeto = normalizeTaste({ vetoes: [{ kind: "pairing", a: word(inPiece), b: word(other) }] });
+    const pairVeto = normalizeTaste({ vetoes: [{ kind: "pairing", a: word(inPiece), b: word(other), source: "ask" }] });
     const third = checkSwaps(HOODIE, RACK, HOODIE_CTX, pairVeto);
     assert.equal(third.some((s) => s.inId === best.inId), false, "pairing veto removes the best swap");
   });

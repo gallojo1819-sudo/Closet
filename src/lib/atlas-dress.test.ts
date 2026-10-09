@@ -5,7 +5,7 @@ import { lookTuck, pickLook, slotOf } from "./style.ts";
 import {
   applyAtlas,
   emptyTaste,
-  learnFromSkip,
+  learnFromAsk,
   leftOffLine,
   techniqueLine,
   techniqueWeight,
@@ -245,10 +245,15 @@ describe("Atlas dresses Today and Lookbook", () => {
     }
   });
 
-  it("skip leaves the field jacket off the next drop, in one line", () => {
+  it("a typed 'not the field jacket' leaves it off the next drop, in one line", () => {
     const rack = [oxford, chino, loafer, field, blazer];
     const skipped = ["field", "ox", "ch", "lf"];
-    const taste = learnFromSkip(emptyTaste(), skipped, rack, Date.parse("2026-10-03T15:00:00.000Z"));
+    const taste = learnFromAsk(emptyTaste(), {
+      text: "not the field jacket",
+      garments: rack,
+      previousIds: skipped,
+      now: Date.parse("2026-10-03T15:00:00.000Z"),
+    });
     const nextIds = pickLook(rack, { ...day, taste });
     assert.ok(!nextIds.includes("field"), `next drop kept the jacket: ${nextIds.join(",")}`);
     const next = nextIds.map((id) => rack.find((g) => g.id === id)!);
