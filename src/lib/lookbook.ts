@@ -41,6 +41,7 @@ import {
   topType,
 } from "./houses.ts";
 import { buildHouseMatrix, type MatrixLook } from "./stylist/matrix.ts";
+import { engineKey, engineStore } from "./engine-store.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { houseCode, jacketHits, jacketRequired, slotPieces, wearSlot as jacketWearSlot } from "./stylist/jackets.ts";
 import { rep3Fails, repCaps, recipeOuterIssue } from "./stylist/row.ts";
@@ -2568,10 +2569,35 @@ export function buildReshuffleRow(
   return finish(best);
 }
 
-/** 7 scarce-first spreads. Each id at most once in the week. Pool is livePool, not the book. */
+const WEEKS = new Map<string, Look[]>();
+
+/**
+ * 7 scarce-first spreads. Each id at most once in the week. Pool is livePool, not the book.
+ * Same inputs (every garment field, both dates, the excluded keys, the counts, the house) give
+ * the same week, so a repeat visit reuses it.
+ */
 export function buildWeek(
   garments: Garment[],
   today = todayISO(),
+  opts?: { excludeKeys?: string[]; usedCount?: Map<string, number>; house?: House },
+): Look[] {
+  const used = [...(opts?.usedCount ?? new Map<string, number>()).entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const key = engineKey("week", [today, todayISO(), opts?.excludeKeys ?? [], used, opts?.house ?? null, garments]);
+  const kept = WEEKS.get(key) ?? (engineStore()?.get(key) as Look[] | undefined);
+  if (kept) return structuredClone(kept);
+  const week = buildWeekFresh(garments, today, opts);
+  WEEKS.set(key, structuredClone(week));
+  if (WEEKS.size > 8) {
+    const first = WEEKS.keys().next().value;
+    if (first) WEEKS.delete(first);
+  }
+  engineStore()?.put(key, structuredClone(week));
+  return week;
+}
+
+function buildWeekFresh(
+  garments: Garment[],
+  today: string,
   opts?: { excludeKeys?: string[]; usedCount?: Map<string, number>; house?: House },
 ): Look[] {
   const monday = mondayISO(today);

@@ -1,4 +1,5 @@
 import { SEASONS, type Garment, type Season } from "./types.ts";
+import { garmentMemo } from "./garment-memo.ts";
 
 export type { Season };
 export { SEASONS };
@@ -9,16 +10,28 @@ export function isSeason(raw: string): raw is Season {
   return SEASON_IDS.has(raw);
 }
 
-function blobOf(g: Pick<Garment, "name" | "subtype" | "material" | "notes">): string {
+function blobOf(g: Garment): string {
+  return garmentMemo(g, "season.blob", buildBlob);
+}
+
+function buildBlob(g: Pick<Garment, "name" | "subtype" | "material" | "notes">): string {
   return `${g.subtype} ${g.name} ${g.material} ${g.notes ?? ""}`.toLowerCase();
 }
 
 export function isLinenCampPiece(g: Garment): boolean {
+  return garmentMemo(g, "season.linenCamp", linenCampTest);
+}
+
+function linenCampTest(g: Garment): boolean {
   const b = blobOf(g);
   return /linen/.test(b) || /camp/.test(b);
 }
 
 export function isOvercoatPiece(g: Garment): boolean {
+  return garmentMemo(g, "season.overcoat", overcoatTest);
+}
+
+function overcoatTest(g: Garment): boolean {
   const b = blobOf(g);
   if (/overcoat|topcoat|shearling/.test(b)) return true;
   if (/parka|puffer/.test(b) && g.warmth >= 4) return true;
@@ -119,6 +132,10 @@ const SUMMER_SHIRT_IDS = new Set<string>(SUMMER_SHIRTS);
 
 /** A camp, bowling, resort, or short-sleeve shirt, or a top the user chipped summer-only. */
 export function isSummerShirt(g: Garment): boolean {
+  return garmentMemo(g, "season.summerShirt", summerShirtTest);
+}
+
+function summerShirtTest(g: Garment): boolean {
   if (SUMMER_SHIRT_IDS.has(g.id)) return true;
   const b = `${g.name} ${g.subtype}`.toLowerCase();
   if (/\bcamp\b|\bbowling\b|\bresort\b/.test(b)) return true;

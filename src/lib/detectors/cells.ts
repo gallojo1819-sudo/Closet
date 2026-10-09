@@ -50,6 +50,8 @@ export type CellContext = {
   color?: string | null;
   pool?: Garment[];
   weatherF?: number;
+  /** visibleDetectors(pool, this context), when the caller already has it. */
+  ways?: Way[];
 };
 
 export type Way = {
@@ -786,12 +788,14 @@ export function sharedDetector(
 export function detectorTitle(pieces: Garment[], ctx?: CellContext): string | null {
   const hit = sharedDetector(pieces, ctx, ctx?.pool);
   if (!hit || !ctx?.occasion || !ctx.season) return null;
-  const open = visibleDetectors(ctx.pool ?? pieces, {
-    occasion: ctx.occasion,
-    season: ctx.season,
-    color: ctx.color,
-    weatherF: ctx.weatherF,
-  });
+  const open =
+    ctx.ways ??
+    visibleDetectors(ctx.pool ?? pieces, {
+      occasion: ctx.occasion,
+      season: ctx.season,
+      color: ctx.color,
+      weatherF: ctx.weatherF,
+    });
   if (!open.some((way) => way.id === hit.id && !way.usual)) return null;
   return hit.title;
 }

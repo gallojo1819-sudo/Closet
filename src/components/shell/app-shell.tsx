@@ -10,6 +10,7 @@ import { backupRemaining, idbCount, shouldShowBackupBanner } from "@/lib/cloud/s
 import { backupPhotos, startCloudSync } from "@/lib/cloud/sync";
 import { scheduleOuterwearPlates, usePlatePassNote } from "@/lib/plate-pass";
 import { livePool } from "@/lib/rack";
+import { engineCacheReady, loadEngineCache } from "@/lib/engine-cache";
 import { migrateImagesToIdb } from "@/lib/migrate";
 import { openPersistGate, useCloset } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -150,18 +151,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    /* Saved house rows and weeks, read once per app open. */
+    void loadEngineCache();
+  }, []);
+
+  useEffect(() => {
     if (pathname !== "/lookbook" || !hydrated) return;
+    let cancelled = false;
+    let stop = () => {};
     const run = () => {
       if (useCloset.getState().garments.length > 0) {
         useCloset.getState().ensureLookbook();
       }
     };
-    if (typeof requestIdleCallback === "function") {
-      const id = requestIdleCallback(run);
-      return () => cancelIdleCallback(id);
-    }
-    const t = window.setTimeout(run, 0);
-    return () => window.clearTimeout(t);
+    void engineCacheReady().then(() => {
+      if (cancelled) return;
+      if (typeof requestIdleCallback === "function") {
+        const id = requestIdleCallback(run);
+        stop = () => cancelIdleCallback(id);
+        return;
+      }
+      const t = window.setTimeout(run, 0);
+      stop = () => window.clearTimeout(t);
+    });
+    return () => {
+      cancelled = true;
+      stop();
+    };
   }, [pathname, hydrated]);
 
   return (

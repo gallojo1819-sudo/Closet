@@ -5,7 +5,7 @@
  * softens COL-9 and PASTEL-b to −10.
  */
 import { ruleKinds } from "../detectors/behavior.ts";
-import { blob, hasText, sig, slotOfPlate, type Plate } from "../house-profiles/evaluate.ts";
+import { blob, hasText, plateMemo, sig, slotOfPlate, type Plate } from "../house-profiles/evaluate.ts";
 import cmap from "./data/color-value-map.json" with { type: "json" };
 import rules from "./data/2026-09-30-proposed-stylist-rules.json" with { type: "json" };
 
@@ -27,6 +27,10 @@ function canonList(raw: string): string[] {
 }
 
 export function dominant(g: Plate): string | null {
+  return plateMemo(g, "rules.dominant", dominantOf);
+}
+
+function dominantOf(g: Plate): string | null {
   for (const c of g.colors ?? []) {
     const t = canonList(c);
     if (t.length) return t[0] ?? null;
@@ -99,6 +103,28 @@ export function piecesFromIds(
 function exceptionLook(ps: Partial<Record<string, Plate>>): boolean {
   const ids = new Set(Object.values(ps).map((g) => g?.id));
   return EXCEPTION.every((id) => ids.has(id));
+}
+
+function linenPiece(g: Plate): boolean {
+  return plateMemo(g, "rules.linen", (x) => /linen/.test(`${blob(x)} ${x.material ?? ""}`));
+}
+
+function flannelPiece(g: Plate): boolean {
+  return plateMemo(g, "rules.flannel", (x) => /flannel/.test(`${blob(x)} ${x.material ?? ""}`));
+}
+
+/** Pattern classes a plate's name | subtype | material hits, in PATTERNS order. */
+function patternClasses(g: Plate): string[] {
+  return plateMemo(g, "rules.patterns", (x) => {
+    const b = blob(x);
+    const out: string[] = [];
+    for (const [cls, kws] of Object.entries(PATTERNS)) {
+      if (!hasText(b, kws)) continue;
+      if (cls === "check_large" && hasText(b, PATTERNS.check_small)) continue;
+      out.push(cls);
+    }
+    return out;
+  });
 }
 
 export function stylistHits(
@@ -328,8 +354,6 @@ export function stylistHits(
   if ((season === "fall" || season === "winter") && shoe && sig(shoe, "mule", SIG)) {
     hit("XC-SEA-3", "hard", 0, `mules ${shoe.name} in ${season}`);
   }
-  const linenPiece = (g: Plate) => /linen/.test(`${blob(g)} ${g.material ?? ""}`);
-  const flannelPiece = (g: Plate) => /flannel/.test(`${blob(g)} ${g.material ?? ""}`);
   if (all.some(linenPiece) && all.some(flannelPiece)) {
     hit("XC-SEA-5", "hard", 0, "linen with flannel");
   }
@@ -338,10 +362,7 @@ export function stylistHits(
   const pat = new Map<string, [string, string][]>();
   for (const [k, g] of Object.entries(ps)) {
     if (!g || k === "shoe") continue;
-    const b = blob(g);
-    for (const [cls, kws] of Object.entries(PATTERNS)) {
-      if (!hasText(b, kws)) continue;
-      if (cls === "check_large" && hasText(b, PATTERNS.check_small)) continue;
+    for (const cls of patternClasses(g)) {
       const list = pat.get(cls) ?? [];
       list.push([k, g.name ?? ""]);
       pat.set(cls, list);

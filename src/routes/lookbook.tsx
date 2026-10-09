@@ -15,7 +15,9 @@ import {
   renderedSectionLooks,
   visibleDetectors,
   warmCellBook,
+  type Way,
 } from "@/lib/detectors";
+import { engineCacheReady } from "@/lib/engine-cache";
 import {
   buildReshuffleRow,
   comboKey,
@@ -40,6 +42,8 @@ import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
 import { emptyTaste } from "@/lib/taste";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const NO_WAYS: Way[] = [];
 
 export const Route = createFileRoute("/lookbook")({
   component: LookbookPage,
@@ -256,10 +260,33 @@ function LookbookPage() {
   /* The Auto chip always names what Auto resolves, so a tapped season never gets a twin. */
   const seasonShown = seasonControlLabel("auto", new Date(), drop?.weather?.f);
   const pageWeather = realWeatherF(drop?.weather);
-  const ways = useMemo(
-    () => visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather }),
-    [garments, occasion, season, color, pageWeather],
-  );
+  /* Detector sections build after first paint; until then the section is empty, then the same rows land. */
+  const [waysFor, setWaysFor] = useState<{ inputs: unknown[]; ways: Way[] } | null>(null);
+  useEffect(() => {
+    const inputs = [garments, occasion, season, color, pageWeather];
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      setWaysFor({ inputs, ways: visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather }) });
+    };
+    const idle = window.requestIdleCallback;
+    if (typeof idle === "function") {
+      const id = idle(run, { timeout: 1500 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback?.(id);
+      };
+    }
+    const id = window.setTimeout(run, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, [garments, occasion, season, color, pageWeather]);
+  const waysInputs = [garments, occasion, season, color, pageWeather];
+  const waysReady = Boolean(waysFor && waysFor.inputs.every((value, i) => Object.is(value, waysInputs[i])));
+  /* Week-card house titles wait for the same rows, so render never builds the cell book. */
+  const ways = waysReady && waysFor ? waysFor.ways : NO_WAYS;
   useEffect(() => {
     const run = () => warmCellBook(garments, season, pageWeather);
     const idle = window.requestIdleCallback;
@@ -299,17 +326,21 @@ function LookbookPage() {
   const [salt, setSalt] = useState(1);
   useEffect(() => {
     let cancel = false;
-    const timer = window.setTimeout(() => {
-      const next = buildReshuffleRow(garments, occasion, {
-        season,
-        color,
-        salt: 1,
-        cap: 8,
-        taste,
-        weather: drop?.weather?.measured ? drop.weather : undefined,
-      });
-      if (!cancel) setRanked({ key: filterKey, looks: next });
-    }, 0);
+    let timer = 0;
+    void engineCacheReady().then(() => {
+      if (cancel) return;
+      timer = window.setTimeout(() => {
+        const next = buildReshuffleRow(garments, occasion, {
+          season,
+          color,
+          salt: 1,
+          cap: 8,
+          taste,
+          weather: drop?.weather?.measured ? drop.weather : undefined,
+        });
+        if (!cancel) setRanked({ key: filterKey, looks: next });
+      }, 0);
+    });
     return () => {
       cancel = true;
       window.clearTimeout(timer);
@@ -357,13 +388,23 @@ function LookbookPage() {
 
   useEffect(() => {
     if (!hydrated || garments.length === 0) return;
+    let cancelled = false;
+    let stop = () => {};
     const run = () => useCloset.getState().ensureLookbook();
-    if (typeof requestIdleCallback === "function") {
-      const id = requestIdleCallback(run, { timeout: 2500 });
-      return () => cancelIdleCallback(id);
-    }
-    const t = window.setTimeout(run, 0);
-    return () => window.clearTimeout(t);
+    void engineCacheReady().then(() => {
+      if (cancelled) return;
+      if (typeof requestIdleCallback === "function") {
+        const id = requestIdleCallback(run, { timeout: 2500 });
+        stop = () => cancelIdleCallback(id);
+        return;
+      }
+      const t = window.setTimeout(run, 0);
+      stop = () => window.clearTimeout(t);
+    });
+    return () => {
+      cancelled = true;
+      stop();
+    };
   }, [hydrated, garments.length, ensureLookbook]);
 
   const openHero = (g: Garment, el?: HTMLElement | null) => {
@@ -670,7 +711,11 @@ function LookbookPage() {
                   pieces={pieces}
                   index={i}
                   season={season}
-                  wayTitle={detectorTitle(pieces, { occasion, season, color, pool: garments, weatherF: pageWeather })}
+                  wayTitle={
+                    waysReady
+                      ? detectorTitle(pieces, { occasion, season, color, pool: garments, weatherF: pageWeather, ways })
+                      : null
+                  }
                   occasionLabel={chapterLabel}
                   seasonLabel={seasonName}
                   note={card.why}

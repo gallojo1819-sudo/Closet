@@ -10,6 +10,7 @@ import { alternatives, dropNote, kitCells, unwornLine, sortLook } from "@/lib/lo
 import { pieceLabel } from "@/lib/piece-label";
 import { isFakeName } from "@/lib/rack";
 import { rackCanDress, weekStripDays } from "@/lib/lookbook";
+import { engineCacheReady } from "@/lib/engine-cache";
 import { seasonFromWeather } from "@/lib/season";
 import { useAccount } from "@/lib/cloud/account";
 import { persistGate } from "@/lib/store-persist";
@@ -120,6 +121,7 @@ function Today() {
   useEffect(() => {
     if (!hydrated || ownedCount === 0) return;
     let cancelled = false;
+    let stop = () => {};
     const run = () => {
       if (cancelled) return;
       const s = useCloset.getState();
@@ -127,17 +129,20 @@ function Today() {
       const season = seasonFromWeather(s.drop?.weather?.f);
       s.fillThisWeek(season);
     };
-    if (typeof requestIdleCallback === "function") {
-      const id = requestIdleCallback(run, { timeout: 1500 });
-      return () => {
-        cancelled = true;
-        cancelIdleCallback(id);
-      };
-    }
-    const t = window.setTimeout(run, 0);
+    /* Saved engine results first, so a repeat open reads the row instead of rebuilding it. */
+    void engineCacheReady().then(() => {
+      if (cancelled) return;
+      if (typeof requestIdleCallback === "function") {
+        const id = requestIdleCallback(run, { timeout: 1500 });
+        stop = () => cancelIdleCallback(id);
+        return;
+      }
+      const t = window.setTimeout(run, 0);
+      stop = () => window.clearTimeout(t);
+    });
     return () => {
       cancelled = true;
-      window.clearTimeout(t);
+      stop();
     };
   }, [hydrated, ownedCount]);
 

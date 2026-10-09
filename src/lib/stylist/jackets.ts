@@ -10,6 +10,8 @@ import {
   blob,
   hasText,
   matchSpec,
+  plateMemo,
+  plateStampOf,
   slotOfPlate,
   type Plate,
 } from "../house-profiles/evaluate.ts";
@@ -138,9 +140,13 @@ function matchExt(g: Plate, spec: Spec | undefined): boolean {
   return true;
 }
 
-const JSIG_MEMO = new WeakMap<Plate, { stamp: string; map: Map<string, boolean> }>();
+const JSIG_MEMO = new WeakMap<Plate, { stamp: string; map: Map<string, Map<string, boolean>> }>();
 
 function plateStamp(g: Plate): string {
+  return plateStampOf(g, buildStamp);
+}
+
+function buildStamp(g: Plate): string {
   return [
     g.category ?? "",
     g.name ?? "",
@@ -161,8 +167,12 @@ function jsig(g: Plate | undefined, id: string, worn: string): boolean {
     box = { stamp, map: new Map() };
     JSIG_MEMO.set(g, box);
   }
-  const key = `${id}|${worn}`;
-  const prev = box.map.get(key);
+  let byId = box.map.get(worn);
+  if (!byId) {
+    byId = new Map();
+    box.map.set(worn, byId);
+  }
+  const prev = byId.get(id);
   if (prev !== undefined) return prev;
   let val = false;
   if (id === "denim_white_or_striped") val = whiteOrStriped(g);
@@ -170,7 +180,7 @@ function jsig(g: Plate | undefined, id: string, worn: string): boolean {
     const spec = JSIG[id] ?? SSIG[id];
     if (spec && !(spec.slot && spec.slot !== "any" && spec.slot !== worn)) val = matchExt(g, spec);
   }
-  box.map.set(key, val);
+  byId.set(id, val);
   return val;
 }
 
@@ -346,7 +356,19 @@ function approvedIds(code: string): IdSeason[] {
   return raw.map((item) => (typeof item === "string" ? { id: item } : { id: item.id, seasons: item.seasons }));
 }
 
+const ADDITION_ROWS = new Map<string, IdSeason[]>();
+
+/** Built from static rule JSON; read-only to callers. */
 function additionRows(code: string): IdSeason[] {
+  let rows = ADDITION_ROWS.get(code);
+  if (!rows) {
+    rows = buildAdditionRows(code);
+    ADDITION_ROWS.set(code, rows);
+  }
+  return rows;
+}
+
+function buildAdditionRows(code: string): IdSeason[] {
   const out: IdSeason[] = [];
   for (const row of ADDS) {
     if (row.type !== "allowed_jackets_update") continue;
@@ -430,7 +452,12 @@ export function supersededStylist(h: { id: string; severity: string }): boolean 
   return supersededHit(h.id);
 }
 
+/* Per-plate scores below read plate fields and static rule JSON only; built once per plate object. */
 function topScore(g: Plate): number {
+  return plateMemo(g, "jackets.topScore", topScoreOf);
+}
+
+function topScoreOf(g: Plate): number {
   const b = blob(g);
   if (hasText(b, ["dress shirt"])) return 4;
   if (
@@ -453,6 +480,10 @@ function topScore(g: Plate): number {
 }
 
 function bottomScore(g: Plate): number {
+  return plateMemo(g, "jackets.bottomScore", bottomScoreOf);
+}
+
+function bottomScoreOf(g: Plate): number {
   if (jsig(g, "distressed_or_frayed", "bottom") || jsig(g, "knit_lounge_pant", "bottom") || whiteOrStriped(g)) return 1;
   if (jsig(g, "tailored_trouser", "bottom")) return 4;
   if (jsig(g, "denim_bottom", "bottom")) return 2;
@@ -460,6 +491,10 @@ function bottomScore(g: Plate): number {
 }
 
 function shoeScore(g: Plate): number {
+  return plateMemo(g, "jackets.shoeScore", shoeScoreOf);
+}
+
+function shoeScoreOf(g: Plate): number {
   if (jsig(g, "athletic_or_fashion_sneaker", "shoe")) return 1;
   if (jsig(g, "clean_leather_sneaker", "shoe") || jsig(g, "mule", "shoe") || hasText(blob(g), ["boot"])) return 2;
   if (hasText(blob(g), ["loafer", "moccasin"])) {
@@ -488,6 +523,10 @@ function subclassOf(g: Plate): string {
 }
 
 function graphicOrCollegiate(g: Plate): boolean {
+  return plateMemo(g, "jackets.graphicOrCollegiate", graphicOrCollegiateOf);
+}
+
+function graphicOrCollegiateOf(g: Plate): boolean {
   const sub = subclassOf(g);
   if (sub.includes("varsity")) return true;
   return hasText(blob(g), ["varsity", "letterman", "collegiate", "graphic"]);
@@ -495,6 +534,10 @@ function graphicOrCollegiate(g: Plate): boolean {
 
 function sportCoat(g: Plate | undefined): boolean {
   if (!g) return false;
+  return plateMemo(g, "jackets.sportCoat", sportCoatOf);
+}
+
+function sportCoatOf(g: Plate): boolean {
   const cls = jacketInfo(g).class;
   if (cls === "sport_coat_soft" || cls === "sport_coat_structured") return true;
   const sub = subclassOf(g);

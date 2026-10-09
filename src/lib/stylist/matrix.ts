@@ -12,6 +12,7 @@ import { clashes } from "../style.ts";
 import { missingJacketOnly, rankLook, scoreLook, DELETED_SNEAKERS } from "./legal.ts";
 import { allowedJackets, fwEligibleJackets, houseCode, jacketRequired, wearSlot, SUEDE_FAMILY } from "./jackets.ts";
 import { DOMINANT, rep1Fails, violatesMustDiffer } from "./row.ts";
+import { engineKey, engineStore } from "../engine-store.ts";
 
 export type MatrixLook = {
   top: string;
@@ -732,6 +733,8 @@ function capAllJackets(
   return chosen.length ? [...chosen, ...rest] : pool;
 }
 
+type SavedMatrix = { matrix: Matrix; jackets: [string, number][] };
+
 export function buildHouseMatrix(garments: Garment[], occasion: Occasion | string, season: Season | string): Matrix {
   const key = `${occasion}|${season}|${garmentKey(garments)}`;
   const hit = CACHE.get(key);
@@ -745,6 +748,42 @@ export function buildHouseMatrix(garments: Garment[], occasion: Occasion | strin
       if (looks.length >= 3) forbid.set(house, looks.map((l) => coreOf(l)).join("||"));
     }
   }
+  const matrix = savedOrBuilt(garments, occasion, season, forbid);
+  CACHE.set(key, matrix);
+  if (CACHE.size > 12) {
+    const first = CACHE.keys().next().value;
+    if (first) CACHE.delete(first);
+  }
+  return matrix;
+}
+
+/**
+ * The saved copy when one exists for these exact inputs: every garment field, the chip, the
+ * sibling rows this build must differ from, and the jacket counts so far. A hit replays the
+ * jacket counts the build would have added, so later builds see the same state.
+ */
+function savedOrBuilt(garments: Garment[], occasion: string, season: string, forbid: Map<string, string>): Matrix {
+  const store = engineStore();
+  if (!store) return buildMatrix(garments, occasion, season, forbid);
+  const before = [...JACKET_USES.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const pkey = engineKey("matrix", [occasion, season, [...forbid.entries()], before, garments]);
+  const saved = store.get(pkey) as SavedMatrix | undefined;
+  if (saved) {
+    for (const [id, n] of saved.jackets) JACKET_USES.set(id, (JACKET_USES.get(id) ?? 0) + n);
+    return structuredClone(saved.matrix);
+  }
+  const prior = new Map(before);
+  const matrix = buildMatrix(garments, occasion, season, forbid);
+  const jackets: [string, number][] = [];
+  for (const [id, n] of JACKET_USES) {
+    const added = n - (prior.get(id) ?? 0);
+    if (added) jackets.push([id, added]);
+  }
+  store.put(pkey, structuredClone({ matrix, jackets } satisfies SavedMatrix));
+  return matrix;
+}
+
+function buildMatrix(garments: Garment[], occasion: string, season: string, forbid: Map<string, string>): Matrix {
   const open: { id: House; chip: string; cores: Core[]; singleShoe: boolean; forbid: string | null; gap: string | null }[] = [];
   const cells: Record<string, HouseCell> = {};
   for (const house of HOUSES) {
@@ -812,11 +851,6 @@ export function buildHouseMatrix(garments: Garment[], occasion: Occasion | strin
     houses: cells,
     all: enumerateAll(garments, occasion, season, usedCores, usedHere),
   };
-  CACHE.set(key, matrix);
-  if (CACHE.size > 12) {
-    const first = CACHE.keys().next().value;
-    if (first) CACHE.delete(first);
-  }
   return matrix;
 }
 

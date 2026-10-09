@@ -9,6 +9,7 @@ import {
   type WeatherSnap,
 } from "./types.ts";
 import { lastDays, todayISO } from "./utils.ts";
+import { garmentMemo, piecesMemo } from "./garment-memo.ts";
 import { isLinenCampPiece, isOvercoatPiece, seasonFromWeather } from "./season.ts";
 import { jacketHits, slotPieces, wearSlot } from "./stylist/jackets.ts";
 import { livePool } from "./rack.ts";
@@ -107,23 +108,45 @@ function formalityTarget(occasion: Occasion, moment: Moment): number {
 }
 
 function blobOf(g: Garment): string {
+  return garmentMemo(g, "style.blob", buildBlob);
+}
+
+function buildBlob(g: Garment): string {
   return `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
 }
 
+/* The classifiers below read only fields garmentMemo checks, so each runs once per garment object. */
+
 export function isHoodiePiece(g: Garment): boolean {
+  return garmentMemo(g, "style.hoodie", hoodieTest);
+}
+
+function hoodieTest(g: Garment): boolean {
   return /\b(hoodies?|sweatshirts?)\b/.test(blobOf(g));
 }
 
 export function isCampCollar(g: Garment): boolean {
+  return garmentMemo(g, "style.camp", campTest);
+}
+
+function campTest(g: Garment): boolean {
   return /camp/.test(blobOf(g));
 }
 
 export function isFairIsle(g: Garment): boolean {
+  return garmentMemo(g, "style.fairIsle", fairIsleTest);
+}
+
+function fairIsleTest(g: Garment): boolean {
   return /fair\s*isle/.test(blobOf(g));
 }
 
 /** 90s / flag / logo / hoodie / printed sweatshirt. Weekend ALD only. */
 export function isGraphic(g: Garment): boolean {
+  return garmentMemo(g, "style.graphic", graphicTest);
+}
+
+function graphicTest(g: Garment): boolean {
   const b = blobOf(g);
   if (/\bhoodies?\b/.test(b)) return true;
   if (/90s|90's/.test(b)) return true;
@@ -133,29 +156,53 @@ export function isGraphic(g: Garment): boolean {
 }
 
 export function isRugbyPiece(g: Garment): boolean {
+  return garmentMemo(g, "style.rugby", rugbyTest);
+}
+
+function rugbyTest(g: Garment): boolean {
   return /rugby/.test(blobOf(g));
 }
 
 export function isHeavyCable(g: Garment): boolean {
+  return garmentMemo(g, "style.heavyCable", heavyCableTest);
+}
+
+function heavyCableTest(g: Garment): boolean {
   const b = blobOf(g);
   if (!/cable|chunky|aran|fisherman/.test(b)) return false;
   return !/fine|silk|thin/.test(b);
 }
 
 export function isSangalloPiece(g: Garment): boolean {
+  return garmentMemo(g, "style.sangallo", sangalloTest);
+}
+
+function sangalloTest(g: Garment): boolean {
   return /sangallo|bowling/.test(blobOf(g));
 }
 
 export function isWesternPiece(g: Garment): boolean {
+  return garmentMemo(g, "style.western", westernTest);
+}
+
+function westernTest(g: Garment): boolean {
   return /western|cowboy|bolo|pearl\s*snap/.test(blobOf(g));
 }
 
 export function isBlazerPiece(g: Garment): boolean {
+  return garmentMemo(g, "style.blazer", blazerTest);
+}
+
+function blazerTest(g: Garment): boolean {
   return /blazer|sport\s*coats?/.test(blobOf(g));
 }
 
 /** Cardigan / fleece / zip-sweater / hoodie — mid layer, never a coat. */
 export function isMidlayer(g: Garment): boolean {
+  return garmentMemo(g, "style.midlayer", midlayerTest);
+}
+
+function midlayerTest(g: Garment): boolean {
   const b = blobOf(g);
   if (isHoodiePiece(g)) return true;
   return /cardigan|fleece|quarter[- ]?zip|zip[- ]?(up)?\s*(sweater|knit)/.test(b);
@@ -166,6 +213,10 @@ export function isMidlayer(g: Garment): boolean {
  * Not hoodie, cardigan, fleece, zip sweater.
  */
 export function isTrueOuter(g: Garment): boolean {
+  return garmentMemo(g, "style.trueOuter", trueOuterTest);
+}
+
+function trueOuterTest(g: Garment): boolean {
   if (isMidlayer(g) || isHoodiePiece(g)) return false;
   const b = blobOf(g);
   if (/\bvests?\b/.test(b) && !/\b(jacket|blazer|coat)\b/.test(b)) return false;
@@ -194,14 +245,26 @@ export function isWeekendSoftJacket(g: Garment): boolean {
 }
 
 export function isCordBlazer(g: Garment): boolean {
+  return garmentMemo(g, "style.cordBlazer", cordBlazerTest);
+}
+
+function cordBlazerTest(g: Garment): boolean {
   return isBlazerPiece(g) && /cord/.test(blobOf(g));
 }
 
 export function isMulePiece(g: Garment): boolean {
+  return garmentMemo(g, "style.mule", muleTest);
+}
+
+function muleTest(g: Garment): boolean {
   return /mule/.test(blobOf(g));
 }
 
 export function isShortsPiece(g: Garment): boolean {
+  return garmentMemo(g, "style.shorts", shortsTest);
+}
+
+function shortsTest(g: Garment): boolean {
   return /\bshorts?\b/.test(blobOf(g));
 }
 
@@ -211,6 +274,10 @@ export function isDistressedJean(g: Garment): boolean {
 }
 
 export function is990Shoe(g: Garment): boolean {
+  return garmentMemo(g, "style.990", nb990Test);
+}
+
+function nb990Test(g: Garment): boolean {
   return /\b990\b|new balance/.test(blobOf(g));
 }
 
@@ -239,6 +306,10 @@ const LOUD =
   /\b(plaid|checks?|gingham|stripes?|striped|floral|print|printed|houndstooth|paisley|camo|leopard|argyle|fair\s*isle)\b/i;
 
 function isLoud(g: Garment): boolean {
+  return garmentMemo(g, "style.loud", loudTest);
+}
+
+function loudTest(g: Garment): boolean {
   return LOUD.test(`${g.name} ${g.subtype} ${g.notes}`) || isGraphic(g);
 }
 
@@ -270,6 +341,10 @@ export function sameScaleChecks(pieces: Garment[]): boolean {
  * Hard invalid looks. Do not soften. Rugby + loafer is legal; rugby + blazer is not.
  */
 export function clashes(pieces: Garment[]): boolean {
+  return piecesMemo(pieces, "style.clashes", clashTest);
+}
+
+function clashTest(pieces: Garment[]): boolean {
   if (pieces.length < 2) return false;
   const tops = pieces.filter(isLayerTop);
   const bottoms = pieces.filter((g) => slotOf(g) === "bottom");
@@ -482,6 +557,10 @@ export function trendScore(
 }
 
 export function slotOf(g: Garment): Slot | null {
+  return garmentMemo(g, "style.slotOf", slotTest);
+}
+
+function slotTest(g: Garment): Slot | null {
   const worn = wearSlot(g);
   if (worn === "outer") return "outerwear";
   if (worn === "mid" || worn === "top") return "top";

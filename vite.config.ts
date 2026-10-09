@@ -147,6 +147,11 @@ function authPopupPlugin(): Plugin {
 // AGENTS.md § "First scaffold".
 export default defineConfig(({ command, isPreview }) => ({
   envPrefix: ["VITE_", "NEXT_PUBLIC_"],
+  // Engine saved-results version (src/lib/engine-store.ts). Vercel sets the SHA during builds;
+  // empty elsewhere, so the engine uses its fixed fallback.
+  define: {
+    "import.meta.env.VITE_ENGINE_COMMIT": JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? ""),
+  },
   server: {
     host: "0.0.0.0",
     port: 8080,
