@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { cloudErrorCopy } from "./copy.ts";
 import { countTjpgFromLists, needsJpegConvert, uploadBlobKeys } from "./blobs.ts";
 
@@ -31,6 +32,15 @@ describe("cloudErrorCopy", () => {
     assert.equal(line.includes("403"), true);
     assert.equal(line.includes("row-level"), true);
     assert.equal(/saved/i.test(line), false);
+  });
+});
+
+describe("build script", () => {
+  it("npm run build does not run the DB migrator", () => {
+    const pkg = JSON.parse(
+      readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
+    ) as { scripts: Record<string, string> };
+    assert.equal(pkg.scripts.build.includes("migrate"), false);
   });
 });
 
