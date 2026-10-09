@@ -165,6 +165,16 @@ describe("plate rack component and styles", () => {
     assert.match(reduce, /\.plate-rack-card:hover\s*\{[^}]*transform: none/);
   });
 
+  it("only the centre card fans its flat-lay; the side cards keep their resting pose", () => {
+    const rack = css.slice(css.indexOf("/* Lookbook rack:"), css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    assert.match(rack, /\.plate-rack-slide:not\(\.is-center\) \.flat-piece\s*\{\s*transform: rotate\(var\(--rr, 0deg\)\) !important;/);
+    assert.match(rack, /\.plate-rack-slide\.is-center button:focus-visible \.flat-piece\s*\{\s*transform: translate\(var\(--sx, 0\), var\(--sy, 0\)\) rotate\(var\(--sr, 0deg\)\);/);
+    // The stacked-kit hover scale is gone with the kit.
+    assert.equal(css.includes(".plate-rack-card:hover .look-kit-plate"), false);
+    // Today's hover fan is the one the centre card inherits, untouched.
+    assert.match(css, /\.group:hover \.flat-piece,\s*\.group:focus-visible \.flat-piece,\s*\.group:focus-within \.flat-piece\s*\{\s*transform: translate\(var\(--sx, 0\), var\(--sy, 0\)\) rotate\(var\(--sr, 0deg\)\);/);
+  });
+
   it("the rack never animates paint: no filter, no box-shadow transition, no 3D row", () => {
     const rack = css.slice(css.indexOf("/* Lookbook rack:"), css.indexOf("@media (prefers-reduced-motion: reduce)", css.indexOf("/* Lookbook rack:")));
     assert.ok(rack.length > 0);

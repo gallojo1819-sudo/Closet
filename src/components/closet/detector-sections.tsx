@@ -1,4 +1,4 @@
-import { LookKit } from "@/components/closet/look-kit";
+import { FlatLay } from "@/components/closet/flat-lay";
 import { activeFirst, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";
 import type { Garment, Occasion, Season } from "@/lib/types";
 import { PlateRack } from "@/components/closet/plate-rack";
@@ -42,7 +42,7 @@ function PlateCard({
           aria-label={`Open ${look.map((g) => g.name).join(", ")}`}
           className="absolute inset-0 block focus-visible:outline focus-visible:outline-1 focus-visible:outline-ink"
         >
-          <LookKit layout="stack" pieces={look} className="pointer-events-none" />
+          <FlatLay pieces={look} passive className="absolute inset-0 border-0 bg-transparent" />
         </button>
       </div>
       <ul className="mt-2 space-y-0.5">

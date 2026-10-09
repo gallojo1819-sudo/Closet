@@ -66,13 +66,13 @@ async function renderSections(
   const detectorsHref = new URL("./detectors.ts", import.meta.url).href;
   const jsxHref = import.meta.resolve("react/jsx-runtime");
   const dir = mkdtempSync(join(tmpdir(), "detectors-"));
-  const kit = join(dir, "kit.mjs");
+  const lay = join(dir, "flat-lay.mjs");
   writeFileSync(
-    kit,
+    lay,
     `import { jsx, jsxs } from ${JSON.stringify(jsxHref)};
-export function LookKit({ pieces = [], layout }) {
+export function FlatLay({ pieces = [] }) {
   return jsxs("div", {
-    "data-look-kit": layout ?? "",
+    "data-flat-lay": "",
     children: pieces.map((g) => jsx("span", { children: g.name }, g.id)),
   });
 }
@@ -87,7 +87,7 @@ export function PlateRack({ label, children }) {
 }
 `,
   );
-  js = js.replaceAll(`from "@/components/closet/look-kit"`, `from ${JSON.stringify(pathToFileURL(kit).href)}`);
+  js = js.replaceAll(`from "@/components/closet/flat-lay"`, `from ${JSON.stringify(pathToFileURL(lay).href)}`);
   js = js.replaceAll(`from "@/components/closet/plate-rack"`, `from ${JSON.stringify(pathToFileURL(rack).href)}`);
   js = js.replaceAll(`from "@/lib/detectors"`, `from ${JSON.stringify(detectorsHref)}`);
   js = js.replaceAll(`from "react/jsx-runtime"`, `from ${JSON.stringify(jsxHref)}`);
@@ -140,7 +140,7 @@ describe("detectors", () => {
     const html = await renderSections(rack, { season: "fall", occasion: "weekend" });
     const titles = titlesOf(html);
     assert.ok(titles.includes("Graphic tee and retro sneaker"));
-    assert.match(html, /data-look-kit="stack"/);
+    assert.match(html, /data-flat-lay/);
     assert.match(html, /graphic tee 1/);
     assert.equal(html.includes("graphic tee 1 · "), false);
     assert.equal(titles.includes("Flannel, cashmere, dark suede"), false);
@@ -360,7 +360,7 @@ describe("detectors", () => {
     };
     const html = await renderSections([], { ways: [way], occasion: "weekday", season: "fall" });
     assert.match(html, /<h2[^>]*>Oxford and chinos<\/h2>/);
-    assert.match(html, /data-look-kit="stack"/);
+    assert.match(html, /data-flat-lay/);
     assert.match(html, /Navy oxford/);
     assert.match(html, /Tan chinos/);
     assert.match(html, /Brown loafers/);
@@ -404,7 +404,7 @@ describe("detectors", () => {
     const cards = html.split('<div class="w-full">').slice(1);
     assert.equal(cards.length, 2);
     for (const card of cards) {
-      assert.match(card, /^<div class="relative aspect-\[4\/5\] w-full"><button type="button"[^>]*><div data-look-kit="stack">/);
+      assert.match(card, /^<div class="relative aspect-\[4\/5\] w-full"><button type="button"[^>]*><div data-flat-lay="">/);
       assert.match(card, /<\/div><\/button><\/div><ul class="mt-2 space-y-0\.5"><li/);
     }
     // The short note closes the row and the last card first; it is never inside a card.
@@ -418,8 +418,10 @@ describe("detectors", () => {
       "utf8",
     );
     const plateCard = source.slice(source.indexOf("function PlateCard"), source.indexOf("function Chapter"));
-    assert.match(plateCard, /<div className="relative aspect-\[4\/5\] w-full">\s*<button[\s\S]*?<LookKit layout="stack"/);
-    assert.equal(/<LookKit[^>]*className="[^"]*(h-full|aspect-)/.test(plateCard), false);
+    assert.match(plateCard, /<div className="relative aspect-\[4\/5\] w-full">\s*<button[\s\S]*?<FlatLay pieces=\{look\} passive/);
+    // The fan needs hover on the FlatLay root itself; clicks still bubble to the button.
+    assert.equal(/<FlatLay[^>]*pointer-events-none/.test(plateCard), false);
+    assert.equal(plateCard.includes("<LookKit"), false);
   });
 
   it("every plate is one button that opens its exact pieces", async () => {
@@ -465,7 +467,7 @@ describe("detectors", () => {
     }
     const imports = source.split("\n").filter((line) => line.startsWith("import "));
     assert.deepEqual(imports, [
-      'import { LookKit } from "@/components/closet/look-kit";',
+      'import { FlatLay } from "@/components/closet/flat-lay";',
       'import { activeFirst, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";',
       'import type { Garment, Occasion, Season } from "@/lib/types";',
       'import { PlateRack } from "@/components/closet/plate-rack";',
@@ -478,7 +480,7 @@ describe("detectors", () => {
       g({ id: `b${n}`, name: `Tan chinos ${n}`, category: "bottom", subtype: "chino" }),
       g({ id: `s${n}`, name: `Brown loafers ${n}`, category: "footwear", subtype: "loafer" }),
     ];
-    const card = /^<div class="relative aspect-\[4\/5\] w-full"><button type="button"[^>]*><div data-look-kit="stack">/;
+    const card = /^<div class="relative aspect-\[4\/5\] w-full"><button type="button"[^>]*><div data-flat-lay="">/;
     const titled: Way = {
       id: "2",
       title: "Oxford and chinos",
@@ -494,7 +496,7 @@ describe("detectors", () => {
     for (const [i, piece] of cards.entries()) {
       assert.match(piece, card);
       assert.equal(piece.split('<button type="button"').length - 1, 1);
-      assert.equal(piece.split('data-look-kit="stack"').length - 1, 1);
+      assert.equal(piece.split('data-flat-lay=""').length - 1, 1);
       assert.equal(
         piece.split(`aria-label="Open Navy oxford ${i + 1}, Tan chinos ${i + 1}, Brown loafers ${i + 1}"`).length - 1,
         1,
@@ -517,7 +519,7 @@ describe("detectors", () => {
     for (const [i, piece] of usualCards.entries()) {
       assert.match(piece, card);
       assert.equal(piece.split('<button type="button"').length - 1, 1);
-      assert.equal(piece.split('data-look-kit="stack"').length - 1, 1);
+      assert.equal(piece.split('data-flat-lay=""').length - 1, 1);
       assert.equal(
         piece.split(`aria-label="Open Navy oxford ${i + 1}, Tan chinos ${i + 1}, Brown loafers ${i + 1}"`).length - 1,
         1,

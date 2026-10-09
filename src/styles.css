@@ -398,9 +398,14 @@
   .is-center .plate-rack-card:hover {
     transform: translateY(-6px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   }
-  .is-center .plate-rack-card:hover .look-kit-plate {
-    transform: scale(1.04);
-  }
+}
+/* The card art is a passive FlatLay. Only the centre card fans its pieces (on hover, or when
+   its button has keyboard focus); the side cards keep their resting lay-down. */
+.plate-rack-slide:not(.is-center) .flat-piece {
+  transform: rotate(var(--rr, 0deg)) !important;
+}
+.plate-rack-slide.is-center button:focus-visible .flat-piece {
+  transform: translate(var(--sx, 0), var(--sy, 0)) rotate(var(--sr, 0deg));
 }
 .is-center .plate-rack-card:active {
   transform: scale(0.98);
@@ -503,9 +508,6 @@
     transition: none;
   }
   .is-center .plate-rack-card:hover {
-    transform: none;
-  }
-  .is-center .plate-rack-card:hover .look-kit-plate {
     transform: none;
   }
 }
