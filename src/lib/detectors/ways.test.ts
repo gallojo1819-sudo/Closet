@@ -211,7 +211,17 @@ export function LookKit({ pieces = [], layout }) {
 }
 `,
   );
+  const rack = join(dir, "rack.mjs");
+  writeFileSync(
+    rack,
+    `import { jsx } from ${JSON.stringify(jsxHref)};
+export function PlateRack({ label, children }) {
+  return jsx("div", { "data-plate-rack": label, children });
+}
+`,
+  );
   js = js.replaceAll(`from "@/components/closet/look-kit"`, `from ${JSON.stringify(pathToFileURL(kit).href)}`);
+  js = js.replaceAll(`from "@/components/closet/plate-rack"`, `from ${JSON.stringify(pathToFileURL(rack).href)}`);
   js = js.replaceAll(`from "@/lib/detectors"`, `from ${JSON.stringify(detectorsHref)}`);
   js = js.replaceAll(`from "react/jsx-runtime"`, `from ${JSON.stringify(jsxHref)}`);
   const file = join(dir, "detector-sections.mjs");

@@ -78,7 +78,17 @@ export function LookKit({ pieces = [], layout }) {
 }
 `,
   );
+  const rack = join(dir, "rack.mjs");
+  writeFileSync(
+    rack,
+    `import { jsx } from ${JSON.stringify(jsxHref)};
+export function PlateRack({ label, children }) {
+  return jsx("div", { "data-plate-rack": label, children });
+}
+`,
+  );
   js = js.replaceAll(`from "@/components/closet/look-kit"`, `from ${JSON.stringify(pathToFileURL(kit).href)}`);
+  js = js.replaceAll(`from "@/components/closet/plate-rack"`, `from ${JSON.stringify(pathToFileURL(rack).href)}`);
   js = js.replaceAll(`from "@/lib/detectors"`, `from ${JSON.stringify(detectorsHref)}`);
   js = js.replaceAll(`from "react/jsx-runtime"`, `from ${JSON.stringify(jsxHref)}`);
   const file = join(dir, "detector-sections.mjs");
@@ -389,9 +399,9 @@ describe("detectors", () => {
     };
     const html = await renderSections([], { ways: [way], occasion: "weekday", season: "fall" });
     // Heading, then the chapter label, then the row: in-flow siblings inside one section.
-    assert.match(html, /<section><h2[^>]*>Oxford and chinos<\/h2><div><p[^>]*>Weekday<\/p><div class="look-swipe[^"]*">/);
+    assert.match(html, /<section><h2[^>]*>Oxford and chinos<\/h2><div><p[^>]*>Weekday<\/p><div data-plate-rack="Oxford and chinos outfits">/);
     // Every kit sits in a definite 4:5 box; the name list comes after that box, not inside it.
-    const cards = html.split('<div class="w-56 shrink-0">').slice(1);
+    const cards = html.split('<div class="w-full">').slice(1);
     assert.equal(cards.length, 2);
     for (const card of cards) {
       assert.match(card, /^<div class="relative aspect-\[4\/5\] w-full"><button type="button"[^>]*><div data-look-kit="stack">/);
@@ -442,7 +452,7 @@ describe("detectors", () => {
       usual: true,
     };
     const usualHtml = await renderSections([], { ways: [usual], occasion: "weekday", season: "fall" });
-    const plates = usualHtml.split('<div class="w-56 shrink-0">').length - 1;
+    const plates = usualHtml.split('<div class="w-full">').length - 1;
     assert.equal(plates, 4);
     assert.equal(usualHtml.split('<button type="button"').length - 1, plates);
     const source = readFileSync(
@@ -458,7 +468,62 @@ describe("detectors", () => {
       'import { LookKit } from "@/components/closet/look-kit";',
       'import { activeFirst, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";',
       'import type { Garment, Occasion, Season } from "@/lib/types";',
+      'import { PlateRack } from "@/components/closet/plate-rack";',
     ]);
+  });
+
+  it("each way is one labelled rack of full-width plates, and Your usual is one too", async () => {
+    const look = (n: number): Garment[] => [
+      g({ id: `t${n}`, name: `Navy oxford ${n}`, category: "top", subtype: "oxford" }),
+      g({ id: `b${n}`, name: `Tan chinos ${n}`, category: "bottom", subtype: "chino" }),
+      g({ id: `s${n}`, name: `Brown loafers ${n}`, category: "footwear", subtype: "loafer" }),
+    ];
+    const card = /^<div class="relative aspect-\[4\/5\] w-full"><button type="button"[^>]*><div data-look-kit="stack">/;
+    const titled: Way = {
+      id: "2",
+      title: "Oxford and chinos",
+      pieces: look(1),
+      looks: { weekday: [look(1), look(2), look(3)] },
+      counts: { weekday: 3, out: 0, weekend: 0, travel: 0, comfy: 0 },
+    };
+    const html = await renderSections([], { ways: [titled], occasion: "weekday", season: "fall" });
+    assert.equal(html.split("data-plate-rack=").length - 1, 1);
+    assert.equal(html.split('<div data-plate-rack="Oxford and chinos outfits">').length - 1, 1);
+    const cards = html.split('<div class="w-full">').slice(1);
+    assert.equal(cards.length, 3);
+    for (const [i, piece] of cards.entries()) {
+      assert.match(piece, card);
+      assert.equal(piece.split('<button type="button"').length - 1, 1);
+      assert.equal(piece.split('data-look-kit="stack"').length - 1, 1);
+      assert.equal(
+        piece.split(`aria-label="Open Navy oxford ${i + 1}, Tan chinos ${i + 1}, Brown loafers ${i + 1}"`).length - 1,
+        1,
+      );
+    }
+    assert.equal(html.includes("look-swipe"), false);
+    const usual: Way = {
+      id: "usual",
+      title: "Your usual",
+      pieces: [],
+      looks: { weekday: [look(1), look(2)], weekend: [look(3), look(4)] },
+      counts: { weekday: 2, out: 0, weekend: 2, travel: 0, comfy: 0 },
+      usual: true,
+    };
+    const usualHtml = await renderSections([], { ways: [usual], occasion: "weekday", season: "fall" });
+    assert.equal(usualHtml.split("data-plate-rack=").length - 1, 1);
+    assert.equal(usualHtml.split('<div data-plate-rack="Your usual outfits">').length - 1, 1);
+    const usualCards = usualHtml.split('<div class="w-full">').slice(1);
+    assert.equal(usualCards.length, 4);
+    for (const [i, piece] of usualCards.entries()) {
+      assert.match(piece, card);
+      assert.equal(piece.split('<button type="button"').length - 1, 1);
+      assert.equal(piece.split('data-look-kit="stack"').length - 1, 1);
+      assert.equal(
+        piece.split(`aria-label="Open Navy oxford ${i + 1}, Tan chinos ${i + 1}, Brown loafers ${i + 1}"`).length - 1,
+        1,
+      );
+    }
+    assert.equal(usualHtml.includes("look-swipe"), false);
   });
 
   it("section titles are clothes, at most four, and Joe's labels are not headings", () => {

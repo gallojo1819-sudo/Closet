@@ -1,6 +1,7 @@
 import { LookKit } from "@/components/closet/look-kit";
 import { activeFirst, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";
 import type { Garment, Occasion, Season } from "@/lib/types";
+import { PlateRack } from "@/components/closet/plate-rack";
 
 const OCCASION_LABEL: Record<Occasion, string> = {
   weekday: "Weekday",
@@ -33,7 +34,7 @@ function PlateCard({
   onOpen?: OpenPlate;
 }) {
   return (
-    <div className="w-56 shrink-0">
+    <div className="w-full">
       <div className="relative aspect-[4/5] w-full">
         <button
           type="button"
@@ -56,10 +57,12 @@ function PlateCard({
 }
 
 function Chapter({
+  title,
   occasion,
   looks,
   onOpen,
 }: {
+  title: string;
   occasion: Occasion;
   looks: Garment[][];
   onOpen?: OpenPlate;
@@ -68,11 +71,11 @@ function Chapter({
   return (
     <div>
       <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[occasion]}</p>
-      <div className="look-swipe mt-3 flex gap-4">
+      <PlateRack label={`${title} outfits`}>
         {looks.map((look, index) => (
           <PlateCard key={`${occasion}:${index}`} look={look} occasion={occasion} onOpen={onOpen} />
         ))}
-      </div>
+      </PlateRack>
       {looks.length < 3 ? (
         <p data-way-short className="mt-3 text-sm text-ink-soft">{`Only ${looks.length} in your closet.`}</p>
       ) : null}
@@ -117,11 +120,11 @@ export function DetectorSections({
       <div data-detectors className="mt-8 space-y-6">
         <section>
           <h2 className="font-editorial text-2xl tracking-tight">Your usual</h2>
-          <div className="look-swipe mt-3 flex gap-4">
+          <PlateRack label="Your usual outfits">
             {looks.map((plate, index) => (
               <PlateCard key={`usual:${index}`} look={plate.look} occasion={plate.occasion} onOpen={onOpen} />
             ))}
-          </div>
+          </PlateRack>
         </section>
       </div>
     );
@@ -134,7 +137,7 @@ export function DetectorSections({
         return (
           <section key={way.id}>
             <h2 className="font-editorial text-2xl tracking-tight">{way.title}</h2>
-            <Chapter occasion={occasion} looks={looks} onOpen={onOpen} />
+            <Chapter title={way.title} occasion={occasion} looks={looks} onOpen={onOpen} />
           </section>
         );
       })}

@@ -300,6 +300,174 @@
   }
 }
 
+/* Lookbook rack: slide (z-index) → .plate-rack-pose (JS transform + opacity) → .plate-rack-card (the plate). */
+.plate-rack-stage {
+  position: relative; /* the arrows sit on it */
+}
+.plate-rack-track {
+  --rack-card: min(72vw, 300px);
+  --rack-tuck: 14px;
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  /* Slide 0 sits dead centre at scrollLeft 0; the tuck undoes the first slide's negative margin. */
+  padding-inline: calc(50% - var(--rack-card) / 2 + var(--rack-tuck));
+  /* The bottom room is for the centre card's shadow: the track clips vertically too. */
+  padding-block: 18px 52px;
+  outline: none;
+  overscroll-behavior-x: contain;
+}
+.plate-rack-track::-webkit-scrollbar {
+  display: none;
+}
+@media (min-width: 640px) {
+  .plate-rack-track {
+    --rack-card: 340px;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .plate-rack-track {
+    cursor: grab;
+  }
+}
+.plate-rack-track.is-dragging {
+  scroll-snap-type: none;
+  cursor: grabbing;
+  user-select: none;
+}
+.plate-rack-track:focus-visible .is-center .plate-rack-card {
+  outline: 1px solid var(--color-ink);
+  outline-offset: 2px;
+}
+/* No stacking context of its own: isolating the row made the composited poses jank (3x the long tasks). */
+.plate-rack-row {
+  display: flex;
+}
+/* Flex items, so the z-index React sets (rackPose's z, 100 at the centre) stacks them as is. */
+.plate-rack-slide {
+  flex: 0 0 var(--rack-card);
+  scroll-snap-align: center;
+  margin-inline: calc(-1 * var(--rack-tuck)); /* slight overlap so neighbours tuck behind */
+}
+.plate-rack-pose {
+  perspective: 1000px; /* for the card's hover tilt */
+  transform-origin: 50% 60%;
+  /* opacity too: without it Chrome re-rasters the card each time one crosses 1. */
+  will-change: transform, opacity;
+}
+.plate-rack-track.is-ready .plate-rack-pose {
+  transition:
+    transform 450ms var(--ease-atelier),
+    opacity 450ms var(--ease-atelier);
+}
+.plate-rack-card {
+  position: relative;
+  background: var(--color-paper);
+  border: 1px solid var(--color-hairline);
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.05),
+    0 10px 28px rgb(60 45 25 / 0.1);
+  transition: transform 300ms var(--ease-atelier);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+}
+/* The centre card's deeper shadow fades in on a pseudo-element: an opacity change is
+   compositor work, a box-shadow transition repaints the card every frame for 300ms. */
+.plate-rack-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.06),
+    0 16px 36px rgb(60 45 25 / 0.2);
+  opacity: 0;
+  transition: opacity 300ms var(--ease-atelier);
+  pointer-events: none;
+}
+.is-center .plate-rack-card::after {
+  opacity: 1;
+}
+.plate-rack-slide:not(.is-center) .plate-rack-card {
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .is-center .plate-rack-card:hover {
+    transform: translateY(-6px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  }
+  .is-center .plate-rack-card:hover .look-kit-plate {
+    transform: scale(1.04);
+  }
+}
+.is-center .plate-rack-card:active {
+  transform: scale(0.98);
+}
+.plate-rack-arrow {
+  display: none;
+  position: absolute;
+  /* Centred on the card: the track pads 18px above and 52px below it, and the button is 40px. */
+  top: calc(50% - 37px);
+  z-index: 120;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-hairline);
+  color: var(--color-ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  transition:
+    transform 200ms var(--ease-atelier),
+    opacity 200ms;
+}
+.plate-rack-arrow.is-prev {
+  left: 4px;
+}
+.plate-rack-arrow.is-next {
+  right: 4px;
+}
+.plate-rack-arrow:hover:not(:disabled) {
+  transform: scale(1.08);
+}
+.plate-rack-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+@media (min-width: 640px) {
+  .plate-rack-arrow {
+    display: flex;
+  }
+}
+.plate-rack-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  height: 6px;
+  margin-top: -32px;
+  /* The active dot's width change stays inside this row's own layer instead of the page. */
+  contain: layout paint;
+  will-change: transform;
+}
+.plate-rack-dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-hairline);
+  transition:
+    width 350ms var(--ease-atelier),
+    background-color 350ms;
+}
+.plate-rack-dot.is-active {
+  width: 22px;
+  background: var(--color-ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .look-kit-rise {
     animation: none;
@@ -326,5 +494,18 @@
   ul.look-swipe,
   .look-swipe {
     scroll-behavior: auto;
+  }
+  .plate-rack-track.is-ready .plate-rack-pose,
+  .plate-rack-card,
+  .plate-rack-card::after,
+  .plate-rack-arrow,
+  .plate-rack-dot {
+    transition: none;
+  }
+  .is-center .plate-rack-card:hover {
+    transform: none;
+  }
+  .is-center .plate-rack-card:hover .look-kit-plate {
+    transform: none;
   }
 }
