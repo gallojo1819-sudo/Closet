@@ -705,6 +705,110 @@ function yourUsual(garments: Garment[], season: string, occasion: Occasion, weat
   ];
 }
 
+/** Most looks a Lookbook row shows. Display only: toWay/yourUsual and the snapshot keep their caps. */
+export const ROW_MAX = 8;
+
+function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i += 1) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seededPermutation<T>(rows: readonly T[], seed: number): T[] {
+  const out = [...rows];
+  const rnd = mulberry32(seed);
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rnd() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
+function sharedPieces(a: Garment[], b: Garment[]): number {
+  const ids = new Set(a.map((g) => g.id));
+  return b.filter((g) => ids.has(g.id)).length;
+}
+
+/**
+ * Fill a row to ROW_MAX from the stored rows, in order: first rows that share at most one
+ * piece with everything already in the set, then any unused row. Never a new combination.
+ */
+function fillRow(start: Garment[][], stored: Garment[][]): Garment[][] {
+  const out = start.slice(0, ROW_MAX);
+  const used = new Set(out.map(idsOf));
+  const left = stored.filter((row) => !used.has(idsOf(row)));
+  for (const row of left) {
+    if (out.length >= ROW_MAX) break;
+    if (used.has(idsOf(row))) continue;
+    if (out.every((have) => sharedPieces(have, row) <= 1)) {
+      used.add(idsOf(row));
+      out.push(row);
+    }
+  }
+  for (const row of left) {
+    if (out.length >= ROW_MAX) break;
+    if (used.has(idsOf(row))) continue;
+    used.add(idsOf(row));
+    out.push(row);
+  }
+  return out;
+}
+
+/**
+ * The rows the Lookbook renders: each way's looks for this occasion, up to ROW_MAX, drawn only
+ * from the cell's stored (already legal, same colour filter) rows. Salt 0 starts from the
+ * way's current looks in order, so the first cards are exactly visibleDetectors'; a salt > 0
+ * is a seeded permutation of the stored rows before the disjoint pick and the fill. The usual
+ * way asks usualFromCloset for more with the same legality gate.
+ */
+export function rowWays(
+  ways: Way[],
+  garments: Garment[],
+  ctx: { occasion: Occasion | string; season: Season | string; color?: string | null; weatherF?: number; salt?: number },
+): Way[] {
+  const occasion = (ctx.occasion || "weekday") as Occasion;
+  const season = (ctx.season || "fall") as Season;
+  const color = ctx.color ?? null;
+  const weatherF = finiteTemp(ctx.weatherF);
+  const salt = ctx.salt ?? 0;
+  const book = warmCellBook(garments, season, weatherF);
+  return ways.map((way) => {
+    if (way.usual) {
+      if (!(way.looks[occasion] ?? []).length) return way;
+      const built = usualFromCloset(garments, { occasion, season, weatherF, max: ROW_MAX, salt });
+      if (!built.looks.length) return way;
+      return {
+        ...way,
+        looks: { ...way.looks, [occasion]: built.looks.slice(0, ROW_MAX) },
+        counts: { ...way.counts, [occasion]: built.looks.length },
+      };
+    }
+    const built = book.find((row) => row.cell.id === way.id);
+    if (!built) return way;
+    let stored = built.looks[occasion] ?? [];
+    if (color) stored = stored.filter((look) => detectorColor(look, color, built.cell.key).passed);
+    if (!stored.length) return way;
+    const keys = new Set(stored.map(idsOf));
+    const current = (way.looks[occasion] ?? []).filter((look) => keys.has(idsOf(look)));
+    const pool = salt > 0 ? seededPermutation(stored, (salt ^ hashStr(way.id)) >>> 0) : stored;
+    const start = salt > 0 ? maxDisjoint(pool) : current;
+    const looks = fillRow(start, pool);
+    if (!looks.length) return way;
+    return { ...way, looks: { ...way.looks, [occasion]: looks } };
+  });
+}
+
 export function visibleDetectors(
   garments: Garment[],
   ctx: { occasion?: Occasion | string; season?: Season | string; color?: string | null; weatherF?: number } = {},
@@ -808,7 +912,7 @@ function dressedLooks(way: Way, occasion: Occasion): Garment[][] {
 export function wayChipVisible(way: Way, occasion: Occasion | string): boolean {
   const id = (occasion || "weekday") as Occasion;
   if (way.usual) {
-    const looks = OCCASION_ORDER.flatMap((key) => (way.looks[key] ?? []).slice(0, 3)).filter(
+    const looks = OCCASION_ORDER.flatMap((key) => (way.looks[key] ?? []).slice(0, ROW_MAX)).filter(
       (look) => look.length >= 3,
     );
     return looks.length >= 3;
@@ -836,7 +940,7 @@ export function renderedSectionLooks(
   const here = (occasion || "weekday") as Occasion;
   const usual = ways.find((way) => way.usual);
   if (usual) {
-    const looks = OCCASION_ORDER.flatMap((key) => (usual.looks[key] ?? []).slice(0, 3)).filter(
+    const looks = OCCASION_ORDER.flatMap((key) => (usual.looks[key] ?? []).slice(0, ROW_MAX)).filter(
       (look) => look.length >= 3,
     );
     if (looks.length < 3) return [];

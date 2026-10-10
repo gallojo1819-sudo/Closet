@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
+import { LookCollage } from "@/components/closet/look-collage";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { LookSheet } from "@/components/closet/look-sheet";
 import { OnMePanel } from "@/components/closet/on-me";
@@ -397,7 +397,8 @@ function Today() {
               onUsePaper={() => setView("paper")}
             />
           ) : (
-            <FlatLay
+            <LookCollage
+              size="today"
               pieces={shown}
               activeId={picked?.id ?? null}
               onPick={setPick}

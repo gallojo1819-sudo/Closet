@@ -29,14 +29,25 @@ function label(occasion: string, season: string): string {
  * A legal outfit from the live pool. Not the first six of each slot, and not
  * every detector ban at once. A jacket is added only when the rule still requires one.
  */
+/** `salt` rotates a slot's start index; 0 leaves the order as stored. */
+function rotate<T>(list: T[], by: number): T[] {
+  if (!list.length || !by) return list;
+  const k = ((by % list.length) + list.length) % list.length;
+  return k ? [...list.slice(k), ...list.slice(0, k)] : list;
+}
+
 export function usualFromCloset(
   garments: Garment[],
-  opts: { occasion: Occasion | string; season: Season | string; weatherF?: number },
+  opts: { occasion: Occasion | string; season: Season | string; weatherF?: number; max?: number; salt?: number },
 ): UsualResult {
+  const max = opts.max ?? 3;
+  const salt = opts.salt ?? 0;
+  /* The 240-try cap stays for the default three; a longer row may look further, bounded. */
+  const tryCap = max > 3 ? Math.min(800, 240 + (max - 3) * 112) : 240;
   const live = garments.filter((g) => !g.archived);
-  const tops = live.filter(isTop);
-  const bottoms = live.filter((g) => slotOf(g) === "bottom");
-  const shoes = live.filter((g) => slotOf(g) === "footwear");
+  const tops = rotate(live.filter(isTop), salt);
+  const bottoms = rotate(live.filter((g) => slotOf(g) === "bottom"), salt * 7);
+  const shoes = rotate(live.filter((g) => slotOf(g) === "footwear"), salt * 13);
   const jackets = live.filter(isJacket);
   const weatherF = finiteTemp(opts.weatherF);
   const ctx = {
@@ -61,7 +72,7 @@ export function usualFromCloset(
   for (const top of tops) {
     for (const bottom of bottoms) {
       for (const shoe of shoes) {
-        if (tries >= 240 || looks.length >= 3) break;
+        if (tries >= tryCap || looks.length >= max) break;
         tries += 1;
         if (new Set([top.id, bottom.id, shoe.id]).size < 3) continue;
         const core = [top, bottom, shoe];

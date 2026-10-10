@@ -124,6 +124,64 @@
   }
 }
 
+/* Rack, jacket first (CD .lay / .pc): opaque tinted tiles; the cutout multiplies into the tint. */
+.look-collage {
+  aspect-ratio: 1 / 1.28;
+}
+.collage-piece {
+  position: absolute;
+  aspect-ratio: 4 / 5;
+  border-radius: 3px;
+  background: var(--tint, #ece5d8);
+  isolation: isolate;
+  overflow: hidden;
+  box-shadow:
+    0 1px 2px rgb(40 30 20 / 0.1),
+    0 8px 20px -12px rgb(60 45 25 / 0.3);
+  transform: translate(0, 0) rotate(0deg);
+  transition:
+    transform 280ms var(--ease-atelier),
+    opacity 200ms var(--ease-atelier);
+}
+.collage-piece[data-slot="outer"] {
+  box-shadow:
+    0 1px 2px rgb(40 30 20 / 0.1),
+    0 14px 28px -10px rgb(60 45 25 / 0.35);
+}
+.collage-piece img {
+  mix-blend-mode: multiply;
+}
+.collage-piece .flip img {
+  transform: scaleX(-1);
+}
+/* The spread, from rack-hover.png: the centre rack card on hover or keyboard focus, and Today's
+   paper (is-fan) on hover. Fine pointers only. */
+@media (hover: hover) and (pointer: fine) {
+  .is-center .plate-rack-card:hover .collage-piece,
+  .plate-rack-slide.is-center button:focus-visible .collage-piece,
+  .look-collage.is-fan:hover .collage-piece,
+  .look-collage.is-fan:focus-within .collage-piece {
+    transform: translate(var(--hx, 0), var(--hy, 0)) rotate(var(--hr, 0deg));
+  }
+}
+/* Tap a piece: it lifts and straightens, the rest dim. */
+.look-collage.has-pick .collage-piece:not(.is-picked) {
+  opacity: 0.45;
+}
+.look-collage.has-pick .collage-piece.is-picked {
+  transform: translate(var(--hx, 0), var(--hy, 0)) rotate(0deg) scale(1.04);
+}
+@media (prefers-reduced-motion: reduce) {
+  .collage-piece {
+    transition: none;
+  }
+  .is-center .plate-rack-card:hover .collage-piece,
+  .look-collage.is-fan:hover .collage-piece,
+  .look-collage.is-fan:focus-within .collage-piece {
+    transform: none;
+  }
+}
+
 .micro {
   font-family: var(--font-mono);
   font-size: 0.65625rem;
@@ -374,12 +432,12 @@
     transform 450ms var(--ease-atelier),
     opacity 450ms var(--ease-atelier);
 }
+/* CD .card: warm card, 18px radius, 18/18/16 padding, the CD shadow. */
 .plate-rack-card {
   position: relative;
-  background: var(--color-paper);
-  border: 1px solid var(--color-hairline);
-  border-radius: 16px;
-  padding: 14px 14px 12px;
+  background: var(--color-card);
+  border-radius: 18px;
+  padding: 18px 18px 16px;
   box-shadow:
     0 1px 2px rgb(0 0 0 / 0.05),
     0 10px 28px rgb(60 45 25 / 0.1);
@@ -412,14 +470,7 @@
     transform: translateY(-6px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   }
 }
-/* The card art is a passive FlatLay. Only the centre card fans its pieces (on hover, or when
-   its button has keyboard focus); the side cards keep their resting lay-down. */
-.plate-rack-slide:not(.is-center) .flat-piece {
-  transform: rotate(var(--rr, 0deg)) !important;
-}
-.plate-rack-slide.is-center button:focus-visible .flat-piece {
-  transform: translate(var(--sx, 0), var(--sy, 0)) rotate(var(--sr, 0deg));
-}
+/* The card art is a passive LookCollage; its centre-card spread lives with .collage-piece above. */
 .is-center .plate-rack-card:active {
   transform: scale(0.98);
 }

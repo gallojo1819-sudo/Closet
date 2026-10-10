@@ -198,14 +198,15 @@ async function renderSections(props: Record<string, unknown>): Promise<string> {
   }).outputText;
   const detectorsHref = new URL("../detectors.ts", import.meta.url).href;
   const jsxHref = import.meta.resolve("react/jsx-runtime");
+  const collageHref = new URL("../look-collage.ts", import.meta.url).href;
   const dir = mkdtempSync(join(tmpdir(), "ways-"));
-  const lay = join(dir, "flat-lay.mjs");
+  const lay = join(dir, "look-collage.mjs");
   writeFileSync(
     lay,
     `import { jsx, jsxs } from ${JSON.stringify(jsxHref)};
-export function FlatLay({ pieces = [] }) {
+export function LookCollage({ pieces = [] }) {
   return jsxs("div", {
-    "data-flat-lay": "",
+    "data-collage": "",
     children: pieces.map((g) => jsx("span", { children: g.name }, g.id)),
   });
 }
@@ -220,9 +221,10 @@ export function PlateRack({ label, children }) {
 }
 `,
   );
-  js = js.replaceAll(`from "@/components/closet/flat-lay"`, `from ${JSON.stringify(pathToFileURL(lay).href)}`);
+  js = js.replaceAll(`from "@/components/closet/look-collage"`, `from ${JSON.stringify(pathToFileURL(lay).href)}`);
   js = js.replaceAll(`from "@/components/closet/plate-rack"`, `from ${JSON.stringify(pathToFileURL(rack).href)}`);
   js = js.replaceAll(`from "@/lib/detectors"`, `from ${JSON.stringify(detectorsHref)}`);
+  js = js.replaceAll(`from "@/lib/look-collage"`, `from ${JSON.stringify(collageHref)}`);
   js = js.replaceAll(`from "react/jsx-runtime"`, `from ${JSON.stringify(jsxHref)}`);
   const file = join(dir, "detector-sections.mjs");
   writeFileSync(file, js);
@@ -361,7 +363,7 @@ describe("a short way is shown short", () => {
       assert.equal(wayChipVisible(way, "weekday"), true);
       assert.equal(renderedSectionLooks([way], "weekday").length, looks.length);
       const html = await renderSections({ ways: [way], occasion: "weekday", season: "fall" });
-      assert.equal(html.split('data-flat-lay=""').length - 1, looks.length);
+      assert.equal(html.split('data-collage=""').length - 1, looks.length);
       for (const look of looks) for (const g of look) assert.ok(html.includes(`>${g.name}<`), g.name);
       assert.ok(html.includes(`Only ${looks.length} in your closet.`));
       assert.equal(html.split("in your closet.").length - 1, 1);
@@ -556,6 +558,7 @@ describe("the card tag says each thing once", () => {
     assert.match(book, /\{cardTag\(wayTitle, occasionLabel, seasonLabel\)\}/);
     assert.equal(book.includes("?? chapterLabel"), false);
     assert.match(book, /occasionLabel=\{chapterLabel\}/);
-    assert.equal(book.includes("shownWays"), false);
+    // The sections render the rows as built by rowWays (up to ROW_MAX), not the engine's five.
+    assert.match(book, /ways=\{shownWays\}/);
   });
 });

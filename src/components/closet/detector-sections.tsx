@@ -1,5 +1,6 @@
-import { FlatLay } from "@/components/closet/flat-lay";
-import { activeFirst, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";
+import { LookCollage } from "@/components/closet/look-collage";
+import { activeFirst, OCCASION_ORDER, ROW_MAX, visibleDetectors, type Way } from "@/lib/detectors";
+import { lookTitle, pieceLine } from "@/lib/look-collage";
 import type { Garment, Occasion, Season } from "@/lib/types";
 import { PlateRack } from "@/components/closet/plate-rack";
 
@@ -18,19 +19,9 @@ function chapterLooks(way: Way, occasion: Occasion): Garment[][] {
 }
 
 /**
- * The plate sits in its own box above the names. A stretched flex item counts as a definite
- * height, so a kit sized `h-full` straight inside the card would swallow the name list below
- * it and push the names out under the next way's heading.
- *
- * The box is 2:3, taller than Today's 4:5 paper, and it is the one that clips. The lay-down
- * inside it is inset from the sides and the top: the flat-lay places its pieces as percentages
- * of its own box (tops of the height, widths of the width), so on 4:5 the trouser hems and the
- * shoes ran past the bottom, and a fanned jacket lifts ~16px and turns, so its corner needs
- * headroom. A narrower, taller lay keeps the whole outfit inside the box at rest and fanned;
- * nothing can reach the names below. `aspect-auto` matters: an absolutely positioned box with
- * insets on every side still takes the flat-lay's own 4:5 ratio for its height, which would
- * clip exactly as before; `overflow-visible` lets a fanned corner use the inset instead of
- * being cut at the lay's edge.
+ * One rack card: the jacket-first collage (its own 1:1.28 box, nothing clipped, the jacket on
+ * top) inside the card's single button, then CD's caption under it: a serif title and the
+ * one-line piece list. The card surface (CD .card) is .plate-rack-card in styles.css.
  */
 type OpenPlate = (pieces: Garment[], occasion: Occasion, el: HTMLElement) => void;
 
@@ -45,25 +36,16 @@ function PlateCard({
 }) {
   return (
     <div className="w-full">
-      <div className="relative aspect-[2/3] w-full overflow-hidden">
-        <button
-          type="button"
-          onClick={(e) => onOpen?.(look, occasion, e.currentTarget)}
-          aria-label={`Open ${look.map((g) => g.name).join(", ")}`}
-          className="absolute inset-0 block focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-ink"
-        >
-          <div className="absolute inset-x-[9%] top-[7%] bottom-0">
-            <FlatLay pieces={look} passive className="absolute inset-0 aspect-auto overflow-visible border-0 bg-transparent" />
-          </div>
-        </button>
-      </div>
-      <ul className="mt-2 space-y-0.5">
-        {look.map((g) => (
-          <li key={g.id} className="text-sm text-ink">
-            {g.name}
-          </li>
-        ))}
-      </ul>
+      <button
+        type="button"
+        onClick={(e) => onOpen?.(look, occasion, e.currentTarget)}
+        aria-label={`Open ${look.map((g) => g.name).join(", ")}`}
+        className="block w-full text-left focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-ink"
+      >
+        <LookCollage pieces={look} />
+        <p className="mt-3 font-editorial text-[19px] leading-tight tracking-tight">{lookTitle(look)}</p>
+        <p className="mt-1 text-xs leading-snug text-ink-soft">{pieceLine(look)}</p>
+      </button>
     </div>
   );
 }
@@ -117,7 +99,7 @@ export function DetectorSections({
   const usual = found.find((way) => way.usual);
   if (usual) {
     const looks = OCCASION_ORDER.flatMap((id) =>
-      (usual.looks[id] ?? []).map((look) => ({ look, occasion: id })).slice(0, 3),
+      (usual.looks[id] ?? []).map((look) => ({ look, occasion: id })).slice(0, ROW_MAX),
     ).filter((plate) => plate.look.length >= 3);
     if (looks.length < 3) {
       return (

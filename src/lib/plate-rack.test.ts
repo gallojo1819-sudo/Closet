@@ -171,13 +171,21 @@ describe("plate rack component and styles", () => {
     assert.match(reduce, /\.plate-rack-card:hover\s*\{[^}]*transform: none/);
   });
 
-  it("only the centre card fans its flat-lay; the side cards keep their resting pose", () => {
+  it("only the centre card spreads its collage; the rack has no flat-lay rules left", () => {
     const rack = css.slice(css.indexOf("/* Lookbook rack:"), css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
-    assert.match(rack, /\.plate-rack-slide:not\(\.is-center\) \.flat-piece\s*\{\s*transform: rotate\(var\(--rr, 0deg\)\) !important;/);
-    assert.match(rack, /\.plate-rack-slide\.is-center button:focus-visible \.flat-piece\s*\{\s*transform: translate\(var\(--sx, 0\), var\(--sy, 0\)\) rotate\(var\(--sr, 0deg\)\);/);
+    // The FlatLay-era rack rules are gone with FlatLay; the spread lives on .collage-piece.
+    assert.equal(rack.includes(".flat-piece"), false);
+    assert.match(
+      css,
+      /@media \(hover: hover\) and \(pointer: fine\) \{\s*\.is-center \.plate-rack-card:hover \.collage-piece,\s*\.plate-rack-slide\.is-center button:focus-visible \.collage-piece,[^{]*\{\s*transform: translate\(var\(--hx, 0\), var\(--hy, 0\)\) rotate\(var\(--hr, 0deg\)\);/,
+    );
+    // The resting tile has no transform of its own, so the side cards stay put.
+    assert.match(css, /\.collage-piece \{[^}]*transform: translate\(0, 0\) rotate\(0deg\);/);
     // The stacked-kit hover scale is gone with the kit.
     assert.equal(css.includes(".plate-rack-card:hover .look-kit-plate"), false);
-    // Today's hover fan is the one the centre card inherits, untouched.
+    // The card surface is CD's: warm card, 18px radius, 18/18/16 padding.
+    assert.match(rack, /\.plate-rack-card \{[^}]*background: var\(--color-card\);[^}]*border-radius: 18px;[^}]*padding: 18px 18px 16px;/);
+    // Today's FlatLay fan (closet.tsx, look-builder.tsx still use it) is untouched.
     assert.match(css, /\.group:hover \.flat-piece,\s*\.group:focus-visible \.flat-piece,\s*\.group:focus-within \.flat-piece\s*\{\s*transform: translate\(var\(--sx, 0\), var\(--sy, 0\)\) rotate\(var\(--sr, 0deg\)\);/);
   });
 

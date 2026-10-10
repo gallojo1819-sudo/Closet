@@ -13,6 +13,7 @@ import { useImageSrc } from "@/lib/use-image";
 import {
   detectorTitle,
   renderedSectionLooks,
+  rowWays,
   visibleDetectors,
   warmCellBook,
   type Way,
@@ -262,13 +263,18 @@ function LookbookPage() {
   const seasonShown = seasonControlLabel("auto", new Date(), drop?.weather?.f);
   const pageWeather = realWeatherF(drop?.weather);
   /* Detector sections build after first paint; until then the section is empty, then the same rows land. */
-  const [waysFor, setWaysFor] = useState<{ inputs: unknown[]; ways: Way[] } | null>(null);
+  /* Re-dress bumps rowSalt; the rows rebuild in the same idle callback (rowWays), and the old
+     rows stay on screen until the new ones land: the salt is not one of the readiness inputs. */
+  const [rowSalt, setRowSalt] = useState(0);
+  const [waysFor, setWaysFor] = useState<{ inputs: unknown[]; ways: Way[]; shown: Way[] } | null>(null);
   useEffect(() => {
     const inputs = [garments, occasion, season, color, pageWeather];
     let cancelled = false;
     const run = () => {
       if (cancelled) return;
-      setWaysFor({ inputs, ways: visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather }) });
+      const found = visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather });
+      const shown = rowWays(found, garments, { occasion, season, color, weatherF: pageWeather, salt: rowSalt });
+      setWaysFor({ inputs, ways: found, shown });
     };
     const idle = window.requestIdleCallback;
     if (typeof idle === "function") {
@@ -283,11 +289,13 @@ function LookbookPage() {
       cancelled = true;
       window.clearTimeout(id);
     };
-  }, [garments, occasion, season, color, pageWeather]);
+  }, [garments, occasion, season, color, pageWeather, rowSalt]);
   const waysInputs = [garments, occasion, season, color, pageWeather];
   const waysReady = Boolean(waysFor && waysFor.inputs.every((value, i) => Object.is(value, waysInputs[i])));
   /* Week-card house titles wait for the same rows, so render never builds the cell book. */
   const ways = waysReady && waysFor ? waysFor.ways : NO_WAYS;
+  /* The rows as rendered (up to ROW_MAX each): the sections and the stylist page both read these. */
+  const shownWays = waysReady && waysFor ? waysFor.shown : NO_WAYS;
   useEffect(() => {
     const run = () => warmCellBook(garments, season, pageWeather);
     const idle = window.requestIdleCallback;
@@ -421,6 +429,32 @@ function LookbookPage() {
     setOpenId(look.id);
   };
 
+  /* This week's reshuffle, unchanged from the old Reshuffle button. Writes nothing to the store. */
+  const reshuffleWeek = () => {
+    const nextSalt = salt + 1;
+    const next = buildReshuffleRow(garments, occasion, {
+      season,
+      color,
+      salt: nextSalt,
+      cap: 8,
+      excludeKeys: row.map((look) => comboKey(look.garmentIds)),
+      mustInclude: unusedFromLooks(garments, looksAll).map((g) => g.id),
+      taste,
+      weather: drop?.weather?.measured ? drop.weather : undefined,
+    });
+    setSalt(nextSalt);
+    if (next.length) {
+      setShown({ key: filterKey, looks: next });
+      setWeekPulse((x) => x + 1);
+    }
+  };
+
+  /* One Re-dress: new rows (rowWays, idle) and a new week. Nothing is written anywhere. */
+  const redress = () => {
+    setRowSalt((n) => n + 1);
+    reshuffleWeek();
+  };
+
   const getAnchor = useCallback(() => lastAnchor.current, []);
 
   const getOpenCard = useCallback(() => {
@@ -435,7 +469,7 @@ function LookbookPage() {
     allOpenLooks.find((l) => l.id === openId) ??
     null;
   const openPieces = openLook ? piecesFor(openLook) : [];
-  const sectionLooks = renderedSectionLooks(ways, occasion);
+  const sectionLooks = renderedSectionLooks(shownWays, occasion);
   const heroCards = hero && heroShown.length > 0 && !openLook ? realWeekLooks(heroShown, ownedIds) : [];
   const screenLooks = (() => {
     const seen = new Set<string>();
@@ -468,9 +502,28 @@ function LookbookPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-6 py-8 md:py-12 rise">
       <p className="micro text-ink-soft">Lookbook</p>
-      <h1 className="mt-2 font-editorial text-4xl md:text-6xl tracking-tight">
-        Lookbook
-      </h1>
+      <div className="mt-2 flex items-center justify-between gap-4">
+        <h1 className="font-editorial text-4xl md:text-6xl tracking-tight">
+          Lookbook
+        </h1>
+        <button
+          type="button"
+          data-redress
+          onClick={redress}
+          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-ink bg-ink px-4 py-2 text-[12px] font-medium text-paper md:px-5 md:py-3 md:text-[13px]"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Re-dress
+        </button>
+      </div>
       {hydrated && (
         <>
           <p className="mt-3 text-ink-soft max-w-xl">
@@ -582,37 +635,13 @@ function LookbookPage() {
       </div>
       <DetectorSections
         garments={garments}
-        ways={ways}
+        ways={shownWays}
         occasion={occasion}
         season={season}
         color={color}
         onOpen={openPlate}
       />
       <div className="mt-6 flex flex-wrap gap-3">
-      <button
-        type="button"
-        onClick={() => {
-          const nextSalt = salt + 1;
-          const next = buildReshuffleRow(garments, occasion, {
-            season,
-            color,
-            salt: nextSalt,
-            cap: 8,
-            excludeKeys: row.map((look) => comboKey(look.garmentIds)),
-            mustInclude: unusedFromLooks(garments, looksAll).map((g) => g.id),
-            taste,
-            weather: drop?.weather?.measured ? drop.weather : undefined,
-          });
-          setSalt(nextSalt);
-          if (next.length) {
-            setShown({ key: filterKey, looks: next });
-            setWeekPulse((x) => x + 1);
-          }
-        }}
-        className="inline-flex h-11 items-center border border-hairline px-4 text-sm text-ink hover:border-hairline-strong"
-      >
-        Reshuffle
-      </button>
       <button
         type="button"
         onClick={() => setPlay((v) => !v)}

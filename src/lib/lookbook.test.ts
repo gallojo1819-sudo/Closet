@@ -1545,11 +1545,16 @@ describe("reshuffle row", () => {
     assert.ok(blazerLooks.length < second.length);
     assert.equal(saved.length, before);
     const src = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
-    const buttonAt = src.search(/Reshuffle\s*<\/button>/);
-    const clickAt = src.lastIndexOf("onClick", buttonAt);
-    const click = src.slice(clickAt, buttonAt);
+    // The old Reshuffle button is gone; its body is reshuffleWeek, called by the header's Re-dress.
+    assert.equal(/Reshuffle\s*<\/button>/.test(src), false);
+    const weekAt = src.indexOf("const reshuffleWeek = () => {");
+    assert.ok(weekAt > 0);
+    const click = src.slice(weekAt, src.indexOf("};", weekAt));
     assert.equal(click.includes("buildReshuffleRow"), true);
     assert.equal(click.includes("composeChapter"), false);
+    assert.match(src, /const redress = \(\) => \{\s*setRowSalt\(\(n\) => n \+ 1\);\s*reshuffleWeek\(\);\s*\};/);
+    assert.match(src, /<button[^>]*data-redress[^>]*onClick=\{redress\}/);
+    assert.equal(src.split("onClick={redress}").length - 1, 1);
   });
 });
 
@@ -1712,8 +1717,10 @@ describe("lookbook card stack", () => {
     assert.equal(book.includes("HOUSE_LABEL"), false);
     assert.equal(book.includes("dressableHouses"), false);
     assert.match(book, /<DetectorSections/);
-    assert.match(book, /ways=\{ways\}/);
-    assert.equal(book.includes("shownWays"), false);
+    // The sections and the stylist page both read the rows as rendered (rowWays, up to ROW_MAX).
+    assert.match(book, /ways=\{shownWays\}/);
+    assert.match(book, /renderedSectionLooks\(shownWays, occasion\)/);
+    assert.equal(book.includes("ways={ways}"), false);
     assert.match(book, /occasion=\{occasion\}/);
     assert.match(book, /season=\{season\}/);
     assert.match(book, /color=\{color\}/);
@@ -2118,8 +2125,8 @@ export function GarmentImg(props) {
 
   it("Today's paper model picks a piece and swaps it under the list's own rule", () => {
     const today = read("../routes/index.tsx");
-    assert.match(today, /<FlatLay[^>]*onPick=\{setPick\}/);
-    const flatAt = today.indexOf("<FlatLay");
+    assert.match(today, /<LookCollage[^>]*onPick=\{setPick\}/);
+    const flatAt = today.indexOf("<LookCollage");
     const flatEnd = today.indexOf('<div className="space-y-6">', flatAt);
     assert.ok(flatAt > 0 && flatEnd > flatAt);
     const flat = today.slice(flatAt, flatEnd);

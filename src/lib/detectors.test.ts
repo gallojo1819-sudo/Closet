@@ -65,14 +65,15 @@ async function renderSections(
   }).outputText;
   const detectorsHref = new URL("./detectors.ts", import.meta.url).href;
   const jsxHref = import.meta.resolve("react/jsx-runtime");
+  const collageHref = new URL("./look-collage.ts", import.meta.url).href;
   const dir = mkdtempSync(join(tmpdir(), "detectors-"));
-  const lay = join(dir, "flat-lay.mjs");
+  const lay = join(dir, "look-collage.mjs");
   writeFileSync(
     lay,
     `import { jsx, jsxs } from ${JSON.stringify(jsxHref)};
-export function FlatLay({ pieces = [] }) {
+export function LookCollage({ pieces = [] }) {
   return jsxs("div", {
-    "data-flat-lay": "",
+    "data-collage": "",
     children: pieces.map((g) => jsx("span", { children: g.name }, g.id)),
   });
 }
@@ -87,9 +88,10 @@ export function PlateRack({ label, children }) {
 }
 `,
   );
-  js = js.replaceAll(`from "@/components/closet/flat-lay"`, `from ${JSON.stringify(pathToFileURL(lay).href)}`);
+  js = js.replaceAll(`from "@/components/closet/look-collage"`, `from ${JSON.stringify(pathToFileURL(lay).href)}`);
   js = js.replaceAll(`from "@/components/closet/plate-rack"`, `from ${JSON.stringify(pathToFileURL(rack).href)}`);
   js = js.replaceAll(`from "@/lib/detectors"`, `from ${JSON.stringify(detectorsHref)}`);
+  js = js.replaceAll(`from "@/lib/look-collage"`, `from ${JSON.stringify(collageHref)}`);
   js = js.replaceAll(`from "react/jsx-runtime"`, `from ${JSON.stringify(jsxHref)}`);
   const file = join(dir, "detector-sections.mjs");
   writeFileSync(file, js);
@@ -140,9 +142,10 @@ describe("detectors", () => {
     const html = await renderSections(rack, { season: "fall", occasion: "weekend" });
     const titles = titlesOf(html);
     assert.ok(titles.includes("Graphic tee and retro sneaker"));
-    assert.match(html, /data-flat-lay/);
+    assert.match(html, /data-collage/);
     assert.match(html, /graphic tee 1/);
-    assert.equal(html.includes("graphic tee 1 · "), false);
+    // CD's caption: the piece names on one line, in collage order (top, bottom, shoes).
+    assert.match(html, /<p class="mt-1 text-xs[^"]*">graphic tee 1 · indigo jean \d · retro sneaker \d<\/p>/);
     assert.equal(titles.includes("Flannel, cashmere, dark suede"), false);
     assert.equal(titles.includes("Linen and a soft jacket"), false);
     assert.equal(html.includes("None"), false);
@@ -360,11 +363,12 @@ describe("detectors", () => {
     };
     const html = await renderSections([], { ways: [way], occasion: "weekday", season: "fall" });
     assert.match(html, /<h2[^>]*>Oxford and chinos<\/h2>/);
-    assert.match(html, /data-flat-lay/);
+    assert.match(html, /data-collage/);
     assert.match(html, /Navy oxford/);
     assert.match(html, /Tan chinos/);
     assert.match(html, /Brown loafers/);
-    assert.equal(html.includes("Navy oxford · Tan chinos"), false);
+    // CD's caption line under the collage: the names joined with a middle dot, in collage order.
+    assert.equal(html.split("Navy oxford · Tan chinos · Brown loafers").length - 1, 3);
     const empty = await renderSections([], {
       ways: [
         {
@@ -384,7 +388,7 @@ describe("detectors", () => {
     assert.match(empty, /top, a bottom, and a shoe/);
   });
 
-  it("a plate keeps its own 4:5 box, names follow it in flow, and the short note sits after the row", async () => {
+  it("a plate is the collage with its caption under it in flow, and the short note sits after the row", async () => {
     const look = (n: number): Garment[] => [
       g({ id: `t${n}`, name: `Navy oxford ${n}`, category: "top", subtype: "oxford" }),
       g({ id: `b${n}`, name: `Tan chinos ${n}`, category: "bottom", subtype: "chino" }),
@@ -400,21 +404,23 @@ describe("detectors", () => {
     const html = await renderSections([], { ways: [way], occasion: "weekday", season: "fall" });
     // Heading, then the chapter label, then the row: in-flow siblings inside one section.
     assert.match(html, /<section><h2[^>]*>Oxford and chinos<\/h2><div><p[^>]*>Weekday<\/p><div data-plate-rack="Oxford and chinos outfits">/);
-    // Every lay-down sits in a definite 2:3 art box, inset from its sides so the trouser hems and
-    // shoes stay inside it; the name list comes after that box, never inside or under the clothes.
+    // The collage is the card's art (its own 1:1.28 box, nothing clipped), and CD's caption
+    // follows it in flow inside the one button: a serif title, then the one-line piece list.
     const cards = html.split('<div class="w-full">').slice(1);
     assert.equal(cards.length, 2);
     for (const card of cards) {
+      assert.match(card, /^<button type="button"[^>]*><div data-collage="">/);
       assert.match(
         card,
-        /^<div class="relative aspect-\[2\/3\] w-full overflow-hidden"><button type="button"[^>]*><div class="absolute inset-x-\[9%\] top-\[7%\] bottom-0"><div data-flat-lay="">/,
+        /<\/div><p class="mt-3 font-editorial[^"]*">[^<]+<\/p><p class="mt-1 text-xs[^"]*text-ink-soft[^"]*">[^<]+ · [^<]+ · [^<]+<\/p><\/button><\/div>/,
       );
-      assert.match(card, /<\/div><\/div><\/button><\/div><ul class="mt-2 space-y-0\.5"><li/);
+      assert.equal(card.includes("<ul"), false);
     }
+    assert.match(html, /<p class="mt-3 font-editorial[^"]*">Oxford 1 and chinos 1<\/p>/);
     // The short note closes the row and the last card first; it is never inside a card.
     assert.match(
       html,
-      /<\/ul><\/div><\/div><p data-way-short="true" class="[^"]*">Only 2 in your closet\.<\/p><\/div><\/section>/,
+      /<\/button><\/div><\/div><p data-way-short="true" class="[^"]*">Only 2 in your closet\.<\/p><\/div><\/section>/,
     );
     assert.equal(html.split("data-way-short").length - 1, 1);
     const source = readFileSync(
@@ -424,18 +430,15 @@ describe("detectors", () => {
     const plateCard = source.slice(source.indexOf("function PlateCard"), source.indexOf("function Chapter"));
     assert.match(
       plateCard,
-      /<div className="relative aspect-\[2\/3\] w-full overflow-hidden">\s*<button[\s\S]*?<div className="absolute inset-x-\[9%\] top-\[7%\] bottom-0">\s*<FlatLay pieces=\{look\} passive className="absolute inset-0 aspect-auto overflow-visible border-0 bg-transparent" \/>\s*<\/div>\s*<\/button>/,
+      /<button[\s\S]*?<LookCollage pieces=\{look\} \/>\s*<p className="[^"]*font-editorial[^"]*">\{lookTitle\(look\)\}<\/p>\s*<p className="[^"]*text-ink-soft[^"]*">\{pieceLine\(look\)\}<\/p>\s*<\/button>/,
     );
-    // The art box clips, so the button's focus ring has to be drawn inside it.
-    assert.match(plateCard, /<button[\s\S]*?className="[^"]*focus-visible:-outline-offset-1[^"]*"/);
-    // Without aspect-auto the lay keeps the flat-lay's own 4:5 even with insets on every side, and clips as before;
-    // without overflow-visible a fanned piece's rotated corner is cut at the lay's side.
-    assert.match(plateCard, /<FlatLay[^>]*className="[^"]*\baspect-auto\b/);
-    assert.match(plateCard, /<FlatLay[^>]*className="[^"]*\boverflow-visible\b/);
-    // The fan needs hover on the FlatLay root itself; clicks still bubble to the button.
-    assert.equal(/<FlatLay[^>]*pointer-events-none/.test(plateCard), false);
-    assert.equal(plateCard.includes("aspect-[4/5]"), false, "the rack's art box is taller than Today's paper");
+    // Passive collage: no onPick, so clicks bubble to the button; the old 2:3 clip box is gone.
+    assert.equal(/<LookCollage[^>]*onPick/.test(plateCard), false);
+    assert.equal(plateCard.includes("aspect-[2/3]"), false);
+    assert.equal(plateCard.includes("overflow-hidden"), false);
+    assert.equal(plateCard.includes("<FlatLay"), false);
     assert.equal(plateCard.includes("<LookKit"), false);
+    assert.equal(plateCard.includes("<ul"), false);
   });
 
   it("every plate is one button that opens its exact pieces", async () => {
@@ -481,8 +484,9 @@ describe("detectors", () => {
     }
     const imports = source.split("\n").filter((line) => line.startsWith("import "));
     assert.deepEqual(imports, [
-      'import { FlatLay } from "@/components/closet/flat-lay";',
-      'import { activeFirst, OCCASION_ORDER, visibleDetectors, type Way } from "@/lib/detectors";',
+      'import { LookCollage } from "@/components/closet/look-collage";',
+      'import { activeFirst, OCCASION_ORDER, ROW_MAX, visibleDetectors, type Way } from "@/lib/detectors";',
+      'import { lookTitle, pieceLine } from "@/lib/look-collage";',
       'import type { Garment, Occasion, Season } from "@/lib/types";',
       'import { PlateRack } from "@/components/closet/plate-rack";',
     ]);
@@ -494,7 +498,7 @@ describe("detectors", () => {
       g({ id: `b${n}`, name: `Tan chinos ${n}`, category: "bottom", subtype: "chino" }),
       g({ id: `s${n}`, name: `Brown loafers ${n}`, category: "footwear", subtype: "loafer" }),
     ];
-    const card = /^<div class="relative aspect-\[2\/3\] w-full overflow-hidden"><button type="button"[^>]*><div class="absolute inset-x-\[9%\] top-\[7%\] bottom-0"><div data-flat-lay="">/;
+    const card = /^<button type="button"[^>]*><div data-collage="">/;
     const titled: Way = {
       id: "2",
       title: "Oxford and chinos",
@@ -510,7 +514,7 @@ describe("detectors", () => {
     for (const [i, piece] of cards.entries()) {
       assert.match(piece, card);
       assert.equal(piece.split('<button type="button"').length - 1, 1);
-      assert.equal(piece.split('data-flat-lay=""').length - 1, 1);
+      assert.equal(piece.split('data-collage=""').length - 1, 1);
       assert.equal(
         piece.split(`aria-label="Open Navy oxford ${i + 1}, Tan chinos ${i + 1}, Brown loafers ${i + 1}"`).length - 1,
         1,
@@ -533,7 +537,7 @@ describe("detectors", () => {
     for (const [i, piece] of usualCards.entries()) {
       assert.match(piece, card);
       assert.equal(piece.split('<button type="button"').length - 1, 1);
-      assert.equal(piece.split('data-flat-lay=""').length - 1, 1);
+      assert.equal(piece.split('data-collage=""').length - 1, 1);
       assert.equal(
         piece.split(`aria-label="Open Navy oxford ${i + 1}, Tan chinos ${i + 1}, Brown loafers ${i + 1}"`).length - 1,
         1,

@@ -11,6 +11,8 @@ export {
   maxDisjoint,
   OCCASION_ORDER,
   renderedSectionLooks,
+  ROW_MAX,
+  rowWays,
   sharedDetector,
   visibleDetectors,
   warmCellBook,
