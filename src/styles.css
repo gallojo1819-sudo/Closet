@@ -358,9 +358,43 @@
   }
 }
 
-/* Lookbook rack: slide → .plate-rack-pose (JS transform with depth, plus opacity) → .plate-rack-card (the plate). */
+/* Lookbook rack: slide → .plate-rack-hang (the rail's tilt + swing) → hook + .plate-rack-pose (Spotlight's
+   JS transform and opacity) → .plate-rack-card (the plate). ≥640px is The Rail, <640px is Spotlight. */
 .plate-rack-stage {
-  position: relative; /* the arrows sit on it */
+  position: relative; /* the arrows and the rail sit on it */
+}
+/* The brass rail with its end brackets: desktop only, behind the hooks (z 1 < the track's 90). */
+.plate-rack-rail {
+  display: none;
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  top: 10px;
+  height: 6px;
+  z-index: 1;
+  border-radius: 4px;
+  background: linear-gradient(#e2c48a, #b08a4a 55%, #8a6a35);
+  box-shadow: 0 2px 3px rgb(60 40 10 / 0.35);
+  pointer-events: none;
+}
+.plate-rack-bracket {
+  position: absolute;
+  top: -14px;
+  width: 8px;
+  height: 34px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #8a6a35, #c9a866, #8a6a35);
+}
+.plate-rack-bracket.is-left {
+  left: 0;
+}
+.plate-rack-bracket.is-right {
+  right: 0;
+}
+@media (min-width: 640px) {
+  .plate-rack-rail {
+    display: block;
+  }
 }
 /* The track is its own stacking context, high in the page's order. Two reasons, both measured
    on the 15-card row under 4x CPU throttle: (1) the z-index React sets on a slide when the
@@ -370,8 +404,9 @@
    (z-index 120) stay above it; the dots, which overlap its bottom padding, get their own
    z-index so they are still clickable. */
 .plate-rack-track {
-  --rack-card: min(72vw, 300px);
-  --rack-tuck: 14px;
+  /* Spotlight: the centre card at 1.15× leaves ~13vw of each neighbour peeking. */
+  --rack-card: 64vw;
+  --rack-tuck: 6px;
   position: relative;
   isolation: isolate;
   z-index: 90;
@@ -382,7 +417,7 @@
   /* Slide 0 sits dead centre at scrollLeft 0; the tuck undoes the first slide's negative margin. */
   padding-inline: calc(50% - var(--rack-card) / 2 + var(--rack-tuck));
   /* The bottom room is for the centre card's shadow: the track clips vertically too. */
-  padding-block: 18px 52px;
+  padding-block: 18px 40px;
   outline: none;
   overscroll-behavior-x: contain;
 }
@@ -390,8 +425,20 @@
   display: none;
 }
 @media (min-width: 640px) {
+  /* The Rail: 250px hangers 22px apart, start-aligned at RAIL_PAD (plate-rack.ts), with enough
+     room on the right for the last hanger to reach the same line. */
   .plate-rack-track {
-    --rack-card: 340px;
+    --rack-card: 250px;
+    --rack-tuck: 0px;
+    padding-inline: 8px calc(100% - var(--rack-card) - 8px);
+    padding-block: 0 44px;
+  }
+  .plate-rack-row {
+    gap: 22px;
+  }
+  .plate-rack-slide {
+    scroll-snap-align: start;
+    scroll-padding-inline-start: 8px;
   }
 }
 @media (hover: hover) and (pointer: fine) {
@@ -421,9 +468,16 @@
   scroll-snap-align: center;
   margin-inline: calc(-1 * var(--rack-tuck)); /* slight overlap so neighbours tuck behind */
 }
+/* The hanger: on the rail it carries the resting tilt (per slide) plus the row's swing. */
+.plate-rack-hang {
+  transform-origin: 50% 0;
+}
+.plate-rack-hook {
+  display: none;
+}
 .plate-rack-pose {
   perspective: 1000px; /* for the card's hover tilt */
-  transform-origin: 50% 60%;
+  transform-origin: 50% 40%;
   /* opacity too: without it Chrome re-rasters the card each time one crosses 1. */
   will-change: transform, opacity;
 }
@@ -431,6 +485,28 @@
   transition:
     transform 450ms var(--ease-atelier),
     opacity 450ms var(--ease-atelier);
+}
+/* A mouse drag reads the fractional offset every frame: the incoming card grows as it is pulled. */
+.plate-rack-track.is-dragging .plate-rack-pose {
+  transition: none;
+}
+@media (min-width: 640px) {
+  .plate-rack-hang {
+    transform: rotate(calc(var(--tilt, 0deg) + var(--swing, 0deg)));
+    will-change: transform;
+  }
+  .plate-rack-hook {
+    display: block;
+    margin: 0 auto -2px;
+  }
+  /* The rail has no poses: the hanger is the only transform. */
+  .plate-rack-pose,
+  .plate-rack-track.is-ready .plate-rack-pose {
+    transform: none !important;
+    opacity: 1 !important;
+    transition: none;
+    will-change: auto;
+  }
 }
 /* CD .card: warm card, 18px radius, 18/18/16 padding, the CD shadow. */
 .plate-rack-card {
@@ -441,8 +517,40 @@
   box-shadow:
     0 1px 2px rgb(0 0 0 / 0.05),
     0 10px 28px rgb(60 45 25 / 0.1);
-  transition: transform 300ms var(--ease-atelier);
+  transition:
+    transform 300ms var(--ease-atelier),
+    opacity 200ms var(--ease-atelier);
   transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+}
+/* The hanger's number tag, desktop only. */
+.plate-rack-tag {
+  display: none;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  z-index: 8;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--color-ink-soft);
+  background: rgb(251 248 242 / 0.9);
+  padding: 4px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--color-hairline);
+}
+@media (min-width: 640px) {
+  .plate-rack-card {
+    padding: 14px 14px 14px;
+  }
+  .plate-rack-tag {
+    display: block;
+  }
+}
+/* Spotlight: only the centre card shows its piece list; the sides keep the title. */
+@media (max-width: 639px) {
+  .plate-rack-slide:not(.is-center) .plate-rack-card p + p {
+    visibility: hidden;
+  }
 }
 /* The centre card's deeper shadow fades in on a pseudo-element: an opacity change is
    compositor work, a box-shadow transition repaints the card every frame for 300ms. */
@@ -459,8 +567,10 @@
   transition: opacity 300ms var(--ease-atelier);
   pointer-events: none;
 }
-.is-center .plate-rack-card::after {
-  opacity: 1;
+@media (max-width: 639px) {
+  .is-center .plate-rack-card::after {
+    opacity: 1;
+  }
 }
 .plate-rack-slide:not(.is-center) .plate-rack-card {
   cursor: pointer;
@@ -468,6 +578,22 @@
 @media (hover: hover) and (pointer: fine) {
   .is-center .plate-rack-card:hover {
     transform: translateY(-6px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  }
+}
+/* The Rail's hover: the card lifts forward off its hanger with the deep shadow, the others dim.
+   The lifted slide must stack above its neighbours, whose z-index React sets inline. */
+@media (min-width: 640px) and (hover: hover) and (pointer: fine) {
+  .plate-rack-slide:hover {
+    z-index: 101 !important;
+  }
+  .plate-rack-row .plate-rack-slide:hover .plate-rack-card {
+    transform: translateY(12px) scale(1.1);
+  }
+  .plate-rack-slide:hover .plate-rack-card::after {
+    opacity: 1;
+  }
+  .plate-rack-row:hover .plate-rack-slide:not(:hover) .plate-rack-card {
+    opacity: 0.82;
   }
 }
 /* The card art is a passive LookCollage; its centre-card spread lives with .collage-piece above. */
@@ -511,32 +637,63 @@
     display: flex;
   }
 }
-.plate-rack-dots {
+/* Spotlight's scrubber: one mini thumb per look over a progress line. Tap or drag to jump. */
+.plate-rack-scrub {
   position: relative;
-  z-index: 91; /* above the track they overlap (see .plate-rack-track) */
+  z-index: 91; /* above the track it overlaps (see .plate-rack-track) */
   display: flex;
   justify-content: center;
+  align-items: flex-end;
   gap: 6px;
-  height: 6px;
-  margin-top: -32px;
-  /* The active dot's width change stays inside this row's own layer instead of the page. */
+  margin-top: -22px;
+  padding-bottom: 10px;
+  touch-action: none;
+  /* The active thumb's size change stays inside this row's own layer instead of the page. */
   contain: layout paint;
   will-change: transform;
 }
-.plate-rack-dot {
-  width: 6px;
-  height: 6px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
+.plate-rack-scrub::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  height: 2px;
   background: var(--color-hairline);
-  transition:
-    width 350ms var(--ease-atelier),
-    background-color 350ms;
 }
-.plate-rack-dot.is-active {
-  width: 22px;
+.plate-rack-thumb {
+  width: 28px;
+  height: 35px;
+  padding: 2px;
+  border: 1px solid var(--color-hairline);
+  border-radius: 4px;
+  background: var(--color-card);
+  overflow: hidden;
+  opacity: 0.45;
+  transition:
+    width 250ms var(--ease-atelier),
+    height 250ms var(--ease-atelier),
+    opacity 250ms;
+}
+.plate-rack-thumb.is-active {
+  width: 36px;
+  height: 45px;
+  opacity: 1;
+  border-color: var(--color-ink);
+}
+.plate-rack-progress {
+  position: absolute;
+  left: 0;
+  bottom: 4px;
+  z-index: 1;
+  height: 2px;
   background: var(--color-ink);
+  transition: width 250ms var(--ease-atelier);
+}
+@media (min-width: 640px) {
+  .plate-rack-scrub {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -570,9 +727,11 @@
   .plate-rack-card,
   .plate-rack-card::after,
   .plate-rack-arrow,
-  .plate-rack-dot {
+  .plate-rack-thumb,
+  .plate-rack-progress {
     transition: none;
   }
+  .plate-rack-row .plate-rack-slide:hover .plate-rack-card,
   .is-center .plate-rack-card:hover {
     transform: none;
   }

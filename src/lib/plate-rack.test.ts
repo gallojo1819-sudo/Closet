@@ -1,9 +1,90 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { nearestIndex, rackIdentity, rackPose, stepIndex, tiltFromPointer } from "./plate-rack.ts";
+import {
+  nearestIndex,
+  RAIL_PAD,
+  rackIdentity,
+  rackPose,
+  railTilt,
+  scrubIndex,
+  spotlightPose,
+  stepIndex,
+  SWING_REST,
+  swingKick,
+  swingSettled,
+  swingStep,
+  tiltFromPointer,
+} from "./plate-rack.ts";
 
 const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ≈ ${b}`);
+const BANNED =
+  /\b(Polo|Purple|RRL|ALD|Faloni|545|Sweet Stable|Italian summer|Italian winter)\b/;
+
+describe("The Rail and Spotlight geometry", () => {
+  it("every hanger rests within ±0.5°, neighbours lean opposite ways, and the rail inset is small", () => {
+    for (let i = 0; i < 40; i++) {
+      const t = railTilt(i);
+      assert.ok(Math.abs(t) <= 0.5 && Math.abs(t) > 0, `hanger ${i}: ${t}`);
+      assert.ok(Math.sign(railTilt(i + 1)) !== Math.sign(t), `hangers ${i} and ${i + 1} lean the same way`);
+    }
+    assert.equal(railTilt(-1), railTilt(5));
+    assert.equal(RAIL_PAD, 8);
+  });
+
+  it("spotlight: 1.15× at the centre, ~0.88× beside it, ~0.76× two out, and monotonic in the fractional offset", () => {
+    assert.deepEqual(spotlightPose(0), { scale: 1.15, rotateY: 0, opacity: 1, z: 100 });
+    assert.equal(Object.is(spotlightPose(-0).rotateY, -0), false);
+    close(spotlightPose(1).scale, 0.88);
+    close(spotlightPose(-1).scale, 0.88);
+    close(spotlightPose(1).opacity, 0.6);
+    close(spotlightPose(2).scale, 0.76);
+    assert.equal(spotlightPose(1).rotateY, -6);
+    assert.equal(spotlightPose(-1).rotateY, 6);
+    assert.equal(spotlightPose(3).opacity, 0);
+    assert.equal("saturate" in spotlightPose(1), false);
+    // Pulling a card in: scale and opacity rise all the way, with no step, as |offset| falls.
+    let last = spotlightPose(2.5);
+    for (let a = 2.4; a >= -1e-9; a -= 0.1) {
+      const p = spotlightPose(a);
+      assert.ok(p.scale >= last.scale, `scale at ${a.toFixed(1)}`);
+      assert.ok(p.opacity >= last.opacity, `opacity at ${a.toFixed(1)}`);
+      assert.ok(p.z >= last.z);
+      last = p;
+    }
+    // The z is rackPose's, so the slide stacking rule is unchanged.
+    for (const a of [0, 0.4, 1, 1.6, 2, 3]) assert.equal(spotlightPose(a).z, rackPose(a).z);
+  });
+
+  it("the scrubber maps a position along the strip to the look under it", () => {
+    assert.equal(scrubIndex(0, 9), 0);
+    assert.equal(scrubIndex(0.11, 9), 0);
+    assert.equal(scrubIndex(0.12, 9), 1);
+    assert.equal(scrubIndex(0.5, 9), 4);
+    assert.equal(scrubIndex(0.999, 9), 8);
+    assert.equal(scrubIndex(1, 9), 8);
+    assert.equal(scrubIndex(1.5, 9), 8);
+    assert.equal(scrubIndex(-1, 9), 0);
+    assert.equal(scrubIndex(0.5, 0), 0);
+  });
+
+  it("a scroll swings the hangers 1–2° against the motion and the spring settles them back to 0", () => {
+    const kicked = swingKick(SWING_REST, 40);
+    assert.ok(kicked.angle < 0 && kicked.angle >= -2, `against the motion: ${kicked.angle}`);
+    assert.ok(swingKick(SWING_REST, -40).angle > 0);
+    assert.ok(Math.abs(swingKick(SWING_REST, 10000).angle) <= 2, "never past 2°");
+    assert.equal(swingKick(SWING_REST, 0), SWING_REST);
+    let s = swingKick(swingKick(SWING_REST, 30), 30);
+    let steps = 0;
+    while (!swingSettled(s) && steps < 400) {
+      s = swingStep(s);
+      steps += 1;
+    }
+    assert.ok(steps > 3 && steps < 200, `${steps} frames`);
+    assert.deepEqual(s, SWING_REST);
+    assert.equal(Object.is(swingStep({ angle: -0.001, velocity: 0 }).angle, -0), false);
+  });
+});
 
 describe("plate rack geometry", () => {
   it("the centre card is upright and full size, and -0 never leaks out", () => {
@@ -129,7 +210,7 @@ describe("plate rack component and styles", () => {
     // itself that context, high in the page's order (cheap layerization), so the repaint covers
     // one row, not the page container. The dots overlap the track's bottom padding and sit above it.
     assert.match(css, /\.plate-rack-track\s*\{[^}]*position: relative;\s*isolation: isolate;\s*z-index: 90;/);
-    assert.match(css, /\.plate-rack-dots\s*\{\s*position: relative;\s*z-index: 91;/);
+    assert.match(css, /\.plate-rack-scrub\s*\{\s*position: relative;\s*z-index: 91;/);
     assert.match(css, /\.plate-rack-arrow\s*\{[^}]*z-index: 120;/);
   });
 
@@ -157,7 +238,9 @@ describe("plate rack component and styles", () => {
     // Reads (rects) come before writes (styles): no layout thrash per frame.
     assert.ok(loop.indexOf("getBoundingClientRect") < loop.indexOf("style.transform"));
     assert.equal(/\.style\.(width|height|margin|padding|left|top)\s*=/.test(loop), false);
-    assert.match(source, /behavior: reduced \? "auto" : "smooth"/);
+    // Snaps are smooth unless reduced; the scrubber's drag passes "auto" so the row follows the finger.
+    assert.match(source, /behavior: behavior \?\? \(reduced \? "auto" : "smooth"\)/);
+    assert.match(source, /scrollToIndex\(i, "auto"\)/);
   });
 
   it("the stylesheet snaps the rack and leaves This week's swipe row alone", () => {
@@ -187,6 +270,46 @@ describe("plate rack component and styles", () => {
     assert.match(rack, /\.plate-rack-card \{[^}]*background: var\(--color-card\);[^}]*border-radius: 18px;[^}]*padding: 18px 18px 16px;/);
     // Today's FlatLay fan (closet.tsx, look-builder.tsx still use it) is untouched.
     assert.match(css, /\.group:hover \.flat-piece,\s*\.group:focus-visible \.flat-piece,\s*\.group:focus-within \.flat-piece\s*\{\s*transform: translate\(var\(--sx, 0\), var\(--sy, 0\)\) rotate\(var\(--sr, 0deg\)\);/);
+  });
+
+  it("The Rail (≥640px) and Spotlight (<640px) share the engine: one markup, CSS splits the look", () => {
+    // Which look is in force is a ref from the width query, never state; the swing is off under reduced motion.
+    assert.match(source, /const RAIL_QUERY = "\(min-width: 640px\)";/);
+    assert.match(source, /railRef\.current = window\.matchMedia\(RAIL_QUERY\)\.matches;/);
+    assert.match(source, /const kickSwing = useCallback\(\s*\(dx: number\) => \{\s*if \(!railRef\.current \|\| reducedRef\.current\) return;/);
+    assert.match(source, /row\.style\.setProperty\("--swing"/);
+    // The rail writes no poses; Spotlight writes spotlightPose from the fractional offset each frame.
+    const loop = source.slice(source.indexOf("const measure = "), source.indexOf("const scrollToIndex"));
+    assert.match(loop, /if \(!railRef\.current\) \{[\s\S]*spotlightPose\(offsets\[i\]!\)/);
+    assert.equal(loop.includes("railTilt("), false, "the resting tilt is render-time, not per frame");
+    // Hanger, hook, tag and scrubber in the markup; the scrubber thumb is the look's jacket, else its top.
+    assert.match(source, /className="plate-rack-hang" style=\{\{ \["--tilt" as string\]: `\$\{railTilt\(i\)\}deg` \}\}/);
+    assert.match(source, /<Hook \/>/);
+    assert.match(source, /className="plate-rack-tag"/);
+    assert.match(source, /className="plate-rack-scrub"/);
+    assert.match(source, /slots\.find\(\(p\) => p\.slot === "outer"\) \?\? slots\.find\(\(p\) => p\.slot === "top"\)/);
+    assert.equal(source.includes("plate-rack-dots"), false);
+    assert.equal(source.includes("plate-rack-dot"), false);
+    // Tap-to-open stays the card's own button; a drag still swallows its click; the sheet opener is untouched.
+    assert.match(source, /swallowClick\.current = true;/);
+    assert.match(source, /if \(railRef\.current \|\| i === centerRef\.current\) return;/);
+    assert.equal(source.includes("onOpen"), false);
+    // CSS: rail decoration and hooks only from 640px; scrubber only below; poses ignored on the rail.
+    assert.match(css, /\.plate-rack-rail \{\s*display: none;/);
+    assert.match(css, /@media \(min-width: 640px\) \{\s*\.plate-rack-rail \{\s*display: block;/);
+    assert.match(css, /\.plate-rack-hook \{\s*display: none;/);
+    assert.match(css, /\.plate-rack-hang \{\s*transform-origin: 50% 0;/);
+    assert.match(css, /\.plate-rack-hang \{\s*transform: rotate\(calc\(var\(--tilt, 0deg\) \+ var\(--swing, 0deg\)\)\);/);
+    assert.match(css, /@media \(min-width: 640px\) \{\s*\.plate-rack-scrub \{\s*display: none;/);
+    assert.match(css, /\.plate-rack-track\.is-dragging \.plate-rack-pose \{\s*transition: none;/);
+    assert.match(css, /@media \(min-width: 640px\) and \(hover: hover\) and \(pointer: fine\) \{[^}]*\.plate-rack-slide:hover \{\s*z-index: 101 !important;/);
+    assert.match(css, /\.plate-rack-row \.plate-rack-slide:hover \.plate-rack-card \{\s*transform: translateY\(12px\) scale\(1\.1\);/);
+    assert.match(css, /\.plate-rack-row:hover \.plate-rack-slide:not\(:hover\) \.plate-rack-card \{\s*opacity: 0\.82;/);
+    const reduce = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    assert.match(reduce, /\.plate-rack-row \.plate-rack-slide:hover \.plate-rack-card,\s*\.is-center \.plate-rack-card:hover \{\s*transform: none;/);
+    for (const rel of ["../components/closet/plate-rack.tsx", "./plate-rack.ts", "../components/closet/detector-sections.tsx", "../styles.css"]) {
+      assert.equal(BANNED.test(readFileSync(new URL(rel, import.meta.url), "utf8")), false, rel);
+    }
   });
 
   it("the rack never animates paint: no filter, no box-shadow transition, no 3D row, no isolated row", () => {

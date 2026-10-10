@@ -65,7 +65,7 @@ function Chapter({
   return (
     <div>
       <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[occasion]}</p>
-      <PlateRack label={`${title} outfits`}>
+      <PlateRack label={`${title} outfits`} looks={looks}>
         {looks.map((look, index) => (
           <PlateCard key={`${occasion}:${index}`} look={look} occasion={occasion} onOpen={onOpen} />
         ))}
@@ -114,7 +114,7 @@ export function DetectorSections({
       <div data-detectors className="mt-8 space-y-6">
         <section>
           <h2 className="font-editorial text-2xl tracking-tight">Your usual</h2>
-          <PlateRack label="Your usual outfits">
+          <PlateRack label="Your usual outfits" looks={looks.map((plate) => plate.look)}>
             {looks.map((plate, index) => (
               <PlateCard key={`usual:${index}`} look={plate.look} occasion={plate.occasion} onOpen={onOpen} />
             ))}
