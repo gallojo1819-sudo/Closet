@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { AccountChip } from "@/components/shell/account-chip";
 import { useAccount } from "@/lib/cloud/account";
 import { compressRefBackup, putImage, refImageKey } from "@/lib/images";
+import { refPhotoLabel } from "@/lib/ref-photo-label";
 import { useCloset } from "@/lib/store";
 import { useImageSrc } from "@/lib/use-image";
 import { cn } from "@/lib/utils";
@@ -180,7 +181,7 @@ function RefPhotoDialog({ onClose }: { onClose: () => void }) {
             onClick={() => fileRef.current?.click()}
             className="h-10 bg-accent px-4 text-sm text-paper disabled:opacity-40"
           >
-            {busy ? "Saving…" : refPhoto ? "Replace photo" : "Choose photo"}
+            {refPhotoLabel({ busy, shown })}
           </button>
           {refPhoto && (
             <button

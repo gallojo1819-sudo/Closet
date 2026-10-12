@@ -1,4 +1,5 @@
 import { GarmentImg } from "@/components/closet/gimg";
+import { derivedCategory } from "@/lib/garment-category";
 import type { Garment } from "@/lib/types";
 
 type Slot = {
@@ -21,7 +22,8 @@ const SLOTS: Record<string, Slot> = {
 };
 
 function slotOf(g: Garment): Slot | null {
-  const key = g.category === "other" ? "accessory" : g.category;
+  const category = derivedCategory(g);
+  const key = category === "other" ? "accessory" : category;
   return SLOTS[key] ?? null;
 }
 

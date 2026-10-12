@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { BodyPortal } from "@/components/closet/body-portal";
 import { GarmentDetail } from "@/components/closet/detail";
 import { IdleMount } from "@/components/closet/idle-mount";
 import { FlatLay } from "@/components/closet/flat-lay";
@@ -16,6 +17,7 @@ import {
   stashDataUrl,
 } from "@/lib/images";
 import { rackNotes } from "@/lib/gaps";
+import { derivedCategory } from "@/lib/garment-category";
 import { pieceLabel } from "@/lib/piece-label";
 import { jacketsNeedingPlate, needsReprintTile } from "@/lib/plate";
 import { scheduleOuterwearPlates } from "@/lib/plate-pass";
@@ -142,7 +144,7 @@ function ClosetPage() {
   const list = useMemo(() => {
     if (filter === "all") return garments;
     if (filter === "waiting") return waiting;
-    return garments.filter((g) => g.category === filter);
+    return garments.filter((g) => derivedCategory(g) === filter);
   }, [garments, waiting, filter]);
   const open = garments.find((g) => g.id === openId) ?? null;
   const showingDemo = garments.some((g) => g.demo);
@@ -432,6 +434,7 @@ function ClosetPage() {
         />
       )}
       {heroLooks.length > 0 && !heroOpen && (
+        <BodyPortal>
         <div className="fixed inset-0 z-[55] flex items-end md:items-center justify-center">
           <button
             type="button"
@@ -473,6 +476,7 @@ function ClosetPage() {
             </button>
           </div>
         </div>
+        </BodyPortal>
       )}
       {heroOpen && (
         <LookSheet

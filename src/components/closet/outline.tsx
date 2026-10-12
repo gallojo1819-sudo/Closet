@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { BodyPortal } from "@/components/closet/body-portal";
 import { classifyScan, printGarment } from "@/lib/ai";
 import { dataUrlToBlob, imageKey, notifyImage, putImage, putThumb } from "@/lib/images";
 import { readGarmentPhoto } from "@/lib/plate-pass";
@@ -133,6 +134,7 @@ export function OutlineJacket({
   };
 
   return (
+    <BodyPortal>
     <div className="fixed inset-0 z-[70] flex items-end justify-center md:items-center">
       <button type="button" className="absolute inset-0 bg-ink/40" aria-label="Close" onClick={onClose} />
       <div className="relative z-10 w-full max-w-md border border-hairline bg-paper">
@@ -176,5 +178,6 @@ export function OutlineJacket({
         </div>
       </div>
     </div>
+    </BodyPortal>
   );
 }

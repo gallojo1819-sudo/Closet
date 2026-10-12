@@ -5,6 +5,7 @@ import { LookCollage } from "@/components/closet/look-collage";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { LookSheet } from "@/components/closet/look-sheet";
 import { OnMePanel } from "@/components/closet/on-me";
+import { WearButton } from "@/components/closet/wear-button";
 import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, kitCells, unwornLine, sortLook } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
@@ -20,6 +21,7 @@ import { avoidedUniformLine, lastWornDays, todayOccasion } from "@/lib/style";
 import { emptyTaste, leftOffLine, techniqueLine } from "@/lib/taste";
 import { useCloset } from "@/lib/store";
 import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
+import { useIsClient } from "@/lib/use-client";
 import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
 import { getNycWeather } from "@/lib/weather";
 import { cn, formatLongDate, lastDays, todayISO, weekdayLetter } from "@/lib/utils";
@@ -49,6 +51,10 @@ function Today() {
   const [pick, setPick] = useState<string | null>(null);
   const [play, setPlay] = useState(false);
   const [dressed, setDressed] = useState<Look | null>(null);
+  const [landing, setLanding] = useState(false);
+  /* The date is the reader's, so the server leaves it blank rather than guess a time zone. */
+  const isClient = useIsClient();
+  const dateLine = isClient ? formatLongDate() : "";
 
   const ownedCount = garments.filter((g) => !g.archived).length;
 
@@ -248,7 +254,7 @@ function Today() {
       <div className="mx-auto max-w-2xl px-4 md:px-6 py-8 md:py-16 rise">
         <p className="micro text-ink-soft">Your closet</p>
         <h1 className="mt-2 font-editorial text-4xl md:text-6xl tracking-tight">
-          {formatLongDate()}
+          {dateLine}
           <span className="italic text-accent"> — empty until you photograph it.</span>
         </h1>
         <p className="mt-4 text-ink-soft">
@@ -285,7 +291,7 @@ function Today() {
     <div className="mx-auto max-w-5xl px-4 md:px-6 py-8 md:py-12 rise">
       <p className="micro text-ink-soft">The daily drop</p>
       <h1 className="mt-2 font-editorial text-4xl md:text-6xl tracking-tight">
-        {formatLongDate()}
+        {dateLine}
         <span className="italic text-accent"> — one look. Wear it.</span>
       </h1>
       <p className="mt-4 text-ink-soft">
@@ -397,6 +403,7 @@ function Today() {
               onUsePaper={() => setView("paper")}
             />
           ) : (
+            <div className={cn("look-landing", landing && "is-landing")} data-today-look>
             <LookCollage
               size="today"
               pieces={shown}
@@ -418,6 +425,7 @@ function Today() {
                 ) : null
               }
             />
+            </div>
           )}
         </div>
         <div className="space-y-6">
@@ -514,15 +522,16 @@ function Today() {
             })}
           </ol>
           <div className="flex flex-wrap gap-3">
-            <Button
-              onClick={() => {
+            <WearButton
+              done={Boolean(done)}
+              disabled={shown.length < 2}
+              onConfirming={() => setLanding(true)}
+              onWear={() => {
                 const ids = shown.map((g) => g.id);
                 if (ids.length >= 2) wearToday(ids);
+                setLanding(false);
               }}
-              disabled={done}
-            >
-              {done ? "Logged for today" : "Wear this"}
-            </Button>
+            />
             <Button
               variant="ghost"
               onClick={() => skipDrop()}

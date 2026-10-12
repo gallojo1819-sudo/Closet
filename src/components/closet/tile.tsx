@@ -1,5 +1,6 @@
 import type { MouseEvent } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
+import { derivedCategory } from "@/lib/garment-category";
 import { hasCleanCover, needsReprintTile, REPRINT_CAPTION } from "@/lib/plate";
 import { useCoverByteRev } from "@/lib/use-clean-cover";
 import { pieceLabel } from "@/lib/piece-label";
@@ -35,8 +36,9 @@ export function GarmentTile({
         selected && "outline outline-1 outline-ink",
       )}
     >
+      <div className="card-lift">
       <div
-        className="relative bg-paper-deep border border-hairline overflow-hidden aspect-page transition-all duration-300 ease-[var(--ease-atelier)] group-hover:-translate-y-1.5 group-hover:shadow-[0_16px_36px_-14px_rgb(23_20_15/0.3)]"
+        className="relative bg-paper-deep border border-hairline overflow-hidden aspect-page"
         style={{ viewTransitionName: "none" }}
       >
         {paper ? (
@@ -71,9 +73,10 @@ export function GarmentTile({
           </span>
         )}
       </div>
+      </div>
       <div className="mt-2 flex items-baseline justify-between gap-2">
         <p className="text-sm leading-snug">{pieceLabel(garment, pool)}</p>
-        <span className="micro text-ink-soft shrink-0">{garment.category}</span>
+        <span className="micro text-ink-soft shrink-0">{derivedCategory(garment)}</span>
       </div>
       {reprint && (
         <p className="mt-1 micro text-ink-soft">{REPRINT_CAPTION}</p>

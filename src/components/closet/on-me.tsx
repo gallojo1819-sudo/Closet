@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { BodyPortal } from "@/components/closet/body-portal";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { onMePreview } from "@/lib/ai";
 import {
@@ -284,6 +285,7 @@ export function OnMeButton({ pieces }: { pieces: Garment[] }) {
       </button>
       {preview.error && <p className="micro text-accent">{preview.error}</p>}
       {preview.image && (
+        <BodyPortal>
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
           <button
             type="button"
@@ -315,6 +317,7 @@ export function OnMeButton({ pieces }: { pieces: Garment[] }) {
             </div>
           </figure>
         </div>
+        </BodyPortal>
       )}
     </>
   );

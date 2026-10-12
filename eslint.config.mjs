@@ -16,6 +16,7 @@ export default tseslint.config(
       ".next/**",
       "Closet/**",
       "node_modules/**",
+      "artifacts/**",
       "src/routeTree.gen.ts",
     ],
   },

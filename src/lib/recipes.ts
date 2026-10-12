@@ -747,6 +747,14 @@ export function pickRecipe(
   if (!list.length && house) {
     list = RECIPES.filter((r) => r.houses.includes(house) && recipeFitsPool(r, pool));
   }
+  /* Comfy never borrows a weekday recipe: with no Comfy recipe fitting the pool, it was falling
+     through to a prep oxford + trousers + loafers and scoring those up. Its own recipes stay
+     (knit / hoodie / tee / fleece over jeans or chinos with sneakers) even when the pool only
+     half fits them. Light patch until the occasion system is replaced. */
+  if (!list.length && occasion === "comfy") {
+    const own = RECIPES.filter((r) => r.occasions[0] === "comfy");
+    list = own.length ? own : RECIPES.filter((r) => r.occasions.includes(occasion));
+  }
   if (!list.length) {
     list = RECIPES.filter((r) => r.occasions.includes(occasion) && recipeFitsPool(r, pool));
   }

@@ -1,4 +1,5 @@
 import { Loader2 } from "lucide-react";
+import { BodyPortal } from "@/components/closet/body-portal";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { WornBox } from "@/lib/scan";
@@ -19,6 +20,7 @@ export function WornPicker({
   onDone: () => void;
 }) {
   return (
+    <BodyPortal>
     <div className="fixed inset-0 z-50 bg-ink text-paper">
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative max-h-[100dvh] max-w-[100vw]">
@@ -87,5 +89,6 @@ export function WornPicker({
         </div>
       </div>
     </div>
+    </BodyPortal>
   );
 }

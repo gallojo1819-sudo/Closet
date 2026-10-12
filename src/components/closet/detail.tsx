@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { BodyPortal } from "@/components/closet/body-portal";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,9 @@ import {
 } from "@/lib/images";
 import { costPerWear, money } from "@/lib/look";
 import { PALETTE, nameWithColor } from "@/lib/color";
+import { derivedCategory } from "@/lib/garment-category";
+import { colorsForName, shownColors } from "@/lib/garment-color";
+import { styleNotes } from "@/lib/garment-notes";
 import { daysIdle } from "@/lib/style";
 import { CATEGORIES, SEASONS, type Category, type Garment } from "@/lib/types";
 import { seasonsOf } from "@/lib/season";
@@ -137,8 +141,10 @@ export function GarmentDetail({
   const [view, setView] = useState<"print" | "original" | "me">("print");
   const [name, setName] = useState(garment.name);
   const [subtype, setSubtype] = useState(garment.subtype ?? "");
-  const [notes, setNotes] = useState(garment.notes ?? "");
-  const [color, setColor] = useState(garment.colors[0] ?? "");
+  /* A capture marker ("camera", "held") is not a style: the field starts blank instead. */
+  const [notes, setNotes] = useState(styleNotes(garment.notes));
+  /* The name's colour leads: "Navy trousers" shows navy even when the pixels said light blue. */
+  const [color, setColor] = useState(shownColors(garment)[0] ?? "");
   const [canPrint, setCanPrint] = useState(false);
   const [recoloring, setRecoloring] = useState(false);
   const [matching, setMatching] = useState(false);
@@ -178,8 +184,8 @@ export function GarmentDetail({
   useEffect(() => {
     setName(garment.name);
     setSubtype(garment.subtype ?? "");
-    setNotes(garment.notes ?? "");
-    setColor(garment.colors[0] ?? "");
+    setNotes(styleNotes(garment.notes));
+    setColor(shownColors(garment)[0] ?? "");
     setCoverNote(null);
     setCoverError(null);
   }, [garment.id]);
@@ -193,8 +199,13 @@ export function GarmentDetail({
 
   const commitName = () => {
     const next = name.trim();
-    if (next && next !== garment.name) updateGarment(garment.id, { name: next });
-    else setName(garment.name);
+    if (next && next !== garment.name) {
+      /* A renamed colour ("Navy trousers") carries its colour tag along. */
+      const colors = colorsForName(next, garment.colors);
+      const sameColors = colors.length === garment.colors.length && colors.every((c, i) => c === garment.colors[i]);
+      updateGarment(garment.id, { name: next, ...(sameColors ? {} : { colors }) });
+      if (!sameColors) setColor(colors[0] ?? "");
+    } else setName(garment.name);
   };
 
   const commitSubtype = () => {
@@ -208,7 +219,7 @@ export function GarmentDetail({
     const patch = patchFromNotes(garment, notes);
     if (patch.subtype != null) setSubtype(patch.subtype);
     if (patch.name) setName(patch.name);
-    const sameNotes = (patch.notes ?? "") === (garment.notes ?? "");
+    const sameNotes = (patch.notes ?? "") === styleNotes(garment.notes);
     const sameSub = (patch.subtype ?? garment.subtype) === garment.subtype;
     const sameName = !patch.name || patch.name === garment.name;
     const sameCat = !patch.category || patch.category === garment.category;
@@ -335,7 +346,9 @@ export function GarmentDetail({
   };
 
   return (
+    <BodyPortal>
     <div
+      data-piece-detail
       className={cn("fixed inset-0 z-50", !md && "flex items-end")}
     >
       <button
@@ -456,7 +469,7 @@ export function GarmentDetail({
         <div className="p-6 flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <select
-              value={garment.category}
+              value={derivedCategory(garment)}
               onChange={(e) =>
                 updateGarment(garment.id, {
                   category: e.target.value as Category,
@@ -616,7 +629,7 @@ export function GarmentDetail({
                       onClick={() => commitColor(c)}
                       className={cn(
                         "micro border px-2 py-1",
-                        (color || garment.colors[0] || "") === c
+                        (color || shownColors(garment)[0] || "") === c
                           ? "border-ink bg-ink text-paper"
                           : "border-hairline text-ink-soft",
                       )}
@@ -723,5 +736,6 @@ export function GarmentDetail({
         </div>
       </div>
     </div>
+    </BodyPortal>
   );
 }

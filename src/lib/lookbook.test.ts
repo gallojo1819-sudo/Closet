@@ -1575,7 +1575,9 @@ describe("lookbook card stack", () => {
     assert.equal(book.includes("houseFirstRow"), false);
     assert.equal(book.includes("wayFirstRow"), false);
     assert.match(book, /const cards = weekRow\.map/);
-    assert.match(book, /\{weekRow\.length\} looks/);
+    /* The count line reads weekRow.length, through lookbookCountLine, so "0 looks" waits for the ranked row. */
+    assert.match(book, /lookbookCountLine\(\{[^}]*count: weekRow\.length/);
+    assert.match(book, /resolved: weekResolved/);
     assert.equal(book.split('layout="stack"').length - 1, 1);
     assert.equal(sheet.includes('layout="stack"'), false);
     assert.equal(book.includes('viewTransitionName: "none"'), false);

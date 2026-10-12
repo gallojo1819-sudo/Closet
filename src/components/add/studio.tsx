@@ -483,7 +483,7 @@ export function Studio() {
               photoDataUrl: shrunk.dataUrl,
               photoBlob: blob,
               hash,
-              notes: "camera",
+              notes: "",
               show: (cover) =>
                 onPreview({
                   id,
@@ -528,7 +528,7 @@ export function Studio() {
             photoDataUrl: shrunk.dataUrl,
             photoBlob: blob,
             hash,
-            notes: "held",
+            notes: "",
             show: (cover) =>
               onPreview({
                 id,
@@ -719,7 +719,7 @@ export function Studio() {
             photoDataUrl: probe.dataUrl,
             photoBlob: blob,
             hash,
-            notes: "camera",
+            notes: "",
             show: (cover) => {
               setSaved((cur) => [
                 {
@@ -798,7 +798,7 @@ export function Studio() {
                 colors: [],
                 material: "",
                 brand: "",
-                notes: "camera",
+                notes: "",
                 formality: 3,
                 warmth: 3,
                 seasons: [],

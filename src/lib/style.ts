@@ -454,8 +454,41 @@ function occasionScore(g: Garment, occasion: Occasion): number {
     if (/\bhoodies?\b/.test(b)) s += 1;
   } else if (occasion === "travel") {
     if (knit || overshirt || sneaker || loafer) s += 1.5;
+  } else if (occasion === "comfy") {
+    /* Light patch until the occasion system lands: knits, sweats, jeans and sneakers lead;
+       a collared woven shirt over tailored trousers does not. */
+    if (knit || /fleece|half[- ]?zip|quarter[- ]?zip|cardigan|crewneck|sweatshirt|hoodie/.test(b)) s += 3;
+    if (tee) s += 1.5;
+    if (jean || /cord|sweatpant|jogger|track pant/.test(b)) s += 2.5;
+    if (sneaker || /mule|slipper/.test(b)) s += 2;
+    if (isWovenCollarShirt(b)) s -= 4;
+    if (trouser && !jean) s -= 3;
+    if (oxford) s -= 1;
+    if (blazer) s -= 6;
   }
   return s;
+}
+
+/** A collared woven shirt: oxford, button-down, poplin, flannel, chambray, or a plain "shirt" that is not a knit, polo, tee or sweat. */
+function isWovenCollarShirt(blob: string): boolean {
+  if (/\b(polo|knit|sweater|tee|t-shirt|sweatshirt|hoodie|rugby|overshirt)\b/.test(blob)) return false;
+  return /\b(oxford|button[- ]?down|poplin|flannel|chambray|twill shirt|dress shirt|linen shirt|shirts?)\b/.test(blob);
+}
+
+/** A tailored trouser: trousers, pleats, wool, slacks, dress pants; not jeans or chinos. */
+function isTailoredTrouser(blob: string): boolean {
+  if (/\b(jeans?|denim|chinos?|cords?|corduroy|sweatpants?|joggers?)\b/.test(blob)) return false;
+  return /\b(trousers?|pleat(ed)?|slacks|dress pants?|wool pants?|flannel pants?)\b/.test(blob);
+}
+
+/**
+ * Comfy's one hard rule: not a collared woven shirt over tailored trousers. Everything else
+ * the scores decide. The Lookbook's Comfy gate (lookFitsOccasion) is stricter and unchanged.
+ */
+export function comfyCostume(pieces: Garment[]): boolean {
+  const shirt = pieces.some((g) => slotOf(g) === "top" && isWovenCollarShirt(blobOf(g)));
+  const trouser = pieces.some((g) => slotOf(g) === "bottom" && isTailoredTrouser(blobOf(g)));
+  return shirt && trouser;
 }
 
 const KNOWN_SLOTS = [

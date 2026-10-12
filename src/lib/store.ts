@@ -32,6 +32,7 @@ import {
 } from "./lookbook";
 import { isFakeName, nameFromPixels, scrubRack } from "./rack";
 import { preferPixels, sampleCover } from "./color";
+import { colorsForName, looseColors } from "./garment-color";
 import {
   mergeClosetPersist,
   openPersistGate,
@@ -49,6 +50,7 @@ import {
   lastWornDays,
   isMulePiece,
   momentOfDay,
+  comfyCostume,
   pickLook,
   slotOf,
   todayOccasion,
@@ -191,6 +193,7 @@ function pickDrop(
     requireSilhouetteChange: Boolean(extra?.skip),
     taste: extra?.taste,
     legalCombo: (pieces) => {
+      if (occ === "comfy" && comfyCostume(pieces)) return false;
       if (
         cold &&
         pieces.some(
@@ -274,7 +277,13 @@ const guardedStorage: StateStorage = {
   },
 };
 
-function bootCloset(): PersistedCloset | null {
+/**
+ * Synchronous closet.v6 read for the first client paint. Applied by AppShell in a layout
+ * effect (before paint, after React has hydrated the server HTML), never in the store's
+ * initial state: an initial state with garments made the client's first render disagree
+ * with the server's ("142 pieces" vs "0 pieces"), a hydration error on every load.
+ */
+export function bootCloset(): PersistedCloset | null {
   if (typeof localStorage === "undefined") return null;
   try {
     return readClosetSeed(localStorage.getItem("closet.v6"), readTombstones());
@@ -283,22 +292,37 @@ function bootCloset(): PersistedCloset | null {
   }
 }
 
+/** The store fields a boot seed fills. */
+export function seedState(seed: PersistedCloset): Partial<ClosetState> {
+  return {
+    garments: seed.garments,
+    looks: seed.looks ?? [],
+    messages: seed.messages ?? [],
+    taste: seed.taste ? normalizeTaste(seed.taste) : emptyTaste(),
+    drop: seed.drop ?? null,
+    journal: seed.journal ?? [],
+    avoid: seed.avoid ?? {},
+    refPhoto: seed.refPhoto ?? null,
+    refPhotoBackup: seed.refPhotoBackup ?? null,
+    seenLooks: seed.seenLooks ?? {},
+  };
+}
+
 export const useCloset = create<ClosetState>()(
   persist(
     (set, get) => {
-      const seed = bootCloset();
       return {
-      garments: seed?.garments ?? [],
-      looks: seed?.looks ?? [],
-      messages: seed?.messages ?? [],
-      taste: seed?.taste ? normalizeTaste(seed.taste) : emptyTaste(),
-      drop: seed?.drop ?? null,
-      journal: seed?.journal ?? [],
-      avoid: seed?.avoid ?? {},
+      garments: [],
+      looks: [],
+      messages: [],
+      taste: emptyTaste(),
+      drop: null,
+      journal: [],
+      avoid: {},
       hydrated: false,
-      refPhoto: seed?.refPhoto ?? null,
-      refPhotoBackup: seed?.refPhotoBackup ?? null,
-      seenLooks: seed?.seenLooks ?? {},
+      refPhoto: null,
+      refPhotoBackup: null,
+      seenLooks: {},
       thisWeek: [],
       skipCount: 0,
       reshuffleCount: 0,
@@ -902,12 +926,14 @@ export const useCloset = create<ClosetState>()(
             const url = await resolveImage(src);
             if (url) {
               const sampled = await sampleCover(url);
-              colors = preferPixels(sampled, g.colors);
+              /* The tag's words first ("blue" is navy): the sample only wins a far hue. */
+              colors = preferPixels(sampled, looseColors(g.colors));
             }
           } catch {
             /* pixels optional */
           }
           const name = nameFromPixels(g, colors);
+          colors = colorsForName(name, colors);
           if (name && name !== g.name) {
             get().updateGarment(
               g.id,

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { useAccount } from "@/lib/cloud/account";
 import { bindLiveCopies, reconcileAccountCopies } from "@/lib/data/copies-live";
@@ -12,11 +12,12 @@ import { scheduleOuterwearPlates, usePlatePassNote } from "@/lib/plate-pass";
 import { livePool } from "@/lib/rack";
 import { engineCacheReady, loadEngineCache } from "@/lib/engine-cache";
 import { migrateImagesToIdb } from "@/lib/migrate";
-import { openPersistGate, useCloset } from "@/lib/store";
+import { bootCloset, openPersistGate, seedState, useCloset } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { noteRoute } from "@/lib/stylist-page";
 import { BottomNav } from "./bottom-nav";
 import { StylistDock } from "./stylist-dock";
+import { Toasts } from "./toasts";
 import { TopBar } from "./top-bar";
 
 function BackupBanner() {
@@ -78,6 +79,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     localOnly: account.localOnly,
     listedThumbs: account.listedThumbs,
   });
+
+  /* The closet.v6 seed lands after hydration and before paint: the server HTML (an empty
+     closet) is what React hydrates, then this render shows the pieces. See bootCloset. */
+  useLayoutEffect(() => {
+    if (useCloset.getState().garments.length > 0) return;
+    const seed = bootCloset();
+    if (seed) useCloset.setState(seedState(seed));
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -195,6 +204,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
       <StylistDock />
       <BottomNav />
+      <Toasts />
     </div>
   );
 }

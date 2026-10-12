@@ -3,6 +3,7 @@ import { GarmentImg } from "@/components/closet/gimg";
 import { LookKit } from "@/components/closet/look-kit";
 import { Overlay } from "@/components/closet/overlay";
 import { ensureLookOnMe } from "@/components/closet/on-me";
+import { WearButton } from "@/components/closet/wear-button";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { colorLine } from "@/lib/color";
@@ -67,6 +68,7 @@ export function LookSheet({
   const [dressing, setDressing] = useState(false);
   const [dressError, setDressError] = useState<string | null>(null);
   const [showAlts, setShowAlts] = useState(false);
+  const [landing, setLanding] = useState(false);
   const [lockedIds, setLockedIds] = useState<string[]>(
     () => initialLocked?.filter((id) => look.garmentIds.includes(id)) ?? [],
   );
@@ -183,7 +185,7 @@ export function LookSheet({
 
   return (
     <Overlay onClose={onClose} getAnchor={getCard} zClass="z-[60]">
-        <div className="relative border-b border-hairline bg-paper aspect-[4/5] overflow-hidden">
+        <div className={cn("look-landing relative border-b border-hairline bg-paper aspect-[4/5] overflow-hidden", landing && "is-landing")}>
           <LookKit pieces={activePieces} thumb={false} className="border-0" />
           {showMe && painted && (
             <img
@@ -205,13 +207,11 @@ export function LookSheet({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onWear}
-              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
-            >
-              Wear this
-            </button>
+            <WearButton
+              className="h-9 px-4 text-[13px]"
+              onConfirming={() => setLanding(true)}
+              onWear={onWear}
+            />
             <button
               type="button"
               disabled={comboSaved}

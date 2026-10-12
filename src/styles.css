@@ -696,6 +696,156 @@
   }
 }
 
+/* ---- Loading and motion (idea 7). Transform and opacity only. ---- */
+
+/* Skeleton tiles in the flat-lay's shape. The shimmer is a gradient layer translated across
+   the tile (compositor work), not a background-position animation (a repaint every frame). */
+.skeleton-block {
+  position: relative;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--color-paper-deep);
+}
+.skeleton-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgb(251 248 241 / 0.75) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes skeleton-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.rack-skeleton-card {
+  width: 64vw;
+}
+@media (min-width: 640px) {
+  .rack-skeleton-card {
+    width: 250px;
+  }
+}
+
+/* A card landing: opacity 0→1, translateY 10px→0, 240 ms, 60 ms stagger (--i). */
+@keyframes look-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.look-enter {
+  animation: look-enter 240ms var(--ease-atelier) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+/* Card hover lift: translateY(-4px), 180 ms ease-out; the soft shadow lives on an ::after
+   layer and only its opacity changes. Desktop pointers only. */
+.card-lift {
+  position: relative;
+  transform: translateY(0);
+  transition: transform 180ms ease-out;
+}
+.card-lift::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 16px 36px -14px rgb(23 20 15 / 0.3);
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+@media (hover: hover) and (pointer: fine) {
+  .card-lift:hover,
+  .group:hover > .card-lift {
+    transform: translateY(-4px);
+  }
+  .card-lift:hover::after,
+  .group:hover > .card-lift::after {
+    opacity: 1;
+  }
+}
+
+/* Wear this, three steps: press scale(.95) 90 ms; the label crossfades and the check draws
+   in; the card scales toward the strip while the write lands. */
+.wear-button {
+  transform: scale(1);
+  transition:
+    transform 90ms ease-out,
+    background-color 180ms ease-out,
+    opacity 180ms ease-out;
+}
+.wear-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.wear-check {
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 180ms ease-out,
+    transform 240ms var(--ease-atelier);
+}
+.wear-button[data-phase="confirming"] .wear-check,
+.wear-button[data-phase="done"] .wear-check {
+  opacity: 1;
+  transform: scale(1);
+}
+.wear-label {
+  display: inline-block;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 240ms ease-out;
+}
+.wear-label.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.look-landing {
+  transform-origin: 50% 100%;
+  transition: transform 300ms var(--ease-atelier);
+}
+.look-landing.is-landing {
+  transform: scale(0.9);
+}
+
+/* The toast slides up (translateY 12px→0) and fades; leaves the same way after 2 s. */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.toast {
+  animation: toast-in 240ms var(--ease-atelier) both;
+}
+.toast.is-leaving {
+  animation: toast-out 220ms ease-in both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .look-kit-rise {
     animation: none;
@@ -734,5 +884,35 @@
   .plate-rack-row .plate-rack-slide:hover .plate-rack-card,
   .is-center .plate-rack-card:hover {
     transform: none;
+  }
+
+  .skeleton-block::after {
+    animation: none;
+    transform: none;
+    opacity: 0.35;
+  }
+  .look-enter {
+    animation: none;
+  }
+  .card-lift,
+  .card-lift::after,
+  .wear-button,
+  .wear-check,
+  .wear-label,
+  .look-landing {
+    transition: none;
+  }
+  .card-lift:hover,
+  .group:hover > .card-lift,
+  .wear-button:active:not(:disabled),
+  .look-landing.is-landing {
+    transform: none;
+  }
+  .toast,
+  .toast.is-leaving {
+    animation: none;
+  }
+  .toast.is-leaving {
+    opacity: 0;
   }
 }

@@ -5,6 +5,7 @@ import { IdleMount } from "@/components/closet/idle-mount";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { LookKit } from "@/components/closet/look-kit";
 import { LookSheet } from "@/components/closet/look-sheet";
+import { LookSkeleton, RackSkeleton } from "@/components/closet/look-skeleton";
 import { Overlay } from "@/components/closet/overlay";
 import { GarmentTile } from "@/components/closet/tile";
 import { rackLine } from "@/lib/gaps";
@@ -31,6 +32,7 @@ import {
   unusedFromLooks,
   visibleHero,
 } from "@/lib/lookbook";
+import { lookbookCountLine, weekShowsEmptyReason, weekShowsSkeletons } from "@/lib/lookbook-status";
 import { seasonChipRow, seasonControlLabel, seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { cardTag, spreadTitle } from "@/lib/look";
@@ -74,7 +76,7 @@ function LookCardFace({
   return (
     <div
       ref={cardRef}
-      className="look-card relative w-full border border-hairline bg-paper aspect-[4/5]"
+      className="look-card card-lift relative w-full border border-hairline bg-paper aspect-[4/5]"
       style={named ? { viewTransitionName: `look-${look.id}` } : undefined}
     >
       <button
@@ -176,7 +178,8 @@ function LookCard({
   return (
     <li
       id={`look-${look.id}`}
-      className={highlight ? "outline outline-1 outline-ink" : undefined}
+      className={cn("look-enter", highlight && "outline outline-1 outline-ink")}
+      style={{ "--i": Math.min(index, 8) } as React.CSSProperties}
     >
       <IdleMount
         index={index}
@@ -187,8 +190,10 @@ function LookCard({
             ref={cardRef}
             onClick={onOpen}
             aria-label={look.name}
-            className="block w-full aspect-[4/5] border border-hairline paper-shimmer"
-          />
+            className="block w-full border border-hairline bg-paper p-[6%]"
+          >
+            <LookSkeleton caption={false} />
+          </button>
         }
       >
         <LookCardFace
@@ -371,6 +376,8 @@ function LookbookPage() {
   const weekRow = realRow;
   const cards = weekRow.map((look) => ({ look, why: look.gap ?? "" }));
   const visible = cards;
+  /* "0 looks" is only a fact once the ranked row for these filters has come back. */
+  const weekResolved = Boolean(rankedReady);
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const rack = useMemo(
@@ -526,8 +533,13 @@ function LookbookPage() {
       </div>
       {hydrated && (
         <>
-          <p className="mt-3 text-ink-soft max-w-xl">
-            {weekRow.length} looks · {chapterLabel} · {seasonLabel.replace(/^Auto · /, "")}
+          <p className="mt-3 text-ink-soft max-w-xl" data-look-count data-resolved={weekResolved ? "1" : "0"}>
+            {lookbookCountLine({
+              resolved: weekResolved,
+              count: weekRow.length,
+              chapter: chapterLabel,
+              season: seasonLabel.replace(/^Auto · /, ""),
+            })}
           </p>
           <p className="mt-1 micro text-ink-soft">{looksAll.length} saved</p>
         </>
@@ -633,14 +645,22 @@ function LookbookPage() {
           </div>
         </div>
       </div>
-      <DetectorSections
-        garments={garments}
-        ways={shownWays}
-        occasion={occasion}
-        season={season}
-        color={color}
-        onOpen={openPlate}
-      />
+      {hydrated && garments.length > 0 && !waysReady ? (
+        /* The rows are still being found: a skeleton rack, not a blank. */
+        <div data-detectors-loading className="mt-8">
+          <p className="micro text-ink-soft">Finding your looks…</p>
+          <RackSkeleton />
+        </div>
+      ) : (
+        <DetectorSections
+          garments={garments}
+          ways={shownWays}
+          occasion={occasion}
+          season={season}
+          color={color}
+          onOpen={openPlate}
+        />
+      )}
       <div className="mt-6 flex flex-wrap gap-3">
       <button
         type="button"
@@ -661,7 +681,18 @@ function LookbookPage() {
         </div>
       )}
 
-      {!hydrated ? null : garments.length === 0 ? (
+      {!hydrated ? (
+        <section className="mt-10" aria-busy="true">
+          <p className="micro text-ink-soft">This week</p>
+          <ul data-week-skeleton className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[0, 1, 2].map((i) => (
+              <li key={i}>
+                <LookSkeleton index={i} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : garments.length === 0 ? (
         <div className="mt-10 border border-hairline bg-card px-4 py-5">
           <p className="text-sm text-ink-soft">
             {account.user
@@ -693,7 +724,15 @@ function LookbookPage() {
         <p className="micro text-ink-soft">This week</p>
         {colorOpen && !color ? (
           <p className="mt-3 text-sm text-ink-soft">Pick a colour.</p>
-        ) : visible.length === 0 ? (
+        ) : weekShowsSkeletons({ resolved: weekResolved, shown: visible.length }) ? (
+          <ul data-week-skeleton aria-busy="true" className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[0, 1, 2].map((i) => (
+              <li key={i}>
+                <LookSkeleton index={i} />
+              </li>
+            ))}
+          </ul>
+        ) : weekShowsEmptyReason({ resolved: weekResolved, shown: visible.length }) ? (
           <p className="mt-3 text-sm text-ink-soft" data-week-reason>
             {weekReason ||
               emptyFilterCopy(
