@@ -213,7 +213,7 @@ describe("a house and a way compose", () => {
   // Joe removed the Houses and ways chip rows; the app is for everyone. houseFirstRow stays as library.
   it("the page has no house chips and does not rank This week by house", () => {
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
-    assert.match(book, /const weekRow = realRow;/);
+    assert.match(book, /const weekRow = capScreenLooks\(realRow\);/);
     assert.equal(book.includes("houseFirstRow"), false);
     assert.equal(book.includes("wayFirstRow"), false);
     assert.equal(book.includes("data-house-row"), false);

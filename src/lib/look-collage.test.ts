@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { ROW_MAX, rowWays, visibleDetectors } from "./detectors/cells.ts";
+import { ROW_MAX, storedRows, visibleDetectors } from "./detectors/cells.ts";
 import { usualFromCloset } from "./detectors/usual.ts";
 import {
   COLLAGE_GEOMETRY,
@@ -151,7 +151,7 @@ describe("lookTitle and pieceLine", () => {
   it("every look in the 142-piece fixture titles clean of house names", () => {
     for (const season of ["fall", "winter"] as Season[]) {
       for (const occasion of ["weekday", "weekend"] as Occasion[]) {
-        for (const way of rowWays(visibleDetectors(FIXTURE, { occasion, season }), FIXTURE, { occasion, season })) {
+        for (const way of storedRows(visibleDetectors(FIXTURE, { occasion, season }), FIXTURE, { occasion, season })) {
           for (const look of way.looks[occasion] ?? []) {
             const title = lookTitle(look);
             assert.ok(title.length > 0);
@@ -176,7 +176,7 @@ describe("tileTint", () => {
   });
 });
 
-describe("rowWays on the 142-piece fixture", () => {
+describe("storedRows (the pre-variety fill) on the 142-piece fixture", () => {
   const CTX: { occasion: Occasion; season: Season }[] = [
     { occasion: "weekday", season: "fall" },
     { occasion: "weekend", season: "fall" },
@@ -191,7 +191,7 @@ describe("rowWays on the 142-piece fixture", () => {
     for (const { occasion, season } of CTX) {
       const found = visibleDetectors(FIXTURE, { occasion, season });
       const t0 = performance.now();
-      const shown = rowWays(found, FIXTURE, { occasion, season });
+      const shown = storedRows(found, FIXTURE, { occasion, season });
       ms += performance.now() - t0;
       assert.equal(shown.length, found.length);
       for (const [i, way] of shown.entries()) {
@@ -209,7 +209,7 @@ describe("rowWays on the 142-piece fixture", () => {
         report.push(`${occasion}/${season} ${way.title}: ${before.length} → ${looks.length}`);
       }
     }
-    t.diagnostic(`rowWays ${ms.toFixed(1)} ms for 4 contexts; ${report.join("; ")}`);
+    t.diagnostic(`storedRows ${ms.toFixed(1)} ms for 4 contexts; ${report.join("; ")}`);
     // At least one row grows past the engine's cap of 5 on this closet.
     assert.ok(report.some((line) => /→ [678]$/.test(line)), report.join("\n"));
   });
@@ -217,10 +217,10 @@ describe("rowWays on the 142-piece fixture", () => {
   it("a salt keeps every look legal and stored, and changes at least one row", () => {
     for (const { occasion, season } of CTX) {
       const found = visibleDetectors(FIXTURE, { occasion, season });
-      const base = rowWays(found, FIXTURE, { occasion, season, salt: 0 });
+      const base = storedRows(found, FIXTURE, { occasion, season, salt: 0 });
       for (const salt of [1, 2, 3]) {
-        const shown = rowWays(found, FIXTURE, { occasion, season, salt });
-        const again = rowWays(found, FIXTURE, { occasion, season, salt });
+        const shown = storedRows(found, FIXTURE, { occasion, season, salt });
+        const again = storedRows(found, FIXTURE, { occasion, season, salt });
         assert.deepEqual(shown.map((w) => (w.looks[occasion] ?? []).map(key)), again.map((w) => (w.looks[occasion] ?? []).map(key)));
         let differs = false;
         for (const [i, way] of shown.entries()) {
@@ -265,7 +265,10 @@ describe("source pins", () => {
     }
     assert.equal((book.match(/Re-dress\s*<\/button>/g) ?? []).length, 1, "one Re-dress button");
     assert.equal(/Reshuffle\s*<\/button>/.test(book), false, "the old Reshuffle button is gone");
-    assert.match(book, /rowWays\(found, garments, \{ occasion, season, color, weatherF: pageWeather, salt: rowSalt \}\)/);
+    assert.match(
+      book,
+      /rowWays\(found, garments, \{\s*occasion,\s*season,\s*color,\s*weatherF: pageWeather,\s*salt: rowSalt,\s*onScreen: weekIds,\s*suggested,\s*\}\)/,
+    );
   });
 
   it("Today renders the collage with FlatLay's props and no new logic", () => {

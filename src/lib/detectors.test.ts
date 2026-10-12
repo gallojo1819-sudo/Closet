@@ -416,7 +416,8 @@ describe("detectors", () => {
       );
       assert.equal(card.includes("<ul"), false);
     }
-    assert.match(html, /<p class="mt-3 font-editorial[^"]*">Oxford 1 and chinos 1<\/p>/);
+    // The idea title names what differs: the top, the bottom's cloth, the shoe. Never "X and Y".
+    assert.match(html, /<p class="mt-3 font-editorial[^"]*">Navy oxford, navy chinos, navy loafer<\/p>/);
     // The short note closes the row and the last card first; it is never inside a card.
     assert.match(
       html,
@@ -430,7 +431,7 @@ describe("detectors", () => {
     const plateCard = source.slice(source.indexOf("function PlateCard"), source.indexOf("function Chapter"));
     assert.match(
       plateCard,
-      /<button[\s\S]*?<LookCollage pieces=\{look\} \/>\s*<p className="[^"]*font-editorial[^"]*">\{lookTitle\(look\)\}<\/p>\s*<p className="[^"]*text-ink-soft[^"]*">\{pieceLine\(look\)\}<\/p>\s*<\/button>/,
+      /<button[\s\S]*?<LookCollage pieces=\{look\} \/>\s*<p className="[^"]*font-editorial[^"]*">\{ideaTitle\(look\)\}<\/p>\s*<p className="[^"]*text-ink-soft[^"]*">\{pieceLine\(look\)\}<\/p>\s*<\/button>/,
     );
     // Passive collage: no onPick, so clicks bubble to the button; the old 2:3 clip box is gone.
     assert.equal(/<LookCollage[^>]*onPick/.test(plateCard), false);
@@ -486,7 +487,7 @@ describe("detectors", () => {
     assert.deepEqual(imports, [
       'import { LookCollage } from "@/components/closet/look-collage";',
       'import { activeFirst, OCCASION_ORDER, ROW_MAX, visibleDetectors, type Way } from "@/lib/detectors";',
-      'import { lookTitle, pieceLine } from "@/lib/look-collage";',
+      'import { ideaTitle, pieceLine } from "@/lib/look-collage";',
       'import type { Garment, Occasion, Season } from "@/lib/types";',
       'import { PlateRack } from "@/components/closet/plate-rack";',
     ]);

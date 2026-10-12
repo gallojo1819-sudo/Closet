@@ -1,6 +1,22 @@
 import type { Garment } from "./types.ts";
 
 export type { CellContext, Way } from "./detectors/cells.ts";
+export type { IdeaContext } from "./detectors/ideas.ts";
+export {
+  capScreenLooks,
+  FORGOTTEN_DAYS,
+  FORGOTTEN_ID,
+  FORGOTTEN_TITLE,
+  forgottenIds,
+  freshness,
+  lastSuggested,
+  pieceCounts,
+  ROW_MIN,
+  rowRepeats,
+  rowWays,
+  SCREEN_CAP,
+  themePieces,
+} from "./detectors/ideas.ts";
 export {
   activeFirst,
   cellGateOpen,
@@ -12,8 +28,8 @@ export {
   OCCASION_ORDER,
   renderedSectionLooks,
   ROW_MAX,
-  rowWays,
   sharedDetector,
+  storedRows,
   visibleDetectors,
   warmCellBook,
   wayChipVisible,

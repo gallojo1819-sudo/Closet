@@ -25,7 +25,7 @@ const DELETED = new Set<string>(DELETED_SNEAKERS);
 type SlotName = "top" | "bottom" | "shoe" | "layer";
 type Grade = "core" | "compatible" | "no";
 
-type Cell = {
+export type Cell = {
   id: string;
   key: string;
   title: string;
@@ -766,13 +766,15 @@ function fillRow(start: Garment[][], stored: Garment[][]): Garment[][] {
 }
 
 /**
- * The rows the Lookbook renders: each way's looks for this occasion, up to ROW_MAX, drawn only
- * from the cell's stored (already legal, same colour filter) rows. Salt 0 starts from the
- * way's current looks in order, so the first cards are exactly visibleDetectors'; a salt > 0
- * is a seeded permutation of the stored rows before the disjoint pick and the fill. The usual
- * way asks usualFromCloset for more with the same legality gate.
+ * The pre-variety row fill (the Lookbook's rows until Oct 2026): each way's looks for this
+ * occasion, up to ROW_MAX, drawn only from the cell's stored (already legal, same colour
+ * filter) rows. Salt 0 starts from the way's current looks in order, so the first cards are
+ * exactly visibleDetectors'; a salt > 0 is a seeded permutation of the stored rows before the
+ * disjoint pick and the fill. The usual way asks usualFromCloset for more with the same
+ * legality gate. The Lookbook now renders rowWays (ideas.ts); this stays as the "before" of the
+ * distinct-piece count and as the thin-closet fallback for a row that cannot reach three cards.
  */
-export function rowWays(
+export function storedRows(
   ways: Way[],
   garments: Garment[],
   ctx: { occasion: Occasion | string; season: Season | string; color?: string | null; weatherF?: number; salt?: number },
@@ -814,6 +816,18 @@ export function visibleDetectors(
   ctx: { occasion?: Occasion | string; season?: Season | string; color?: string | null; weatherF?: number } = {},
 ): Way[] {
   const season = (ctx.season || "fall") as Season;
+  const occasion = (ctx.occasion || undefined) as Occasion | undefined;
+  const ranked = rankedWays(garments, ctx);
+  if (!ranked.length) return yourUsual(garments, season, occasion ?? "weekday", finiteTemp(ctx.weatherF));
+  return ranked.slice(0, CAP);
+}
+
+/** Every open cell with a look here, in visibleDetectors' order and without its cap. Never the usual. */
+export function rankedWays(
+  garments: Garment[],
+  ctx: { occasion?: Occasion | string; season?: Season | string; color?: string | null; weatherF?: number } = {},
+): Way[] {
+  const season = (ctx.season || "fall") as Season;
   const color = ctx.color ?? null;
   const weatherF = finiteTemp(ctx.weatherF);
   const occasion = (ctx.occasion || undefined) as Occasion | undefined;
@@ -835,8 +849,7 @@ export function visibleDetectors(
         a.built.cell.id.localeCompare(b.built.cell.id, undefined, { numeric: true })
       );
     });
-  if (!ranked.length) return yourUsual(garments, season, occasion ?? "weekday", weatherF);
-  return ranked.slice(0, CAP).map((row) => toWay(row.built, season, color, false));
+  return ranked.map((row) => toWay(row.built, season, color, false));
 }
 
 export function cellLooks(detector: string, garments: Garment[], occasion: Occasion | string, season: Season | string): Garment[][] {
@@ -988,5 +1001,25 @@ export function wayFirstRow(row: Look[], way: Way | undefined, occasion: Occasio
   }
   return out;
 }
+
+
+/**
+ * The cell predicates the idea rows (ideas.ts) dress with. Same gates as dressCell: a look the
+ * idea rows show would also have been a stored row, had the store been big enough.
+ */
+export const cellKit = {
+  cells: (): readonly Cell[] => CELLS,
+  deleted: DELETED as ReadonlySet<string>,
+  grade,
+  slotRole,
+  layerRole,
+  anchorHits,
+  layerOwed,
+  globalFail,
+  passesCheap,
+  legalOk,
+  seasonOk,
+  idsOf,
+};
 
 export { detectorPalette, detectorColor } from "./palette.ts";

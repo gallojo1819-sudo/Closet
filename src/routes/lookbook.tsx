@@ -12,7 +12,9 @@ import { rackLine } from "@/lib/gaps";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import {
+  capScreenLooks,
   detectorTitle,
+  lastSuggested,
   renderedSectionLooks,
   rowWays,
   visibleDetectors,
@@ -240,6 +242,7 @@ function LookbookPage() {
   const [color, setColor] = useState<string | null>(null);
   const [colorOpen, setColorOpen] = useState(false);
   const drop = useCloset((s) => s.drop);
+  const journal = useCloset((s) => s.journal);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dressed, setDressed] = useState<Look | null>(null);
   const [heroId, setHeroId] = useState<string | null>(null);
@@ -272,29 +275,6 @@ function LookbookPage() {
      rows stay on screen until the new ones land: the salt is not one of the readiness inputs. */
   const [rowSalt, setRowSalt] = useState(0);
   const [waysFor, setWaysFor] = useState<{ inputs: unknown[]; ways: Way[]; shown: Way[] } | null>(null);
-  useEffect(() => {
-    const inputs = [garments, occasion, season, color, pageWeather];
-    let cancelled = false;
-    const run = () => {
-      if (cancelled) return;
-      const found = visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather });
-      const shown = rowWays(found, garments, { occasion, season, color, weatherF: pageWeather, salt: rowSalt });
-      setWaysFor({ inputs, ways: found, shown });
-    };
-    const idle = window.requestIdleCallback;
-    if (typeof idle === "function") {
-      const id = idle(run, { timeout: 1500 });
-      return () => {
-        cancelled = true;
-        window.cancelIdleCallback?.(id);
-      };
-    }
-    const id = window.setTimeout(run, 0);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(id);
-    };
-  }, [garments, occasion, season, color, pageWeather, rowSalt]);
   const waysInputs = [garments, occasion, season, color, pageWeather];
   const waysReady = Boolean(waysFor && waysFor.inputs.every((value, i) => Object.is(value, waysInputs[i])));
   /* Week-card house titles wait for the same rows, so render never builds the cell book. */
@@ -373,11 +353,48 @@ function LookbookPage() {
   const weekReason = realRow.length
     ? null
     : noted?.gap || noted?.name || preview.reason || "Nothing in this closet is legal for this week.";
-  const weekRow = realRow;
+  /* No piece on more than two week cards: the engine's row, cards past the cap left off. */
+  const weekRow = capScreenLooks(realRow);
   const cards = weekRow.map((look) => ({ look, why: look.gap ?? "" }));
   const visible = cards;
   /* "0 looks" is only a fact once the ranked row for these filters has come back. */
   const weekResolved = Boolean(rankedReady);
+  /* The idea rows count the week row's pieces as already on screen (SCREEN_CAP across the page),
+     and lift pieces the store has not put in front of the user lately. Nothing is written. */
+  const weekKey = weekRow.map((look) => look.garmentIds.join(",")).join("|");
+  const weekIds = useMemo(() => weekKey.split("|").flatMap((ids) => (ids ? ids.split(",") : [])), [weekKey]);
+  const suggested = useMemo(() => lastSuggested({ drop, journal, looks: looksAll }), [drop, journal, looksAll]);
+  useEffect(() => {
+    const inputs = [garments, occasion, season, color, pageWeather];
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      const found = visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather });
+      const shown = rowWays(found, garments, {
+        occasion,
+        season,
+        color,
+        weatherF: pageWeather,
+        salt: rowSalt,
+        onScreen: weekIds,
+        suggested,
+      });
+      setWaysFor({ inputs, ways: found, shown });
+    };
+    const idle = window.requestIdleCallback;
+    if (typeof idle === "function") {
+      const id = idle(run, { timeout: 1500 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback?.(id);
+      };
+    }
+    const id = window.setTimeout(run, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, [garments, occasion, season, color, pageWeather, rowSalt, weekIds, suggested]);
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const rack = useMemo(

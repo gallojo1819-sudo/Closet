@@ -194,3 +194,149 @@ export function pieceLine(pieces: Garment[]): string {
     .map((p) => p.g.name)
     .join(" · ");
 }
+
+type Kind = [RegExp, string];
+
+/** The word that makes an outer layer itself. First match wins; the colour goes in front. */
+const OUTER_KINDS: Kind[] = [
+  [/field/, "field"],
+  [/chore/, "chore"],
+  [/trucker|denim jacket/, "trucker"],
+  [/bomber/, "bomber"],
+  [/sport\s?coat/, "sport coat"],
+  [/blazer/, "blazer"],
+  [/overshirt/, "overshirt"],
+  [/cardigan/, "cardigan"],
+  [/\bvest\b|gilet/, "vest"],
+  [/fleece/, "fleece"],
+  [/parka/, "parka"],
+  [/overcoat|topcoat|long coat/, "topcoat"],
+  [/\bcoat\b/, "coat"],
+  [/shearling|sherpa/, "shearling"],
+  [/suede/, "suede jacket"],
+  [/leather/, "leather jacket"],
+  [/waxed/, "waxed jacket"],
+  [/cord/, "cord jacket"],
+  [/wool/, "wool jacket"],
+  [/quilted/, "quilted jacket"],
+  [/jacket/, "jacket"],
+];
+
+const TOP_KINDS: Kind[] = [
+  [/oxford|button-down|button down|\bocbd\b/, "oxford"],
+  [/henley/, "henley"],
+  [/rugby/, "rugby"],
+  [/knit polo|merino polo|polo.*knit|knit.*polo/, "knit polo"],
+  [/\bpolos?\b/, "polo"],
+  [/turtleneck|roll neck|mock neck/, "turtleneck"],
+  [/half-zip|half zip/, "half-zip"],
+  [/quarter-zip|quarter zip/, "quarter-zip"],
+  [/hoodie/, "hoodie"],
+  [/sweatshirt|crewneck sweat/, "sweatshirt"],
+  [/cardigan/, "cardigan"],
+  [/flannel/, "flannel"],
+  [/chambray/, "chambray"],
+  [/\bcamp\b/, "camp collar"],
+  [/linen/, "linen shirt"],
+  [/denim/, "denim shirt"],
+  [/\btee\b|t-shirt|t shirt/, "tee"],
+  [/cable/, "cable knit"],
+  [/sweater|knit|jumper|crew/, "knit"],
+  [/dress shirt/, "dress shirt"],
+  [/shirt|button-up/, "shirt"],
+  [/dress/, "dress"],
+  [/\bvest\b|gilet/, "vest"],
+  [/fleece/, "fleece"],
+  [/pullover/, "pullover"],
+  [/overshirt/, "overshirt"],
+  [/field/, "field"],
+  [/jacket/, "jacket"],
+];
+
+/** Bottoms read by cloth: the colour goes in front except on denim. */
+const BOTTOM_KINDS: Kind[] = [
+  [/\bjeans?\b|denim|selvedge/, "denim"],
+  [/\bcords?\b|corduroy/, "cords"],
+  [/chino/, "chinos"],
+  [/flannel/, "flannels"],
+  [/gurkha/, "gurkhas"],
+  [/pleat/, "pleats"],
+  [/linen/, "linen"],
+  [/track/, "track pants"],
+  [/short/, "shorts"],
+  [/jogger|sweatpant/, "sweats"],
+  [/wool/, "wool trousers"],
+  [/trouser/, "trousers"],
+  [/pant/, "pants"],
+];
+
+const SHOE_KINDS: Kind[] = [
+  [/sneaker|trainer/, "sneaker"],
+  [/tassel/, "tassel loafer"],
+  [/penny/, "penny loafer"],
+  [/loafer/, "loafer"],
+  [/chelsea/, "chelsea"],
+  [/chukka/, "chukka"],
+  [/\bboots?\b|roper/, "boot"],
+  [/derby/, "derby"],
+  [/brogue/, "brogue"],
+  [/mule/, "mule"],
+  [/moc|driver/, "moc"],
+  [/sandal|slide/, "sandal"],
+  [/oxford/, "oxford shoe"],
+];
+
+const DENIM_TONES = /white|black|ecru|cream|grey|gray/;
+
+function kindText(g: Garment): string {
+  return `${g.subtype} ${g.name} ${g.material}`.toLowerCase();
+}
+
+function kindOf(g: Garment, table: Kind[], fallback: string): string {
+  const text = kindText(g);
+  for (const [re, kind] of table) if (re.test(text)) return kind;
+  return fallback;
+}
+
+/** The first colour as one word: "navy/brown" → "navy". Empty when the piece has none. */
+function tone(g: Garment): string {
+  const first = (g.colors ?? []).find((c) => c && c.trim()) ?? "";
+  return first.split("/")[0]!.trim().toLowerCase();
+}
+
+function toned(g: Garment, kind: string, withSuede = false): string {
+  const parts: string[] = [];
+  const colour = tone(g);
+  if (colour && !kind.includes(colour)) parts.push(colour);
+  if (withSuede && /suede/.test(kindText(g)) && !kind.includes("suede")) parts.push("suede");
+  parts.push(kind);
+  return parts.join(" ");
+}
+
+/**
+ * The idea card's title names what makes the look different from the one beside it:
+ * "Olive field, denim, white sneaker". The jacket (the top when there is none) with its
+ * colour, the bottom by cloth, the shoe with its colour. Never "X and Y jacket", never a brand.
+ */
+export function ideaTitle(pieces: Garment[]): string {
+  const slots = collageSlots(pieces);
+  const by = (slot: CollageSlot) => slots.find((p) => p.slot === slot)?.g;
+  const outer = by("outer");
+  const top = by("top") ?? by("top2");
+  const bottom = by("bottom");
+  const shoes = by("shoes");
+  const parts: string[] = [];
+  if (outer) parts.push(toned(outer, kindOf(outer, OUTER_KINDS, "jacket"), true));
+  else if (top) parts.push(toned(top, kindOf(top, TOP_KINDS, "top")));
+  if (bottom) {
+    const kind = kindOf(bottom, BOTTOM_KINDS, "trousers");
+    const colour = tone(bottom);
+    parts.push(kind === "denim" && !DENIM_TONES.test(colour) ? "denim" : toned(bottom, kind));
+  }
+  if (shoes) parts.push(toned(shoes, kindOf(shoes, SHOE_KINDS, "shoe"), true));
+  if (!parts.length) {
+    const first = pieces[0];
+    return first ? capFirst(plainName(first).toLowerCase() || first.name.toLowerCase()) : "";
+  }
+  return capFirst(parts.join(", "));
+}

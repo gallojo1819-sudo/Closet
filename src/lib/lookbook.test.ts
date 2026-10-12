@@ -1570,8 +1570,9 @@ describe("lookbook card stack", () => {
     assert.equal(book.includes("chapterVisible"), false);
     assert.equal(book.includes("buildReshuffleRow"), true);
     assert.match(book, /const realRow = realWeekLooks\(row/);
-    // Joe removed the Houses and ways chip rows; the app is for everyone. This week is the plain row.
-    assert.match(book, /const weekRow = realRow;/);
+    // Joe removed the Houses and ways chip rows; the app is for everyone. This week is the plain row,
+    // with no piece on more than two of its cards (the screen cap the idea rows share).
+    assert.match(book, /const weekRow = capScreenLooks\(realRow\);/);
     assert.equal(book.includes("houseFirstRow"), false);
     assert.equal(book.includes("wayFirstRow"), false);
     assert.match(book, /const cards = weekRow\.map/);

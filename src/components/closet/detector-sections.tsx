@@ -1,6 +1,6 @@
 import { LookCollage } from "@/components/closet/look-collage";
 import { activeFirst, OCCASION_ORDER, ROW_MAX, visibleDetectors, type Way } from "@/lib/detectors";
-import { lookTitle, pieceLine } from "@/lib/look-collage";
+import { ideaTitle, pieceLine } from "@/lib/look-collage";
 import type { Garment, Occasion, Season } from "@/lib/types";
 import { PlateRack } from "@/components/closet/plate-rack";
 
@@ -43,7 +43,7 @@ function PlateCard({
         className="block w-full text-left focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-ink"
       >
         <LookCollage pieces={look} />
-        <p className="mt-3 font-editorial text-[19px] leading-tight tracking-tight">{lookTitle(look)}</p>
+        <p className="mt-3 font-editorial text-[19px] leading-tight tracking-tight">{ideaTitle(look)}</p>
         <p className="mt-1 text-xs leading-snug text-ink-soft">{pieceLine(look)}</p>
       </button>
     </div>
