@@ -1546,11 +1546,14 @@ describe("reshuffle row", () => {
     assert.equal(saved.length, before);
     const src = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
     // The old Reshuffle button is gone; its body is reshuffleWeek, called by the header's Re-dress.
+    // Since the rotation (rotation.ts) the page's week row is dressWeek: weekRotationRow, the next
+    // turn of the session queue, not the engine's best-scored row.
     assert.equal(/Reshuffle\s*<\/button>/.test(src), false);
     const weekAt = src.indexOf("const reshuffleWeek = () => {");
     assert.ok(weekAt > 0);
     const click = src.slice(weekAt, src.indexOf("};", weekAt));
-    assert.equal(click.includes("buildReshuffleRow"), true);
+    assert.equal(click.includes("dressWeek()"), true);
+    assert.equal(click.includes("buildReshuffleRow"), false);
     assert.equal(click.includes("composeChapter"), false);
     assert.match(src, /const redress = \(\) => \{\s*setRowSalt\(\(n\) => n \+ 1\);\s*reshuffleWeek\(\);\s*\};/);
     assert.match(src, /<button[^>]*data-redress[^>]*onClick=\{redress\}/);
@@ -1568,7 +1571,10 @@ describe("lookbook card stack", () => {
     assert.equal(/from\s+["'][^"']*ai(\.ts)?["']/.test(kit), false);
     assert.equal(book.includes("composeChapter"), false);
     assert.equal(book.includes("chapterVisible"), false);
-    assert.equal(book.includes("buildReshuffleRow"), true);
+    /* The week row is the rotation's (weekRotationRow → looksFromRows), never the engine's ranked row. */
+    assert.equal(book.includes("buildReshuffleRow"), false);
+    assert.match(book, /const built = weekRotationRow\(garments, \{/);
+    assert.match(book, /return looksFromRows\(built\.looks, occasion, built\.demoted\);/);
     assert.match(book, /const realRow = realWeekLooks\(row/);
     // Joe removed the Houses and ways chip rows; the app is for everyone. This week is the plain row,
     // with no piece on more than two of its cards (the screen cap the idea rows share).
@@ -1632,7 +1638,8 @@ describe("lookbook card stack", () => {
     const preview = book.slice(book.indexOf("const preview"), book.indexOf("const [ranked"));
     assert.match(preview, /firstWeekLooks\(/);
     assert.equal(preview.includes("buildReshuffleRow"), false);
-    assert.match(book, /window\.setTimeout\(\(\) => \{[\s\S]*?buildReshuffleRow/);
+    assert.equal(preview.includes("weekRotationRow"), false);
+    assert.match(book, /window\.setTimeout\(\(\) => \{[\s\S]*?dressWeek\(\)/);
     assert.match(book, /data-week-reason/);
     const fn = lib.slice(lib.indexOf("export function firstWeekLooks"), lib.indexOf("export function buildReshuffleRow"));
     assert.equal(fn.includes("buildHouseMatrix"), false);

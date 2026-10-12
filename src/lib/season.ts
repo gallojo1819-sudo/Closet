@@ -189,6 +189,22 @@ export function lookFitsSeason(pieces: Garment[], season: Season): boolean {
   return true;
 }
 
+/**
+ * One piece on its own, for the season: its listed (or guessed) seasons, and the per-piece
+ * parts of lookFitsSeason (an overcoat sits out summer; a summer shirt, shorts, and linen or
+ * camp tops sit out the cold). The mixing rule needs a whole look and is checked there.
+ */
+export function pieceFitsSeason(g: Garment, season: Season): boolean {
+  if (!seasonsOf(g).includes(season)) return false;
+  if (season === "summer" && isOvercoatPiece(g)) return false;
+  if ((season === "fall" || season === "winter") && isLayerTop(g) && isSummerShirt(g)) return false;
+  if (season === "winter") {
+    if (/\bshorts?\b/.test(blobOf(g))) return false;
+    if (isLayerTop(g) && (isLinenCampPiece(g) || isSummerOnly(g))) return false;
+  }
+  return true;
+}
+
 export function seasonRank(pieces: Garment[], season: Season): number {
   if (!lookFitsSeason(pieces, season)) return -1;
   const target = seasonWarmth(season);

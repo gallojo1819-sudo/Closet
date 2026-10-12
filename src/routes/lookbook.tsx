@@ -16,20 +16,22 @@ import {
   detectorTitle,
   lastSuggested,
   renderedSectionLooks,
+  rotationEligible,
   rowWays,
   visibleDetectors,
   warmCellBook,
+  weekRotationRow,
   type Way,
 } from "@/lib/detectors";
 import { engineCacheReady } from "@/lib/engine-cache";
 import {
-  buildReshuffleRow,
   comboKey,
   draftFromPlate,
   emptyFilterCopy,
   firstWeekLooks,
   lookbookPool,
   looksForHero,
+  looksFromRows,
   realWeekLooks,
   unusedFromLooks,
   visibleHero,
@@ -42,6 +44,7 @@ import { pieceLabel } from "@/lib/piece-label";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
+import { advanceRotation, readRotation, ROTATION_KEY, writeRotation, type Rotation } from "@/lib/rotation";
 import { daysIdle, slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
@@ -317,21 +320,72 @@ function LookbookPage() {
   );
   const [ranked, setRanked] = useState<{ key: string; looks: Look[] } | null>(null);
   const [shown, setShown] = useState<{ key: string; looks: Look[] } | null>(null);
-  const [salt, setSalt] = useState(1);
+  /* The Re-dress rotation (rotation.ts): one session queue for the week row and the rows, so
+     every in-season piece gets a turn before anything repeats. Kept in sessionStorage, read
+     once; nothing is written to the store. `stuck` is this filter's list of pieces no legal
+     look can hold, which the rows skip and the dev console names. */
+  const rotationRef = useRef<Rotation | null>(null);
+  const stuckRef = useRef<{ key: string; ids: Set<string> } | null>(null);
+  const getRotation = useCallback((): Rotation => {
+    if (rotationRef.current) return rotationRef.current;
+    let raw: string | null = null;
+    try {
+      raw = window.sessionStorage.getItem(ROTATION_KEY);
+    } catch {
+      raw = null;
+    }
+    rotationRef.current = readRotation(raw);
+    return rotationRef.current;
+  }, []);
+  const recordPage = useCallback(
+    (page: readonly (readonly string[])[]) => {
+      const stuck = stuckRef.current?.key === filterKey ? stuckRef.current.ids : undefined;
+      const { next } = advanceRotation(getRotation(), {
+        page,
+        closet: garments.map((g) => g.id),
+        eligible: rotationEligible(garments, season, taste).map((g) => g.id),
+        stuck,
+      });
+      rotationRef.current = next;
+      try {
+        window.sessionStorage.setItem(ROTATION_KEY, writeRotation(next));
+      } catch {
+        /* Memory only: the queue still lives for this page. */
+      }
+    },
+    [filterKey, garments, season, taste, getRotation],
+  );
+  const stuckFor = useCallback(() => (stuckRef.current?.key === filterKey ? stuckRef.current.ids : undefined), [filterKey]);
+  /* The week row: the front of the queue, dressed by the plain rules. Writes nothing. */
+  const dressWeek = useCallback((): Look[] => {
+    const built = weekRotationRow(garments, {
+      occasion,
+      season,
+      color,
+      weatherF: pageWeather,
+      taste,
+      rotation: getRotation(),
+      stuck: stuckFor(),
+      cap: 8,
+    });
+    stuckRef.current = { key: filterKey, ids: new Set(built.unpairable.map((g) => g.id)) };
+    if (import.meta.env.DEV && built.unpairable.length) {
+      console.debug(
+        `[closet] Re-dress ${occasion}/${season}: ${built.unpairable.length} piece(s) no legal look here can hold`,
+        built.unpairable.map((g) => g.name),
+      );
+    }
+    recordPage(built.looks.map((look) => look.map((g) => g.id)));
+    return looksFromRows(built.looks, occasion, built.demoted);
+  }, [garments, occasion, season, color, pageWeather, taste, filterKey, getRotation, stuckFor, recordPage]);
   useEffect(() => {
     let cancel = false;
     let timer = 0;
     void engineCacheReady().then(() => {
       if (cancel) return;
       timer = window.setTimeout(() => {
-        const next = buildReshuffleRow(garments, occasion, {
-          season,
-          color,
-          salt: 1,
-          cap: 8,
-          taste,
-          weather: drop?.weather?.measured ? drop.weather : undefined,
-        });
+        if (cancel) return;
+        const next = dressWeek();
         if (!cancel) setRanked({ key: filterKey, looks: next });
       }, 0);
     });
@@ -339,7 +393,7 @@ function LookbookPage() {
       cancel = true;
       window.clearTimeout(timer);
     };
-  }, [filterKey, garments, occasion, season, color, taste, drop?.weather]);
+  }, [filterKey, dressWeek]);
   const rankedReady = ranked && ranked.key === filterKey ? ranked : null;
   const row =
     shown && shown.key === filterKey && shown.looks.length > 0
@@ -378,7 +432,10 @@ function LookbookPage() {
         salt: rowSalt,
         onScreen: weekIds,
         suggested,
+        rotation: getRotation(),
+        stuck: stuckFor(),
       });
+      recordPage(shown.flatMap((way) => (way.looks[occasion] ?? []).map((look) => look.map((g) => g.id))));
       setWaysFor({ inputs, ways: found, shown });
     };
     const idle = window.requestIdleCallback;
@@ -394,7 +451,7 @@ function LookbookPage() {
       cancelled = true;
       window.clearTimeout(id);
     };
-  }, [garments, occasion, season, color, pageWeather, rowSalt, weekIds, suggested]);
+  }, [garments, occasion, season, color, pageWeather, rowSalt, weekIds, suggested, getRotation, stuckFor, recordPage]);
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const rack = useMemo(
@@ -453,20 +510,9 @@ function LookbookPage() {
     setOpenId(look.id);
   };
 
-  /* This week's reshuffle, unchanged from the old Reshuffle button. Writes nothing to the store. */
+  /* This week's reshuffle: the next turn of the rotation. Writes nothing to the store. */
   const reshuffleWeek = () => {
-    const nextSalt = salt + 1;
-    const next = buildReshuffleRow(garments, occasion, {
-      season,
-      color,
-      salt: nextSalt,
-      cap: 8,
-      excludeKeys: row.map((look) => comboKey(look.garmentIds)),
-      mustInclude: unusedFromLooks(garments, looksAll).map((g) => g.id),
-      taste,
-      weather: drop?.weather?.measured ? drop.weather : undefined,
-    });
-    setSalt(nextSalt);
+    const next = dressWeek();
     if (next.length) {
       setShown({ key: filterKey, looks: next });
       setWeekPulse((x) => x + 1);

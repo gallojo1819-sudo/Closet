@@ -2176,6 +2176,18 @@ export function firstWeekLooks(
   return { looks: found.map((pieces, index) => lookFromPieces(pieces, occasion, index)), reason: "" };
 }
 
+/**
+ * Week cards from rows of pieces (the rotation row, weekRotationRow in detectors/ideas.ts):
+ * the same ids, names and recipe stamps the engine's row gets. `demoted` marks the cards that
+ * go without the jacket the day asks for.
+ */
+export function looksFromRows(rows: Garment[][], occasion: Occasion, demoted: readonly number[] = []): Look[] {
+  const bare = new Set(demoted);
+  return rows.map((pieces, index) =>
+    lookFromPieces(pieces, occasion, index, undefined, bare.has(index) ? { demoted: "JKT-COV-1" } : undefined),
+  );
+}
+
 export function buildReshuffleRow(
   garments: Garment[],
   occasion: Occasion,

@@ -14,9 +14,12 @@ export {
   pieceCounts,
   ROW_MIN,
   rowRepeats,
+  rotationEligible,
   rowWays,
   SCREEN_CAP,
   themePieces,
+  weekRotationRow,
+  type WeekRotation,
 } from "./detectors/ideas.ts";
 export {
   activeFirst,
