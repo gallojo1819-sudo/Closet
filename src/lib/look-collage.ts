@@ -313,10 +313,16 @@ function toned(g: Garment, kind: string, withSuede = false): string {
   return parts.join(" ");
 }
 
+/** The jacket as the idea title names it: its colour, suede when it is, its kind. "Olive field". */
+export function outerLabel(g: Garment): string {
+  return toned(g, kindOf(g, OUTER_KINDS, "jacket"), true);
+}
+
 /**
  * The idea card's title names what makes the look different from the one beside it:
  * "Olive field, denim, white sneaker". The jacket (the top when there is none) with its
  * colour, the bottom by cloth, the shoe with its colour. Never "X and Y jacket", never a brand.
+ * A card with a jacket always starts with it (outerLabel).
  */
 export function ideaTitle(pieces: Garment[]): string {
   const slots = collageSlots(pieces);
@@ -326,7 +332,7 @@ export function ideaTitle(pieces: Garment[]): string {
   const bottom = by("bottom");
   const shoes = by("shoes");
   const parts: string[] = [];
-  if (outer) parts.push(toned(outer, kindOf(outer, OUTER_KINDS, "jacket"), true));
+  if (outer) parts.push(outerLabel(outer));
   else if (top) parts.push(toned(top, kindOf(top, TOP_KINDS, "top")));
   if (bottom) {
     const kind = kindOf(bottom, BOTTOM_KINDS, "trousers");

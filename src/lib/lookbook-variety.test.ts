@@ -2,8 +2,10 @@
  * Lookbook variety: the idea rows use the whole closet. Every row is a theme with a different
  * hero per card, no piece repeats within a row, no piece sits on more than two cards of a
  * screen, titles say what differs, and a "Forgotten pieces" row shows what has not been worn
- * or suggested in a while. The fixture is the 142-piece stripped closet the engine snapshot
- * uses, with the clock frozen at the snapshot's instant.
+ * or suggested in a while. Summer themes (linen, camp collar, resort, short-sleeve polo) stay in
+ * summer, and a jacket theme puts a jacket on every card, named first. The fixture is the
+ * 142-piece stripped closet the engine snapshot uses, with the clock frozen at the snapshot's
+ * instant.
  */
 import { describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
@@ -15,6 +17,10 @@ import {
   FORGOTTEN_TITLE,
   forgottenIds,
   freshness,
+  isJacketWay,
+  isOuterPiece,
+  isSummerOnlyPiece,
+  jacketTheme,
   lastSuggested,
   pieceCounts,
   ROW_MAX,
@@ -22,14 +28,17 @@ import {
   rowRepeats,
   rowWays,
   SCREEN_CAP,
+  seasonFits,
   storedRows,
+  SUMMER_ONLY,
   themePieces,
   visibleDetectors,
   type Way,
 } from "./detectors.ts";
-import { ideaTitle, pieceLine } from "./look-collage.ts";
+import library from "./detectors/library.json" with { type: "json" };
+import { ideaTitle, outerLabel, pieceLine } from "./look-collage.ts";
 import { buildReshuffleRow, lookbookPool } from "./lookbook.ts";
-import { lookFitsSeason } from "./season.ts";
+import { isLinenCampPiece, lookFitsSeason } from "./season.ts";
 import { slotOf } from "./style.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
@@ -289,6 +298,105 @@ describe("the screen cap and freshness", () => {
       assert.ok(rowLooks(rows[at]!, occasion).length >= ROW_MIN);
     }
     assert.ok(seen >= 1, "no screen built a forgotten row");
+  });
+});
+
+describe("summer themes stay in summer", () => {
+  const linen = g({ id: "ls", name: "Blue linen shirt", category: "top", subtype: "shirt", material: "linen", seasons: [] });
+  const camp = g({ id: "cs", name: "Ivory cotton camp shirt", category: "top", subtype: "camp shirt", seasons: [] });
+  const resort = g({ id: "rs", name: "Green resort shirt", category: "top", subtype: "shirt", seasons: [] });
+  const ssPolo = g({ id: "sp", name: "Navy short-sleeve polo", category: "top", subtype: "polo", seasons: [] });
+  const knit = g({ id: "k", name: "Cream knit", category: "top", subtype: "sweater", seasons: [] });
+  const chinos = g({ id: "c", name: "Brown cotton chinos", category: "bottom", subtype: "chinos", seasons: [] });
+  const loafers = g({ id: "l", name: "Brown suede loafers", category: "footwear", subtype: "loafers", material: "suede", seasons: [] });
+
+  it("the summer-only list names linen, camp collar, resort and short-sleeve polo, and nothing else trips it", () => {
+    assert.deepEqual(
+      SUMMER_ONLY.map((row) => row.id),
+      ["linen", "camp collar", "resort", "short-sleeve polo"],
+    );
+    for (const piece of [linen, camp, resort, ssPolo]) assert.equal(isSummerOnlyPiece(piece), true, piece.name);
+    for (const piece of [knit, chinos, loafers]) assert.equal(isSummerOnlyPiece(piece), false, piece.name);
+    const longPolo = g({ id: "lp", name: "Brown knit polo", category: "top", subtype: "polo", seasons: [] });
+    assert.equal(isSummerOnlyPiece(longPolo), false, "a knit polo without short sleeves is not summer-only");
+  });
+
+  it("seasonFits is seasonOk plus the summer gate: a linen look passes in summer only", () => {
+    for (const season of ["fall", "winter", "spring"] as Season[]) {
+      assert.equal(seasonFits([linen, chinos, loafers], season), false, season);
+      assert.equal(seasonFits([knit, chinos, loafers], season), true, season);
+    }
+    assert.equal(seasonFits([linen, chinos, loafers], "summer"), true);
+    assert.equal(seasonFits([camp, chinos, loafers], "summer"), true);
+  });
+
+  it("a fall build has no linen or camp-collar piece on any card, and no summer-only piece at all", () => {
+    for (const { occasion, rows } of SCREENS) {
+      for (const way of rows) {
+        for (const look of rowLooks(way, occasion)) {
+          const summer = look.filter((p) => isLinenCampPiece(p) || isSummerOnlyPiece(p));
+          assert.deepEqual(summer.map((p) => p.name), [], `${occasion} / ${way.title}: ${pieceLine(look)}`);
+        }
+      }
+    }
+  });
+
+  it("the linen theme is hidden in fall, and the fixture has linen to hide", () => {
+    assert.ok(FIXTURE.some((p) => isLinenCampPiece(p)), "the fixture has linen or camp pieces");
+    const linenCell = library.cells.find((cell) => cell.key === "linen_soft")!;
+    for (const { rows } of SCREENS) assert.equal(rows.some((way) => way.id === linenCell.id), false);
+  });
+});
+
+describe("jacket themes show the jacket", () => {
+  it("a jacket theme is a cell whose title or core layer is a jacket", () => {
+    const byKey = (key: string) => library.cells.find((cell) => cell.key === key)!;
+    for (const key of ["linen_soft", "flannel_cashmere", "fine_knit_loafer", "western_work", "clean_city", "ivy_prep"]) {
+      assert.equal(jacketTheme(byKey(key)), true, key);
+    }
+    for (const key of ["print_plain", "soft_outdoor"]) assert.equal(jacketTheme(byKey(key)), false, key);
+    assert.equal(isJacketWay("8"), true);
+    assert.equal(isJacketWay("forgotten"), false);
+  });
+
+  it("every card of a jacket-themed row has a jacket, three or more different ones, and the title starts with it", () => {
+    let seen = 0;
+    for (const { occasion, rows } of SCREENS) {
+      for (const way of rows) {
+        if (!isJacketWay(way.id)) continue;
+        seen += 1;
+        const looks = rowLooks(way, occasion);
+        const jackets = new Set<string>();
+        for (const look of looks) {
+          const outers = look.filter(isOuterPiece);
+          assert.ok(outers.length >= 1, `${occasion} / ${way.title} has no jacket: ${pieceLine(look)}`);
+          for (const p of outers) jackets.add(p.id);
+          const title = ideaTitle(look);
+          assert.ok(
+            outers.some((p) => title.toLowerCase().startsWith(outerLabel(p).toLowerCase())),
+            `${occasion} / ${way.title}: "${title}" does not start with ${outers.map(outerLabel).join(" or ")}`,
+          );
+        }
+        assert.ok(jackets.size >= Math.min(looks.length, ROW_MIN), `${occasion} / ${way.title}: ${jackets.size} jackets`);
+        assert.ok(looks.length >= ROW_MIN, `${occasion} / ${way.title} shows ${looks.length} cards`);
+      }
+    }
+    assert.ok(seen >= 1, "some screen shows a jacket-themed row");
+  });
+
+  it("ideaTitle leads with the jacket wherever it sits in the card", () => {
+    const field = g({ id: "f", name: "Olive cotton field jacket", category: "outerwear", subtype: "field jacket", colors: ["olive"] });
+    const knit = g({ id: "k", name: "Cream knit", category: "top", subtype: "sweater", colors: ["cream"] });
+    const jeans = g({ id: "j", name: "Light blue denim jeans", category: "bottom", subtype: "jeans", colors: ["light blue"], material: "denim" });
+    const boots = g({ id: "b", name: "Brown leather boots", category: "footwear", subtype: "boots", colors: ["brown"] });
+    assert.equal(outerLabel(field), "olive field");
+    for (const look of [
+      [knit, jeans, boots, field],
+      [field, knit, jeans, boots],
+      [knit, field, jeans, boots],
+    ]) {
+      assert.ok(ideaTitle(look).toLowerCase().startsWith("olive field"), ideaTitle(look));
+    }
   });
 });
 

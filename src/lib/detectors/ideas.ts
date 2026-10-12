@@ -4,8 +4,11 @@
  * shoe or jacket. Across the screen no piece is on more than SCREEN_CAP cards. Freshness (days
  * idle, not suggested lately, not yet on this screen) weighs about as much as fit (the cell's
  * grade). A "Forgotten pieces" row closes the screen, built only from pieces not worn or
- * suggested in a while. The engine's stored rows (visibleDetectors, the snapshot) are untouched:
- * this is display, as storedRows was. Pure: relative imports only, no React, no DOM.
+ * suggested in a while. Summer themes (linen, camp collar, resort, short-sleeve polo: SUMMER_ONLY
+ * in cells.ts) show in summer only. A jacket theme (jacketTheme in cells.ts) puts a jacket on every
+ * card, so a row with fewer than ROW_MIN jackets shrinks or hides. The engine's stored rows
+ * (visibleDetectors, the snapshot) are untouched: this is display, as storedRows was. Pure:
+ * relative imports only, no React, no DOM.
  */
 import { cellKit, maxDisjoint, rankedWays, ROW_MAX, storedRows, type Cell, type Way } from "./cells.ts";
 import { detectorColor } from "./palette.ts";
@@ -304,6 +307,8 @@ function cellDresser(
   pool: Garment[],
 ): Dresser {
   const needJacket = jacketRequired(occasion, season, weatherF);
+  /* A jacket theme: only a jacket may be the layer, and no card goes without one. */
+  const jacket = cellKit.jacketTheme(cell);
   const owed = cellKit.layerOwed(cell);
   const colorOk = (pieces: Garment[]) => !color || detectorColor(pieces, color, cell.key).passed;
   const fit = (g: Garment, slot: SlotName) => (cellKit.grade(cell, g, slot) === "core" ? 1 : 0.5);
@@ -311,13 +316,14 @@ function cellDresser(
     tops: live.filter((g) => cellKit.slotRole(g, cell) === "top"),
     bottoms: live.filter((g) => slotOf(g) === "bottom" && cellKit.grade(cell, g, "bottom") !== "no"),
     shoes: live.filter((g) => slotOf(g) === "footwear" && cellKit.grade(cell, g, "shoe") !== "no"),
-    layers: live.filter((g) => cellKit.layerRole(g, cell)),
-    coreOk: (core) => cellKit.passesCheap(cell, core, occasion, season, pool, owed),
+    layers: live.filter((g) => cellKit.layerRole(g, cell) && (!jacket || isOuterPiece(g))),
+    coreOk: (core) => cellKit.seasonFits(core, season) && cellKit.passesCheap(cell, core, occasion, season, pool, owed),
     finalOk: (pieces) =>
+      cellKit.seasonFits(pieces, season) &&
       cellKit.passesCheap(cell, pieces, occasion, season, pool) &&
       colorOk(pieces) &&
       cellKit.legalOk(pieces, occasion, season, weatherF),
-    bareOk: () => !needJacket,
+    bareOk: () => !needJacket && !jacket,
     fit,
     theme: (g, slot) => isTheme(cell, g, slot),
   };
@@ -326,7 +332,8 @@ function cellDresser(
 /** The forgotten row has no cell: the shared hard rules, the occasion and season gates, then isLegal. */
 const PLAIN_CELL = { key: "", tuck: "", ban: [], fails: [] } as unknown as Cell;
 
-function isOuterPiece(g: Garment): boolean {
+/** A jacket: classified outer, or filed as outerwear. Cardigans, fleeces and vests are not. */
+export function isOuterPiece(g: Garment): boolean {
   return wearSlot(g) === "outer" || slotOf(g) === "outerwear";
 }
 
@@ -352,7 +359,7 @@ function forgottenDresser(
     !pieces.some((g) => cellKit.deleted.has(g.id)) &&
     !cellKit.globalFail(PLAIN_CELL, pieces) &&
     lookFitsOccasion(pieces, occasion, pool, undefined) &&
-    cellKit.seasonOk(pieces, season);
+    cellKit.seasonFits(pieces, season);
   return {
     tops: live.filter(isTopPiece),
     bottoms: live.filter((g) => slotOf(g) === "bottom"),
@@ -408,8 +415,8 @@ function forgottenWay(
 /**
  * The rows the Lookbook renders. Each way's looks for this occasion become hero-first cards
  * (ROW_MIN..ROW_MAX, distinct pieces within the row, SCREEN_CAP across the screen). A theme
- * that cannot reach ROW_MIN falls back to its stored disjoint rows under the same cap, so a
- * thin closet still shows what it has. The usual way asks usualFromCloset as before. A
+ * that cannot reach ROW_MIN falls back to its stored disjoint rows under the same cap (and the
+ * same season and jacket rules), so a thin closet still shows what it has. The usual way asks usualFromCloset as before. A
  * "Forgotten pieces" row closes the list when three cards of forgotten pieces are legal.
  */
 export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way[] {
@@ -451,8 +458,13 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
        under the cap, say "Only N in your closet" as before rather than leaving the page bare. */
     const stored = storedRows(short, garments, { occasion, season, color, weatherF, salt });
     for (const [i, way] of short.entries()) {
-      const kept = maxDisjoint(stored[i]?.looks[occasion] ?? []).filter((look) =>
-        look.every((g) => (counts.get(g.id) ?? 0) < SCREEN_CAP),
+      const cell = cellKit.cells().find((row) => row.id === way.id);
+      const jacket = cell ? cellKit.jacketTheme(cell) : false;
+      const kept = maxDisjoint(stored[i]?.looks[occasion] ?? []).filter(
+        (look) =>
+          look.every((g) => (counts.get(g.id) ?? 0) < SCREEN_CAP) &&
+          cellKit.seasonFits(look, season) &&
+          (!jacket || look.some(isOuterPiece)),
       );
       if (!kept.length) continue;
       for (const look of kept) for (const g of look) counts.set(g.id, (counts.get(g.id) ?? 0) + 1);

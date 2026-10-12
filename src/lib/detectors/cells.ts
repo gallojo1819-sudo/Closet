@@ -411,6 +411,49 @@ function seasonOk(pieces: Garment[], season: Season): boolean {
   return lookFitsSeason(pieces, season);
 }
 
+/**
+ * Summer themes: a piece one of these names belongs to a summer idea (linen, a camp collar, a
+ * resort shirt, a short-sleeve polo). The idea rows show a look with one of them in summer only;
+ * in fall, winter and spring the theme is hidden. Display only, so the engine's stored rows (the
+ * snapshot) keep seasonOk as it is.
+ */
+export const SUMMER_ONLY: readonly { id: string; test: (g: Garment) => boolean }[] = [
+  { id: "linen", test: (g) => has(g, /linen/) },
+  { id: "camp collar", test: (g) => has(g, /\bcamp\b/) },
+  { id: "resort", test: (g) => has(g, /resort/) },
+  { id: "short-sleeve polo", test: (g) => has(g, /short[- ]?sleeved?/) && has(g, /\bpolos?\b/) },
+];
+
+export function isSummerOnlyPiece(g: Garment): boolean {
+  return SUMMER_ONLY.some((row) => row.test(g));
+}
+
+/** seasonOk, and out of summer no summer-only piece. What the idea rows check. */
+export function seasonFits(pieces: Garment[], season: Season): boolean {
+  if (!seasonOk(pieces, season)) return false;
+  return season === "summer" || !pieces.some(isSummerOnlyPiece);
+}
+
+/** A layer phrase or a title word that is a jacket. Fleeces, vests, cardigans and zip knits are not. */
+const JACKET_WORDS =
+  /jacket|blazer|sport\s?coat|bomber|chore|\bcoat\b|overcoat|overshirt|trucker|waxed|shearling|suede|leather|unstructured|varsity|\btrack\b|plaid|field/;
+
+/**
+ * A jacket theme: the cell's title names a jacket, or a jacket is one of its core layers ("soft
+ * jacket", "soft wool blazer", "suede jacket or bomber", "chore"). Every card of such a row
+ * carries a jacket, and the card's title starts with it.
+ */
+export function jacketTheme(cell: Pick<Cell, "title" | "slots">): boolean {
+  if (JACKET_WORDS.test(cell.title.toLowerCase())) return true;
+  return (cell.slots.layer?.core ?? []).some((phrase) => JACKET_WORDS.test(phrase.toLowerCase()));
+}
+
+/** jacketTheme for a way id or cell key. */
+export function isJacketWay(wayId: string): boolean {
+  const cell = CELLS.find((row) => row.id === wayId || row.key === wayId);
+  return cell ? jacketTheme(cell) : false;
+}
+
 const LEGAL = new Map<string, boolean>();
 
 function finiteTemp(n: unknown): number | undefined {
@@ -1019,6 +1062,8 @@ export const cellKit = {
   passesCheap,
   legalOk,
   seasonOk,
+  seasonFits,
+  jacketTheme,
   idsOf,
 };
 
