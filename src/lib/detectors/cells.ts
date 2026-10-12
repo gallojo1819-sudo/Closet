@@ -434,18 +434,17 @@ export function seasonFits(pieces: Garment[], season: Season): boolean {
   return season === "summer" || !pieces.some(isSummerOnlyPiece);
 }
 
-/** A layer phrase or a title word that is a jacket. Fleeces, vests, cardigans and zip knits are not. */
+/** A title word that is a jacket. Fleeces, vests, cardigans and zip knits are not. */
 const JACKET_WORDS =
-  /jacket|blazer|sport\s?coat|bomber|chore|\bcoat\b|overcoat|overshirt|trucker|waxed|shearling|suede|leather|unstructured|varsity|\btrack\b|plaid|field/;
+  /jacket|blazer|sport\s?coat|bomber|chore|\bcoat\b|overcoat|overshirt|trucker|waxed|shearling|varsity/;
 
 /**
- * A jacket theme: the cell's title names a jacket, or a jacket is one of its core layers ("soft
- * jacket", "soft wool blazer", "suede jacket or bomber", "chore"). Every card of such a row
- * carries a jacket, and the card's title starts with it.
+ * A jacket theme: the cell's title names a jacket ("Linen and a soft jacket", "Oxford, chino,
+ * navy blazer"). The core layer phrases do not count. Every card of such a row carries a jacket,
+ * and the card's title starts with it.
  */
-export function jacketTheme(cell: Pick<Cell, "title" | "slots">): boolean {
-  if (JACKET_WORDS.test(cell.title.toLowerCase())) return true;
-  return (cell.slots.layer?.core ?? []).some((phrase) => JACKET_WORDS.test(phrase.toLowerCase()));
+export function jacketTheme(cell: Pick<Cell, "title">): boolean {
+  return JACKET_WORDS.test(cell.title.toLowerCase());
 }
 
 /** jacketTheme for a way id or cell key. */
