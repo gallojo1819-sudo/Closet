@@ -37,3 +37,12 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   section to markup over six Re-dress pages per chapter on the 157-piece fixture and checks the
   header against the cards drawn. `detectors.test.ts` pins the component's import line and the
   `{row.title}` heading. vitest resolves `@/` via an alias in `vitest.config.ts`.
+- stylist-memory (Oct 13 2026, claude/stylist-memory): the stylist keeps what the user tells it.
+  `supabase/migrations/20261013200000_stylist_notes.sql` (hand-applied, not `migrations/`) makes
+  `stylist_notes` with RLS; `src/lib/stylist-notes/` holds the module (`notes.ts`: add/listActive/
+  delete over a backend, same-topic supersede keeps the older row), the pure classifier
+  (`classify.ts`, cue words, no model call), the top-8-by-topic-then-recency ranker and prompt
+  block (`rank.ts`), the dock hook (`remember.ts`, runs beside learnFromAsk, never on a Skip), and
+  the server loader (`notes.server.ts`, caller token under RLS). `askStylist` appends a REMEMBERED
+  block after NOTES. The notes view is `components/shell/stylist-notes.tsx`, toggled in the dock.
+  `policy.test.ts` runs the migration verbatim in PGlite with a stubbed auth schema.

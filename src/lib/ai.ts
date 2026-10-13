@@ -12,6 +12,7 @@ import {
 import { livePool } from "./rack";
 import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
 import { acceptStylistReply, answerAsked, pageNotes, type StylistPageContext } from "./stylist-page";
+import { notesBlock, relevantNotes } from "./stylist-notes/rank";
 import { buildStylistSystem, composeAtlasLook, normalizeTaste, occasionFromPrompt, type TasteMemory } from "./taste";
 import type { Category, Garment, Occasion } from "./types";
 
@@ -635,6 +636,13 @@ export const askStylist = createServerFn({ method: "POST" })
     });
     const noteBody = [data.context, pageNotes(page)].filter(Boolean).join("\n");
     const notes = noteBody ? `\n\nNOTES\n${noteBody}` : "";
+    /* What he told the stylist, as the caller under RLS: the top eight by topic match, then recency. */
+    const { loadActiveNotes } = await import("./stylist-notes/notes.server");
+    const active = await loadActiveNotes(context.callerId, context.sbToken);
+    const remembered = notesBlock(
+      relevantNotes(active, { prompt: data.prompt, garments: rack, lockedIds: data.lockedIds }),
+      rack,
+    );
     const prior = (data.thread ?? [])
       .slice(-8)
       .filter((m) => m.text.trim())
@@ -643,7 +651,7 @@ export const askStylist = createServerFn({ method: "POST" })
         content: m.text.slice(0, 1200),
       }));
     const messages = [
-      { role: "system", content: `${system}${notes}` },
+      { role: "system", content: `${system}${notes}${remembered}` },
       ...prior,
       { role: "user", content: data.prompt.slice(0, 1200) },
     ];

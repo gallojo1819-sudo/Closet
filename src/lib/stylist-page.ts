@@ -46,6 +46,11 @@ export type StylistAskData = {
 const HOUSE =
   /\b(purple label|rrl|a\.?l\.?d\.?|aim[eé] leon dore|faloni|sweet stable|italian summer|italian winter|ralph lauren|ralph|fortela|drake'?s|fivefourfive)\b/i;
 
+/** The same house list, every occurrence. A stylist note keeps his words without a house in them. */
+export function scrubHouseNames(text: string): string {
+  return text.replace(new RegExp(HOUSE.source, "gi"), " ").replace(/\s+/g, " ").trim();
+}
+
 const REFUSE =
   /\b(anything goes|buy|shop|purchase|you should get|pick up a|order a|add to cart)\b/i;
 

@@ -36,6 +36,9 @@ import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
 import { daysIdle, defaultOccasion, momentOfDay, todayOccasion } from "@/lib/style";
 import { useCloset } from "@/lib/store";
+import { accountNotes } from "@/lib/stylist-notes/client";
+import { rememberFromAsk } from "@/lib/stylist-notes/remember";
+import { StylistNotes } from "./stylist-notes";
 import {
   acceptTrend,
   composeAtlasLook,
@@ -107,6 +110,8 @@ export function StylistDock() {
   const [shown, setShown] = useState(false);
   const [ring, setRing] = useState(false);
   const [unread, setUnread] = useState(false);
+  /* The notes view sits inside the one panel. Closing the panel brings the chat back. */
+  const [notesOpen, setNotesOpen] = useState(false);
   const seenRef = useRef(messages.length);
 
   useEffect(() => {
@@ -120,6 +125,7 @@ export function StylistDock() {
   useEffect(() => {
     if (!open) return;
     setShown(false);
+    setNotesOpen(false);
     const raf = requestAnimationFrame(() => setShown(true));
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -182,6 +188,13 @@ export function StylistDock() {
       now: Date.now(),
     });
     setTaste(taste);
+    /* A stated never or lean, or a correction of the last look, stays on his account. Not a Skip, not the store. */
+    void rememberFromAsk(accountNotes(), {
+      text: q,
+      garments: owned,
+      previousIds: previous?.garmentIds ?? [],
+      now: Date.now(),
+    }).catch(() => {});
     const vetoed = pieceVetoIds(taste);
     const here = readStylistPage();
     /* "What should I wear today?" is today's look, on every page, before the page answers. */
@@ -494,11 +507,28 @@ export function StylistDock() {
             }}
           >
             <div className="px-4 pt-3">
-              <p className="micro text-ink-soft">This page</p>
+              <div className="flex items-center justify-between">
+                <p className="micro text-ink-soft">This page</p>
+                <button
+                  type="button"
+                  data-stylist-notes-toggle
+                  aria-expanded={notesOpen}
+                  onClick={() => setNotesOpen((v) => !v)}
+                  className="micro text-ink-soft hover:text-ink underline-offset-2 hover:underline"
+                >
+                  {notesOpen ? "Stylist" : "Notes"}
+                </button>
+              </div>
               <p data-stylist-screen className="mt-1 text-sm text-ink">
                 {sentence}
               </p>
             </div>
+            {notesOpen ? (
+              <div className="mt-3 border-t border-hairline">
+                <StylistNotes onBack={() => setNotesOpen(false)} />
+              </div>
+            ) : (
+            <>
             <div className="mt-3 border-t border-hairline px-4 pt-3">
               <p className="micro text-ink-soft">This look</p>
               {look ? (
@@ -559,6 +589,8 @@ export function StylistDock() {
                 <p className="mt-2 text-sm text-accent">{error}</p>
               ) : null}
             </div>
+            </>
+            )}
           </div>
         </>
       ) : null}
