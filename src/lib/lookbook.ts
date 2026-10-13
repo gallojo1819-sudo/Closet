@@ -44,7 +44,7 @@ import {
 import { buildHouseMatrix, type MatrixLook } from "./stylist/matrix.ts";
 import { engineKey, engineStore } from "./engine-store.ts";
 import { isLegal } from "./stylist/legal.ts";
-import { houseCode, jacketHits, jacketRequired, slotPieces, wearSlot as jacketWearSlot } from "./stylist/jackets.ts";
+import { fwEligibleJackets, houseCode, jacketHits, jacketRequired, slotPieces, wearSlot as jacketWearSlot } from "./stylist/jackets.ts";
 import { rep3Fails, repCaps, recipeOuterIssue } from "./stylist/row.ts";
 import { approvedProfile } from "./house-profiles/load.ts";
 import { evaluateColor, colorEmptyCopy } from "./stylist/colorChip.ts";
@@ -1956,6 +1956,9 @@ function rotateJackets(
   return next;
 }
 
+/** A colour row leads with its colour on at least this many looks when the closet allows (re-dressing jackets if it must). */
+const COLOR_ROW_MIN = 3;
+
 function finishStyled(
   garments: Garment[],
   occasion: Occasion,
@@ -2028,12 +2031,61 @@ function finishStyled(
     return out;
   };
 
+  /**
+   * The colour row leads with the colour on at least COLOR_ROW_MIN looks when the closet allows.
+   * The matrix spreads its jackets across every row built this session, so a look whose only
+   * navy piece was its jacket may come back under another jacket and fail the colour. When the
+   * matrix's looks leave the row short, the next looks are re-dressed with a jacket that carries
+   * the colour (in season, legal with the core, not already on the row), in matrix order.
+   */
+  const isJacket = (g: Garment) => jacketWearSlot(g) === "outer" || slotOf(g) === "outerwear";
+  const plateOf = (g: Garment) => ({
+    id: g.id,
+    name: g.name,
+    category: g.category === "dress" ? "top" : g.category,
+    subtype: g.subtype,
+    material: g.material,
+    colors: g.colors,
+    brand: g.brand,
+    fit: g.fit,
+    warmth: g.warmth,
+  });
+  const publishColor = (): Look[] => {
+    const row = publish(matrix.all);
+    const want = Math.min(COLOR_ROW_MIN, cap);
+    if (row.length >= want) return row;
+    const have = new Set(row.map((look) => comboKey(look.garmentIds)));
+    const fw = new Set(season === "fall" || season === "winter" ? fwEligibleJackets() : []);
+    const jackets = pool.filter((g) => isJacket(g) && (fw.size === 0 || fw.has(g.id)));
+    const out = [...row];
+    for (const look of matrix.all) {
+      if (out.length >= want) break;
+      const raw = piecesOfLook(look, byId);
+      if (raw.length < 3 || DELETED_HIT(raw)) continue;
+      const core = raw.filter((g) => !isJacket(g));
+      if (core.length < 3) continue;
+      for (const jacket of jackets) {
+        const combined = [...core, jacket];
+        const key = comboKey(combined.map((g) => g.id));
+        if (banned.has(key) || have.has(key)) continue;
+        const pieces = opts?.taste ? applyAtlas(combined, opts.taste) : combined;
+        if (!pieces || pieces.length !== combined.length) continue;
+        if (!evaluateColor(assignSlots(pieces.map(plateOf)), color).passed) continue;
+        if (!isLegal(pieces, { house: null, occasion, season })) continue;
+        out.push(lookFromPieces(pieces, occasion, out.length));
+        have.add(key);
+        break;
+      }
+    }
+    return out;
+  };
+
   if (color && house) {
     /*
      * House ranks here too. The row is the colour row, re-ordered so the looks that fit
      * the house lead. Same count as colour alone; never a gate card.
      */
-    const row = publish(matrix.all);
+    const row = publishColor();
     if (row.length) {
       const fits = (look: Look) => {
         const pieces = look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
@@ -2047,7 +2099,7 @@ function finishStyled(
   }
 
   if (color) {
-    const fromAll = publish(matrix.all);
+    const fromAll = publishColor();
     if (fromAll.length) return fromAll;
     return [
       lookFromPieces([], occasion, 0, undefined, {

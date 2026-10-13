@@ -23,6 +23,7 @@ import {
   SCREEN_CAP,
   STORY_ROWS,
   twinCounts,
+  twinGroups,
   twinKey,
   visibleDetectors,
   weekRotationRow,
@@ -37,7 +38,10 @@ import { LIVE_SNAPSHOT_COUNT, liveSnapshot } from "./__fixtures__/snapshot.ts";
 
 const CLOSET: Garment[] = liveSnapshot;
 const BY_ID = new Map(CLOSET.map((g) => [g.id, g]));
-const ALIKE = new Map(CLOSET.map((g) => [g.id, twinKey(g)]));
+/** What the page hands the rotation and what coverage counts: the merged groups (same-name pieces are one piece). */
+const TWINS = twinGroups(CLOSET);
+const KEY = new Map(CLOSET.map((g) => [g.id, TWINS.key(g)]));
+const ALIKE = KEY;
 const NOW = new Date("2026-10-09T15:00:00.000Z");
 const TODAY = "2026-10-09";
 const SEASON: Season = "fall";
@@ -115,11 +119,11 @@ function simulate(occasion: Occasion, taps = TAPS): Run {
     reset = reset || adv.reset;
     const page = [...week.looks, ...rows.flatMap((row) => row.looks)];
     const pieces = new Set(page.flat().map((g) => g.id));
-    const twins = new Set(page.flat().map(twinKey));
+    const twins = new Set(page.flat().map((g) => KEY.get(g.id)!));
     const newTwins = [...twins].filter((key) => !shownTwins.has(key)).length;
     for (const key of twins) shownTwins.add(key);
     shownTwinsBy.set(n, new Set(shownTwins));
-    const allowedTwins = new Set(eligible.filter((id) => !stuck.has(id)).map((id) => ALIKE.get(id)!));
+    const allowedTwins = new Set(eligible.filter((id) => !stuck.has(id)).map((id) => KEY.get(id)!));
     out.push({
       n,
       week: week.looks,

@@ -152,13 +152,16 @@ describe("fixture matrix", () => {
       ];
       for (const look of rows) {
         const shoe = by.get(look.shoe);
-        expect(`${shoe?.name ?? ""} ${shoe?.subtype ?? ""}`.toLowerCase(), `${occ}/${season}`).not.toMatch(/mule/);
+        /* A mule sits out winter; in fall only a cold-weather mule (suede, leather) may be the shoe (XC-SEA-3). */
+        const shoeText = `${shoe?.name ?? ""} ${shoe?.subtype ?? ""} ${shoe?.material ?? ""}`.toLowerCase();
+        if (season === "winter" || !/suede|leather|shearling|wool/.test(shoeText)) expect(shoeText, `${occ}/${season}`).not.toMatch(/mule/);
         if ((occ === "weekday" || occ === "out") && !look.outer) expect(look.demoted).toBe("JKT-COV-1");
       }
     }
     const italian = fall.houses.italianSummer!.looks[2]!;
     const italianShoe = by.get(italian.shoe);
-    expect(`${italianShoe?.name ?? ""} ${italianShoe?.subtype ?? ""}`.toLowerCase()).not.toMatch(/mule/);
+    const italianShoeText = `${italianShoe?.name ?? ""} ${italianShoe?.subtype ?? ""} ${italianShoe?.material ?? ""}`.toLowerCase();
+    if (!/suede|leather|shearling|wool/.test(italianShoeText)) expect(italianShoeText).not.toMatch(/mule/);
     expect(italian.outer || italian.demoted).toBeTruthy();
     const winter = matrices.find((m) => m.occ === "weekday" && m.season === "winter")!.matrix;
     const summer = matrices.find((m) => m.occ === "weekend" && m.season === "summer")!.matrix;

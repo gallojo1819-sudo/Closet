@@ -4,9 +4,11 @@
  * (engine-garments.json): the owner's pieces, brands stripped, the fifteen shirts, trousers,
  * jeans and chinos added on Oct 10 2026 among them; the clock is frozen at the snapshot's
  * instant. A row never repeats a piece, so a chapter whose scarcest core slot (top, bottom or
- * shoe) has fewer look-alike groups than the week cap gets a shorter week row: on this closet
- * the "out" chapter, where only the non-sneaker shoes pair. Taps are simulated as the Lookbook page
- * does them: the week row (weekRotationRow), then the rows (rowWays) with the week's pieces on
+ * shoe) has fewer pairable look-alike groups than the week cap gets exactly that many week
+ * cards: on this closet the "out" chapter, where only the non-sneaker shoes (loafers, boots and
+ * the suede mules) pair. A piece no legal look can hold is listed as unpairable, never dropped
+ * silently; the mules in winter walk that path. Taps are simulated as the Lookbook page does
+ * them: the week row (weekRotationRow), then the rows (rowWays) with the week's pieces on
  * screen, the rotation advanced after each.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -25,7 +27,7 @@ import {
   STORY_ROWS,
   SUEDE_SHARE,
   twinCounts,
-  twinKey,
+  twinGroups,
   visibleDetectors,
   weekRotationRow,
 } from "./detectors.ts";
@@ -40,9 +42,13 @@ import { TEST_CLOSET_COUNT, testCloset } from "./__fixtures__/snapshot.ts";
 const CLOSET: Garment[] = testCloset;
 /** The navy camp shirt added on Oct 10 2026: a navy piece whose colour family the page spreads. */
 const NAVY_CAMP_SHIRT = "g_b82609ex2nd7";
+/** The brown suede mules: casual and dressy, a fall shoe for out and weekend; a mule sits out winter (XC-SEA-3). */
+const MULES = "g_wymz2j18s6wh";
 const BY_ID = new Map(CLOSET.map((g) => [g.id, g]));
-/** Look-alike key per piece: the caps and the cycle count four white sneakers as one piece. */
-const ALIKE = new Map(CLOSET.map((g) => [g.id, twinKey(g)]));
+/** The page's merged groups (four white sneakers, or two pieces stored under one name, are one piece): what the rotation gets and coverage counts. */
+const TWINS = twinGroups(CLOSET);
+const KEY = new Map(CLOSET.map((g) => [g.id, TWINS.key(g)]));
+const ALIKE = KEY;
 const NOW = new Date("2026-10-09T15:00:00.000Z");
 const TODAY = "2026-10-09";
 const SEASON: Season = "fall";
@@ -63,28 +69,36 @@ type Tap = {
   pieces: Set<string>;
   /** Pieces allowed in this scope so far: eligible minus what is known unpairable after this tap. */
   allowed: string[];
-  /** Look-alike keys of the allowed pieces. */
+  /** Look-alike groups (the page's merged keys) of the allowed pieces. */
   allowedTwins: Set<string>;
-  /** Look-alike groups in the scarcest core slot among the allowed pieces: a row holds no more cards than that. */
-  coreTwins: number;
   coveredAllowed: number;
   reset: boolean;
   ms: number;
 };
 
-type Run = { occasion: Occasion; taps: Tap[]; eligible: string[]; unpairable: string[]; shownBy: Map<number, Set<string>> };
+type Run = {
+  occasion: Occasion;
+  season: Season;
+  taps: Tap[];
+  eligible: string[];
+  /** Eligible pieces no legal look here can hold, as the last week-row call lists them. */
+  unpairable: string[];
+  /** Look-alike groups in the scarcest core slot among the pieces that pair: the week row holds exactly min(cap, this) cards. */
+  pairableCore: number;
+  shownBy: Map<number, Set<string>>;
+};
 
-/** Look-alike keys shown by a tap. */
-const shownTwinsBy = (run: Run, n: number) => new Set([...run.shownBy.get(n)!].map((id) => ALIKE.get(id)!));
+/** Look-alike groups shown by a tap. */
+const shownTwinsBy = (run: Run, n: number) => new Set([...run.shownBy.get(n)!].map((id) => KEY.get(id)!));
 
 const CORE_SLOTS = ["top", "bottom", "footwear"] as const;
 /** Distinct look-alike groups per core slot among these pieces, the smallest. */
 const coreTwins = (allowed: readonly string[]) =>
-  Math.min(...CORE_SLOTS.map((category) => new Set(allowed.filter((id) => BY_ID.get(id)!.category === category).map((id) => ALIKE.get(id)!)).size));
+  Math.min(...CORE_SLOTS.map((category) => new Set(allowed.filter((id) => BY_ID.get(id)!.category === category).map((id) => KEY.get(id)!)).size));
 
-function simulate(occasion: Occasion, taps = TAPS): Run {
+function simulate(occasion: Occasion, taps = TAPS, season: Season = SEASON): Run {
   const closet = CLOSET.map((g) => g.id);
-  const eligible = rotationEligible(CLOSET, SEASON).map((g) => g.id);
+  const eligible = rotationEligible(CLOSET, season).map((g) => g.id);
   let rotation: Rotation = emptyRotation();
   let stuck = new Set<string>();
   const out: Tap[] = [];
@@ -92,15 +106,15 @@ function simulate(occasion: Occasion, taps = TAPS): Run {
   const shownBy = new Map<number, Set<string>>();
   for (let n = 1; n <= taps; n += 1) {
     const t0 = performance.now();
-    const week = weekRotationRow(CLOSET, { occasion, season: SEASON, rotation, cap: WEEK, today: TODAY, stuck });
+    const week = weekRotationRow(CLOSET, { occasion, season, rotation, cap: WEEK, today: TODAY, stuck });
     stuck = new Set(week.unpairable.map((g) => g.id));
     let adv = advanceRotation(rotation, { page: week.looks.map(ids), closet, eligible, stuck, alike: ALIKE });
     rotation = adv.next;
     let reset = adv.reset;
-    const found = visibleDetectors(CLOSET, { occasion, season: SEASON });
+    const found = visibleDetectors(CLOSET, { occasion, season });
     const ways = rowWays(found, CLOSET, {
       occasion,
-      season: SEASON,
+      season,
       onScreen: week.looks.flatMap(ids),
       today: TODAY,
       rotation,
@@ -123,23 +137,27 @@ function simulate(occasion: Occasion, taps = TAPS): Run {
       page,
       pieces,
       allowed,
-      allowedTwins: new Set(allowed.map((id) => ALIKE.get(id)!)),
-      coreTwins: coreTwins(allowed),
+      allowedTwins: new Set(allowed.map((id) => KEY.get(id)!)),
       coveredAllowed: allowed.filter((id) => shownEver.has(id)).length,
       reset,
       ms: Math.round(performance.now() - t0),
     });
   }
-  const last = weekRotationRow(CLOSET, { occasion, season: SEASON, rotation, cap: 0, today: TODAY, stuck });
-  return { occasion, taps: out, eligible, unpairable: last.unpairable.map((g) => g.id), shownBy };
+  const last = weekRotationRow(CLOSET, { occasion, season, rotation, cap: 0, today: TODAY, stuck });
+  const unpairable = last.unpairable.map((g) => g.id);
+  const pairable = eligible.filter((id) => !unpairable.includes(id));
+  return { occasion, season, taps: out, eligible, unpairable, pairableCore: coreTwins(pairable), shownBy };
 }
 
 let RUNS: Run[] = [];
+/** Two weekend taps in winter: the mules pass the cheap gates there and no look is legal. */
+let WINTER_WEEKEND: Run;
 
 beforeAll(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   RUNS = ALL.map((occasion) => simulate(occasion));
+  WINTER_WEEKEND = simulate("weekend", 2, "winter");
 });
 
 afterAll(() => {
@@ -156,19 +174,14 @@ describe("the snapshot test closet", () => {
 });
 
 describe("six Re-dresses on the snapshot closet, every chapter", () => {
-  it("every tap shows a week row as full as the closet allows (eight looks where the scarcest slot has eight) and the story rows", () => {
+  it("every tap shows a week row exactly as full as the closet allows (the scarcest core slot's pairable look-alike groups, eight at most) and the story rows", () => {
     let full = 0;
     for (const run of RUNS) {
+      /* No piece twice in a row, so the pairable groups of the scarcest slot bound the row; the fill pass reaches that bound. */
+      const expected = Math.min(WEEK, run.pairableCore);
+      if (expected === WEEK) full += 1;
       for (const tap of run.taps) {
-        if (tap.coreTwins >= WEEK) {
-          expect(tap.week.length, `${run.occasion} tap ${tap.n} week row`).toBe(WEEK);
-          full += 1;
-        } else {
-          /* No piece twice in a row: the scarce slot bounds the row, and the row still clears the minimum. */
-          const line = `${run.occasion} tap ${tap.n} week row (${tap.coreTwins} pieces in the scarcest core slot)`;
-          expect(tap.week.length, line).toBeGreaterThanOrEqual(ROW_MIN);
-          expect(tap.week.length, line).toBeLessThanOrEqual(tap.coreTwins);
-        }
+        expect(tap.week.length, `${run.occasion} tap ${tap.n} week row (${run.pairableCore} pairable groups in the scarcest core slot)`).toBe(expected);
         expect(tap.rows.length, `${run.occasion} tap ${tap.n} rows: ${tap.rows.map((r) => r.id).join(",")}`).toBeGreaterThanOrEqual(STORY_ROWS);
         for (const row of tap.rows) {
           expect(row.looks.length, `${run.occasion} tap ${tap.n} / ${row.title}`).toBeGreaterThanOrEqual(row.relaxed ? 1 : ROW_MIN);
@@ -179,14 +192,57 @@ describe("six Re-dresses on the snapshot closet, every chapter", () => {
     expect(full, "chapters with a full week row").toBeGreaterThan(0);
   });
 
+  it("the brown suede mules, casual and dressy, are on cards of the out chapter and of the weekend chapter", () => {
+    expect(BY_ID.get(MULES)?.name).toMatch(/\bmules\b/);
+    for (const occasion of ["out", "weekend"] as const) {
+      const run = RUNS.find((r) => r.occasion === occasion)!;
+      expect(run.eligible, `${occasion}: eligible`).toContain(MULES);
+      expect(run.unpairable, `${occasion}: listed as unpairable`).not.toContain(MULES);
+      const cards = run.taps.flatMap((tap) => tap.page).filter((look) => look.some((g) => g.id === MULES));
+      expect(cards.length, `${occasion}: cards with the mules in ${TAPS} taps`).toBeGreaterThan(0);
+    }
+  });
+
+  it("a piece no legal look here can hold is listed as unpairable, never dropped silently", () => {
+    /* Every eligible piece is accounted for by the last tap: shown (as a look-alike) or listed. */
+    for (const run of RUNS) {
+      const shown = shownTwinsBy(run, TAPS);
+      const silent = run.eligible.filter((id) => !shown.has(KEY.get(id)!) && !run.unpairable.includes(id));
+      expect(names(silent), `${run.occasion}: eligible pieces neither shown nor listed`).toEqual([]);
+      for (const id of run.unpairable) expect(run.eligible, `${run.occasion}: unpairable ${id} is eligible`).toContain(id);
+    }
+    /* The path the cheap census cannot see: in winter the mules pass the weekend gate and the
+       season gate with many cores, and the legality engine refuses every look (a mule sits out
+       winter). The week row settles their verdict on the first tap, before the hero order could
+       have reached them, so they are listed at once and never on a card. */
+    const mules = BY_ID.get(MULES)!;
+    expect(WINTER_WEEKEND.eligible).toContain(MULES);
+    const tops = CLOSET.filter((g) => g.category === "top" && WINTER_WEEKEND.eligible.includes(g.id));
+    const bottoms = CLOSET.filter((g) => g.category === "bottom" && WINTER_WEEKEND.eligible.includes(g.id));
+    let gatesPass = 0;
+    for (const top of tops) {
+      for (const bottom of bottoms) {
+        const core = [top, bottom, mules];
+        if (lookFitsOccasion(core, "weekend", CLOSET, undefined, { wideWeekdayTops: true }) && lookFitsSeason(core, "winter")) gatesPass += 1;
+        expect(isLegal(core, { house: null, occasion: "weekend", season: "winter" }), `${top.name} + ${bottom.name} + mules legal in winter`).toBe(false);
+      }
+    }
+    expect(gatesPass, "cores with the mules that pass the cheap gates in winter").toBeGreaterThan(0);
+    expect(WINTER_WEEKEND.taps[0]!.allowed, "weekend/winter tap 1: the mules still allowed").not.toContain(MULES);
+    expect(WINTER_WEEKEND.unpairable).toContain(MULES);
+    for (const tap of WINTER_WEEKEND.taps) expect(tap.pieces.has(MULES), `weekend/winter tap ${tap.n} shows the mules`).toBe(false);
+  });
+
   it("every allowed piece appears at least once within the first five taps (look-alikes as one piece)", () => {
     for (const run of RUNS) {
       const allowed = run.taps[4]!.allowed;
       const shown = shownTwinsBy(run, 5);
-      const missing = allowed.filter((id) => !shown.has(ALIKE.get(id)!));
+      const missing = allowed.filter((id) => !shown.has(KEY.get(id)!));
       expect(names(missing), `${run.occasion}: allowed pieces never shown in 5 taps`).toEqual([]);
-      /* The loose weekday gate and the plain rows keep most of the closet in play. */
-      expect(allowed.length, `${run.occasion}: allowed pieces`).toBeGreaterThanOrEqual(Math.ceil(0.5 * run.eligible.length));
+      /* The loose weekday gate and the plain rows keep most of the closet in play; out (no sneakers
+         while loafers are owned, every clash the pattern words carry) sits near the floor, as in
+         rotation.test.ts. */
+      expect(allowed.length, `${run.occasion}: allowed pieces`).toBeGreaterThanOrEqual(Math.ceil(0.45 * run.eligible.length));
     }
   });
 
@@ -234,8 +290,8 @@ describe("six Re-dresses on the snapshot closet, every chapter", () => {
           expect(look.length, line).toBeGreaterThanOrEqual(3);
           expect(new Set(ids(look)).size, line).toBe(look.length);
           expect(lookFitsOccasion(look, run.occasion, CLOSET, undefined, { wideWeekdayTops: true }), line).toBe(true);
-          expect(lookFitsSeason(look, SEASON), line).toBe(true);
-          expect(isLegal(look, { house: null, occasion: run.occasion, season: SEASON }), line).toBe(true);
+          expect(lookFitsSeason(look, run.season), line).toBe(true);
+          expect(isLegal(look, { house: null, occasion: run.occasion, season: run.season }), line).toBe(true);
           if (run.occasion === "weekday" && !lookFitsOccasion(look, "weekday", CLOSET) && look.some(isLongSleeveTop)) longSleeveWeekday += 1;
         });
         if (run.occasion === "weekday" || run.occasion === "out") {
@@ -285,7 +341,7 @@ describe("six Re-dresses on the snapshot closet, every chapter", () => {
       const line = run.taps
         .map((tap) => `tap ${tap.n}: ${tap.week.length} week + ${tap.rows.map((r) => r.looks.length).join("+")} rows, allowed ${tap.coveredAllowed}/${tap.allowed.length}, new ${tap.n > 1 ? [...tap.pieces].filter((id) => !run.taps[tap.n - 2]!.pieces.has(id)).length : tap.pieces.size}${tap.reset ? ", new cycle" : ""}, ${tap.ms}ms`)
         .join("\n  ");
-      console.log(`redress ${run.occasion}/${SEASON} (eligible ${run.eligible.length}, cannot pair ${run.unpairable.length}):\n  ${line}`);
+      console.log(`redress ${run.occasion}/${run.season} (eligible ${run.eligible.length}, cannot pair ${run.unpairable.length}, scarcest core slot ${run.pairableCore} pairable groups):\n  ${line}`);
       const last = run.taps.at(-1)!;
       const shown = shownTwinsBy(run, last.n);
       expect([...last.allowedTwins].filter((key) => !shown.has(key))).toEqual([]);

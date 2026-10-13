@@ -18,7 +18,7 @@ import {
   renderedSectionLooks,
   rotationEligible,
   rowWays,
-  twinKey,
+  twinGroups,
   visibleDetectors,
   warmCellBook,
   weekRotationRow,
@@ -341,13 +341,14 @@ function LookbookPage() {
   const recordPage = useCallback(
     (page: readonly (readonly string[])[]) => {
       const stuck = stuckRef.current?.key === filterKey ? stuckRef.current.ids : undefined;
+      const twins = twinGroups(garments);
       const { next } = advanceRotation(getRotation(), {
         page,
         closet: garments.map((g) => g.id),
         eligible: rotationEligible(garments, season, taste).map((g) => g.id),
         stuck,
-        /* Look-alikes stored apart (four pairs of one sneaker) are one turn of the cycle. */
-        alike: new Map(garments.map((g) => [g.id, twinKey(g)])),
+        /* Look-alikes stored apart (four pairs of one sneaker, two pieces under one name) are one turn of the cycle: the rows' merged groups. */
+        alike: new Map(garments.map((g) => [g.id, twins.key(g)])),
       });
       rotationRef.current = next;
       try {

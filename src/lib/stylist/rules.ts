@@ -105,6 +105,16 @@ function exceptionLook(ps: Partial<Record<string, Plate>>): boolean {
   return EXCEPTION.every((id) => ids.has(id));
 }
 
+/** Mule materials that are not summer fabrics: such a mule is a fall shoe (XC-SEA-3). */
+const COLD_MULE = ["suede", "leather", "shearling", "wool", "felt", "velvet"];
+/** The mule_delta of XC-SEA-3 in the rule JSON: a cold-weather mule in fall weekday or out, soft. */
+const MULE_DELTA = -5;
+
+/** A mule, slide or slipper in a cold-weather material (its name, subtype or material field). */
+function coldMule(g: Plate): boolean {
+  return plateMemo(g, "rules.coldMule", (x) => sig(x, "mule", SIG) && hasText(blob(x), COLD_MULE));
+}
+
 function linenPiece(g: Plate): boolean {
   return plateMemo(g, "rules.linen", (x) => /linen/.test(`${blob(x)} ${x.material ?? ""}`));
 }
@@ -323,7 +333,7 @@ export function stylistHits(
   }
 
   const cold = (g: Plate) => sig(g, "cold_fabric_piece", SIG) || (g.warmth ?? 0) >= 4;
-  const hot = (g: Plate) => sig(g, "summer_fabric_piece", SIG);
+  const hot = (g: Plate) => sig(g, "summer_fabric_piece", SIG) && !coldMule(g);
   const all = Object.values(ps).filter((g): g is Plate => Boolean(g));
   if (season === "summer") {
     const bad = all.filter(cold).map((g) => g.name ?? "");
@@ -350,8 +360,11 @@ export function stylistHits(
       if (!hot(g) || sig(g, "mule", SIG)) continue;
       hit("XC-SEA-3", "soft", -10, `resort piece in fall ${occ}: ${g.name}`);
     }
+    if (shoe && coldMule(shoe)) hit("XC-SEA-3", "soft", MULE_DELTA, `mules ${shoe.name} in fall ${occ}`);
   }
-  if ((season === "fall" || season === "winter") && shoe && sig(shoe, "mule", SIG)) {
+  /* A summer mule (canvas, raffia, woven, no material) sits out fall and winter; a cold-weather
+     mule is a fall shoe, casual or dressy, and sits out winter only. */
+  if ((season === "fall" || season === "winter") && shoe && sig(shoe, "mule", SIG) && !(season === "fall" && coldMule(shoe))) {
     hit("XC-SEA-3", "hard", 0, `mules ${shoe.name} in ${season}`);
   }
   if (all.some(linenPiece) && all.some(flannelPiece)) {

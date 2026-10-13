@@ -20,7 +20,9 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   `color.ts` and the occasion gates feed it, so change them only with the snapshot in mind.
 - Overlays go through a body portal (`Overlay`, `BodyPortal`): the page containers animate with a
   transform (`.rise`), which traps `position: fixed`.
-- Tests need Node 22 (`--experimental-strip-types`): `npm test`, `npm run typecheck`, `npm run lint`.
+- Tests need Node 22.6+ (`--experimental-strip-types`; Node 20 has no type stripping and no loader
+  is bundled, so `npm test` fails there at once): `npm test`, `npm run typecheck`, `npm run lint`.
+  `package.json` says so in `engines`.
 
 ## Round log
 
@@ -57,3 +59,32 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   the stand-ins' fake shoes and jackets had hidden that. `redress-fill.test.ts` now asks for a
   full week row only where the scarcest core slot has eight look-alike groups, and
   `redress-rowdupe.test.ts` allows one look in a relaxed plain row, as redress-fill already did.
+- mules-fall (Oct 13 2026, claude/stylist-memory): the brown suede mules (casual and dressy) never
+  paired on out or weekend in fall because `XC-SEA-3` in `stylist/rules.ts` hard-failed every mule
+  in fall and winter (the `summer_fabric_piece` signal names all mules). Now `coldMule` (a mule
+  whose name, subtype or material says suede, leather, shearling, wool, felt or velvet) is a fall
+  shoe: not a summer piece, soft -5 (the rule JSON's `mule_delta`) on fall weekday/out, hard in
+  winter only; summer mules are unchanged. `weekRotationRow` now `settle`s the verdict of core
+  pieces the row never tried (scarcest slot first, least-recently-shown first) with the page's
+  search budget, which counts tries (PAIR_SEARCHES × PAIR_TRIES) rather than calls, so a piece no
+  legal look can hold is in `unpairable` on the first page that can judge it (the mules in winter:
+  weekend tap 1), never silent. Out/fall week row: 6 cards (six pairable shoe groups) and no
+  one-look row. `redress-fill.test.ts` pins the week row to min(8, the scarcest core slot's
+  pairable groups) and counts coverage by the page's merged twin groups; `redress-rowdupe.test.ts`
+  allows a one-look row only under ROW_MIN pairable shoe groups and pins the header to the cards.
+  Fixture names are the stored names without the maker (`fixtureName` in the refresh script: the
+  brand phrase, `HOUSE_WORDS` and logo initials cut, a placeholder falls back to `builtName`), so
+  the pattern and colour words are back ("red gingham shirt", "blue pinstripe trousers"); 123 of
+  157 names changed and `engine-snapshot.json` was re-recorded from the 58d7b8c tree with the same
+  rule patch. `matrix.test.ts` allows a cold-weather mule in fall. Side effect caught by
+  `houses-rank.test.ts`: the matrix spreads jackets across every row built in a session, and the
+  mule looks in earlier house rows shifted which jacket the weekend/fall matrix gave two looks, so
+  the navy colour row fell to 2. `finishStyled` now has `publishColor`: a colour row short of
+  `COLOR_ROW_MIN` (3) re-dresses the next matrix looks with a legal in-season jacket that carries
+  the colour (colour rows are not among the pinned engine outputs; `publish` is untouched).
+  With the names back, two "brown blue plaid shirt" pieces get different twinKeys but one merged
+  group (nameKey), so the route now hands `advanceRotation` the merged `twinGroups` key (was
+  twinKey): otherwise the never-shown name-twin blocks the cycle reset. The rotation tests count
+  coverage by the same merged key. The rule JSON (`2026-09-30-proposed-stylist-rules.json`) is a law
+  file pinned by hash in `profiles.test.ts`, so its XC-SEA-3 #1 case ("fail: mules in fall") is
+  overridden in `rules.test.ts` (`SUPERSEDED`), not edited.

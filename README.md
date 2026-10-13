@@ -19,6 +19,16 @@ npm run dev
 
 Opens on port 8080. Paste a garment photo on **Add**, then **Keep my photo**.
 
+## Tests
+
+Node 22.6 or newer. The test runner uses `node --experimental-strip-types`, which Node 20 does not have, so `npm test` fails at once there (`Could not find 'scripts/**/*.test.mjs'` is the first symptom, not the cause).
+
+```bash
+npm test            # node:test suites, then vitest
+npm run typecheck
+npm run lint
+```
+
 ## What this build does
 
 - Closet grid is catalog tiles on paper, not a camera roll.

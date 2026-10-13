@@ -1,7 +1,7 @@
 /**
  * Equivalence run for the engine speed work. The stripped live closet (engine-garments.json:
- * real ids, which the rule JSON keys on; names built from colour, material and subtype;
- * no brand, notes or wear dates), clock frozen,
+ * real ids, which the rule JSON keys on; the stored names without the maker, so the pattern
+ * and colour words stay; no brand, notes or wear dates), clock frozen,
  * same call order every time (the matrix counts jackets across builds).
  */
 import { register } from "node:module";

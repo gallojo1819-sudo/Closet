@@ -7,7 +7,9 @@
  *
  * The closet is the snapshot fixture (engine-garments.json) plus the two
  * same-name trousers and a second "Light Blue denim jacket" next to the stored one. Six pages
- * (the first load and five Re-dress taps) per chapter are simulated as the page does them.
+ * (the first load and five Re-dress taps) per chapter are simulated as the page does them. A
+ * row may hold one look only where the chapter has fewer pairable shoe groups than ROW_MIN; the
+ * header's "N looks" is the number of cards on the page.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -41,10 +43,9 @@ const DENIM_TWIN: Garment = { ...DENIM_JACKET, id: "g_dupe_denim_jacket", name: 
 
 const CLOSET: Garment[] = [...STORED, ...DUPES, DENIM_TWIN];
 const BY_ID = new Map(CLOSET.map((g) => [g.id, g]));
-/** What the page hands the rotation: twinKey per id. */
-const ALIKE = new Map(CLOSET.map((g) => [g.id, twinKey(g)]));
-/** What the rows check their caps against: the page's merged groups. */
+/** The page's merged groups: what the rows check their caps against and what the page hands the rotation. */
 const TWINS = twinGroups(CLOSET);
+const ALIKE = new Map(CLOSET.map((g) => [g.id, TWINS.key(g)]));
 const NOW = new Date("2026-10-13T15:00:00.000Z");
 const TODAY = "2026-10-13";
 const SEASON: Season = "fall";
@@ -77,7 +78,13 @@ type Page = {
   sectionRendered: number;
 };
 
-function simulate(occasion: Occasion): Page[] {
+type Sim = {
+  pages: Page[];
+  /** Look-alike groups of shoes that pair in this chapter (eligible, not unpairable): a row may go short only below ROW_MIN of them. */
+  shoeGroups: number;
+};
+
+function simulate(occasion: Occasion): Sim {
   const closet = CLOSET.map((g) => g.id);
   const eligible = rotationEligible(CLOSET, SEASON).map((g) => g.id);
   let rotation: Rotation = emptyRotation();
@@ -124,15 +131,20 @@ function simulate(occasion: Occasion): Page[] {
     });
     prev = twins;
   }
-  return out;
+  const last = weekRotationRow(CLOSET, { occasion, season: SEASON, rotation, cap: 0, today: TODAY, stuck });
+  const unpairable = new Set(last.unpairable.map((g) => g.id));
+  const shoeGroups = new Set(
+    CLOSET.filter((g) => g.category === "footwear" && eligible.includes(g.id) && !unpairable.has(g.id)).map((g) => TWINS.key(g)),
+  ).size;
+  return { pages: out, shoeGroups };
 }
 
-let RUNS: { occasion: Occasion; pages: Page[] }[] = [];
+let RUNS: { occasion: Occasion; pages: Page[]; shoeGroups: number }[] = [];
 
 beforeAll(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
-  RUNS = ALL.map((occasion) => ({ occasion, pages: simulate(occasion) }));
+  RUNS = ALL.map((occasion) => ({ occasion, ...simulate(occasion) }));
 });
 
 afterAll(() => {
@@ -189,14 +201,16 @@ describe(`six pages per chapter on the ${CLOSET.length}-piece closet`, () => {
     }
   });
 
-  it("c. exactly four idea rows a page, each at least ROW_MIN looks (a relaxed plain row, one)", () => {
+  it("c. exactly four idea rows a page, each at least ROW_MIN looks unless the chapter has fewer pairable shoe groups than that; the header counts the cards shown", () => {
     for (const run of RUNS) {
+      /* A one-look row is allowed only where the chapter cannot seat three distinct shoes at all. */
+      const floor = run.shoeGroups < ROW_MIN ? 1 : ROW_MIN;
       for (const page of run.pages) {
         expect(page.rows.length, `${run.occasion} page ${page.n} rows: ${page.rows.map((r) => r.id).join(",")}`).toBe(STORY_ROWS);
         for (const row of page.rows) {
-          /* A plain row the section owed may run relaxed when the scope is scarce ("out": the non-sneaker shoes). */
-          expect(row.looks.length, `${run.occasion} page ${page.n} / ${row.title}`).toBeGreaterThanOrEqual(row.relaxed ? 1 : ROW_MIN);
+          expect(row.looks.length, `${run.occasion} page ${page.n} / ${row.title} (${run.shoeGroups} pairable shoe groups)`).toBeGreaterThanOrEqual(floor);
         }
+        expect(page.header, `${run.occasion} page ${page.n}: "N looks" vs the cards on the page`).toBe(page.page.length);
       }
     }
   });
@@ -227,7 +241,7 @@ describe(`six pages per chapter on the ${CLOSET.length}-piece closet`, () => {
           return `page ${page.n}: ${page.rows.length} rows (${page.week.length} week + ${page.rows.map((r) => `${r.looks.length}${r.relaxed ? "*" : ""}`).join("+")}), max per-row repeat ${rowMax}, max per-page ${pageMax}, new ${page.fresh}, header ${page.header} = ${page.weekRendered}+${page.sectionRendered}`;
         })
         .join("\n  ");
-      console.log(`redress rowdupe ${run.occasion}/${SEASON}:\n  ${line}`);
+      console.log(`redress rowdupe ${run.occasion}/${SEASON} (${run.shoeGroups} pairable shoe groups):\n  ${line}`);
       expect(run.pages.length).toBe(PAGES);
     }
   });

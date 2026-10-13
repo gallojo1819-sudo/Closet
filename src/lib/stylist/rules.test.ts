@@ -50,6 +50,14 @@ function grade(expected: string, hits: StylistHit[], ruleId: string): boolean {
   return false;
 }
 
+/**
+ * Cases the dated rule document records that a later product decision superseded; the JSON is
+ * a law file pinned by hash (profiles.test.ts), so the new expectation lives here.
+ * XC-SEA-3 #1 (Oct 13 2026): the brown suede mules are a fall shoe, casual and dressy; a
+ * cold-weather mule is a soft hit on fall weekday/out, hard in winter only (rules.ts coldMule).
+ */
+const SUPERSEDED: Record<string, string> = { "XC-SEA-3#1": "soft: suede mules in fall" };
+
 const groups = [
   ...(rules.cross_chip_color_rules as Rule[]),
   ...(rules.cross_chip_texture_rules as Rule[]),
@@ -80,12 +88,13 @@ describe("stylist rules", () => {
   });
 
   for (const { rule, test, i } of flat) {
-    it(`${rule.id} #${i + 1} ${test.expected}`, () => {
+    const expected = SUPERSEDED[`${rule.id}#${i + 1}`] ?? test.expected;
+    it(`${rule.id} #${i + 1} ${expected}`, () => {
       const occ = test.context?.occasion ?? "weekday";
       const season = test.context?.season ?? "fall";
       const id = firedId(rule.id);
       const hits = stylistHits(piecesFromIds(test.look ?? {}, by), occ, season, houseFor(rule));
-      const ok = grade(test.expected, hits, id);
+      const ok = grade(expected, hits, id);
       const seen = hits
         .filter((h) => h.id === id)
         .map((h) => `${h.id}:${h.severity}`)

@@ -23,8 +23,10 @@
  * Both reads mirror the app: closet_meta.garments (rowToCloud in src/lib/cloud/commit.ts drops
  * tombstones, accountPool in cloud/merge.ts drops demo, livePool in rack.ts drops archived).
  * The repo is public, so the pieces are stripped the way the fixture already is: real opaque
- * ids (the house, jacket and colour rule JSON key on them), a name built from colour, material
- * and subtype, empty brand, notes and wear dates, a fixed createdAt.
+ * ids (the house, jacket and colour rule JSON key on them), the stored name without the maker
+ * (fixtureName: the brand phrase, house words and logo initials cut, so the pattern and colour
+ * words the engine reads stay: "red gingham shirt", "blue pinstripe trousers"), empty brand,
+ * notes and wear dates, a fixed createdAt.
  *
  * The fixture is the whole test closet: every piece in it is in the account (the fifteen
  * hand-drafted `x_*` stand-ins that used to sit in redress-extra.json are gone).
@@ -109,7 +111,7 @@ function escapeRegExp(s: string): string {
 }
 
 /** Colour, material and subtype (or the category when the subtype is blank); the material is left out when the subtype already says it. */
-export function fixtureName(colors: string[], material: string, subtype: string, category: string): string {
+export function builtName(colors: string[], material: string, subtype: string, category: string): string {
   const colour = (colors[0] ?? "").trim();
   const mat = material.trim();
   const sub = subtype.trim();
@@ -117,6 +119,60 @@ export function fixtureName(colors: string[], material: string, subtype: string,
   if (mat && !new RegExp(`\\b${escapeRegExp(mat)}\\b`, "i").test(sub)) words.push(mat);
   words.push(sub || category);
   return words.filter(Boolean).join(" ");
+}
+
+/** The app's placeholder for a piece not yet named (NEW_PIECE_NAME in src/lib/ingest.ts). */
+const PLACEHOLDER = /^(new piece|untitled|unnamed)?$/;
+
+/** Houses and makers' motifs a stored name may carry; the fixture carries none. Whole phrases. */
+export const HOUSE_WORDS = [
+  "polo bear",
+  "ralph lauren",
+  "ralph",
+  "purple label",
+  "double rl",
+  "rrl",
+  "aime leon dore",
+  "aimé leon dore",
+  "a.l.d.",
+  "ald",
+  "faloni",
+  "sweet stable",
+  "italian summer",
+  "italian winter",
+  "fortela",
+  "drake's",
+  "drakes",
+  "fivefourfive",
+] as const;
+
+/** `text` with every whole-phrase occurrence of `phrase` cut (word boundaries on both sides). */
+function withoutPhrase(text: string, phrase: string): string {
+  const p = phrase.trim().toLowerCase();
+  if (!p) return text;
+  return text.replace(new RegExp(`(^|[^a-z0-9])${escapeRegExp(p)}(?![a-z0-9])`, "g"), "$1");
+}
+
+/**
+ * The fixture name: the stored name, lower-cased, without the maker. The brand field's phrase,
+ * every HOUSE_WORDS phrase and any one-letter word (a logo initial) are cut; what stays keeps
+ * the pattern and colour words the engine reads ("red gingham shirt", "black white check shirt",
+ * "blue pinstripe trousers"). A blank or placeholder name, or one that is nothing but the maker,
+ * falls back to builtName (colour, material, subtype). Applying it again changes nothing.
+ */
+export function fixtureName(
+  name: string,
+  colors: string[],
+  material: string,
+  subtype: string,
+  category: string,
+  brand = "",
+): string {
+  let text = name.trim().toLowerCase().replace(/\s+/g, " ");
+  if (PLACEHOLDER.test(text)) return builtName(colors, material, subtype, category);
+  for (const phrase of [brand, ...HOUSE_WORDS]) text = withoutPhrase(text, phrase);
+  const words = text.split(/\s+/).filter((w) => w.length > 1 || /\d/.test(w));
+  return words.length ? words.join(" ") : builtName(colors, material, subtype, category);
 }
 
 const TUCKS: readonly Tuck[] = ["in", "out", "either"];
@@ -139,7 +195,7 @@ export function stripGarment(g: StoredGarment): Garment {
   const seasons = (Array.isArray(g.seasons) ? g.seasons : []).filter((s): s is string => typeof s === "string");
   const piece = {
     id: g.id,
-    name: fixtureName(colors, material, subtype, category),
+    name: fixtureName(typeof g.name === "string" ? g.name : "", colors, material, subtype, category, typeof g.brand === "string" ? g.brand : ""),
     category,
     subtype,
     colors,

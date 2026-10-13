@@ -218,7 +218,7 @@ describe("stylist notes on the owner's closet", () => {
 
     const block = notesBlock([pieceNote, rows[2]!], CLOSET, NOW);
     expect(block).toContain("REMEMBERED");
-    expect(block).toContain(`- Never: Not the loafers (${BROWN_LOAFERS} brown suede loafers, Oct 13)`);
+    expect(block).toContain(`- Never: Not the loafers (${BROWN_LOAFERS} ${CLOSET.find((g) => g.id === BROWN_LOAFERS)!.name}, Oct 13)`);
     expect(block).toContain("- Never: about navy (navy, Oct 13)");
     expect(notesBlock([], CLOSET, NOW)).toBe("");
   });

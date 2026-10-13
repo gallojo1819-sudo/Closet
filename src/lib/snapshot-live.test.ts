@@ -10,11 +10,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  builtName,
   closetFromStored,
   exportGarments,
   fetchLiveCloset,
   fixtureName,
   fixtureText,
+  HOUSE_WORDS,
   liveGarments,
   parseArgs,
   readExportCloset,
@@ -115,9 +117,25 @@ describe("the refresh script", () => {
 
   it("maps a stored piece to the shape the fixture already has", () => {
     for (const g of liveSnapshot) expect(stripGarment(g), g.id).toEqual(g);
-    expect(fixtureName(["light blue"], "flannel", "flannel shirt", "top")).toBe("light blue flannel shirt");
-    expect(fixtureName(["khaki"], "", "", "top")).toBe("khaki top");
-    expect(fixtureName(["navy", "black"], "corduroy", "trousers", "bottom")).toBe("navy corduroy trousers");
+    /* The stored name, lower-cased, keeps the pattern and colour words the engine reads; the maker goes. */
+    expect(fixtureName("Light Blue plaid flannel", ["light blue"], "flannel", "flannel shirt", "top")).toBe("light blue plaid flannel");
+    expect(fixtureName("Red gingham shirt", ["maroon", "white"], "", "shirt", "top")).toBe("red gingham shirt");
+    expect(fixtureName("Black white check shirt", ["black", "white"], "", "shirt", "top")).toBe("black white check shirt");
+    expect(fixtureName("Blue pinstripe trousers", ["light blue"], "", "trousers", "bottom")).toBe("blue pinstripe trousers");
+    expect(fixtureName("Navy Someone & Co polo", ["navy"], "cotton", "polo", "top", "Someone & Co")).toBe("navy polo");
+    expect(fixtureName("Navy R sweater", ["navy"], "knit", "sweater", "top", "Some Maker")).toBe("navy sweater");
+    for (const word of HOUSE_WORDS) expect(fixtureName(`Navy ${word} sweater`, ["navy"], "knit", "sweater", "top"), word).toBe("navy sweater");
+    /* A blank or placeholder name, or nothing but the maker, is built from colour, material and subtype. */
+    expect(fixtureName("New piece", ["khaki"], "", "", "top")).toBe("khaki top");
+    expect(fixtureName("", ["navy", "black"], "corduroy", "trousers", "bottom")).toBe("navy corduroy trousers");
+    expect(fixtureName("Some Maker", ["navy"], "cotton", "polo", "top", "Some Maker")).toBe("navy cotton polo");
+    expect(builtName(["light blue"], "flannel", "flannel shirt", "top")).toBe("light blue flannel shirt");
+    /* The fixture names are a fixed point of the sanitizer and carry no maker, capital or placeholder. */
+    for (const g of liveSnapshot) {
+      expect(fixtureName(g.name, g.colors, g.material ?? "", g.subtype ?? "", g.category), g.id).toBe(g.name);
+      expect(g.name, g.id).not.toMatch(/[A-Z]|\bnew piece\b/);
+      for (const word of HOUSE_WORDS) expect(` ${g.name} `, g.id).not.toContain(` ${word} `);
+    }
     const strippedText = fixtureText(liveSnapshot);
     expect(JSON.parse(strippedText)).toHaveLength(LIVE_SNAPSHOT_COUNT);
     expect(strippedText.endsWith("\n]\n")).toBe(true);

@@ -22,7 +22,7 @@
  },
  {
   "id": "g_08shegj8gqie",
-  "name": "grey suede sneakers",
+  "name": "grey and white low-top sneakers",
   "category": "footwear",
   "subtype": "sneakers",
   "colors": [
@@ -44,7 +44,7 @@
  },
  {
   "id": "g_0pfc8ytc1sbb",
-  "name": "light blue cotton trousers",
+  "name": "light blue striped trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -66,7 +66,7 @@
  },
  {
   "id": "g_0re8nrx2mpdy",
-  "name": "cream linen trousers",
+  "name": "cream pleated trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -86,7 +86,7 @@
  },
  {
   "id": "g_1gb6slz8h71n",
-  "name": "cream cotton button-up",
+  "name": "cream embroidered shirt",
   "category": "top",
   "subtype": "button-up",
   "colors": [
@@ -107,7 +107,7 @@
  },
  {
   "id": "g_1khiworawkt7",
-  "name": "light blue cotton quarter-zip sweatshirt",
+  "name": "light blue quarter-zip sweatshirt",
   "category": "top",
   "subtype": "quarter-zip sweatshirt",
   "colors": [
@@ -127,7 +127,7 @@
  },
  {
   "id": "g_1pg9y05mlkek",
-  "name": "brown suede field jacket",
+  "name": "brown suede jacket",
   "category": "outerwear",
   "subtype": "field jacket",
   "colors": [
@@ -169,7 +169,7 @@
  },
  {
   "id": "g_21b6d3qcohmu",
-  "name": "brown cotton button-down shirt",
+  "name": "brown blue plaid shirt",
   "category": "top",
   "subtype": "button-down shirt",
   "colors": [
@@ -190,7 +190,7 @@
  },
  {
   "id": "g_2b6fao81vqrs",
-  "name": "blue flannel shirt",
+  "name": "blue plaid flannel shirt",
   "category": "top",
   "subtype": "flannel shirt",
   "colors": [
@@ -213,7 +213,7 @@
  },
  {
   "id": "g_2djvq6l9qxbb",
-  "name": "navy leather loafers",
+  "name": "navy leather tassel loafers",
   "category": "footwear",
   "subtype": "loafers",
   "colors": [
@@ -233,7 +233,7 @@
  },
  {
   "id": "g_2rtuat7aheik",
-  "name": "light blue cotton dress shirt",
+  "name": "light blue dress shirt",
   "category": "top",
   "subtype": "dress shirt",
   "colors": [
@@ -274,7 +274,7 @@
  },
  {
   "id": "g_3821acdhupu9",
-  "name": "cream ribbed knit half-zip sweater",
+  "name": "cream ribbed half-zip sweater",
   "category": "top",
   "subtype": "half-zip sweater",
   "colors": [
@@ -294,7 +294,7 @@
  },
  {
   "id": "g_3qjmw7n4wj2a",
-  "name": "navy wool jacket",
+  "name": "navy brown plaid jacket",
   "category": "outerwear",
   "subtype": "jacket",
   "colors": [
@@ -316,7 +316,7 @@
  },
  {
   "id": "g_491tzu2suiv7",
-  "name": "blue denim jacket",
+  "name": "blue plaid shearling jacket",
   "category": "outerwear",
   "subtype": "jacket",
   "colors": [
@@ -338,7 +338,7 @@
  },
  {
   "id": "g_5g4fqg77s4rw",
-  "name": "black leather loafers",
+  "name": "black woven loafers",
   "category": "footwear",
   "subtype": "loafers",
   "colors": [
@@ -358,7 +358,7 @@
  },
  {
   "id": "g_5gfabeezh485",
-  "name": "white jacket",
+  "name": "white beige toggle jacket",
   "category": "outerwear",
   "subtype": "jacket",
   "colors": [
@@ -379,7 +379,7 @@
  },
  {
   "id": "g_5josnvyoi4z9",
-  "name": "navy wool blazer",
+  "name": "navy blazer",
   "category": "outerwear",
   "subtype": "blazer",
   "colors": [
@@ -399,7 +399,7 @@
  },
  {
   "id": "g_66xj06nllgf2",
-  "name": "sage trousers",
+  "name": "sage pleated trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -419,7 +419,7 @@
  },
  {
   "id": "g_6lolc7ma0mk8",
-  "name": "charcoal cotton shirt",
+  "name": "dark grey button-down shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -439,7 +439,7 @@
  },
  {
   "id": "g_6qz38nwsrupx",
-  "name": "cream cotton sweatshirt",
+  "name": "cream sweatshirt",
   "category": "top",
   "subtype": "sweatshirt",
   "colors": [
@@ -460,7 +460,7 @@
  },
  {
   "id": "g_6uhygeskozw8",
-  "name": "black cotton hoodie",
+  "name": "black color-block hoodie",
   "category": "top",
   "subtype": "hoodie",
   "colors": [
@@ -481,7 +481,7 @@
  },
  {
   "id": "g_6xkkzn06sbdm",
-  "name": "beige cotton trousers",
+  "name": "beige trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -501,7 +501,7 @@
  },
  {
   "id": "g_7iyagp6doqqz",
-  "name": "black cotton hoodie",
+  "name": "black hoodie",
   "category": "top",
   "subtype": "hoodie",
   "colors": [
@@ -541,7 +541,7 @@
  },
  {
   "id": "g_80sz9s08xpw1",
-  "name": "cream cotton trousers",
+  "name": "cream trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -561,7 +561,7 @@
  },
  {
   "id": "g_8m17f0l0tss9",
-  "name": "light blue fleece half-zip pullover",
+  "name": "light blue half-zip fleece",
   "category": "top",
   "subtype": "half-zip pullover",
   "colors": [
@@ -581,7 +581,7 @@
  },
  {
   "id": "g_8nrtffa2s13s",
-  "name": "brown suede loafers",
+  "name": "brown suede tassel loafers",
   "category": "footwear",
   "subtype": "loafers",
   "colors": [
@@ -622,7 +622,7 @@
  },
  {
   "id": "g_8qqqzpwxuwti",
-  "name": "brown cotton chore jacket",
+  "name": "brown chore jacket",
   "category": "outerwear",
   "subtype": "chore jacket",
   "colors": [
@@ -642,7 +642,7 @@
  },
  {
   "id": "g_8t9o3g4r78c2",
-  "name": "light blue denim jeans",
+  "name": "light blue jeans",
   "category": "bottom",
   "subtype": "jeans",
   "colors": [
@@ -682,7 +682,7 @@
  },
  {
   "id": "g_939onlwfrg9j",
-  "name": "light blue polo",
+  "name": "light blue long-sleeve polo",
   "category": "top",
   "subtype": "polo",
   "colors": [
@@ -702,7 +702,7 @@
  },
  {
   "id": "g_98p2sivflrxg",
-  "name": "ivory wool blazer",
+  "name": "ivory double-breasted blazer",
   "category": "outerwear",
   "subtype": "blazer",
   "colors": [
@@ -722,7 +722,7 @@
  },
  {
   "id": "g_9eip7wdtsxzd",
-  "name": "yellow knit polo",
+  "name": "pale yellow ribbed polo",
   "category": "top",
   "subtype": "polo",
   "colors": [
@@ -785,7 +785,7 @@
  },
  {
   "id": "g_ap5v0s67pg9d",
-  "name": "brown cotton shirt",
+  "name": "dark brown button-up shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -805,7 +805,7 @@
  },
  {
   "id": "g_ayfv9c97ohmv",
-  "name": "brown corduroy gurkha",
+  "name": "brown corduroy trousers",
   "category": "bottom",
   "subtype": "gurkha",
   "colors": [
@@ -850,7 +850,7 @@
  },
  {
   "id": "g_b82609ex2nd7",
-  "name": "navy camp shirt",
+  "name": "navy floral camp shirt",
   "category": "top",
   "subtype": "camp shirt",
   "colors": [
@@ -870,7 +870,7 @@
  },
  {
   "id": "g_b8n14erlispm",
-  "name": "grey suede sneakers",
+  "name": "grey distressed sneakers",
   "category": "footwear",
   "subtype": "sneakers",
   "colors": [
@@ -892,7 +892,7 @@
  },
  {
   "id": "g_bee1dg9rnfe5",
-  "name": "grey wool trousers",
+  "name": "grey pleated trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -932,7 +932,7 @@
  },
  {
   "id": "g_btael28aebgu",
-  "name": "beige denim jeans",
+  "name": "beige patchwork jeans",
   "category": "bottom",
   "subtype": "jeans",
   "colors": [
@@ -991,7 +991,7 @@
  },
  {
   "id": "g_d1awqw83gd3c",
-  "name": "navy knit sweater",
+  "name": "navy sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -1012,7 +1012,7 @@
  },
  {
   "id": "g_dk92xcrfjmq8",
-  "name": "white cotton polo",
+  "name": "white long-sleeve polo",
   "category": "top",
   "subtype": "polo",
   "colors": [
@@ -1032,7 +1032,7 @@
  },
  {
   "id": "g_dscxzk8inlx2",
-  "name": "navy wool trousers",
+  "name": "navy pinstripe trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -1052,7 +1052,7 @@
  },
  {
   "id": "g_dsqnx6ckt81v",
-  "name": "beige cotton quarter-zip",
+  "name": "beige quarter-zip sweatshirt",
   "category": "top",
   "subtype": "quarter-zip",
   "colors": [
@@ -1072,7 +1072,7 @@
  },
  {
   "id": "g_dzsh3qh7v6sb",
-  "name": "navy blue/brown. match original denim trousers",
+  "name": "navy blue/brown. match original blue/brown. match original denim trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -1117,7 +1117,7 @@
  },
  {
   "id": "g_e4y3rjpn57gj",
-  "name": "black shirt",
+  "name": "black white check shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -1138,7 +1138,7 @@
  },
  {
   "id": "g_ed0ga2v0q2yo",
-  "name": "beige cotton jacket",
+  "name": "beige zip jacket",
   "category": "outerwear",
   "subtype": "jacket",
   "colors": [
@@ -1159,7 +1159,7 @@
  },
  {
   "id": "g_ef0u3ljnwa09",
-  "name": "grey wool vest",
+  "name": "grey herringbone puffer vest",
   "category": "outerwear",
   "subtype": "vest",
   "colors": [
@@ -1179,7 +1179,7 @@
  },
  {
   "id": "g_f7a1ienioi31",
-  "name": "navy wool baseball cap",
+  "name": "navy baseball cap",
   "category": "accessory",
   "subtype": "baseball cap",
   "colors": [
@@ -1200,7 +1200,7 @@
  },
  {
   "id": "g_fvc535elt23d",
-  "name": "light blue denim jeans",
+  "name": "light blue jeans",
   "category": "bottom",
   "subtype": "jeans",
   "colors": [
@@ -1241,7 +1241,7 @@
  },
  {
   "id": "g_gp53xkrmem9b",
-  "name": "grey wool sweater",
+  "name": "grey knit sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -1282,7 +1282,7 @@
  },
  {
   "id": "g_h7dy95xdgnh8",
-  "name": "black cotton hoodie",
+  "name": "black hoodie",
   "category": "top",
   "subtype": "hoodie",
   "colors": [
@@ -1302,7 +1302,7 @@
  },
  {
   "id": "g_hhbz4ghpjmd1",
-  "name": "navy knit zip sweater",
+  "name": "navy ribbed zip sweater",
   "category": "outerwear",
   "subtype": "zip sweater",
   "colors": [
@@ -1325,7 +1325,7 @@
  },
  {
   "id": "g_hslm9n4nmc79",
-  "name": "beige cotton sweatshirt",
+  "name": "beige mock-neck sweatshirt",
   "category": "top",
   "subtype": "sweatshirt",
   "colors": [
@@ -1345,7 +1345,7 @@
  },
  {
   "id": "g_i2191l774tad",
-  "name": "brown shirt",
+  "name": "brown long-sleeve shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -1365,7 +1365,7 @@
  },
  {
   "id": "g_i80zb0yen5gn",
-  "name": "green cotton shirt",
+  "name": "sage striped shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -1386,7 +1386,7 @@
  },
  {
   "id": "g_j1n1vh1wvbo4",
-  "name": "grey fleece half-zip sweatshirt",
+  "name": "grey half-zip fleece",
   "category": "top",
   "subtype": "half-zip sweatshirt",
   "colors": [
@@ -1407,7 +1407,7 @@
  },
  {
   "id": "g_j2id379jo424",
-  "name": "blue knit zip jacket",
+  "name": "blue zip-up knit jacket",
   "category": "outerwear",
   "subtype": "zip jacket",
   "colors": [
@@ -1427,7 +1427,7 @@
  },
  {
   "id": "g_j4qu90fgv347",
-  "name": "light blue flannel shirt",
+  "name": "light blue plaid flannel",
   "category": "top",
   "subtype": "flannel shirt",
   "colors": [
@@ -1449,7 +1449,7 @@
  },
  {
   "id": "g_j5og5jmzh5tx",
-  "name": "khaki top",
+  "name": "khaki varsity",
   "category": "top",
   "subtype": "",
   "colors": [
@@ -1470,7 +1470,7 @@
  },
  {
   "id": "g_j994h3k9l8ot",
-  "name": "cream denim jeans",
+  "name": "cream straight-leg jeans",
   "category": "bottom",
   "subtype": "jeans",
   "colors": [
@@ -1490,7 +1490,7 @@
  },
  {
   "id": "g_jhyr10t2vo13",
-  "name": "beige knit half-zip sweater",
+  "name": "beige cable-knit half-zip sweater",
   "category": "top",
   "subtype": "half-zip sweater",
   "colors": [
@@ -1510,7 +1510,7 @@
  },
  {
   "id": "g_jkj2nzfzpf1o",
-  "name": "black polyester bowling shirt",
+  "name": "black bowling shirt",
   "category": "top",
   "subtype": "bowling shirt",
   "colors": [
@@ -1531,7 +1531,7 @@
  },
  {
   "id": "g_juk45cokjxxy",
-  "name": "taupe wool blazer",
+  "name": "taupe blazer",
   "category": "outerwear",
   "subtype": "blazer",
   "colors": [
@@ -1551,7 +1551,7 @@
  },
  {
   "id": "g_k0mfejxiu5f8",
-  "name": "cream fleece pullover",
+  "name": "cream printed fleece pullover",
   "category": "outerwear",
   "subtype": "fleece pullover",
   "colors": [
@@ -1572,7 +1572,7 @@
  },
  {
   "id": "g_k75fdfdsnak0",
-  "name": "light grey trousers",
+  "name": "light grey pleated trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -1612,7 +1612,7 @@
  },
  {
   "id": "g_kh5r3xy9r1i5",
-  "name": "light blue cotton shirt",
+  "name": "light blue striped shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -1633,7 +1633,7 @@
  },
  {
   "id": "g_ko7zz8iktplc",
-  "name": "grey cotton polo",
+  "name": "grey long-sleeve polo",
   "category": "top",
   "subtype": "polo",
   "colors": [
@@ -1653,7 +1653,7 @@
  },
  {
   "id": "g_kp1ps7qww1ar",
-  "name": "beige cotton sweatshirt",
+  "name": "beige quarter-zip sweatshirt",
   "category": "top",
   "subtype": "sweatshirt",
   "colors": [
@@ -1673,7 +1673,7 @@
  },
  {
   "id": "g_lad85rg9nxs3",
-  "name": "ivory woven trousers",
+  "name": "ivory pleated trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -1693,7 +1693,7 @@
  },
  {
   "id": "g_lg5qftegw0qo",
-  "name": "brown cotton pants",
+  "name": "brown frayed-hem pants",
   "category": "bottom",
   "subtype": "pants",
   "colors": [
@@ -1713,7 +1713,7 @@
  },
  {
   "id": "g_lqf1mrlsure9",
-  "name": "ivory cotton camp shirt",
+  "name": "ivory camp collar shirt",
   "category": "top",
   "subtype": "camp shirt",
   "colors": [
@@ -1734,7 +1734,7 @@
  },
  {
   "id": "g_lxqx9egrqg14",
-  "name": "light blue denim jeans",
+  "name": "light blue striped jeans",
   "category": "bottom",
   "subtype": "jeans",
   "colors": [
@@ -1754,7 +1754,7 @@
  },
  {
   "id": "g_m6ri2fgg2hmd",
-  "name": "light blue woven trousers",
+  "name": "light blue trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -1776,7 +1776,7 @@
  },
  {
   "id": "g_m7bg5j5z10wc",
-  "name": "light blue cotton henley",
+  "name": "light blue henley",
   "category": "top",
   "subtype": "henley",
   "colors": [
@@ -1798,7 +1798,7 @@
  },
  {
   "id": "g_mir3akjyhwnr",
-  "name": "light blue cotton t-shirt",
+  "name": "light blue t-shirt",
   "category": "top",
   "subtype": "t-shirt",
   "colors": [
@@ -1838,7 +1838,7 @@
  },
  {
   "id": "g_mpvyy87tse1c",
-  "name": "cream cotton sweatshirt",
+  "name": "cream flag sweatshirt",
   "category": "top",
   "subtype": "sweatshirt",
   "colors": [
@@ -1861,7 +1861,7 @@
  },
  {
   "id": "g_mq1ob9uc1npn",
-  "name": "rust cotton shirt",
+  "name": "rust button-down",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -1883,7 +1883,7 @@
  },
  {
   "id": "g_mqjsmpqgwwvm",
-  "name": "cream knit sweater",
+  "name": "cream cable-knit sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -1905,7 +1905,7 @@
  },
  {
   "id": "g_n955igwlvcl4",
-  "name": "beige knit sweater",
+  "name": "beige gradient sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -1926,7 +1926,7 @@
  },
  {
   "id": "g_nffskb5hta4l",
-  "name": "cream ribbed knit pants",
+  "name": "cream ribbed pants",
   "category": "bottom",
   "subtype": "pants",
   "colors": [
@@ -1968,7 +1968,7 @@
  },
  {
   "id": "g_o739106dt8ym",
-  "name": "cream fleece pullover",
+  "name": "cream abstract fleece half-zip",
   "category": "top",
   "subtype": "fleece pullover",
   "colors": [
@@ -1991,7 +1991,7 @@
  },
  {
   "id": "g_oimadifuvalb",
-  "name": "cream cotton polo",
+  "name": "cream long-sleeve polo",
   "category": "top",
   "subtype": "polo",
   "colors": [
@@ -2050,7 +2050,7 @@
  },
  {
   "id": "g_oyyiaxx6rls7",
-  "name": "mint cotton jacket",
+  "name": "mint green field jacket",
   "category": "outerwear",
   "subtype": "jacket",
   "colors": [
@@ -2071,7 +2071,7 @@
  },
  {
   "id": "g_pa7kfg14rtzl",
-  "name": "white cotton shirt",
+  "name": "white button-up shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -2111,7 +2111,7 @@
  },
  {
   "id": "g_q3e47jxb10wb",
-  "name": "charcoal cotton button-up",
+  "name": "charcoal button-up",
   "category": "top",
   "subtype": "button-up",
   "colors": [
@@ -2133,7 +2133,7 @@
  },
  {
   "id": "g_qn51qgub6tu3",
-  "name": "maroon shirt",
+  "name": "red gingham shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -2154,7 +2154,7 @@
  },
  {
   "id": "g_qnmo5yzgl50b",
-  "name": "navy cotton field jacket",
+  "name": "navy field jacket",
   "category": "outerwear",
   "subtype": "field jacket",
   "colors": [
@@ -2174,7 +2174,7 @@
  },
  {
   "id": "g_qrx875pbmh6n",
-  "name": "beige knit sweater",
+  "name": "beige textured sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -2194,7 +2194,7 @@
  },
  {
   "id": "g_reesb6nbrmm4",
-  "name": "navy cotton polo",
+  "name": "navy long-sleeve polo",
   "category": "top",
   "subtype": "polo",
   "colors": [
@@ -2214,7 +2214,7 @@
  },
  {
   "id": "g_ri78lj9vspyj",
-  "name": "beige knit sweater",
+  "name": "beige ribbed sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -2234,7 +2234,7 @@
  },
  {
   "id": "g_rpjfgscii90r",
-  "name": "cream knit sweater",
+  "name": "cream fair isle half-zip sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -2257,7 +2257,7 @@
  },
  {
   "id": "g_rvrs9hibr981",
-  "name": "light blue denim jeans",
+  "name": "light blue jeans",
   "category": "bottom",
   "subtype": "jeans",
   "colors": [
@@ -2277,7 +2277,7 @@
  },
  {
   "id": "g_rxglifsoqobm",
-  "name": "pink suede sneakers",
+  "name": "pink suede star sneakers",
   "category": "footwear",
   "subtype": "sneakers",
   "colors": [
@@ -2299,7 +2299,7 @@
  },
  {
   "id": "g_s5d2t696vryw",
-  "name": "cream cotton trousers",
+  "name": "cream trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -2319,7 +2319,7 @@
  },
  {
   "id": "g_salzdhuswyd3",
-  "name": "brown cotton sweater",
+  "name": "brown cable-knit sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -2339,7 +2339,7 @@
  },
  {
   "id": "g_sb0mc7s7v346",
-  "name": "olive cotton field jacket",
+  "name": "olive field jacket",
   "category": "outerwear",
   "subtype": "field jacket",
   "colors": [
@@ -2361,7 +2361,7 @@
  },
  {
   "id": "g_sxxi5soxomf3",
-  "name": "black cotton hoodie",
+  "name": "black 90s hoodie",
   "category": "top",
   "subtype": "hoodie",
   "colors": [
@@ -2402,7 +2402,7 @@
  },
  {
   "id": "g_t3e39jysdda5",
-  "name": "tan cotton trousers",
+  "name": "tan trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -2422,7 +2422,7 @@
  },
  {
   "id": "g_teatot7o1lst",
-  "name": "grey flannel shirt",
+  "name": "grey plaid shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -2444,7 +2444,7 @@
  },
  {
   "id": "g_teitg9jmpwxa",
-  "name": "black wool sweater",
+  "name": "black cable-knit sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -2464,7 +2464,7 @@
  },
  {
   "id": "g_tosucnfv40wc",
-  "name": "pink linen shirt",
+  "name": "coral linen shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -2484,7 +2484,7 @@
  },
  {
   "id": "g_tqnnde1xmp0p",
-  "name": "mauve cotton shirt",
+  "name": "mauve button-up shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -2504,7 +2504,7 @@
  },
  {
   "id": "g_ttw2m97ww8z5",
-  "name": "pink cotton polo",
+  "name": "light pink polo",
   "category": "top",
   "subtype": "polo",
   "colors": [
@@ -2524,7 +2524,7 @@
  },
  {
   "id": "g_twp15jpdf6h3",
-  "name": "light blue trousers",
+  "name": "blue pinstripe trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -2544,7 +2544,7 @@
  },
  {
   "id": "g_u0f8e90jp3ez",
-  "name": "cream cotton shirt",
+  "name": "cream button-up shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -2564,7 +2564,7 @@
  },
  {
   "id": "g_u1ujhidqsibg",
-  "name": "cream cotton hoodie",
+  "name": "cream hoodie",
   "category": "top",
   "subtype": "hoodie",
   "colors": [
@@ -2604,7 +2604,7 @@
  },
  {
   "id": "g_ulv8tgkujvjh",
-  "name": "blue denim jacket",
+  "name": "light blue denim jacket",
   "category": "outerwear",
   "subtype": "jacket",
   "colors": [
@@ -2644,7 +2644,7 @@
  },
  {
   "id": "g_upplq59rp8lp",
-  "name": "white cotton t-shirt",
+  "name": "white logo t-shirt",
   "category": "top",
   "subtype": "t-shirt",
   "colors": [
@@ -2664,7 +2664,7 @@
  },
  {
   "id": "g_v2gxktsmsoov",
-  "name": "beige knit sweater",
+  "name": "beige crewneck sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -2707,7 +2707,7 @@
  },
  {
   "id": "g_v5ov6nhyvlun",
-  "name": "silver metal sunglasses",
+  "name": "silver rectangular sunglasses",
   "category": "accessory",
   "subtype": "sunglasses",
   "colors": [
@@ -2749,7 +2749,7 @@
  },
  {
   "id": "g_vf28ktbdhmtz",
-  "name": "brown cotton chinos",
+  "name": "dark brown chinos",
   "category": "bottom",
   "subtype": "chinos",
   "colors": [
@@ -2790,7 +2790,7 @@
  },
  {
   "id": "g_vzqle7zdtpis",
-  "name": "blue knit sweater",
+  "name": "blue ivory diamond knit sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -2851,7 +2851,7 @@
  },
  {
   "id": "g_wwy9b2pusds3",
-  "name": "brown suede bomber jacket",
+  "name": "brown shearling bomber jacket",
   "category": "outerwear",
   "subtype": "bomber jacket",
   "colors": [
@@ -2892,7 +2892,7 @@
  },
  {
   "id": "g_x1vivoqz2ixd",
-  "name": "maroon/brown wool trousers",
+  "name": "maroon/brown trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -2933,7 +2933,7 @@
  },
  {
   "id": "g_xbt3gpjuo1p4",
-  "name": "burgundy knit sweater",
+  "name": "burgundy collared sweater",
   "category": "top",
   "subtype": "sweater",
   "colors": [
@@ -2953,7 +2953,7 @@
  },
  {
   "id": "g_xc4gr022xmvm",
-  "name": "cream knit cardigan",
+  "name": "cream cable-knit cardigan",
   "category": "outerwear",
   "subtype": "cardigan",
   "colors": [
@@ -2973,7 +2973,7 @@
  },
  {
   "id": "g_xi3w7tz3aren",
-  "name": "tan cotton chinos",
+  "name": "tan chinos",
   "category": "bottom",
   "subtype": "chinos",
   "colors": [
@@ -3013,7 +3013,7 @@
  },
  {
   "id": "g_xuqvrfy5ocv4",
-  "name": "olive knit zip sweater",
+  "name": "olive zip-up knit sweater",
   "category": "top",
   "subtype": "zip sweater",
   "colors": [
@@ -3033,7 +3033,7 @@
  },
  {
   "id": "g_yae8h1k9pjm1",
-  "name": "brown leather loafers",
+  "name": "brown leather tassel loafers",
   "category": "footwear",
   "subtype": "loafers",
   "colors": [
@@ -3053,7 +3053,7 @@
  },
  {
   "id": "g_yfkavdj5irwe",
-  "name": "light grey woven trousers",
+  "name": "light grey pleated trousers",
   "category": "bottom",
   "subtype": "trousers",
   "colors": [
@@ -3093,7 +3093,7 @@
  },
  {
   "id": "g_z6syv3lx30tn",
-  "name": "brown shirt",
+  "name": "brown blue plaid shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -3115,7 +3115,7 @@
  },
  {
   "id": "g_z7nhuz8vidky",
-  "name": "cream cotton hoodie",
+  "name": "cream hoodie",
   "category": "top",
   "subtype": "hoodie",
   "colors": [
@@ -3155,7 +3155,7 @@
  },
  {
   "id": "g_zc85ll18q9kn",
-  "name": "cream cotton shirt",
+  "name": "cream printed shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -3176,7 +3176,7 @@
  },
  {
   "id": "g_zh2l854ghu1t",
-  "name": "green knit shirt",
+  "name": "green herringbone knit shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
@@ -3196,7 +3196,7 @@
  },
  {
   "id": "g_zw51yaqdsx0q",
-  "name": "white denim jeans",
+  "name": "white distressed jeans",
   "category": "bottom",
   "subtype": "jeans",
   "colors": [
@@ -3216,7 +3216,7 @@
  },
  {
   "id": "g_zzrq3j5n2njk",
-  "name": "pink cotton dress shirt",
+  "name": "pink gingham shirt",
   "category": "top",
   "subtype": "dress shirt",
   "colors": [

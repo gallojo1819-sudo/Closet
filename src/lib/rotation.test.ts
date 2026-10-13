@@ -18,7 +18,7 @@ import {
   SCREEN_CAP,
   seasonFits,
   twinCounts,
-  twinKey,
+  twinGroups,
   visibleDetectors,
   weekRotationRow,
 } from "./detectors.ts";
@@ -42,8 +42,10 @@ const FIXTURE = JSON.parse(
   readFileSync(new URL("./__fixtures__/engine-garments.json", import.meta.url), "utf8"),
 ) as Garment[];
 const BY_ID = new Map(FIXTURE.map((g) => [g.id, g]));
-/** Look-alike key per piece: the caps and the cycle count four white sneakers as one piece. */
-const ALIKE = new Map(FIXTURE.map((g) => [g.id, twinKey(g)]));
+/** The page's merged groups (four white sneakers, or two same-name pieces, are one piece): what the rotation gets and coverage counts. */
+const GROUPS = twinGroups(FIXTURE);
+const KEY = new Map(FIXTURE.map((g) => [g.id, GROUPS.key(g)]));
+const ALIKE = KEY;
 const NOW = new Date("2026-10-09T15:00:00.000Z");
 const TODAY = "2026-10-09";
 const SEASON: Season = "fall";
@@ -184,8 +186,8 @@ describe("repeated Re-dress on the fixture closet", () => {
   it("every piece that can pair appears within a few Re-dresses (look-alikes as one piece); the rest are listed, not dropped", () => {
     for (const run of RUNS) {
       const pairable = run.eligible.filter((id) => !run.unpairable.includes(id));
-      const shown = new Set([...run.shownBy.get(REDRESSES)!].map((id) => ALIKE.get(id)!));
-      const missing = pairable.filter((id) => !shown.has(ALIKE.get(id)!));
+      const shown = new Set([...run.shownBy.get(REDRESSES)!].map((id) => KEY.get(id)!));
+      const missing = pairable.filter((id) => !shown.has(KEY.get(id)!));
       expect(missing.map((id) => BY_ID.get(id)?.name), `${run.occasion}: never shown`).toEqual([]);
       /* Out in fall asks for a jacket and refuses sneakers while loafers are owned: just under half of this fixture pairs there. */
       expect(pairable.length, `${run.occasion}: pairable pieces`).toBeGreaterThanOrEqual(Math.ceil(0.45 * run.eligible.length));

@@ -1067,7 +1067,11 @@ function plainDresser(
 
 /** Pairability per scope (closet, occasion, season, colour, weather): one search per piece, ever. */
 const PAIRABLE = new Map<string, Map<string, boolean>>();
-/** Pairability searches one page may run; the rest wait for the next page. */
+/**
+ * Full searches' worth of tries one page may spend (the week row's heroes, then settle); the
+ * rest wait for the next page. A search always gets its whole PAIR_TRIES, so a verdict is never
+ * cut short; a pairable piece spends a few hundred tries, one that cannot pair spends them all.
+ */
 const PAIR_SEARCHES = 6;
 
 function scopeKey(occasion: Occasion, season: Season, color: string | null, weatherF: number | undefined, live: Garment[]): string {
@@ -1151,7 +1155,7 @@ function census(scope: string, d: Dresser): void {
 /** A page's pairability checker: cached answers are free, full searches are capped per page. */
 function pairChecker(scope: string, d: Dresser): Pairable {
   const cache = pairCache(scope);
-  let searches = 0;
+  let left = PAIR_SEARCHES * PAIR_TRIES;
   const cheap = (g: Garment): false | undefined => {
     const slot = heroSlot(g);
     if (slot && !cheapUnpairable(g, slot, d)) return undefined;
@@ -1165,9 +1169,11 @@ function pairChecker(scope: string, d: Dresser): Pairable {
       const hit = cache.get(g.id);
       if (hit !== undefined) return hit;
       if (cheap(g) === false) return false;
-      if (searches >= PAIR_SEARCHES) return undefined;
-      searches += 1;
-      return pairableIn(scope, g, d);
+      if (left < PAIR_TRIES) return undefined;
+      const budget: Budget = { tries: PAIR_TRIES, hero: PAIR_TRIES };
+      const ok = pairableIn(scope, g, d, budget);
+      left -= PAIR_TRIES - budget.tries;
+      return ok;
     },
     note: (g, ok) => {
       if (!cache.has(g.id)) cache.set(g.id, ok);
@@ -1175,14 +1181,13 @@ function pairChecker(scope: string, d: Dresser): Pairable {
   };
 }
 
-function pairableIn(scope: string, hero: Garment, d: Dresser): boolean {
+function pairableIn(scope: string, hero: Garment, d: Dresser, budget: Budget): boolean {
   const cache = pairCache(scope);
   const hit = cache.get(hero.id);
   if (hit !== undefined) return hit;
   const slot = heroSlot(hero);
   let ok = false;
   if (slot && !cheapUnpairable(hero, slot, d)) {
-    const budget: Budget = { tries: PAIR_TRIES, hero: PAIR_TRIES };
     const byId = (a: Garment, b: Garment) => a.id.localeCompare(b.id);
     const wide: Dresser = {
       ...d,
@@ -1197,6 +1202,23 @@ function pairableIn(scope: string, hero: Garment, d: Dresser): boolean {
   }
   cache.set(hero.id, ok);
   return ok;
+}
+
+/**
+ * The verdict for core pieces the row never tried: a row fills from the first heroes that
+ * dress, so a piece late in the order that no legal look here can hold (the cheap gates pass,
+ * the legality engine refuses every look) would stay unknown, neither shown nor listed, until
+ * the order reached it. The never-shown pieces whose verdict is unknown get a full search now,
+ * scarcest slot first (shoes, bottoms, tops), least-recently-shown first, with the full searches
+ * the page has left (PAIR_SEARCHES, shared with the row); the rest wait for the next page.
+ * Pairable pieces resolve in a few tries, so the budget goes to the ones that cannot pair.
+ */
+function settle(d: Dresser, pairable: Pairable, rotation: Rotation, twins: Twins, span: number): void {
+  const rank = twinRank(rotationRank(rotation), twins, span);
+  for (const list of [d.shoes, d.bottoms, d.tops]) {
+    const open = list.filter((g) => pairable.known(g) === undefined).sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id));
+    for (const g of open) if (pairable.check(g) === undefined) return;
+  }
 }
 
 export type WeekRotation = {
@@ -1258,6 +1280,7 @@ export function weekRotationRow(
     }
   }
   spreadJackets(looks, strict, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation, twins);
+  if (ctx.rotation) settle(strict, pairable, ctx.rotation, twins, live.length);
   /* Every piece this scope has found unpairable so far, so the caller's list is complete. */
   const unpairable: Garment[] = [];
   for (const [id, ok] of PAIRABLE.get(scope) ?? []) {
