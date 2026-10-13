@@ -3,6 +3,7 @@
  * Keyword trips are not the predicate. Slots, gates, and isLegal are.
  */
 import library from "./library.json" with { type: "json" };
+import { garmentMemo } from "../garment-memo.ts";
 import { comboKey, lookFitsOccasion } from "../lookbook.ts";
 import { livePool } from "../rack.ts";
 import { lookFitsSeason, seasonsOf, type Season } from "../season.ts";
@@ -63,6 +64,8 @@ export type Way = {
   usual?: boolean;
   /** Why the fallback has no looks. Never a bare heading. */
   reason?: string;
+  /** A plain row the section owed that took pieces past the page cap (RELAXED_CAP in ideas.ts). */
+  relaxed?: boolean;
 };
 
 type Built = {
@@ -72,7 +75,12 @@ type Built = {
 
 const BOOKS = new Map<string, Built[]>();
 
+/** The piece's searchable text, built once per garment (garmentMemo tracks every field read here). */
 function textOf(g: Garment): string {
+  return garmentMemo(g, "cells.text", buildText);
+}
+
+function buildText(g: Garment): string {
   return `${g.name} ${g.subtype} ${g.material} ${g.notes ?? ""} ${(g.colors ?? []).join(" ")} ${g.fit ?? ""}`.toLowerCase();
 }
 

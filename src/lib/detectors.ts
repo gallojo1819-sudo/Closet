@@ -17,6 +17,7 @@ export {
   isOuterPiece,
   lastSuggested,
   pieceCounts,
+  RELAXED_CAP,
   ROW_MIN,
   rowRepeats,
   rotationEligible,
@@ -25,8 +26,12 @@ export {
   STORY_ROWS,
   SUEDE_SHARE,
   themePieces,
+  twinCounts,
+  twinGroups,
+  twinKey,
   weekRotationRow,
   type ColorFamily,
+  type Twins,
   type WeekRotation,
 } from "./detectors/ideas.ts";
 export {

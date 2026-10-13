@@ -14,6 +14,7 @@ import {
   FILL_ID,
   isOuterPiece,
   pieceCounts,
+  RELAXED_CAP,
   ROW_MIN,
   rotationEligible,
   rowRepeats,
@@ -21,6 +22,8 @@ import {
   SCREEN_CAP,
   STORY_ROWS,
   SUEDE_SHARE,
+  twinCounts,
+  twinKey,
   visibleDetectors,
   weekRotationRow,
 } from "./detectors.ts";
@@ -34,6 +37,8 @@ import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts"
 const read = (rel: string) => JSON.parse(readFileSync(new URL(rel, import.meta.url), "utf8")) as Garment[];
 const CLOSET: Garment[] = [...read("./__fixtures__/engine-garments.json"), ...read("./__fixtures__/redress-extra.json")];
 const BY_ID = new Map(CLOSET.map((g) => [g.id, g]));
+/** Look-alike key per piece: the caps and the cycle count four white sneakers as one piece. */
+const ALIKE = new Map(CLOSET.map((g) => [g.id, twinKey(g)]));
 const NOW = new Date("2026-10-09T15:00:00.000Z");
 const TODAY = "2026-10-09";
 const SEASON: Season = "fall";
@@ -48,18 +53,23 @@ type Tap = {
   n: number;
   week: Garment[][];
   demoted: number[];
-  rows: { id: string; title: string; looks: Garment[][] }[];
+  rows: { id: string; title: string; looks: Garment[][]; relaxed: boolean }[];
   /** Every card on the page: the week row, then the rows. */
   page: Garment[][];
   pieces: Set<string>;
   /** Pieces allowed in this scope so far: eligible minus what is known unpairable after this tap. */
   allowed: string[];
+  /** Look-alike keys of the allowed pieces. */
+  allowedTwins: Set<string>;
   coveredAllowed: number;
   reset: boolean;
   ms: number;
 };
 
 type Run = { occasion: Occasion; taps: Tap[]; eligible: string[]; unpairable: string[]; shownBy: Map<number, Set<string>> };
+
+/** Look-alike keys shown by a tap. */
+const shownTwinsBy = (run: Run, n: number) => new Set([...run.shownBy.get(n)!].map((id) => ALIKE.get(id)!));
 
 function simulate(occasion: Occasion, taps = TAPS): Run {
   const closet = CLOSET.map((g) => g.id);
@@ -73,7 +83,7 @@ function simulate(occasion: Occasion, taps = TAPS): Run {
     const t0 = performance.now();
     const week = weekRotationRow(CLOSET, { occasion, season: SEASON, rotation, cap: WEEK, today: TODAY, stuck });
     stuck = new Set(week.unpairable.map((g) => g.id));
-    let adv = advanceRotation(rotation, { page: week.looks.map(ids), closet, eligible, stuck });
+    let adv = advanceRotation(rotation, { page: week.looks.map(ids), closet, eligible, stuck, alike: ALIKE });
     rotation = adv.next;
     let reset = adv.reset;
     const found = visibleDetectors(CLOSET, { occasion, season: SEASON });
@@ -85,8 +95,8 @@ function simulate(occasion: Occasion, taps = TAPS): Run {
       rotation,
       stuck,
     });
-    const rows = ways.map((way) => ({ id: way.id, title: way.title, looks: way.looks[occasion] ?? [] }));
-    adv = advanceRotation(rotation, { page: rows.flatMap((row) => row.looks).map(ids), closet, eligible, stuck });
+    const rows = ways.map((way) => ({ id: way.id, title: way.title, looks: way.looks[occasion] ?? [], relaxed: Boolean(way.relaxed) }));
+    adv = advanceRotation(rotation, { page: rows.flatMap((row) => row.looks).map(ids), closet, eligible, stuck, alike: ALIKE });
     rotation = adv.next;
     reset = reset || adv.reset;
     const page = [...week.looks, ...rows.flatMap((row) => row.looks)];
@@ -102,6 +112,7 @@ function simulate(occasion: Occasion, taps = TAPS): Run {
       page,
       pieces,
       allowed,
+      allowedTwins: new Set(allowed.map((id) => ALIKE.get(id)!)),
       coveredAllowed: allowed.filter((id) => shownEver.has(id)).length,
       reset,
       ms: Math.round(performance.now() - t0),
@@ -132,24 +143,24 @@ describe("the 157-piece test closet", () => {
 });
 
 describe("six Re-dresses on the 157-piece closet, every chapter", () => {
-  it("every tap shows a full week row of eight looks and at least three story rows", () => {
+  it("every tap shows a full week row of eight looks and the story rows", () => {
     for (const run of RUNS) {
       for (const tap of run.taps) {
         expect(tap.week.length, `${run.occasion} tap ${tap.n} week row`).toBe(WEEK);
         expect(tap.rows.length, `${run.occasion} tap ${tap.n} rows: ${tap.rows.map((r) => r.id).join(",")}`).toBeGreaterThanOrEqual(STORY_ROWS);
         for (const row of tap.rows) {
-          expect(row.looks.length, `${run.occasion} tap ${tap.n} / ${row.title}`).toBeGreaterThanOrEqual(ROW_MIN);
+          expect(row.looks.length, `${run.occasion} tap ${tap.n} / ${row.title}`).toBeGreaterThanOrEqual(row.relaxed ? 1 : ROW_MIN);
           expect(row.title.length).toBeGreaterThan(0);
         }
       }
     }
   });
 
-  it("every allowed piece appears at least once within the first five taps", () => {
+  it("every allowed piece appears at least once within the first five taps (look-alikes as one piece)", () => {
     for (const run of RUNS) {
       const allowed = run.taps[4]!.allowed;
-      const shown = run.shownBy.get(5)!;
-      const missing = allowed.filter((id) => !shown.has(id));
+      const shown = shownTwinsBy(run, 5);
+      const missing = allowed.filter((id) => !shown.has(ALIKE.get(id)!));
       expect(names(missing), `${run.occasion}: allowed pieces never shown in 5 taps`).toEqual([]);
       /* The loose weekday gate and the plain rows keep most of the closet in play. */
       expect(allowed.length, `${run.occasion}: allowed pieces`).toBeGreaterThanOrEqual(Math.ceil(0.5 * run.eligible.length));
@@ -171,15 +182,21 @@ describe("six Re-dresses on the 157-piece closet, every chapter", () => {
     }
   });
 
-  it("no piece is on more than two cards of a page, nor twice in one row (sneakers, loafers and jackets included)", () => {
+  it("no piece is on more than two cards of a page, nor twice in one row (sneakers, loafers, jackets and look-alikes included)", () => {
     for (const run of RUNS) {
       for (const tap of run.taps) {
-        const over = [...pieceCounts(tap.page).entries()].filter(([, n]) => n > SCREEN_CAP);
-        expect(over.map(([id, n]) => `${BY_ID.get(id)?.name}=${n}`), `${run.occasion} tap ${tap.n}: over the page cap`).toEqual([]);
+        /* A plain row the section owed may take one more card than the cap (relaxed); the rest holds. */
+        const strict = [...tap.week, ...tap.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
+        const over = [...twinCounts(strict).entries()].filter(([, n]) => n > SCREEN_CAP);
+        expect(over.map(([key, n]) => `${key}=${n}`), `${run.occasion} tap ${tap.n}: over the page cap`).toEqual([]);
+        const overRelaxed = [...twinCounts(tap.page).entries()].filter(([, n]) => n > RELAXED_CAP);
+        expect(overRelaxed.map(([key, n]) => `${key}=${n}`), `${run.occasion} tap ${tap.n}: over the relaxed cap`).toEqual([]);
         const rows = [{ title: "week", looks: tap.week }, ...tap.rows];
         for (const row of rows) {
           expect(rowRepeats(row.looks).map((g) => g.name), `${run.occasion} tap ${tap.n} / ${row.title}`).toEqual([]);
           expect(rowRepeats(row.looks, true).map((g) => g.name), `${run.occasion} tap ${tap.n} / ${row.title} jacket`).toEqual([]);
+          const twice = [...twinCounts(row.looks).entries()].filter(([, n]) => n > 1).map(([key]) => key);
+          expect(twice, `${run.occasion} tap ${tap.n} / ${row.title}: a look-alike twice in the row`).toEqual([]);
         }
       }
     }
@@ -246,7 +263,9 @@ describe("six Re-dresses on the 157-piece closet, every chapter", () => {
         .map((tap) => `tap ${tap.n}: ${tap.week.length} week + ${tap.rows.map((r) => r.looks.length).join("+")} rows, allowed ${tap.coveredAllowed}/${tap.allowed.length}, new ${tap.n > 1 ? [...tap.pieces].filter((id) => !run.taps[tap.n - 2]!.pieces.has(id)).length : tap.pieces.size}${tap.reset ? ", new cycle" : ""}, ${tap.ms}ms`)
         .join("\n  ");
       console.log(`redress ${run.occasion}/${SEASON} (eligible ${run.eligible.length}, cannot pair ${run.unpairable.length}):\n  ${line}`);
-      expect(run.taps.at(-1)!.coveredAllowed).toBe(run.taps.at(-1)!.allowed.length);
+      const last = run.taps.at(-1)!;
+      const shown = shownTwinsBy(run, last.n);
+      expect([...last.allowedTwins].filter((key) => !shown.has(key))).toEqual([]);
     }
   });
 });

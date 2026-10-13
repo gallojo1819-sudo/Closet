@@ -11,12 +11,14 @@ import { vi } from "vitest";
 import {
   capScreenLooks,
   isOuterPiece,
-  pieceCounts,
+  RELAXED_CAP,
   rotationEligible,
   rowRepeats,
   rowWays,
   SCREEN_CAP,
   seasonFits,
+  twinCounts,
+  twinKey,
   visibleDetectors,
   weekRotationRow,
 } from "./detectors.ts";
@@ -40,6 +42,8 @@ const FIXTURE = JSON.parse(
   readFileSync(new URL("./__fixtures__/engine-garments.json", import.meta.url), "utf8"),
 ) as Garment[];
 const BY_ID = new Map(FIXTURE.map((g) => [g.id, g]));
+/** Look-alike key per piece: the caps and the cycle count four white sneakers as one piece. */
+const ALIKE = new Map(FIXTURE.map((g) => [g.id, twinKey(g)]));
 const NOW = new Date("2026-10-09T15:00:00.000Z");
 const TODAY = "2026-10-09";
 const SEASON: Season = "fall";
@@ -53,7 +57,7 @@ type Page = {
   n: number;
   week: Garment[][];
   demoted: number[];
-  rows: { id: string; title: string; looks: Garment[][] }[];
+  rows: { id: string; title: string; looks: Garment[][]; relaxed: boolean }[];
   keys: Set<string>;
   reset: boolean;
 };
@@ -72,7 +76,7 @@ function simulate(occasion: Occasion, redresses = REDRESSES): Run {
   for (let n = 1; n <= redresses; n += 1) {
     const week = weekRotationRow(FIXTURE, { occasion, season: SEASON, rotation, cap: 8, today: TODAY, stuck });
     stuck = new Set(week.unpairable.map((g) => g.id));
-    let adv = advanceRotation(rotation, { page: week.looks.map(ids), closet, eligible, stuck });
+    let adv = advanceRotation(rotation, { page: week.looks.map(ids), closet, eligible, stuck, alike: ALIKE });
     rotation = adv.next;
     let reset = adv.reset;
     const found = visibleDetectors(FIXTURE, { occasion, season: SEASON });
@@ -84,8 +88,8 @@ function simulate(occasion: Occasion, redresses = REDRESSES): Run {
       rotation,
       stuck,
     });
-    const rows = ways.map((way) => ({ id: way.id, title: way.title, looks: way.looks[occasion] ?? [] }));
-    adv = advanceRotation(rotation, { page: rows.flatMap((row) => row.looks).map(ids), closet, eligible, stuck });
+    const rows = ways.map((way) => ({ id: way.id, title: way.title, looks: way.looks[occasion] ?? [], relaxed: Boolean(way.relaxed) }));
+    adv = advanceRotation(rotation, { page: rows.flatMap((row) => row.looks).map(ids), closet, eligible, stuck, alike: ALIKE });
     rotation = adv.next;
     reset = reset || adv.reset;
     const page = [...week.looks, ...rows.flatMap((row) => row.looks)];
@@ -177,11 +181,11 @@ describe("the rotation queue", () => {
 });
 
 describe("repeated Re-dress on the fixture closet", () => {
-  it("every piece that can pair appears within a few Re-dresses; the rest are listed, not dropped", () => {
+  it("every piece that can pair appears within a few Re-dresses (look-alikes as one piece); the rest are listed, not dropped", () => {
     for (const run of RUNS) {
       const pairable = run.eligible.filter((id) => !run.unpairable.includes(id));
-      const shown = run.shownBy.get(REDRESSES)!;
-      const missing = pairable.filter((id) => !shown.has(id));
+      const shown = new Set([...run.shownBy.get(REDRESSES)!].map((id) => ALIKE.get(id)!));
+      const missing = pairable.filter((id) => !shown.has(ALIKE.get(id)!));
       expect(missing.map((id) => BY_ID.get(id)?.name), `${run.occasion}: never shown`).toEqual([]);
       /* Out in fall asks for a jacket and refuses sneakers while loafers are owned: just under half of this fixture pairs there. */
       expect(pairable.length, `${run.occasion}: pairable pieces`).toBeGreaterThanOrEqual(Math.ceil(0.45 * run.eligible.length));
@@ -202,17 +206,23 @@ describe("repeated Re-dress on the fixture closet", () => {
     }
   });
 
-  it("no piece more than twice per page, and never twice in one row (jackets included)", () => {
+  it("no piece more than twice per page, and never twice in one row (jackets and look-alikes included)", () => {
     for (const run of RUNS) {
       for (const page of run.pages) {
+        /* A plain row the section owed may take one more card than the cap (relaxed); the rest holds. */
+        const strict = [...page.week, ...page.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
+        const over = [...twinCounts(strict).entries()].filter(([, n]) => n > SCREEN_CAP);
+        expect(over.map(([key, n]) => `${key}=${n}`), `${run.occasion} p${page.n}: over the page cap`).toEqual([]);
         const all = [...page.week, ...page.rows.flatMap((row) => row.looks)];
-        const over = [...pieceCounts(all).entries()].filter(([, n]) => n > SCREEN_CAP);
-        expect(over.map(([id, n]) => `${BY_ID.get(id)?.name}=${n}`), `${run.occasion} p${page.n}: over the page cap`).toEqual([]);
+        const overRelaxed = [...twinCounts(all).entries()].filter(([, n]) => n > RELAXED_CAP);
+        expect(overRelaxed.map(([key, n]) => `${key}=${n}`), `${run.occasion} p${page.n}: over the relaxed cap`).toEqual([]);
         expect(rowRepeats(page.week).map((g) => g.name), `${run.occasion} p${page.n}: week row repeats`).toEqual([]);
         expect(rowRepeats(page.week, true).map((g) => g.name), `${run.occasion} p${page.n}: week row repeats a jacket`).toEqual([]);
-        for (const row of page.rows) {
+        for (const row of [{ title: "week", looks: page.week }, ...page.rows]) {
           expect(rowRepeats(row.looks).map((g) => g.name), `${run.occasion} p${page.n} / ${row.title}`).toEqual([]);
           expect(rowRepeats(row.looks, true).map((g) => g.name), `${run.occasion} p${page.n} / ${row.title} jacket`).toEqual([]);
+          const twice = [...twinCounts(row.looks).entries()].filter(([, n]) => n > 1).map(([key]) => key);
+          expect(twice, `${run.occasion} p${page.n} / ${row.title}: a look-alike twice in the row`).toEqual([]);
         }
         /* The page shows the week row as capScreenLooks would: nothing for it to drop. */
         const looks = page.week.map((pieces, i) => ({ id: String(i), garmentIds: ids(pieces) }));

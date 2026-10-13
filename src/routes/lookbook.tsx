@@ -18,6 +18,7 @@ import {
   renderedSectionLooks,
   rotationEligible,
   rowWays,
+  twinKey,
   visibleDetectors,
   warmCellBook,
   weekRotationRow,
@@ -345,6 +346,8 @@ function LookbookPage() {
         closet: garments.map((g) => g.id),
         eligible: rotationEligible(garments, season, taste).map((g) => g.id),
         stuck,
+        /* Look-alikes stored apart (four pairs of one sneaker) are one turn of the cycle. */
+        alike: new Map(garments.map((g) => [g.id, twinKey(g)])),
       });
       rotationRef.current = next;
       try {

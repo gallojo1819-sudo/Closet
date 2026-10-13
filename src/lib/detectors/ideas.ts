@@ -13,8 +13,11 @@
  * the same way from the plain rules: the style rules are pass/fail guardrails only. Lists never
  * shrink: when the unseen looks run out a row is filled from the whole closet, least-recently-
  * shown first (fillRow), the week row to its cap and every row to ROW_MIN; the section always
- * shows STORY_ROWS rows, plain rows (FILL_TITLES) after the themes. Weekday admits any
- * long-sleeve top here (isLongSleeveTop in lookbook.ts); the engine's gate is unchanged.
+ * shows STORY_ROWS rows, plain rows (FILL_TITLES) after the themes, a short plain row rather
+ * than none when the page cap leaves too few pieces. Weekday admits any long-sleeve top here
+ * (isLongSleeveTop in lookbook.ts); the engine's gate is unchanged. Under rotation, look-alike
+ * pieces (twinKey: the same slot, colour, material and kind, as four pairs of white leather
+ * sneakers stored apart) count as one piece for the row and page caps and take one turn.
  * Colours spread: a family already a third of the page ranks its pieces after the rest, and
  * brown suede jackets past a third of the page's jackets are swapped (spreadJackets). Pure:
  * relative imports only, no React, no DOM.
@@ -35,6 +38,8 @@ import { todayISO } from "../utils.ts";
 
 /** Most cards one piece is on across one screen (every row and the week row). */
 export const SCREEN_CAP = 2;
+/** The page cap a plain row owed to the section may use when the strict cap leaves it short. */
+export const RELAXED_CAP = SCREEN_CAP + 1;
 /** A row shrinks to this before it gives up its theme. */
 export const ROW_MIN = 3;
 export const FORGOTTEN_ID = "forgotten";
@@ -60,11 +65,11 @@ const PAIR_TRIES = 6000;
 const UNKNOWN_HEROES = 96;
 /** Wide retries a plain row spends on heroes whose pairability is still unknown (the search cap hit). */
 const UNKNOWN_WIDE = 4;
-/** Rows the idea section always shows under rotation: the themes, then plain rows from the whole closet. */
-export const STORY_ROWS = 3;
+/** Rows the idea section always shows under rotation: the themes, the forgotten row, then plain rows from the whole closet. */
+export const STORY_ROWS = 4;
 export const FILL_ID = "more";
 /** Titles of the plain rows that fill the section to STORY_ROWS, in order. */
-export const FILL_TITLES = ["More from your closet", "Next in the rotation", "Another turn"] as const;
+export const FILL_TITLES = ["More from your closet", "Next in the rotation", "Another turn", "One more turn"] as const;
 /** The rotation rows' occasion gate: weekday takes any long-sleeve top. */
 const WIDE = { wideWeekdayTops: true } as const;
 /** Brown suede jackets past this share of a page's jackets are swapped for the next jacket. */
@@ -132,6 +137,64 @@ export function familyShares(counts: ReadonlyMap<string, number>, byId: Readonly
   const out = new Map<ColorFamily, number>();
   if (total) for (const [fam, n] of per) out.set(fam, n / total);
   return out;
+}
+
+/**
+ * Look-alike pieces: the slot, the colour the name leads with (else the first tagged colour),
+ * the material and the last word of the name. Four pairs of "white leather sneakers" stored as
+ * four garments, or a brown suede bomber and a brown suede field jacket, are one piece to the
+ * eye, so the row and page caps and the rotation treat them as one.
+ */
+export function twinKey(g: Garment): string {
+  const words = g.name
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const noun = (words.at(-1) ?? "").replace(/(?<!s)s$/, "");
+  const color = nameLeadColor(g.name) ?? looseColor(g.colors?.[0]) ?? (g.colors?.[0] ?? "").trim().toLowerCase();
+  const material = (g.material ?? "").trim().toLowerCase() || words.at(-2) || "";
+  return `${slotOf(g)}|${color}|${material}|${noun}`;
+}
+
+export type Twins = {
+  key: (g: Garment) => string;
+  /** The pieces that share a key with `g`, `g` among them. */
+  of: (g: Garment) => readonly Garment[];
+};
+
+/** The twin groups of a pool: built once per page, read by every row. */
+export function twinGroups(pool: readonly Garment[]): Twins {
+  const keys = new Map<string, string>();
+  const groups = new Map<string, Garment[]>();
+  for (const g of pool) {
+    const key = twinKey(g);
+    keys.set(g.id, key);
+    const group = groups.get(key);
+    if (group) group.push(g);
+    else groups.set(key, [g]);
+  }
+  const key = (g: Garment) => keys.get(g.id) ?? twinKey(g);
+  return { key, of: (g) => groups.get(key(g)) ?? [g] };
+}
+
+/** No grouping: every piece its own twin. What the rows use when no rotation is in play. */
+export function soloTwins(): Twins {
+  return { key: (g) => g.id, of: (g) => [g] };
+}
+
+/** Cards per twin key across the looks: what the page cap is really checked against. */
+export function twinCounts(looks: readonly (readonly Garment[])[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const look of looks) for (const g of look) counts.set(twinKey(g), (counts.get(twinKey(g)) ?? 0) + 1);
+  return counts;
+}
+
+/** Cards the twins of `g` are on, by the id counts. */
+function twinCount(counts: ReadonlyMap<string, number>, twins: Twins, g: Garment): number {
+  let n = 0;
+  for (const t of twins.of(g)) n += counts.get(t.id) ?? 0;
+  return n;
 }
 
 export type IdeaContext = {
@@ -270,7 +333,10 @@ export function capScreenLooks<T extends { garmentIds: readonly string[] }>(look
   return out;
 }
 
-/** Pieces (other than jackets) that sit on more than one card of the row. Empty for a good row. */
+/**
+ * Pieces (other than jackets) that sit on more than one card of the row, by id. Empty for a
+ * good row. Look-alikes are checked with twinCounts.
+ */
 export function rowRepeats(looks: readonly Garment[][], jackets = false): Garment[] {
   const seen = new Map<string, Garment>();
   const out = new Map<string, Garment>();
@@ -373,6 +439,10 @@ type RowOpts = {
   skip?: ReadonlySet<string>;
   /** Cards already in the row (a fill pass): their pieces stay distinct, their counts stand. */
   seed?: readonly Garment[][];
+  /** The page's look-alike groups; built from the dresser's pools when the caller has none. */
+  twins?: Twins;
+  /** Cards a piece (with its twins) may be on across the page; SCREEN_CAP unless a relaxed pass says. */
+  cap?: number;
   /**
    * For a plain dresser: whether a hero pairs with anything here at all. A hero not yet known
    * gets the cheap verdict first, then the beam; a failure is checked (a few full searches per
@@ -401,13 +471,6 @@ type Pairable = {
 function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garment[][] {
   const { salt, fresh, rotation } = opts;
   const max = opts.max ?? ROW_MAX;
-  const countOf = (g: Garment) => counts.get(g.id) ?? 0;
-  const rowUsed = new Set<string>();
-  const looks: Garment[][] = opts.seed ? opts.seed.map((look) => [...look]) : [];
-  for (const look of looks) for (const g of look) rowUsed.add(g.id);
-  const open = (g: Garment) => !rowUsed.has(g.id) && countOf(g) < SCREEN_CAP;
-  const jitter = (g: Garment) => (salt > 0 ? hashId(g.id, salt) * 0.6 : 0);
-  const rank = rotation ? rotationRank(rotation) : null;
   const pools: [Garment[], SlotName][] = [
     [d.tops, "top"],
     [d.bottoms, "bottom"],
@@ -416,6 +479,16 @@ function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garmen
   ];
   const byId = new Map<string, Garment>();
   for (const [list] of pools) for (const g of list) byId.set(g.id, g);
+  const twins = opts.twins ?? (rotation ? twinGroups([...byId.values()]) : soloTwins());
+  /* A piece's cards on the page are its twins' cards too: one white sneaker, however many pairs. */
+  const countOf = (g: Garment) => twinCount(counts, twins, g);
+  const rowUsed = new Set<string>();
+  const looks: Garment[][] = opts.seed ? opts.seed.map((look) => [...look]) : [];
+  for (const look of looks) for (const g of look) rowUsed.add(twins.key(g));
+  const cap = opts.cap ?? SCREEN_CAP;
+  const open = (g: Garment) => !rowUsed.has(twins.key(g)) && countOf(g) < cap;
+  const jitter = (g: Garment) => (salt > 0 ? hashId(g.id, salt) * 0.6 : 0);
+  const rank = rotation ? twinRank(rotationRank(rotation), twins, byId.size) : null;
   /* A partner whose colour family already holds FAMILY_SHARE of the page goes behind the rest.
      The crowded families are read once per hero: the counts move only when a card lands. */
   let hot = new Set<ColorFamily>();
@@ -431,10 +504,12 @@ function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garmen
     const fam = colorFamily(g);
     return fam && hot.has(fam) ? FAMILY_PENALTY : 0;
   };
+  /* A relaxed pass (cap past SCREEN_CAP) still takes pieces under the strict cap first. */
+  const over = (g: Garment) => (cap > SCREEN_CAP && countOf(g) >= SCREEN_CAP ? FAMILY_PENALTY : 0);
   const heroScore = rank
-    ? (g: Garment) => -rank(g.id)
+    ? (g: Garment) => -rank(g) - over(g)
     : (g: Garment, slot: SlotName) => d.fit(g, slot) + fresh(g, countOf(g)) + jitter(g);
-  const score = rank ? (g: Garment) => -rank(g.id) - crowded(g) : heroScore;
+  const score = rank ? (g: Garment) => -rank(g) - crowded(g) - over(g) : heroScore;
   const seen = rotation && rotation.looks.length ? new Set(rotation.looks) : null;
   const dd: Dresser = seen
     ? { ...d, finalOk: (pieces) => d.finalOk(pieces) && !seen.has(rotationLookKey(pieces.map((g) => g.id))) }
@@ -447,9 +522,18 @@ function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garmen
   const budget: Budget = { tries: d.wide ? WIDE_ROW_TRIES : ROW_TRIES, hero: HERO_TRIES };
   let unknownTried = 0;
   let unknownWide = 0;
+  const needLayer = !d.bareOk([]);
   for (const hero of heroes) {
     if (looks.length >= max || budget.tries <= 0) break;
     if (!open(hero.g)) continue;
+    /* A partner slot with nothing open (the page cap, the row): no search, no pairability check. */
+    if (
+      (hero.slot !== "top" && !d.tops.some(open)) ||
+      (hero.slot !== "bottom" && !d.bottoms.some(open)) ||
+      (hero.slot !== "shoe" && !d.shoes.some(open)) ||
+      (hero.slot !== "layer" && needLayer && !d.layers.some(open))
+    )
+      continue;
     const known = opts.pairable?.known(hero.g);
     if (known === false) continue;
     if (known === undefined && opts.pairable) {
@@ -476,11 +560,30 @@ function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garmen
     opts.pairable?.note(hero.g, true);
     looks.push(look);
     for (const g of look) {
-      rowUsed.add(g.id);
-      counts.set(g.id, countOf(g) + 1);
+      rowUsed.add(twins.key(g));
+      counts.set(g.id, (counts.get(g.id) ?? 0) + 1);
     }
   }
   return looks;
+}
+
+/**
+ * Least-recently-shown over twin groups: a group ranks by its latest-shown member, so four
+ * pairs of the same sneaker take one turn, and within the group the member shown longest ago
+ * leads. Ranks are -1 (never queued) or a queue index; the member term stays under one.
+ */
+function twinRank(rank: (id: string) => number, twins: Twins, span: number): (g: Garment) => number {
+  const scale = span + 2;
+  const memo = new Map<string, number>();
+  return (g) => {
+    const hit = memo.get(g.id);
+    if (hit !== undefined) return hit;
+    let latest = -1;
+    for (const t of twins.of(g)) latest = Math.max(latest, rank(t.id));
+    const out = latest + (rank(g.id) + 1) / scale;
+    memo.set(g.id, out);
+    return out;
+  };
 }
 
 /** The rotation with no refused looks: the fill pass may show a look seen this cycle. */
@@ -502,15 +605,16 @@ function fillRow(d: Dresser, counts: Map<string, number>, opts: RowOpts, min: nu
 /**
  * Brown suede jackets past SUEDE_SHARE of the page's jackets (the cards counted so far, this row
  * included): the latest such card takes the next-least-recently-shown jacket that is not brown
- * suede, not in the row, under the page cap and legal with the card's core. Stops when the
- * share is met or no other jacket fits. Counts are kept current.
+ * suede, not in the row (twins included), under the page cap and legal with the card's core.
+ * Stops when the share is met or no other jacket fits. Counts are kept current.
  */
 function spreadJackets(
   looks: Garment[][],
   d: Dresser,
   counts: Map<string, number>,
   byId: ReadonlyMap<string, Garment>,
-  rank: ((id: string) => number) | null,
+  rotation: Rotation | undefined,
+  twins: Twins,
 ): void {
   let total = 0;
   let suede = 0;
@@ -520,20 +624,24 @@ function spreadJackets(
     total += n;
     if (isBrownSuedeOuter(g)) suede += n;
   }
-  const rowUsed = new Set(looks.flat().map((g) => g.id));
+  const rank = rotation ? twinRank(rotationRank(rotation), twins, byId.size) : null;
+  const rowUsed = new Set(looks.flat().map((g) => twins.key(g)));
   for (let i = looks.length - 1; i >= 0 && suede > total * SUEDE_SHARE; i -= 1) {
     const look = looks[i]!;
     const old = look.find(isOuterPiece);
     if (!old || !isBrownSuedeOuter(old)) continue;
     const core = look.filter((g) => g.id !== old.id);
     const options = d.layers
-      .filter((g) => isOuterPiece(g) && !isBrownSuedeOuter(g) && !rowUsed.has(g.id) && (counts.get(g.id) ?? 0) < SCREEN_CAP)
-      .sort((a, b) => (rank ? rank(a.id) - rank(b.id) : 0) || a.id.localeCompare(b.id));
+      .filter(
+        (g) =>
+          isOuterPiece(g) && !isBrownSuedeOuter(g) && !rowUsed.has(twins.key(g)) && twinCount(counts, twins, g) < SCREEN_CAP,
+      )
+      .sort((a, b) => (rank ? rank(a) - rank(b) : 0) || a.id.localeCompare(b.id));
     const next = options.find((g) => d.finalOk([...core, g]));
     if (!next) continue;
     looks[i] = [...core, next];
-    rowUsed.delete(old.id);
-    rowUsed.add(next.id);
+    rowUsed.delete(twins.key(old));
+    rowUsed.add(twins.key(next));
     counts.set(old.id, Math.max(0, (counts.get(old.id) ?? 1) - 1));
     counts.set(next.id, (counts.get(next.id) ?? 0) + 1);
     suede -= 1;
@@ -642,6 +750,7 @@ function forgottenWay(
     stuck?: ReadonlySet<string>;
     /** Cards at most (the page's row budget); ROW_MAX unless the caller says. */
     max?: number;
+    twins: Twins;
   },
 ): Way | null {
   const forgotten = forgottenIds(garments, { today: ctx.today, suggested: ctx.suggested });
@@ -651,9 +760,11 @@ function forgottenWay(
   const scope = scopeKey(ctx.occasion, ctx.season, ctx.color, ctx.weatherF, live);
   const skip = new Set(ctx.stuck ?? []);
   for (const [id, ok] of PAIRABLE.get(scope) ?? []) if (!ok) skip.add(id);
+  /* The row dresses on its own counts: only the cards it ships are charged to the page. */
+  const local = new Map(counts);
   const rows = fillRow(
     { ...d, wide: true },
-    counts,
+    local,
     {
       salt: ctx.salt,
       fresh: ctx.fresh,
@@ -661,13 +772,17 @@ function forgottenWay(
       skip,
       pairable: pairChecker(scope, d),
       max: ctx.max,
+      twins: ctx.twins,
     },
     ROW_MIN,
   )
     .filter((look) => look.some((g) => forgotten.has(g.id)))
     .filter((look) => !seen.has(idsOf(look)) && seen.add(idsOf(look)));
   if (rows.length < ROW_MIN) return null;
-  spreadJackets(rows, d, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation ? rotationRank(ctx.rotation) : null);
+  const shipped = new Map(counts);
+  for (const look of rows) for (const g of look) shipped.set(g.id, (shipped.get(g.id) ?? 0) + 1);
+  spreadJackets(rows, d, shipped, new Map(live.map((g) => [g.id, g])), ctx.rotation, ctx.twins);
+  for (const [id, n] of shipped) counts.set(id, n);
   return {
     id: FORGOTTEN_ID,
     title: FORGOTTEN_TITLE,
@@ -694,7 +809,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
   const pool = livePool(garments);
   const live = pool.filter((g) => !cellKit.deleted.has(g.id));
   const byId = new Map(live.map((g) => [g.id, g]));
-  const rank = ctx.rotation ? rotationRank(ctx.rotation) : null;
+  const twins = ctx.rotation ? twinGroups(live) : soloTwins();
   let counts = pieceCounts((ctx.onScreen ?? []).map((id) => [{ id }]));
   const fresh = (g: Garment, onScreen: number) => freshness(g, { today, suggested: ctx.suggested }, onScreen);
   if (ways.some((way) => way.usual)) return storedRows(ways, garments, { occasion, season, color, weatherF, salt });
@@ -710,49 +825,75 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
   if (ctx.rotation) census(scope, plainDresser(live, occasion, season, weatherF, color, pool, undefined, false));
   const unpairable = new Set(ctx.stuck ?? []);
   for (const [id, ok] of PAIRABLE.get(scope) ?? []) if (!ok) unpairable.add(id);
-  /* Under rotation the section promises STORY_ROWS rows (the forgotten row among them when the
-     closet has forgotten pieces), so each row takes its share of the scarcest slot's room. */
+  /* Under rotation the section promises exactly STORY_ROWS rows, the forgotten row among them
+     when the closet has forgotten pieces (a seat is held for it until it is built), so each
+     row takes its share of the scarcest slot's room. */
   const forgottenWanted = Boolean(ctx.rotation) && live.some((g) => forgottenIds(garments, { today, suggested: ctx.suggested }).has(g.id));
-  const rowsWanted = () => Math.max(1, STORY_ROWS + (forgottenWanted ? 1 : 0) - out.length);
-  const rowMax = (d: Dresser) => (ctx.rotation ? rowBudget(d, counts, unpairable, rowsWanted()) : ROW_MAX);
+  /* Rows still to build, the one in hand included: the forgotten row's seat is one of them until
+     it is built; once built (its cards charged to the page) it is a row waiting to be pushed. */
+  let pending = 0;
+  const rowsWanted = () => Math.max(1, STORY_ROWS - pending - out.length);
+  const rowMax = (d: Dresser) => (ctx.rotation ? rowBudget(d, counts, unpairable, rowsWanted(), twins) : ROW_MAX);
+  const themeCap = ctx.rotation ? STORY_ROWS - (forgottenWanted ? 1 : 0) : THEME_ROWS;
   for (const way of order) {
-    if (out.length >= THEME_ROWS) break;
+    if (out.length >= themeCap) break;
     const cell = cellKit.cells().find((row) => row.id === way.id);
     if (!cell) continue;
     const d = cellDresser(cell, live, occasion, season, weatherF, color, pool);
     const local = new Map(counts);
-    const looks = fillRow(d, local, { salt, fresh, rotation: ctx.rotation, skip: ctx.stuck, max: rowMax(d) }, ROW_MIN);
+    const looks = fillRow(d, local, { salt, fresh, rotation: ctx.rotation, skip: ctx.stuck, max: rowMax(d), twins }, ROW_MIN);
     if (looks.length < ROW_MIN) {
       if (short.length < THEME_ROWS) short.push(way);
       continue;
     }
-    spreadJackets(looks, d, local, byId, rank);
+    spreadJackets(looks, d, local, byId, ctx.rotation, twins);
     counts = local;
     out.push({ ...way, pieces: looks[0] ?? way.pieces, looks: { ...way.looks, [occasion]: looks } });
   }
   /* The section never shrinks below STORY_ROWS: plain rows from the whole closet, least-
      recently-shown first, follow the themes (before the forgotten row, which closes the screen;
      after it only if it did not come). Jackets when the day asks for them; bare cores only when
-     the jackets are spent. */
+     the jackets are spent; and when the page cap leaves too few pieces for ROW_MIN cards, the
+     row ships short rather than not at all. */
   let fills = 0;
   const fillRows = (upTo: number) => {
-    if (!ctx.rotation) return;
+    const rotation = ctx.rotation;
+    if (!rotation) return;
     while (out.length < upTo && fills < FILL_TITLES.length) {
       const d = plainDresser(live, occasion, season, weatherF, color, pool, undefined, false);
-      const opts: RowOpts = { salt, fresh, rotation: ctx.rotation, skip: unpairable, pairable: pairChecker(scope, d), max: rowMax(d) };
+      const opts: RowOpts = {
+        salt,
+        fresh,
+        rotation,
+        skip: unpairable,
+        pairable: pairChecker(scope, d),
+        max: rowMax(d),
+        twins,
+      };
       let looks = fillRow(d, counts, opts, ROW_MIN);
-      if (looks.length < ROW_MIN && jacketRequired(occasion, season, weatherF)) {
-        const bare = plainDresser(live, occasion, season, weatherF, color, pool, undefined, true);
-        looks = heroRow({ ...bare, layers: [] }, counts, { ...opts, rotation: unseen(ctx.rotation), seed: looks, max: ROW_MIN });
+      const needJacket = jacketRequired(occasion, season, weatherF);
+      const bare = needJacket ? plainDresser(live, occasion, season, weatherF, color, pool, undefined, true) : null;
+      const again = (dd: Dresser, cap: number) =>
+        heroRow(dd, counts, { ...opts, rotation: unseen(rotation), seed: looks, max: ROW_MIN, cap });
+      if (looks.length < ROW_MIN && bare) looks = again({ ...bare, layers: [] }, SCREEN_CAP);
+      /* Too few pieces left under the page cap (a chapter with five kinds of shoe): the row is
+         still owed, so its pieces may take one more card than the cap. The way says so. */
+      let relaxed = false;
+      if (looks.length < ROW_MIN) {
+        const before = looks.length;
+        looks = again(d, RELAXED_CAP);
+        if (looks.length < ROW_MIN && bare) looks = again({ ...bare, layers: [] }, RELAXED_CAP);
+        relaxed = looks.length > before;
       }
-      if (looks.length < ROW_MIN) return;
-      spreadJackets(looks, d, counts, byId, rank);
+      if (!looks.length) return;
+      spreadJackets(looks, d, counts, byId, rotation, twins);
       out.push({
         id: `${FILL_ID}-${fills + 1}`,
         title: FILL_TITLES[fills]!,
         pieces: looks[0]!,
         looks: { [occasion]: looks },
         counts: { weekday: 0, out: 0, weekend: 0, travel: 0, comfy: 0, [occasion]: looks.length },
+        ...(relaxed ? { relaxed: true } : {}),
       });
       fills += 1;
     }
@@ -771,8 +912,10 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     rotation: ctx.rotation,
     stuck: ctx.stuck,
     max: forgottenWanted ? rowMax(plainDresser(live, occasion, season, weatherF, color, pool, undefined, false)) : undefined,
+    twins,
   });
-  fillRows(STORY_ROWS - (forgotten ? 1 : 0));
+  pending = forgotten ? 1 : 0;
+  fillRows(STORY_ROWS - pending);
   if (!out.length && !forgotten && short.length) {
     /* No theme reaches three distinct heroes and nothing is forgotten: the stored disjoint rows,
        under the cap, say "Only N in your closet" as before rather than leaving the page bare. */
@@ -792,18 +935,33 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     }
   }
   if (forgotten) out.push(forgotten);
+  pending = 0;
   fillRows(STORY_ROWS);
   return out;
 }
 
 /**
  * Cards one row may take so the rows still wanted on this page get theirs: the scarcest core
- * slot's room (pieces not known unpairable, each SCREEN_CAP minus its count) split between the
- * rows, never under ROW_MIN or over ROW_MAX.
+ * slot's room (twin groups with a pairable member, each SCREEN_CAP minus the group's count)
+ * split between the rows, never under ROW_MIN or over ROW_MAX.
  */
-function rowBudget(d: Dresser, counts: ReadonlyMap<string, number>, unpairable: ReadonlySet<string>, rows: number): number {
-  const room = (list: Garment[]) =>
-    list.reduce((n, g) => n + (unpairable.has(g.id) ? 0 : Math.max(0, SCREEN_CAP - (counts.get(g.id) ?? 0))), 0);
+function rowBudget(
+  d: Dresser,
+  counts: ReadonlyMap<string, number>,
+  unpairable: ReadonlySet<string>,
+  rows: number,
+  twins: Twins,
+): number {
+  const room = (list: Garment[]) => {
+    const seen = new Set<string>();
+    let n = 0;
+    for (const g of list) {
+      if (unpairable.has(g.id) || seen.has(twins.key(g))) continue;
+      seen.add(twins.key(g));
+      n += Math.max(0, SCREEN_CAP - twinCount(counts, twins, g));
+    }
+    return n;
+  };
   const scarce = Math.min(room(d.tops), room(d.bottoms), room(d.shoes));
   return Math.min(ROW_MAX, Math.max(ROW_MIN, Math.floor(scarce / Math.max(1, rows))));
 }
@@ -1046,7 +1204,8 @@ export function weekRotationRow(
   const skip = new Set(ctx.stuck ?? []);
   for (const [id, ok] of PAIRABLE.get(scope) ?? []) if (!ok) skip.add(id);
   const pairable = pairChecker(scope, strict);
-  const opts: RowOpts = { salt, fresh, rotation: ctx.rotation, max: cap, skip, pairable };
+  const twins = ctx.rotation ? twinGroups(live) : soloTwins();
+  const opts: RowOpts = { salt, fresh, rotation: ctx.rotation, max: cap, skip, pairable, twins };
   /* The unseen looks first; when they run out, the least-recently-shown pieces fill the row to its cap. */
   const looks = fillRow(strict, counts, opts, cap);
   const demoted: number[] = [];
@@ -1062,7 +1221,7 @@ export function weekRotationRow(
       looks.push(look);
     }
   }
-  spreadJackets(looks, strict, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation ? rotationRank(ctx.rotation) : null);
+  spreadJackets(looks, strict, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation, twins);
   /* Every piece this scope has found unpairable so far, so the caller's list is complete. */
   const unpairable: Garment[] = [];
   for (const [id, ok] of PAIRABLE.get(scope) ?? []) {

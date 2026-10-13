@@ -7,7 +7,9 @@
  * since the last reset; once every eligible piece has appeared (pieces that can never pair are
  * set aside, see weekRotationRow in ideas.ts), or a whole page adds no new piece, the cycle
  * resets: the looks seen so far may come back and the least-recently-shown pieces lead again,
- * so the rotation never stalls at nothing new. The state is per session, client-side
+ * so the rotation never stalls at nothing new. Look-alike pieces (twinKey in ideas.ts: the
+ * same colour, material and kind, as four pairs of white leather sneakers) are capped and
+ * ranked as one piece there; the queue itself holds ids. The state is per session, client-side
  * (sessionStorage or memory); nothing here writes to the store or the database. Pure: no React,
  * no DOM, relative imports only.
  */
@@ -24,15 +26,17 @@ export type Rotation = {
   looks: string[];
   /** Resets so far: every eligible piece has had a turn this many times. */
   passes: number;
-  /** Advances in a row that showed new looks but no new piece. Two (a whole page) stall the cycle. */
+  /** Advances in a row that showed no new piece. Two (a whole page) stall the cycle. */
   idle: number;
+  /** The last page recorded (its look keys joined): recording it again changes nothing. */
+  last: string;
 };
 
 /** Advances in a row (a page is two: the week row, then the rows) with nothing new before a reset. */
 export const STALL_ADVANCES = 2;
 
 export function emptyRotation(): Rotation {
-  return { v: 1, queue: [], shown: [], looks: [], passes: 0, idle: 0 };
+  return { v: 1, queue: [], shown: [], looks: [], passes: 0, idle: 0, last: "" };
 }
 
 /** Sorted ids joined: the same key as comboKey in lookbook.ts, without importing it. */
@@ -61,16 +65,23 @@ export type AdvanceInput = {
   eligible: readonly string[];
   /** Eligible pieces that can never pair here; coverage does not wait for them. */
   stuck?: ReadonlySet<string>;
+  /**
+   * Look-alike key per piece id (twinKey in ideas.ts): a piece counts as shown once any piece
+   * with its key has been, so four pairs of one sneaker are one turn of the cycle. Ids without
+   * a key stand alone.
+   */
+  alike?: ReadonlyMap<string, string>;
 };
 
 export type Advance = { next: Rotation; reset: boolean; newPieces: number; remaining: string[] };
 
 /**
  * Record a page: shown pieces go to the back of the queue (in page order), the looks join the
- * seen set, and when nothing eligible is left unshown the cycle resets. Re-recording the same
- * page changes nothing. A whole page (STALL_ADVANCES advances) that shows new looks but no new
- * piece while eligible pieces remain means the rest cannot be reached under the caps: the
- * cycle resets rather than stall.
+ * seen set, and when nothing eligible is left unshown the cycle resets. Recording the page just
+ * recorded again changes nothing. Any other page moves its pieces to the back even when none
+ * of them is new, so the next page leads with something else rather than repeat it. A whole
+ * page (STALL_ADVANCES advances) with no new piece while eligible pieces remain means the rest
+ * cannot be reached under the caps: the cycle resets rather than stall.
  */
 export function advanceRotation(r: Rotation, input: AdvanceInput): Advance {
   const closet = new Set(input.closet);
@@ -88,10 +99,14 @@ export function advanceRotation(r: Rotation, input: AdvanceInput): Advance {
   const shownBefore = new Set(r.shown);
   const looksBefore = new Set(r.looks);
   const newPieces = shownNow.filter((id) => !shownBefore.has(id)).length;
-  const newLooks = keys.filter((key) => !looksBefore.has(key)).length;
-  const remainingOf = (shown: ReadonlySet<string>) =>
-    input.eligible.filter((id) => closet.has(id) && !shown.has(id) && !input.stuck?.has(id));
-  if (newPieces === 0 && newLooks === 0) {
+  const keyOf = (id: string) => input.alike?.get(id) ?? id;
+  const remainingOf = (shown: ReadonlySet<string>) => {
+    const keys = new Set<string>();
+    for (const id of shown) keys.add(keyOf(id));
+    return input.eligible.filter((id) => closet.has(id) && !keys.has(keyOf(id)) && !input.stuck?.has(id));
+  };
+  const last = keys.join("/");
+  if (last === r.last) {
     const same = r.queue.every((id) => closet.has(id)) && input.closet.every((id) => r.queue.includes(id));
     const next = same ? r : { ...r, queue: pruneQueue(r.queue, closet, input.closet) };
     return { next, reset: false, newPieces: 0, remaining: remainingOf(shownBefore) };
@@ -104,13 +119,13 @@ export function advanceRotation(r: Rotation, input: AdvanceInput): Advance {
   const stalled = idle >= STALL_ADVANCES && remaining.length > 0;
   if (remaining.length === 0 || stalled) {
     return {
-      next: { v: 1, queue, shown: [], looks: [], passes: r.passes + 1, idle: 0 },
+      next: { v: 1, queue, shown: [], looks: [], passes: r.passes + 1, idle: 0, last },
       reset: true,
       newPieces,
       remaining: stalled ? remaining : [],
     };
   }
-  return { next: { v: 1, queue, shown, looks, passes: r.passes, idle }, reset: false, newPieces, remaining };
+  return { next: { v: 1, queue, shown, looks, passes: r.passes, idle, last }, reset: false, newPieces, remaining };
 }
 
 /** Known ids in their order, minus what left the closet; new ids go to the front. */
@@ -136,6 +151,7 @@ export function readRotation(raw: string | null | undefined): Rotation {
       looks: ids(got.looks),
       passes: typeof got.passes === "number" && Number.isFinite(got.passes) ? got.passes : 0,
       idle: typeof got.idle === "number" && Number.isFinite(got.idle) ? got.idle : 0,
+      last: typeof got.last === "string" ? got.last : "",
     };
   } catch {
     return emptyRotation();

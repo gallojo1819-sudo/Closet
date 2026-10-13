@@ -1,4 +1,5 @@
 import { canonicalize, harmony } from "./color.ts";
+import { garmentMemo } from "./garment-memo.ts";
 import { livePool } from "./rack.ts";
 import {
   clashes as styleClashes,
@@ -460,7 +461,12 @@ export function forceLooksForPiece(
   return looks.filter((l) => l.garmentIds.includes(garmentId)).slice(0, n);
 }
 
+/** The piece's searchable text, built once per garment (garmentMemo tracks the fields read here). */
 function pieceBlob(g: Garment): string {
+  return garmentMemo(g, "lookbook.blob", buildPieceBlob);
+}
+
+function buildPieceBlob(g: Garment): string {
   return `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
 }
 
@@ -487,18 +493,32 @@ function hasKind(list: Garment[], re: RegExp): boolean {
   return list.some((g) => re.test(pieceBlob(g)));
 }
 
+/** Whether a pool owns a kind of piece in a slot: one scan per pool, slot and pattern. */
+const RACK_HAS = new WeakMap<Garment[], Map<string, boolean>>();
+
 function rackHas(
   pool: Garment[] | undefined,
   slot: "top" | "bottom" | "footwear",
   re: RegExp,
 ): boolean {
-  return (pool ?? []).some((g) => {
+  if (!pool) return false;
+  let memo = RACK_HAS.get(pool);
+  if (!memo) {
+    memo = new Map();
+    RACK_HAS.set(pool, memo);
+  }
+  const key = `${slot}|${re.source}|${re.flags}`;
+  const hit = memo.get(key);
+  if (hit !== undefined) return hit;
+  const found = pool.some((g) => {
     const s = slotOf(g);
     if (slot === "top") {
       if (s !== "top" && s !== "dress") return false;
     } else if (s !== slot) return false;
     return re.test(pieceBlob(g));
   });
+  memo.set(key, found);
+  return found;
 }
 
 /**
