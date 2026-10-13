@@ -1,42 +1,40 @@
 /**
- * The closet snapshot: the fixture counts add up, the refresh script writes the shape the
- * fixture already has and only ever selects, and, when Supabase env is set, the live closet
- * has as many pieces as the snapshot (read-only; skipped without env).
+ * The closet snapshot: the fixture is the whole test closet and every piece in it is real, the
+ * refresh script writes the shape the fixture already has and only ever selects, its
+ * --from-file mode reduces an export the way the live row is reduced without touching the
+ * network, and, when Supabase env is set, the live closet has as many pieces as the snapshot
+ * (read-only; skipped without env).
  */
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  EXTRA_URL,
+  closetFromStored,
+  exportGarments,
   fetchLiveCloset,
   fixtureName,
   fixtureText,
   liveGarments,
+  parseArgs,
+  readExportCloset,
   readSnapshotEnv,
   SNAPSHOT_URL,
   stripGarment,
 } from "../../scripts/refresh-closet-snapshot.ts";
-import {
-  EXTRA_PIECE_COUNT,
-  LIVE_SNAPSHOT_COUNT,
-  TEST_CLOSET_COUNT,
-  extraPieces,
-  liveSnapshot,
-  testCloset,
-} from "./__fixtures__/snapshot.ts";
+import { LIVE_SNAPSHOT_COUNT, TEST_CLOSET_COUNT, liveSnapshot, testCloset } from "./__fixtures__/snapshot.ts";
 
 const SCRIPT_URL = new URL("../../scripts/refresh-closet-snapshot.ts", import.meta.url);
 const ENV = readSnapshotEnv();
 
 describe("the snapshot closet", () => {
-  it("counts the live snapshot plus the hand-drafted extras, every id once", () => {
-    expect(TEST_CLOSET_COUNT).toBe(LIVE_SNAPSHOT_COUNT + EXTRA_PIECE_COUNT);
-    expect(testCloset.length).toBe(TEST_CLOSET_COUNT);
+  it("is the live snapshot alone: every id once, every id the account's, no hand-drafted piece", () => {
+    expect(TEST_CLOSET_COUNT).toBe(LIVE_SNAPSHOT_COUNT);
+    expect(testCloset).toBe(liveSnapshot);
     expect(new Set(testCloset.map((g) => g.id)).size).toBe(TEST_CLOSET_COUNT);
-    expect(LIVE_SNAPSHOT_COUNT).toBeGreaterThan(EXTRA_PIECE_COUNT);
-    const liveIds = new Set(liveSnapshot.map((g) => g.id));
-    for (const g of extraPieces) {
-      expect(g.id, g.name).toMatch(/^x_/);
-      expect(liveIds.has(g.id)).toBe(false);
+    for (const g of testCloset) {
+      expect(g.id, g.name).toMatch(/^g_[a-z0-9]+$/);
+      expect(g.id, g.name).not.toMatch(/^x_/);
     }
   });
 
@@ -67,12 +65,52 @@ describe("the refresh script", () => {
   it("writes only the live snapshot file and takes keys from process.env alone", () => {
     expect(source.match(/writeFileSync\(/g)?.length).toBe(1);
     expect(source).toMatch(/writeFileSync\(SNAPSHOT_URL, next\)/);
-    expect(source).not.toMatch(/writeFileSync\(EXTRA_URL/);
     expect(source).not.toMatch(/supabase\.co/);
     expect(source).not.toMatch(/eyJ[A-Za-z0-9_-]{20,}/);
     expect(source).not.toMatch(/process\.env\.[A-Z_]+/);
     expect(SNAPSHOT_URL.pathname.endsWith("/src/lib/__fixtures__/engine-garments.json")).toBe(true);
-    expect(EXTRA_URL.pathname.endsWith("/src/lib/__fixtures__/redress-extra.json")).toBe(true);
+  });
+
+  it("reads an export file the way it reads the live row: rows list, one row or the bare array, no network", () => {
+    const garments = [
+      { id: "a", name: "kept", brand: "someone", notes: "secret", wornOn: ["2026-10-01"], createdAt: "2025-01-01" },
+      { id: "b", archived: true, tombstone: true },
+      { id: "c", demo: true },
+      { id: "d", archived: true },
+      { id: "e", colors: ["olive"], material: "linen", subtype: "shirt", category: "top" },
+    ];
+    expect(exportGarments([{ user_id: "u", garments }])).toBe(garments);
+    expect(exportGarments({ user_id: "u", garments })).toBe(garments);
+    expect(exportGarments(garments)).toBe(garments);
+    expect(() => exportGarments([{ garments }, { garments }])).toThrow(/2 closet rows/);
+    expect(() => exportGarments("nope")).toThrow(/neither/);
+
+    const dir = mkdtempSync(join(tmpdir(), "closet-export-"));
+    try {
+      const path = join(dir, "closet_meta.json");
+      writeFileSync(path, JSON.stringify([{ user_id: "u", garments }]));
+      const closet = readExportCloset(path);
+      expect(closet.pieces.map((g) => g.id)).toEqual(["a", "e"]);
+      expect(closet).toMatchObject({ stored: 5, tombstones: 1, demo: 1, archived: 1 });
+      expect(closet.pieces[0]).toMatchObject({ brand: "", notes: "", wornOn: [], createdAt: "2026-01-01T00:00:00.000Z" });
+      expect(closet.pieces[1]!.name).toBe("olive linen shirt");
+      expect(closet.pieces[1]!.id).toBe("e");
+      writeFileSync(path, "{ not json");
+      expect(() => readExportCloset(path)).toThrow(/Could not read the export/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    expect(parseArgs(["--check", "--from-file", "x.json"])).toEqual({ check: true, fromFile: "x.json" });
+    expect(parseArgs([])).toEqual({ check: false });
+    expect(parseArgs(["--from-file"])).toEqual({ error: "--from-file needs a path" });
+    expect(parseArgs(["--from-file", "--check"])).toEqual({ error: "--from-file needs a path" });
+    expect(parseArgs(["--nope"])).toEqual({ error: "unknown argument --nope" });
+  });
+
+  it("the fixture is a fixed point of that reduction: reducing it again changes nothing", () => {
+    const again = closetFromStored(liveSnapshot);
+    expect(again.pieces).toEqual(liveSnapshot);
+    expect(again).toMatchObject({ stored: LIVE_SNAPSHOT_COUNT, tombstones: 0, demo: 0, archived: 0 });
   });
 
   it("maps a stored piece to the shape the fixture already has", () => {

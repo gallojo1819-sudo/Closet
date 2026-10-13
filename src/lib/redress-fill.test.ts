@@ -1,12 +1,14 @@
 /**
- * Redress fill: every Re-dress shows a full page, and over a few taps every piece that can pair
- * gets a turn. The closet is the 142-piece engine fixture plus 15 pieces (redress-extra.json:
- * button-downs, sweaters, a cardigan, a long-sleeve polo, bottoms, non-sneaker shoes, jackets
- * that are not brown suede), the snapshot closet in all; the clock is frozen at the snapshot's instant. Taps
- * are simulated as the Lookbook page does them: the week row (weekRotationRow), then the rows
- * (rowWays) with the week's pieces on screen, the rotation advanced after each.
+ * Redress fill: every Re-dress shows a page as full as the closet allows, and over a few taps
+ * every piece that can pair gets a turn. The closet is the snapshot fixture
+ * (engine-garments.json): the owner's pieces, brands stripped, the fifteen shirts, trousers,
+ * jeans and chinos added on Oct 10 2026 among them; the clock is frozen at the snapshot's
+ * instant. A row never repeats a piece, so a chapter whose scarcest core slot (top, bottom or
+ * shoe) has fewer look-alike groups than the week cap gets a shorter week row: on this closet
+ * the "out" chapter, where only the non-sneaker shoes pair. Taps are simulated as the Lookbook page
+ * does them: the week row (weekRotationRow), then the rows (rowWays) with the week's pieces on
+ * screen, the rotation advanced after each.
  */
-import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   colorFamily,
@@ -33,10 +35,11 @@ import { lookFitsSeason } from "./season.ts";
 import { isBrownSuedeOuter } from "./style.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
-import { EXTRA_PIECE_COUNT, TEST_CLOSET_COUNT } from "./__fixtures__/snapshot.ts";
+import { TEST_CLOSET_COUNT, testCloset } from "./__fixtures__/snapshot.ts";
 
-const read = (rel: string) => JSON.parse(readFileSync(new URL(rel, import.meta.url), "utf8")) as Garment[];
-const CLOSET: Garment[] = [...read("./__fixtures__/engine-garments.json"), ...read("./__fixtures__/redress-extra.json")];
+const CLOSET: Garment[] = testCloset;
+/** The navy camp shirt added on Oct 10 2026: a navy piece whose colour family the page spreads. */
+const NAVY_CAMP_SHIRT = "g_b82609ex2nd7";
 const BY_ID = new Map(CLOSET.map((g) => [g.id, g]));
 /** Look-alike key per piece: the caps and the cycle count four white sneakers as one piece. */
 const ALIKE = new Map(CLOSET.map((g) => [g.id, twinKey(g)]));
@@ -62,6 +65,8 @@ type Tap = {
   allowed: string[];
   /** Look-alike keys of the allowed pieces. */
   allowedTwins: Set<string>;
+  /** Look-alike groups in the scarcest core slot among the allowed pieces: a row holds no more cards than that. */
+  coreTwins: number;
   coveredAllowed: number;
   reset: boolean;
   ms: number;
@@ -71,6 +76,11 @@ type Run = { occasion: Occasion; taps: Tap[]; eligible: string[]; unpairable: st
 
 /** Look-alike keys shown by a tap. */
 const shownTwinsBy = (run: Run, n: number) => new Set([...run.shownBy.get(n)!].map((id) => ALIKE.get(id)!));
+
+const CORE_SLOTS = ["top", "bottom", "footwear"] as const;
+/** Distinct look-alike groups per core slot among these pieces, the smallest. */
+const coreTwins = (allowed: readonly string[]) =>
+  Math.min(...CORE_SLOTS.map((category) => new Set(allowed.filter((id) => BY_ID.get(id)!.category === category).map((id) => ALIKE.get(id)!)).size));
 
 function simulate(occasion: Occasion, taps = TAPS): Run {
   const closet = CLOSET.map((g) => g.id);
@@ -114,6 +124,7 @@ function simulate(occasion: Occasion, taps = TAPS): Run {
       pieces,
       allowed,
       allowedTwins: new Set(allowed.map((id) => ALIKE.get(id)!)),
+      coreTwins: coreTwins(allowed),
       coveredAllowed: allowed.filter((id) => shownEver.has(id)).length,
       reset,
       ms: Math.round(performance.now() - t0),
@@ -136,19 +147,28 @@ afterAll(() => {
 });
 
 describe("the snapshot test closet", () => {
-  it("is the fixture plus fifteen distinct, brand-free pieces", () => {
-    expect(EXTRA_PIECE_COUNT).toBe(15);
+  it("is the snapshot closet: distinct, brand-free pieces", () => {
     expect(CLOSET.length).toBe(TEST_CLOSET_COUNT);
+    expect(CLOSET.some((g) => g.id === NAVY_CAMP_SHIRT)).toBe(true);
     expect(new Set(CLOSET.map((g) => g.id)).size).toBe(TEST_CLOSET_COUNT);
     for (const g of CLOSET) expect(g.brand ?? "", g.name).toBe("");
   });
 });
 
 describe("six Re-dresses on the snapshot closet, every chapter", () => {
-  it("every tap shows a full week row of eight looks and the story rows", () => {
+  it("every tap shows a week row as full as the closet allows (eight looks where the scarcest slot has eight) and the story rows", () => {
+    let full = 0;
     for (const run of RUNS) {
       for (const tap of run.taps) {
-        expect(tap.week.length, `${run.occasion} tap ${tap.n} week row`).toBe(WEEK);
+        if (tap.coreTwins >= WEEK) {
+          expect(tap.week.length, `${run.occasion} tap ${tap.n} week row`).toBe(WEEK);
+          full += 1;
+        } else {
+          /* No piece twice in a row: the scarce slot bounds the row, and the row still clears the minimum. */
+          const line = `${run.occasion} tap ${tap.n} week row (${tap.coreTwins} pieces in the scarcest core slot)`;
+          expect(tap.week.length, line).toBeGreaterThanOrEqual(ROW_MIN);
+          expect(tap.week.length, line).toBeLessThanOrEqual(tap.coreTwins);
+        }
         expect(tap.rows.length, `${run.occasion} tap ${tap.n} rows: ${tap.rows.map((r) => r.id).join(",")}`).toBeGreaterThanOrEqual(STORY_ROWS);
         for (const row of tap.rows) {
           expect(row.looks.length, `${run.occasion} tap ${tap.n} / ${row.title}`).toBeGreaterThanOrEqual(row.relaxed ? 1 : ROW_MIN);
@@ -156,6 +176,7 @@ describe("six Re-dresses on the snapshot closet, every chapter", () => {
         }
       }
     }
+    expect(full, "chapters with a full week row").toBeGreaterThan(0);
   });
 
   it("every allowed piece appears at least once within the first five taps (look-alikes as one piece)", () => {
@@ -246,7 +267,7 @@ describe("six Re-dresses on the snapshot closet, every chapter", () => {
         if (jackets) expect(suede, `${run.occasion} tap ${tap.n}: ${suede} brown suede of ${jackets} jackets`).toBeLessThanOrEqual(Math.floor(jackets * SUEDE_SHARE));
       }
     }
-    expect(colorFamily(BY_ID.get("x_jkt_navy_chore")!)).toBe("blue");
+    expect(colorFamily(BY_ID.get(NAVY_CAMP_SHIRT)!)).toBe("blue");
   });
 
   it("the plain rows carry their own titles and the stored themes keep theirs", () => {

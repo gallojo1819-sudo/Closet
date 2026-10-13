@@ -1,11 +1,16 @@
 /**
  * Refresh the test snapshot of the live closet (src/lib/__fixtures__/engine-garments.json)
- * from Supabase. READ-ONLY: one select on closet_meta, nothing else; no table or key in
- * closet.v6 / closet_meta is ever written.
+ * from Supabase, or from an export of the closet_meta row kept outside the repo. READ-ONLY:
+ * one select on closet_meta (none at all with --from-file), nothing else; no table or key in
+ * closet.v6 / closet_meta is ever written, and the only file written is the fixture.
  *
  *   npm run snapshot:refresh          rewrite engine-garments.json from the account
  *   npm run snapshot:check            compare the live piece count with the snapshot, write nothing
- *   npx tsx scripts/refresh-closet-snapshot.ts [--check]
+ *   npx tsx scripts/refresh-closet-snapshot.ts [--check] [--from-file <path>]
+ *
+ * --from-file <path> reads the export instead of Supabase (no network, no env): a JSON file
+ * holding the closet_meta rows (`[{ user_id, garments }]`), one row, or the garments array.
+ * The export itself stays outside the repo; only the stripped pieces land in the fixture.
  *
  * Env (process.env only; nothing is printed or stored):
  *   url   VITE_SUPABASE_URL | SUPABASE_URL | NEXT_PUBLIC_SUPABASE_URL
@@ -15,14 +20,14 @@
  *   the caller, or use the service-role key with the owner's id (CLOSET_USER_ID |
  *   SUPABASE_USER_ID) when more than one closet row is visible.
  *
- * The read mirrors the app: closet_meta.garments (rowToCloud in src/lib/cloud/commit.ts drops
+ * Both reads mirror the app: closet_meta.garments (rowToCloud in src/lib/cloud/commit.ts drops
  * tombstones, accountPool in cloud/merge.ts drops demo, livePool in rack.ts drops archived).
  * The repo is public, so the pieces are stripped the way the fixture already is: real opaque
  * ids (the house, jacket and colour rule JSON key on them), a name built from colour, material
  * and subtype, empty brand, notes and wear dates, a fixed createdAt.
  *
- * redress-extra.json is NOT refreshed: its fifteen `x_*` pieces are hand-drafted test pieces
- * that are not in the account.
+ * The fixture is the whole test closet: every piece in it is in the account (the fifteen
+ * hand-drafted `x_*` stand-ins that used to sit in redress-extra.json are gone).
  *
  * After a refresh, engine-snapshot.json (pinned engine outputs on the old pieces) must be
  * re-recorded from the base tree with src/lib/__fixtures__/record-engine-snapshot.ts.
@@ -33,7 +38,6 @@ import { pathToFileURL } from "node:url";
 import { CATEGORIES, type Category, type Garment, type Tuck } from "../src/lib/types.ts";
 
 export const SNAPSHOT_URL = new URL("../src/lib/__fixtures__/engine-garments.json", import.meta.url);
-export const EXTRA_URL = new URL("../src/lib/__fixtures__/redress-extra.json", import.meta.url);
 
 export const URL_NAMES = ["VITE_SUPABASE_URL", "SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"] as const;
 export const KEY_NAMES = [
@@ -176,6 +180,46 @@ export type LiveCloset = {
   archived: number;
 };
 
+/** The stored array read the way the app does, each live piece stripped, plus what was left out. */
+export function closetFromStored(stored: unknown): LiveCloset {
+  const rows = Array.isArray(stored) ? stored : [];
+  const typed = rows.filter((g): g is StoredGarment => Boolean(g) && typeof g === "object");
+  return {
+    pieces: liveGarments(stored).map(stripGarment),
+    stored: typed.length,
+    tombstones: typed.filter((g) => g.tombstone === true).length,
+    demo: typed.filter((g) => g.tombstone !== true && g.demo === true).length,
+    archived: typed.filter((g) => g.tombstone !== true && g.demo !== true && g.archived === true).length,
+  };
+}
+
+/**
+ * The garments array inside an export: a list of closet_meta rows, one row, or the array
+ * itself. Throws when there is not exactly one closet row.
+ */
+export function exportGarments(parsed: unknown): unknown[] {
+  const isRow = (x: unknown): x is { garments: unknown } =>
+    Boolean(x) && typeof x === "object" && !Array.isArray(x) && "garments" in (x as object);
+  if (isRow(parsed)) return Array.isArray(parsed.garments) ? parsed.garments : [];
+  if (!Array.isArray(parsed)) throw new Error("The export is neither a closet_meta row list nor a garments array.");
+  if (parsed.length && parsed.every(isRow)) {
+    if (parsed.length > 1) throw new Error(`${parsed.length} closet rows are in the export; keep the owner's row only.`);
+    return Array.isArray(parsed[0]!.garments) ? parsed[0]!.garments : [];
+  }
+  return parsed;
+}
+
+/** The export file read and reduced like the live row. No network; nothing but the path is reported. */
+export function readExportCloset(path: string): LiveCloset {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
+  } catch (e) {
+    throw new Error(`Could not read the export at ${path}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  return closetFromStored(exportGarments(parsed));
+}
+
 /** One select on closet_meta, as the caller the env describes. Throws with a plain message; never echoes env. */
 export async function fetchLiveCloset(env: Extract<SnapshotEnv, { ok: true }>): Promise<LiveCloset> {
   const sb = createClient(env.url, env.key, {
@@ -196,49 +240,64 @@ export async function fetchLiveCloset(env: Extract<SnapshotEnv, { ok: true }>): 
   if (rows.length > 1) {
     throw new Error(`${rows.length} closet rows are visible; set ${USER_NAMES.join(" | ")} to pick the owner's.`);
   }
-  const stored = Array.isArray(rows[0]?.garments) ? (rows[0]!.garments as unknown[]) : [];
-  const typed = stored.filter((g): g is StoredGarment => Boolean(g) && typeof g === "object");
-  const live = liveGarments(stored);
-  return {
-    pieces: live.map(stripGarment),
-    stored: typed.length,
-    tombstones: typed.filter((g) => g.tombstone === true).length,
-    demo: typed.filter((g) => g.tombstone !== true && g.demo === true).length,
-    archived: typed.filter((g) => g.tombstone !== true && g.demo !== true && g.archived === true).length,
-  };
+  return closetFromStored(Array.isArray(rows[0]?.garments) ? rows[0]!.garments : []);
 }
 
 function usage(): string {
-  return "usage: refresh-closet-snapshot.ts [--check]\n  --check  compare the live piece count with the snapshot and write nothing";
+  return [
+    "usage: refresh-closet-snapshot.ts [--check] [--from-file <path>]",
+    "  --check             compare the live piece count with the snapshot and write nothing",
+    "  --from-file <path>  read an export of the closet_meta row (kept outside the repo) instead of Supabase",
+  ].join("\n");
+}
+
+export type Args = { check: boolean; fromFile?: string };
+
+/** The flags, or a message for the usage error. */
+export function parseArgs(argv: string[]): Args | { error: string } {
+  const args: Args = { check: false };
+  for (let i = 0; i < argv.length; i += 1) {
+    const flag = argv[i]!;
+    if (flag === "--check") args.check = true;
+    else if (flag === "--from-file") {
+      const path = argv[i + 1];
+      if (!path || path.startsWith("--")) return { error: "--from-file needs a path" };
+      args.fromFile = path;
+      i += 1;
+    } else return { error: `unknown argument ${flag}` };
+  }
+  return args;
 }
 
 async function main(argv: string[]): Promise<number> {
-  const flags = new Set(argv);
-  if (flags.has("--help") || flags.has("-h")) {
+  if (argv.includes("--help") || argv.includes("-h")) {
     console.log(usage());
     return 0;
   }
-  for (const flag of flags) {
-    if (flag !== "--check") {
-      console.error(`unknown argument ${flag}\n${usage()}`);
-      return 2;
-    }
-  }
-  const check = flags.has("--check");
-  const env = readSnapshotEnv();
-  if (!env.ok) {
-    console.error(env.message);
+  const args = parseArgs(argv);
+  if ("error" in args) {
+    console.error(`${args.error}\n${usage()}`);
     return 2;
   }
-  const role = env.keyName === "SUPABASE_SERVICE_ROLE_KEY" ? "service role" : "anon";
-  const as = env.token ? "as the token's user" : env.userId ? "filtered to the given user id" : "as the key alone";
-  console.log(`reading closet_meta with ${env.urlName} + ${env.keyName} (${role}), ${as}`);
+  const check = args.check;
 
   const snapshot = readSnapshot();
-  const extras = readSnapshot(EXTRA_URL);
   let live: LiveCloset;
   try {
-    live = await fetchLiveCloset(env);
+    if (args.fromFile) {
+      console.log(`reading the export at ${args.fromFile} (no network)`);
+      live = readExportCloset(args.fromFile);
+    } else {
+      const env = readSnapshotEnv();
+      if (!env.ok) {
+        console.error(env.message);
+        return 2;
+      }
+      const role = env.keyName === "SUPABASE_SERVICE_ROLE_KEY" ? "service role" : "anon";
+      const as = env.token ? "as the token's user" : env.userId ? "filtered to the given user id" : "as the key alone";
+      console.log(`reading closet_meta with ${env.urlName} + ${env.keyName} (${role}), ${as}`);
+      live = await fetchLiveCloset(env);
+    }
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e));
     console.error("Nothing was written.");
@@ -247,7 +306,7 @@ async function main(argv: string[]): Promise<number> {
   console.log(
     `live: ${live.pieces.length} pieces (${live.stored} stored rows: ${live.tombstones} tombstones, ${live.demo} demo, ${live.archived} archived)`,
   );
-  console.log(`snapshot: ${snapshot.length} pieces in engine-garments.json (+ ${extras.length} hand-drafted in redress-extra.json, not refreshed)`);
+  console.log(`snapshot: ${snapshot.length} pieces in engine-garments.json`);
 
   const snapIds = new Set(snapshot.map((g) => g.id));
   const liveIds = new Set(live.pieces.map((g) => g.id));

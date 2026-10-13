@@ -1,5 +1,5 @@
 /**
- * Equivalence run for the engine speed work. 142 stripped pieces (engine-garments.json:
+ * Equivalence run for the engine speed work. The stripped live closet (engine-garments.json:
  * real ids, which the rule JSON keys on; names built from colour, material and subtype;
  * no brand, notes or wear dates), clock frozen,
  * same call order every time (the matrix counts jackets across builds).

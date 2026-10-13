@@ -1,5 +1,5 @@
 /**
- * Cold/warm timings on the 142-piece fixture (engine fields only, no real names or brands). One measurement per process so module caches start cold.
+ * Cold/warm timings on the live-closet fixture (engine fields only, no real names or brands). One measurement per process so module caches start cold.
  * node --experimental-strip-types src/lib/__fixtures__/bench-engine.ts matrix|row-weekday|row-weekend|week|ways
  */
 import { engineGarments as garments } from "./engine-run.ts";

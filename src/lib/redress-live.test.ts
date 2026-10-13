@@ -1,5 +1,5 @@
 /**
- * Redress on the live closet: the 142-piece fixture is the owner's closet (brands stripped),
+ * Redress on the live closet: the snapshot fixture is the owner's closet (brands stripped),
  * and it stores look-alikes apart: four "white leather sneakers", four brown suede jackets, six
  * beige knit sweaters, three light blue denim jeans. The live page showed white sneakers three
  * or four times a page, the brown suede jacket three times, and lost a row on the last tap.
@@ -11,7 +11,6 @@
  * piece in fall) and the jacket rules (a jacket where the day or the theme asks) hold on every
  * card.
  */
-import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   isJacketWay,
@@ -34,8 +33,9 @@ import { lookFitsSeason } from "./season.ts";
 import { isBrownSuedeOuter } from "./style.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
+import { LIVE_SNAPSHOT_COUNT, liveSnapshot } from "./__fixtures__/snapshot.ts";
 
-const CLOSET = JSON.parse(readFileSync(new URL("./__fixtures__/engine-garments.json", import.meta.url), "utf8")) as Garment[];
+const CLOSET: Garment[] = liveSnapshot;
 const BY_ID = new Map(CLOSET.map((g) => [g.id, g]));
 const ALIKE = new Map(CLOSET.map((g) => [g.id, twinKey(g)]));
 const NOW = new Date("2026-10-09T15:00:00.000Z");
@@ -153,7 +153,7 @@ afterAll(() => {
 
 describe("the live closet", () => {
   it("stores look-alike pieces apart: four white leather sneakers, four brown suede jackets", () => {
-    expect(CLOSET.length).toBe(142);
+    expect(CLOSET.length).toBe(LIVE_SNAPSHOT_COUNT);
     const groups = new Map<string, Garment[]>();
     for (const g of CLOSET) groups.set(twinKey(g), [...(groups.get(twinKey(g)) ?? []), g]);
     expect(groups.get(WHITE_SNEAKERS)!.map((g) => g.name)).toEqual(Array(4).fill("white leather sneakers"));

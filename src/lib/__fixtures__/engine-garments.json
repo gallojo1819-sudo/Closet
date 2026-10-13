@@ -1,11 +1,117 @@
 [
  {
-  "id": "g_oimadifuvalb",
-  "name": "cream cotton polo",
-  "category": "top",
-  "subtype": "polo",
+  "id": "g_01xaga54r12h",
+  "name": "white leather sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "white",
+   "blue"
+  ],
+  "material": "leather",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_08shegj8gqie",
+  "name": "grey suede sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "grey",
+   "white",
+   "cream"
+  ],
+  "material": "suede",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_0pfc8ytc1sbb",
+  "name": "light blue cotton trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "light blue",
+   "cream"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular",
+  "tuck": "either"
+ },
+ {
+  "id": "g_0re8nrx2mpdy",
+  "name": "cream linen trousers",
+  "category": "bottom",
+  "subtype": "trousers",
   "colors": [
    "cream"
+  ],
+  "material": "linen",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_1gb6slz8h71n",
+  "name": "cream cotton button-up",
+  "category": "top",
+  "subtype": "button-up",
+  "colors": [
+   "cream",
+   "blue"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_1khiworawkt7",
+  "name": "light blue cotton quarter-zip sweatshirt",
+  "category": "top",
+  "subtype": "quarter-zip sweatshirt",
+  "colors": [
+   "light blue"
   ],
   "material": "cotton",
   "brand": "",
@@ -17,41 +123,17 @@
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular",
-  "tuck": "either"
+  "fit": "relaxed"
  },
  {
-  "id": "g_j4qu90fgv347",
-  "name": "light blue flannel shirt",
-  "category": "top",
-  "subtype": "flannel shirt",
+  "id": "g_1pg9y05mlkek",
+  "name": "brown suede field jacket",
+  "category": "outerwear",
+  "subtype": "field jacket",
   "colors": [
-   "light blue",
-   "cream"
+   "brown"
   ],
-  "material": "flannel",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular",
-  "tuck": "either"
- },
- {
-  "id": "g_v3ovns4bv344",
-  "name": "navy corduroy trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "navy",
-   "black"
-  ],
-  "material": "corduroy",
+  "material": "suede",
   "brand": "",
   "notes": "",
   "formality": 3,
@@ -61,29 +143,6 @@
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular",
-  "tuck": "either"
- },
- {
-  "id": "g_sb0mc7s7v346",
-  "name": "olive cotton field jacket",
-  "category": "outerwear",
-  "subtype": "field jacket",
-  "colors": [
-   "olive",
-   "chocolate"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular",
   "tuck": "either"
  },
  {
@@ -109,77 +168,12 @@
   "tuck": "either"
  },
  {
-  "id": "g_zzrq3j5n2njk",
-  "name": "pink cotton dress shirt",
+  "id": "g_21b6d3qcohmu",
+  "name": "brown cotton button-down shirt",
   "category": "top",
-  "subtype": "dress shirt",
+  "subtype": "button-down shirt",
   "colors": [
-   "pink",
-   "cream"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 4,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "slim",
-  "tuck": "in"
- },
- {
-  "id": "g_x1vivoqz2ixd",
-  "name": "maroon/brown wool trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "maroon/brown"
-  ],
-  "material": "wool",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular",
-  "tuck": "either"
- },
- {
-  "id": "g_m6ri2fgg2hmd",
-  "name": "light blue woven trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "light blue",
-   "cream"
-  ],
-  "material": "woven",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular",
-  "tuck": "either"
- },
- {
-  "id": "g_mq1ob9uc1npn",
-  "name": "rust cotton shirt",
-  "category": "top",
-  "subtype": "shirt",
-  "colors": [
-   "rust",
+   "brown",
    "cream"
   ],
   "material": "cotton",
@@ -192,39 +186,18 @@
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular",
-  "tuck": "in"
+  "fit": "regular"
  },
  {
-  "id": "g_0pfc8ytc1sbb",
-  "name": "light blue cotton trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "light blue",
-   "cream"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular",
-  "tuck": "either"
- },
- {
-  "id": "g_teatot7o1lst",
-  "name": "grey flannel shirt",
+  "id": "g_2b6fao81vqrs",
+  "name": "blue flannel shirt",
   "category": "top",
-  "subtype": "shirt",
+  "subtype": "flannel shirt",
   "colors": [
+   "blue",
+   "white",
    "grey",
-   "cream"
+   "tan"
   ],
   "material": "flannel",
   "brand": "",
@@ -236,16 +209,342 @@
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular",
-  "tuck": "in"
+  "fit": "regular"
  },
  {
-  "id": "g_q3e47jxb10wb",
-  "name": "charcoal cotton button-up",
-  "category": "top",
-  "subtype": "button-up",
+  "id": "g_2djvq6l9qxbb",
+  "name": "navy leather loafers",
+  "category": "footwear",
+  "subtype": "loafers",
   "colors": [
-   "charcoal",
+   "navy"
+  ],
+  "material": "leather",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_2rtuat7aheik",
+  "name": "light blue cotton dress shirt",
+  "category": "top",
+  "subtype": "dress shirt",
+  "colors": [
+   "light blue"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 4,
+  "warmth": 1,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_2wf48xbqlgcv",
+  "name": "white leather sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "white",
+   "blue"
+  ],
+  "material": "leather",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_3821acdhupu9",
+  "name": "cream ribbed knit half-zip sweater",
+  "category": "top",
+  "subtype": "half-zip sweater",
+  "colors": [
+   "cream"
+  ],
+  "material": "ribbed knit",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_3qjmw7n4wj2a",
+  "name": "navy wool jacket",
+  "category": "outerwear",
+  "subtype": "jacket",
+  "colors": [
+   "navy",
+   "brown",
+   "beige"
+  ],
+  "material": "wool",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_491tzu2suiv7",
+  "name": "blue denim jacket",
+  "category": "outerwear",
+  "subtype": "jacket",
+  "colors": [
+   "blue",
+   "cream",
+   "beige"
+  ],
+  "material": "denim",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_5g4fqg77s4rw",
+  "name": "black leather loafers",
+  "category": "footwear",
+  "subtype": "loafers",
+  "colors": [
+   "black"
+  ],
+  "material": "leather",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_5gfabeezh485",
+  "name": "white jacket",
+  "category": "outerwear",
+  "subtype": "jacket",
+  "colors": [
+   "white",
+   "beige"
+  ],
+  "material": "",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_5josnvyoi4z9",
+  "name": "navy wool blazer",
+  "category": "outerwear",
+  "subtype": "blazer",
+  "colors": [
+   "navy"
+  ],
+  "material": "wool",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_66xj06nllgf2",
+  "name": "sage trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "sage"
+  ],
+  "material": "",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_6lolc7ma0mk8",
+  "name": "charcoal cotton shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "charcoal"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_6qz38nwsrupx",
+  "name": "cream cotton sweatshirt",
+  "category": "top",
+  "subtype": "sweatshirt",
+  "colors": [
+   "cream",
+   "white"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_6uhygeskozw8",
+  "name": "black cotton hoodie",
+  "category": "top",
+  "subtype": "hoodie",
+  "colors": [
+   "black",
+   "white"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_6xkkzn06sbdm",
+  "name": "beige cotton trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "beige"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_7iyagp6doqqz",
+  "name": "black cotton hoodie",
+  "category": "top",
+  "subtype": "hoodie",
+  "colors": [
+   "black"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_7z48xpoqh5tx",
+  "name": "grey shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "grey"
+  ],
+  "material": "",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_80sz9s08xpw1",
+  "name": "cream cotton trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
    "cream"
   ],
   "material": "cotton",
@@ -258,8 +557,209 @@
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular",
-  "tuck": "in"
+  "fit": "regular"
+ },
+ {
+  "id": "g_8m17f0l0tss9",
+  "name": "light blue fleece half-zip pullover",
+  "category": "top",
+  "subtype": "half-zip pullover",
+  "colors": [
+   "light blue"
+  ],
+  "material": "fleece",
+  "brand": "",
+  "notes": "",
+  "formality": 1,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_8nrtffa2s13s",
+  "name": "brown suede loafers",
+  "category": "footwear",
+  "subtype": "loafers",
+  "colors": [
+   "brown"
+  ],
+  "material": "suede",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_8od90wk1sl9k",
+  "name": "brown suede bomber jacket",
+  "category": "outerwear",
+  "subtype": "bomber jacket",
+  "colors": [
+   "brown",
+   "black"
+  ],
+  "material": "suede",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_8qqqzpwxuwti",
+  "name": "brown cotton chore jacket",
+  "category": "outerwear",
+  "subtype": "chore jacket",
+  "colors": [
+   "brown"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_8t9o3g4r78c2",
+  "name": "light blue denim jeans",
+  "category": "bottom",
+  "subtype": "jeans",
+  "colors": [
+   "light blue"
+  ],
+  "material": "denim",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_8ukg5mi9r3fc",
+  "name": "brown suede loafers",
+  "category": "footwear",
+  "subtype": "loafers",
+  "colors": [
+   "brown"
+  ],
+  "material": "suede",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_939onlwfrg9j",
+  "name": "light blue polo",
+  "category": "top",
+  "subtype": "polo",
+  "colors": [
+   "light blue"
+  ],
+  "material": "",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_98p2sivflrxg",
+  "name": "ivory wool blazer",
+  "category": "outerwear",
+  "subtype": "blazer",
+  "colors": [
+   "ivory"
+  ],
+  "material": "wool",
+  "brand": "",
+  "notes": "",
+  "formality": 4,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_9eip7wdtsxzd",
+  "name": "yellow knit polo",
+  "category": "top",
+  "subtype": "polo",
+  "colors": [
+   "yellow"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_9q0j6ksxlgcv",
+  "name": "white leather sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "white",
+   "navy"
+  ],
+  "material": "leather",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
  },
  {
   "id": "g_9t24uvtl10wd",
@@ -284,35 +784,12 @@
   "tuck": "in"
  },
  {
-  "id": "g_m7bg5j5z10wc",
-  "name": "light blue cotton henley",
+  "id": "g_ap5v0s67pg9d",
+  "name": "brown cotton shirt",
   "category": "top",
-  "subtype": "henley",
+  "subtype": "shirt",
   "colors": [
-   "light blue",
-   "cream"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed",
-  "tuck": "either"
- },
- {
-  "id": "g_21b6d3qcohmu",
-  "name": "brown cotton button-down shirt",
-  "category": "top",
-  "subtype": "button-down shirt",
-  "colors": [
-   "brown",
-   "cream"
+   "brown"
   ],
   "material": "cotton",
   "brand": "",
@@ -352,6 +829,417 @@
   "fit": "regular"
  },
  {
+  "id": "g_b4zsf3dfrhdv",
+  "name": "brown leather boots",
+  "category": "footwear",
+  "subtype": "boots",
+  "colors": [
+   "brown"
+  ],
+  "material": "leather",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_b82609ex2nd7",
+  "name": "navy camp shirt",
+  "category": "top",
+  "subtype": "camp shirt",
+  "colors": [
+   "navy"
+  ],
+  "material": "",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_b8n14erlispm",
+  "name": "grey suede sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "grey",
+   "cream",
+   "beige"
+  ],
+  "material": "suede",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_bee1dg9rnfe5",
+  "name": "grey wool trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "grey"
+  ],
+  "material": "wool",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_bq9qnaa1vkon",
+  "name": "brown knit polo",
+  "category": "top",
+  "subtype": "polo",
+  "colors": [
+   "brown"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_btael28aebgu",
+  "name": "beige denim jeans",
+  "category": "bottom",
+  "subtype": "jeans",
+  "colors": [
+   "beige",
+   "light blue"
+  ],
+  "material": "denim",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_c5tgp57bcuub",
+  "name": "other",
+  "category": "other",
+  "subtype": "",
+  "colors": [],
+  "material": "",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_cfm8n594jea7",
+  "name": "burgundy corduroy pants",
+  "category": "bottom",
+  "subtype": "pants",
+  "colors": [
+   "burgundy"
+  ],
+  "material": "corduroy",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "slim"
+ },
+ {
+  "id": "g_d1awqw83gd3c",
+  "name": "navy knit sweater",
+  "category": "top",
+  "subtype": "sweater",
+  "colors": [
+   "navy",
+   "red"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_dk92xcrfjmq8",
+  "name": "white cotton polo",
+  "category": "top",
+  "subtype": "polo",
+  "colors": [
+   "white"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_dscxzk8inlx2",
+  "name": "navy wool trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "navy"
+  ],
+  "material": "wool",
+  "brand": "",
+  "notes": "",
+  "formality": 4,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_dsqnx6ckt81v",
+  "name": "beige cotton quarter-zip",
+  "category": "top",
+  "subtype": "quarter-zip",
+  "colors": [
+   "beige"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_dzsh3qh7v6sb",
+  "name": "navy blue/brown. match original denim trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "navy blue/brown. match original"
+  ],
+  "material": "denim",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [
+   "summer",
+   "spring",
+   "fall",
+   "winter"
+  ],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_e0tjgy0tzq08",
+  "name": "olive linen shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "olive"
+  ],
+  "material": "linen",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_e4y3rjpn57gj",
+  "name": "black shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "black",
+   "white"
+  ],
+  "material": "",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_ed0ga2v0q2yo",
+  "name": "beige cotton jacket",
+  "category": "outerwear",
+  "subtype": "jacket",
+  "colors": [
+   "beige",
+   "brown"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_ef0u3ljnwa09",
+  "name": "grey wool vest",
+  "category": "outerwear",
+  "subtype": "vest",
+  "colors": [
+   "grey"
+  ],
+  "material": "wool",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 4,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_f7a1ienioi31",
+  "name": "navy wool baseball cap",
+  "category": "accessory",
+  "subtype": "baseball cap",
+  "colors": [
+   "navy",
+   "cream"
+  ],
+  "material": "wool",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_fvc535elt23d",
+  "name": "light blue denim jeans",
+  "category": "bottom",
+  "subtype": "jeans",
+  "colors": [
+   "light blue"
+  ],
+  "material": "denim",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_fzekzikyrf50",
+  "name": "navy suede sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "navy",
+   "white"
+  ],
+  "material": "suede",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
   "id": "g_gp53xkrmem9b",
   "name": "grey wool sweater",
   "category": "top",
@@ -373,15 +1261,77 @@
   "fit": "relaxed"
  },
  {
-  "id": "g_vtbi91noucd3",
-  "name": "light blue denim jacket",
-  "category": "outerwear",
-  "subtype": "jacket",
+  "id": "g_gyc76ur3ikb9",
+  "name": "beige trousers",
+  "category": "bottom",
+  "subtype": "trousers",
   "colors": [
-   "light blue",
-   "cream"
+   "beige"
   ],
-  "material": "denim",
+  "material": "",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_h7dy95xdgnh8",
+  "name": "black cotton hoodie",
+  "category": "top",
+  "subtype": "hoodie",
+  "colors": [
+   "black"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 1,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_hhbz4ghpjmd1",
+  "name": "navy knit zip sweater",
+  "category": "outerwear",
+  "subtype": "zip sweater",
+  "colors": [
+   "navy",
+   "blue",
+   "black",
+   "white"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_hslm9n4nmc79",
+  "name": "beige cotton sweatshirt",
+  "category": "top",
+  "subtype": "sweatshirt",
+  "colors": [
+   "beige"
+  ],
+  "material": "cotton",
   "brand": "",
   "notes": "",
   "formality": 2,
@@ -394,12 +1344,12 @@
   "fit": "regular"
  },
  {
-  "id": "g_7z48xpoqh5tx",
-  "name": "grey shirt",
+  "id": "g_i2191l774tad",
+  "name": "brown shirt",
   "category": "top",
   "subtype": "shirt",
   "colors": [
-   "grey"
+   "brown"
   ],
   "material": "",
   "brand": "",
@@ -411,7 +1361,91 @@
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_i80zb0yen5gn",
+  "name": "green cotton shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "green",
+   "white"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
   "fit": "regular"
+ },
+ {
+  "id": "g_j1n1vh1wvbo4",
+  "name": "grey fleece half-zip sweatshirt",
+  "category": "top",
+  "subtype": "half-zip sweatshirt",
+  "colors": [
+   "grey",
+   "pink"
+  ],
+  "material": "fleece",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 4,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_j2id379jo424",
+  "name": "blue knit zip jacket",
+  "category": "outerwear",
+  "subtype": "zip jacket",
+  "colors": [
+   "blue"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_j4qu90fgv347",
+  "name": "light blue flannel shirt",
+  "category": "top",
+  "subtype": "flannel shirt",
+  "colors": [
+   "light blue",
+   "cream"
+  ],
+  "material": "flannel",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular",
+  "tuck": "either"
  },
  {
   "id": "g_j5og5jmzh5tx",
@@ -435,201 +1469,17 @@
   "fit": "regular"
  },
  {
-  "id": "g_salzdhuswyd3",
-  "name": "brown cotton sweater",
-  "category": "top",
-  "subtype": "sweater",
-  "colors": [
-   "brown"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_80sz9s08xpw1",
-  "name": "cream cotton trousers",
+  "id": "g_j994h3k9l8ot",
+  "name": "cream denim jeans",
   "category": "bottom",
-  "subtype": "trousers",
+  "subtype": "jeans",
   "colors": [
    "cream"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_xc4gr022xmvm",
-  "name": "cream knit cardigan",
-  "category": "outerwear",
-  "subtype": "cardigan",
-  "colors": [
-   "cream"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 4,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_yo7mwga1xi3m",
-  "name": "light blue denim shirt",
-  "category": "top",
-  "subtype": "shirt",
-  "colors": [
-   "light blue"
   ],
   "material": "denim",
   "brand": "",
   "notes": "",
   "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_mqjsmpqgwwvm",
-  "name": "cream knit sweater",
-  "category": "top",
-  "subtype": "sweater",
-  "colors": [
-   "cream",
-   "navy",
-   "green"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_1khiworawkt7",
-  "name": "light blue cotton quarter-zip sweatshirt",
-  "category": "top",
-  "subtype": "quarter-zip sweatshirt",
-  "colors": [
-   "light blue"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_ef0u3ljnwa09",
-  "name": "grey wool vest",
-  "category": "outerwear",
-  "subtype": "vest",
-  "colors": [
-   "grey"
-  ],
-  "material": "wool",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 4,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_3qjmw7n4wj2a",
-  "name": "navy wool jacket",
-  "category": "outerwear",
-  "subtype": "jacket",
-  "colors": [
-   "navy",
-   "brown",
-   "beige"
-  ],
-  "material": "wool",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_lg5qftegw0qo",
-  "name": "brown cotton pants",
-  "category": "bottom",
-  "subtype": "pants",
-  "colors": [
-   "brown"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_ttw2m97ww8z5",
-  "name": "pink cotton polo",
-  "category": "top",
-  "subtype": "polo",
-  "colors": [
-   "pink"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
   "warmth": 2,
   "seasons": [],
   "demo": false,
@@ -659,34 +1509,15 @@
   "fit": "regular"
  },
  {
-  "id": "g_kp1ps7qww1ar",
-  "name": "beige cotton sweatshirt",
+  "id": "g_jkj2nzfzpf1o",
+  "name": "black polyester bowling shirt",
   "category": "top",
-  "subtype": "sweatshirt",
+  "subtype": "bowling shirt",
   "colors": [
-   "beige"
+   "black",
+   "white"
   ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_s5d2t696vryw",
-  "name": "cream cotton trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "cream"
-  ],
-  "material": "cotton",
+  "material": "polyester",
   "brand": "",
   "notes": "",
   "formality": 2,
@@ -699,213 +1530,18 @@
   "fit": "regular"
  },
  {
-  "id": "g_bq9qnaa1vkon",
-  "name": "brown knit polo",
-  "category": "top",
-  "subtype": "polo",
-  "colors": [
-   "brown"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_2b6fao81vqrs",
-  "name": "blue flannel shirt",
-  "category": "top",
-  "subtype": "flannel shirt",
-  "colors": [
-   "blue",
-   "white",
-   "grey",
-   "tan"
-  ],
-  "material": "flannel",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_v5ov6nhyvlun",
-  "name": "silver metal sunglasses",
-  "category": "accessory",
-  "subtype": "sunglasses",
-  "colors": [
-   "silver",
-   "grey",
-   "black"
-  ],
-  "material": "metal",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 1,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_dzsh3qh7v6sb",
-  "name": "navy/brown denim trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "navy/brown"
-  ],
-  "material": "denim",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [
-   "summer",
-   "spring",
-   "fall",
-   "winter"
-  ],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_j1n1vh1wvbo4",
-  "name": "grey fleece half-zip sweatshirt",
-  "category": "top",
-  "subtype": "half-zip sweatshirt",
-  "colors": [
-   "grey",
-   "pink"
-  ],
-  "material": "fleece",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 4,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_n955igwlvcl4",
-  "name": "beige knit sweater",
-  "category": "top",
-  "subtype": "sweater",
-  "colors": [
-   "beige",
-   "tan"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_lqf1mrlsure9",
-  "name": "ivory cotton camp shirt",
-  "category": "top",
-  "subtype": "camp shirt",
-  "colors": [
-   "ivory",
-   "light blue"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_8qqqzpwxuwti",
-  "name": "brown cotton chore jacket",
+  "id": "g_juk45cokjxxy",
+  "name": "taupe wool blazer",
   "category": "outerwear",
-  "subtype": "chore jacket",
+  "subtype": "blazer",
   "colors": [
-   "brown"
+   "taupe"
   ],
-  "material": "cotton",
+  "material": "wool",
   "brand": "",
   "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_3821acdhupu9",
-  "name": "cream ribbed knit half-zip sweater",
-  "category": "top",
-  "subtype": "half-zip sweater",
-  "colors": [
-   "cream"
-  ],
-  "material": "ribbed knit",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_491tzu2suiv7",
-  "name": "blue denim jacket",
-  "category": "outerwear",
-  "subtype": "jacket",
-  "colors": [
-   "blue",
-   "cream",
-   "beige"
-  ],
-  "material": "denim",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
+  "formality": 3,
+  "warmth": 2,
   "seasons": [],
   "demo": false,
   "wornOn": [],
@@ -935,18 +1571,59 @@
   "fit": "relaxed"
  },
  {
-  "id": "g_x4adkv9zu9yu",
-  "name": "navy/black corduroy jacket",
-  "category": "outerwear",
-  "subtype": "jacket",
+  "id": "g_k75fdfdsnak0",
+  "name": "light grey trousers",
+  "category": "bottom",
+  "subtype": "trousers",
   "colors": [
-   "navy/black"
+   "light grey"
   ],
-  "material": "corduroy",
+  "material": "",
   "brand": "",
   "notes": "",
   "formality": 3,
-  "warmth": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_kde45hmnqie9",
+  "name": "light blue leather sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "light blue"
+  ],
+  "material": "leather",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_kh5r3xy9r1i5",
+  "name": "light blue cotton shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "light blue",
+   "white"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
   "seasons": [],
   "demo": false,
   "wornOn": [],
@@ -975,94 +1652,10 @@
   "fit": "regular"
  },
  {
-  "id": "g_8m17f0l0tss9",
-  "name": "light blue fleece half-zip pullover",
+  "id": "g_kp1ps7qww1ar",
+  "name": "beige cotton sweatshirt",
   "category": "top",
-  "subtype": "half-zip pullover",
-  "colors": [
-   "light blue"
-  ],
-  "material": "fleece",
-  "brand": "",
-  "notes": "",
-  "formality": 1,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_vzqle7zdtpis",
-  "name": "blue knit sweater",
-  "category": "top",
-  "subtype": "sweater",
-  "colors": [
-   "blue",
-   "ivory"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_o739106dt8ym",
-  "name": "cream fleece pullover",
-  "category": "top",
-  "subtype": "fleece pullover",
-  "colors": [
-   "cream",
-   "navy",
-   "blue",
-   "burgundy"
-  ],
-  "material": "fleece",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 4,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_nffskb5hta4l",
-  "name": "cream ribbed knit pants",
-  "category": "bottom",
-  "subtype": "pants",
-  "colors": [
-   "cream"
-  ],
-  "material": "ribbed knit",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "slim"
- },
- {
-  "id": "g_dsqnx6ckt81v",
-  "name": "beige cotton quarter-zip",
-  "category": "top",
-  "subtype": "quarter-zip",
+  "subtype": "sweatshirt",
   "colors": [
    "beige"
   ],
@@ -1076,21 +1669,21 @@
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
+  "fit": "regular"
  },
  {
-  "id": "g_9eip7wdtsxzd",
-  "name": "yellow knit polo",
-  "category": "top",
-  "subtype": "polo",
+  "id": "g_lad85rg9nxs3",
+  "name": "ivory woven trousers",
+  "category": "bottom",
+  "subtype": "trousers",
   "colors": [
-   "yellow"
+   "ivory"
   ],
-  "material": "knit",
+  "material": "woven",
   "brand": "",
   "notes": "",
   "formality": 3,
-  "warmth": 3,
+  "warmth": 2,
   "seasons": [],
   "demo": false,
   "wornOn": [],
@@ -1099,18 +1692,18 @@
   "fit": "regular"
  },
  {
-  "id": "g_py2swfwot1ed",
-  "name": "brown suede jacket",
-  "category": "outerwear",
-  "subtype": "jacket",
+  "id": "g_lg5qftegw0qo",
+  "name": "brown cotton pants",
+  "category": "bottom",
+  "subtype": "pants",
   "colors": [
    "brown"
   ],
-  "material": "suede",
+  "material": "cotton",
   "brand": "",
   "notes": "",
   "formality": 2,
-  "warmth": 3,
+  "warmth": 2,
   "seasons": [],
   "demo": false,
   "wornOn": [],
@@ -1119,7 +1712,28 @@
   "fit": "regular"
  },
  {
-  "id": "g_fvc535elt23d",
+  "id": "g_lqf1mrlsure9",
+  "name": "ivory cotton camp shirt",
+  "category": "top",
+  "subtype": "camp shirt",
+  "colors": [
+   "ivory",
+   "light blue"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_lxqx9egrqg14",
   "name": "light blue denim jeans",
   "category": "bottom",
   "subtype": "jeans",
@@ -1136,38 +1750,40 @@
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
+  "fit": "slim"
  },
  {
-  "id": "g_v2gxktsmsoov",
-  "name": "beige knit sweater",
-  "category": "top",
-  "subtype": "sweater",
+  "id": "g_m6ri2fgg2hmd",
+  "name": "light blue woven trousers",
+  "category": "bottom",
+  "subtype": "trousers",
   "colors": [
-   "beige",
-   "brown"
+   "light blue",
+   "cream"
   ],
-  "material": "knit",
+  "material": "woven",
   "brand": "",
   "notes": "",
   "formality": 3,
-  "warmth": 3,
+  "warmth": 2,
   "seasons": [],
   "demo": false,
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
+  "fit": "regular",
+  "tuck": "either"
  },
  {
-  "id": "g_zw51yaqdsx0q",
-  "name": "white denim jeans",
-  "category": "bottom",
-  "subtype": "jeans",
+  "id": "g_m7bg5j5z10wc",
+  "name": "light blue cotton henley",
+  "category": "top",
+  "subtype": "henley",
   "colors": [
-   "white"
+   "light blue",
+   "cream"
   ],
-  "material": "denim",
+  "material": "cotton",
   "brand": "",
   "notes": "",
   "formality": 2,
@@ -1177,62 +1793,22 @@
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "slim"
+  "fit": "relaxed",
+  "tuck": "either"
  },
  {
-  "id": "g_ri78lj9vspyj",
-  "name": "beige knit sweater",
+  "id": "g_mir3akjyhwnr",
+  "name": "light blue cotton t-shirt",
   "category": "top",
-  "subtype": "sweater",
+  "subtype": "t-shirt",
   "colors": [
-   "beige"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 4,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_8od90wk1sl9k",
-  "name": "brown suede bomber jacket",
-  "category": "outerwear",
-  "subtype": "bomber jacket",
-  "colors": [
-   "brown",
-   "black"
-  ],
-  "material": "suede",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_u1ujhidqsibg",
-  "name": "cream cotton hoodie",
-  "category": "top",
-  "subtype": "hoodie",
-  "colors": [
-   "cream"
+   "light blue"
   ],
   "material": "cotton",
   "brand": "",
   "notes": "",
-  "formality": 2,
-  "warmth": 3,
+  "formality": 1,
+  "warmth": 2,
   "seasons": [],
   "demo": false,
   "wornOn": [],
@@ -1241,18 +1817,17 @@
   "fit": "relaxed"
  },
  {
-  "id": "g_wwy9b2pusds3",
-  "name": "brown suede bomber jacket",
-  "category": "outerwear",
-  "subtype": "bomber jacket",
+  "id": "g_mjno2x20podx",
+  "name": "black fleece track pants",
+  "category": "bottom",
+  "subtype": "track pants",
   "colors": [
-   "brown",
-   "cream"
+   "black"
   ],
-  "material": "suede",
+  "material": "fleece",
   "brand": "",
   "notes": "",
-  "formality": 3,
+  "formality": 1,
   "warmth": 4,
   "seasons": [],
   "demo": false,
@@ -1285,14 +1860,101 @@
   "fit": "regular"
  },
  {
-  "id": "g_6xkkzn06sbdm",
-  "name": "beige cotton trousers",
-  "category": "bottom",
-  "subtype": "trousers",
+  "id": "g_mq1ob9uc1npn",
+  "name": "rust cotton shirt",
+  "category": "top",
+  "subtype": "shirt",
   "colors": [
-   "beige"
+   "rust",
+   "cream"
   ],
   "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular",
+  "tuck": "in"
+ },
+ {
+  "id": "g_mqjsmpqgwwvm",
+  "name": "cream knit sweater",
+  "category": "top",
+  "subtype": "sweater",
+  "colors": [
+   "cream",
+   "navy",
+   "green"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_n955igwlvcl4",
+  "name": "beige knit sweater",
+  "category": "top",
+  "subtype": "sweater",
+  "colors": [
+   "beige",
+   "tan"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_nffskb5hta4l",
+  "name": "cream ribbed knit pants",
+  "category": "bottom",
+  "subtype": "pants",
+  "colors": [
+   "cream"
+  ],
+  "material": "ribbed knit",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "slim"
+ },
+ {
+  "id": "g_nq7il0e0glnn",
+  "name": "white leather sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "white",
+   "green",
+   "beige"
+  ],
+  "material": "leather",
   "brand": "",
   "notes": "",
   "formality": 2,
@@ -1305,64 +1967,66 @@
   "fit": "regular"
  },
  {
-  "id": "g_8nrtffa2s13s",
-  "name": "brown suede loafers",
-  "category": "footwear",
-  "subtype": "loafers",
+  "id": "g_o739106dt8ym",
+  "name": "cream fleece pullover",
+  "category": "top",
+  "subtype": "fleece pullover",
   "colors": [
-   "brown"
+   "cream",
+   "navy",
+   "blue",
+   "burgundy"
   ],
-  "material": "suede",
+  "material": "fleece",
   "brand": "",
   "notes": "",
-  "formality": 3,
-  "warmth": 2,
+  "formality": 2,
+  "warmth": 4,
   "seasons": [],
   "demo": false,
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
+  "fit": "relaxed"
  },
  {
-  "id": "g_wymz2j18s6wh",
-  "name": "brown suede mules",
-  "category": "footwear",
-  "subtype": "mules",
+  "id": "g_oimadifuvalb",
+  "name": "cream cotton polo",
+  "category": "top",
+  "subtype": "polo",
   "colors": [
-   "brown"
+   "cream"
   ],
-  "material": "suede",
+  "material": "cotton",
   "brand": "",
   "notes": "",
-  "formality": 3,
-  "warmth": 2,
+  "formality": 2,
+  "warmth": 3,
   "seasons": [],
   "demo": false,
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
+  "fit": "regular",
+  "tuck": "either"
  },
  {
-  "id": "g_5g4fqg77s4rw",
-  "name": "black leather loafers",
-  "category": "footwear",
-  "subtype": "loafers",
-  "colors": [
-   "black"
-  ],
-  "material": "leather",
+  "id": "g_okvtcabq289s",
+  "name": "other",
+  "category": "other",
+  "subtype": "",
+  "colors": [],
+  "material": "",
   "brand": "",
   "notes": "",
   "formality": 3,
-  "warmth": 2,
+  "warmth": 3,
   "seasons": [],
   "demo": false,
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
+  "tuck": "either"
  },
  {
   "id": "g_om0dh5nps1ke",
@@ -1373,46 +2037,6 @@
    "brown"
   ],
   "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_xowln4uos3ug",
-  "name": "beige knit sweater",
-  "category": "top",
-  "subtype": "sweater",
-  "colors": [
-   "beige"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_pa7kfg14rtzl",
-  "name": "white cotton shirt",
-  "category": "top",
-  "subtype": "shirt",
-  "colors": [
-   "white"
-  ],
-  "material": "cotton",
   "brand": "",
   "notes": "",
   "formality": 3,
@@ -1446,19 +2070,121 @@
   "fit": "regular"
  },
  {
-  "id": "g_6qz38nwsrupx",
-  "name": "cream cotton sweatshirt",
+  "id": "g_pa7kfg14rtzl",
+  "name": "white cotton shirt",
   "category": "top",
-  "subtype": "sweatshirt",
+  "subtype": "shirt",
   "colors": [
-   "cream",
    "white"
   ],
   "material": "cotton",
   "brand": "",
   "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_py2swfwot1ed",
+  "name": "brown suede jacket",
+  "category": "outerwear",
+  "subtype": "jacket",
+  "colors": [
+   "brown"
+  ],
+  "material": "suede",
+  "brand": "",
+  "notes": "",
   "formality": 2,
   "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_q3e47jxb10wb",
+  "name": "charcoal cotton button-up",
+  "category": "top",
+  "subtype": "button-up",
+  "colors": [
+   "charcoal",
+   "cream"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular",
+  "tuck": "in"
+ },
+ {
+  "id": "g_qn51qgub6tu3",
+  "name": "maroon shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "maroon",
+   "white"
+  ],
+  "material": "",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_qnmo5yzgl50b",
+  "name": "navy cotton field jacket",
+  "category": "outerwear",
+  "subtype": "field jacket",
+  "colors": [
+   "navy"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_qrx875pbmh6n",
+  "name": "beige knit sweater",
+  "category": "top",
+  "subtype": "sweater",
+  "colors": [
+   "beige"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 4,
   "seasons": [],
   "demo": false,
   "wornOn": [],
@@ -1487,759 +2213,7 @@
   "fit": "relaxed"
  },
  {
-  "id": "g_b4zsf3dfrhdv",
-  "name": "brown leather boots",
-  "category": "footwear",
-  "subtype": "boots",
-  "colors": [
-   "brown"
-  ],
-  "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_fzekzikyrf50",
-  "name": "navy suede sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
-  "colors": [
-   "navy",
-   "white"
-  ],
-  "material": "suede",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_z8gvd1zvrcif",
-  "name": "brown knit zip sweater",
-  "category": "top",
-  "subtype": "zip sweater",
-  "colors": [
-   "brown"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_939onlwfrg9j",
-  "name": "light blue polo",
-  "category": "top",
-  "subtype": "polo",
-  "colors": [
-   "light blue"
-  ],
-  "material": "",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_01xaga54r12h",
-  "name": "white leather sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
-  "colors": [
-   "white",
-   "blue"
-  ],
-  "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_rvrs9hibr981",
-  "name": "light blue denim jeans",
-  "category": "bottom",
-  "subtype": "jeans",
-  "colors": [
-   "light blue"
-  ],
-  "material": "denim",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_8ukg5mi9r3fc",
-  "name": "brown suede loafers",
-  "category": "footwear",
-  "subtype": "loafers",
-  "colors": [
-   "brown"
-  ],
-  "material": "suede",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_kh5r3xy9r1i5",
-  "name": "light blue cotton shirt",
-  "category": "top",
-  "subtype": "shirt",
-  "colors": [
-   "light blue",
-   "white"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_2djvq6l9qxbb",
-  "name": "navy leather loafers",
-  "category": "footwear",
-  "subtype": "loafers",
-  "colors": [
-   "navy"
-  ],
-  "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_upni66uiqtgb",
-  "name": "cream leather sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
-  "colors": [
-   "cream"
-  ],
-  "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_lxqx9egrqg14",
-  "name": "light blue denim jeans",
-  "category": "bottom",
-  "subtype": "jeans",
-  "colors": [
-   "light blue"
-  ],
-  "material": "denim",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "slim"
- },
- {
-  "id": "g_rxglifsoqobm",
-  "name": "pink suede sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
-  "colors": [
-   "pink",
-   "green",
-   "white"
-  ],
-  "material": "suede",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_kde45hmnqie9",
-  "name": "light blue leather sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
-  "colors": [
-   "light blue"
-  ],
-  "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_ugyaieefqcxe",
-  "name": "white knit cardigan",
-  "category": "top",
-  "subtype": "cardigan",
-  "colors": [
-   "white"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_ed0ga2v0q2yo",
-  "name": "beige cotton jacket",
-  "category": "outerwear",
-  "subtype": "jacket",
-  "colors": [
-   "beige",
-   "brown"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_zc85ll18q9kn",
-  "name": "cream cotton shirt",
-  "category": "top",
-  "subtype": "shirt",
-  "colors": [
-   "cream",
-   "white"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_teitg9jmpwxa",
-  "name": "black wool sweater",
-  "category": "top",
-  "subtype": "sweater",
-  "colors": [
-   "black"
-  ],
-  "material": "wool",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 4,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_ap5v0s67pg9d",
-  "name": "brown cotton shirt",
-  "category": "top",
-  "subtype": "shirt",
-  "colors": [
-   "brown"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_mjno2x20podx",
-  "name": "black fleece track pants",
-  "category": "bottom",
-  "subtype": "track pants",
-  "colors": [
-   "black"
-  ],
-  "material": "fleece",
-  "brand": "",
-  "notes": "",
-  "formality": 1,
-  "warmth": 4,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_jkj2nzfzpf1o",
-  "name": "black polyester bowling shirt",
-  "category": "top",
-  "subtype": "bowling shirt",
-  "colors": [
-   "black",
-   "white"
-  ],
-  "material": "polyester",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_yae8h1k9pjm1",
-  "name": "brown leather loafers",
-  "category": "footwear",
-  "subtype": "loafers",
-  "colors": [
-   "brown"
-  ],
-  "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_u0f8e90jp3ez",
-  "name": "cream cotton shirt",
-  "category": "top",
-  "subtype": "shirt",
-  "colors": [
-   "cream"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_6uhygeskozw8",
-  "name": "black cotton hoodie",
-  "category": "top",
-  "subtype": "hoodie",
-  "colors": [
-   "black",
-   "white"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_upplq59rp8lp",
-  "name": "white cotton t-shirt",
-  "category": "top",
-  "subtype": "t-shirt",
-  "colors": [
-   "white"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 1,
-  "warmth": 1,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_xuqvrfy5ocv4",
-  "name": "olive knit zip sweater",
-  "category": "top",
-  "subtype": "zip sweater",
-  "colors": [
-   "olive"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_sxxi5soxomf3",
-  "name": "black cotton hoodie",
-  "category": "top",
-  "subtype": "hoodie",
-  "colors": [
-   "black",
-   "grey"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_7iyagp6doqqz",
-  "name": "black cotton hoodie",
-  "category": "top",
-  "subtype": "hoodie",
-  "colors": [
-   "black"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_f7a1ienioi31",
-  "name": "navy wool baseball cap",
-  "category": "accessory",
-  "subtype": "baseball cap",
-  "colors": [
-   "navy",
-   "cream"
-  ],
-  "material": "wool",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_xbt3gpjuo1p4",
-  "name": "burgundy knit sweater",
-  "category": "top",
-  "subtype": "sweater",
-  "colors": [
-   "burgundy"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_lad85rg9nxs3",
-  "name": "ivory woven trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "ivory"
-  ],
-  "material": "woven",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_j2id379jo424",
-  "name": "blue knit zip jacket",
-  "category": "outerwear",
-  "subtype": "zip jacket",
-  "colors": [
-   "blue"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_dscxzk8inlx2",
-  "name": "navy wool trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "navy"
-  ],
-  "material": "wool",
-  "brand": "",
-  "notes": "",
-  "formality": 4,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_bee1dg9rnfe5",
-  "name": "grey wool trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "grey"
-  ],
-  "material": "wool",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_k75fdfdsnak0",
-  "name": "light grey trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "light grey"
-  ],
-  "material": "",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_i80zb0yen5gn",
-  "name": "green cotton shirt",
-  "category": "top",
-  "subtype": "shirt",
-  "colors": [
-   "green",
-   "white"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_tqnnde1xmp0p",
-  "name": "mauve cotton shirt",
-  "category": "top",
-  "subtype": "shirt",
-  "colors": [
-   "mauve"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_0re8nrx2mpdy",
-  "name": "cream linen trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "cream"
-  ],
-  "material": "linen",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_qrx875pbmh6n",
+  "id": "g_ri78lj9vspyj",
   "name": "beige knit sweater",
   "category": "top",
   "subtype": "sweater",
@@ -2251,271 +2225,6 @@
   "notes": "",
   "formality": 3,
   "warmth": 4,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_2wf48xbqlgcv",
-  "name": "white leather sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
-  "colors": [
-   "white",
-   "blue"
-  ],
-  "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_hslm9n4nmc79",
-  "name": "beige cotton sweatshirt",
-  "category": "top",
-  "subtype": "sweatshirt",
-  "colors": [
-   "beige"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_whgv0gu6m08l",
-  "name": "beige corduroy blazer",
-  "category": "outerwear",
-  "subtype": "blazer",
-  "colors": [
-   "beige"
-  ],
-  "material": "corduroy",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_98p2sivflrxg",
-  "name": "ivory wool blazer",
-  "category": "outerwear",
-  "subtype": "blazer",
-  "colors": [
-   "ivory"
-  ],
-  "material": "wool",
-  "brand": "",
-  "notes": "",
-  "formality": 4,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_9q0j6ksxlgcv",
-  "name": "white leather sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
-  "colors": [
-   "white",
-   "navy"
-  ],
-  "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_66xj06nllgf2",
-  "name": "sage trousers",
-  "category": "bottom",
-  "subtype": "trousers",
-  "colors": [
-   "sage"
-  ],
-  "material": "",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_j994h3k9l8ot",
-  "name": "cream denim jeans",
-  "category": "bottom",
-  "subtype": "jeans",
-  "colors": [
-   "cream"
-  ],
-  "material": "denim",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_juk45cokjxxy",
-  "name": "taupe wool blazer",
-  "category": "outerwear",
-  "subtype": "blazer",
-  "colors": [
-   "taupe"
-  ],
-  "material": "wool",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_ulv8tgkujvjh",
-  "name": "blue denim jacket",
-  "category": "outerwear",
-  "subtype": "jacket",
-  "colors": [
-   "blue"
-  ],
-  "material": "denim",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_dk92xcrfjmq8",
-  "name": "white cotton polo",
-  "category": "top",
-  "subtype": "polo",
-  "colors": [
-   "white"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_hhbz4ghpjmd1",
-  "name": "navy knit zip sweater",
-  "category": "outerwear",
-  "subtype": "zip sweater",
-  "colors": [
-   "navy",
-   "blue",
-   "black",
-   "white"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_cfm8n594jea7",
-  "name": "burgundy corduroy pants",
-  "category": "bottom",
-  "subtype": "pants",
-  "colors": [
-   "burgundy"
-  ],
-  "material": "corduroy",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "slim"
- },
- {
-  "id": "g_wgarjdurj7yp",
-  "name": "brown leather sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
-  "colors": [
-   "brown"
-  ],
-  "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
   "seasons": [],
   "demo": false,
   "wornOn": [],
@@ -2547,6 +2256,802 @@
   "fit": "regular"
  },
  {
+  "id": "g_rvrs9hibr981",
+  "name": "light blue denim jeans",
+  "category": "bottom",
+  "subtype": "jeans",
+  "colors": [
+   "light blue"
+  ],
+  "material": "denim",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_rxglifsoqobm",
+  "name": "pink suede sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "pink",
+   "green",
+   "white"
+  ],
+  "material": "suede",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_s5d2t696vryw",
+  "name": "cream cotton trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "cream"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_salzdhuswyd3",
+  "name": "brown cotton sweater",
+  "category": "top",
+  "subtype": "sweater",
+  "colors": [
+   "brown"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_sb0mc7s7v346",
+  "name": "olive cotton field jacket",
+  "category": "outerwear",
+  "subtype": "field jacket",
+  "colors": [
+   "olive",
+   "chocolate"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular",
+  "tuck": "either"
+ },
+ {
+  "id": "g_sxxi5soxomf3",
+  "name": "black cotton hoodie",
+  "category": "top",
+  "subtype": "hoodie",
+  "colors": [
+   "black",
+   "grey"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_szj91ziihfpw",
+  "name": "blue linen shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "blue"
+  ],
+  "material": "linen",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_t3e39jysdda5",
+  "name": "tan cotton trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "tan"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_teatot7o1lst",
+  "name": "grey flannel shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "grey",
+   "cream"
+  ],
+  "material": "flannel",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular",
+  "tuck": "in"
+ },
+ {
+  "id": "g_teitg9jmpwxa",
+  "name": "black wool sweater",
+  "category": "top",
+  "subtype": "sweater",
+  "colors": [
+   "black"
+  ],
+  "material": "wool",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 4,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_tosucnfv40wc",
+  "name": "pink linen shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "pink"
+  ],
+  "material": "linen",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_tqnnde1xmp0p",
+  "name": "mauve cotton shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "mauve"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_ttw2m97ww8z5",
+  "name": "pink cotton polo",
+  "category": "top",
+  "subtype": "polo",
+  "colors": [
+   "pink"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_twp15jpdf6h3",
+  "name": "light blue trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "light blue"
+  ],
+  "material": "",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_u0f8e90jp3ez",
+  "name": "cream cotton shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "cream"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_u1ujhidqsibg",
+  "name": "cream cotton hoodie",
+  "category": "top",
+  "subtype": "hoodie",
+  "colors": [
+   "cream"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_ugyaieefqcxe",
+  "name": "white knit cardigan",
+  "category": "top",
+  "subtype": "cardigan",
+  "colors": [
+   "white"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_ulv8tgkujvjh",
+  "name": "blue denim jacket",
+  "category": "outerwear",
+  "subtype": "jacket",
+  "colors": [
+   "blue"
+  ],
+  "material": "denim",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_upni66uiqtgb",
+  "name": "cream leather sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "cream"
+  ],
+  "material": "leather",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_upplq59rp8lp",
+  "name": "white cotton t-shirt",
+  "category": "top",
+  "subtype": "t-shirt",
+  "colors": [
+   "white"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 1,
+  "warmth": 1,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_v2gxktsmsoov",
+  "name": "beige knit sweater",
+  "category": "top",
+  "subtype": "sweater",
+  "colors": [
+   "beige",
+   "brown"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_v3ovns4bv344",
+  "name": "navy corduroy trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "navy",
+   "black"
+  ],
+  "material": "corduroy",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular",
+  "tuck": "either"
+ },
+ {
+  "id": "g_v5ov6nhyvlun",
+  "name": "silver metal sunglasses",
+  "category": "accessory",
+  "subtype": "sunglasses",
+  "colors": [
+   "silver",
+   "grey",
+   "black"
+  ],
+  "material": "metal",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 1,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_v7uvadckh79p",
+  "name": "light blue denim overshirt",
+  "category": "top",
+  "subtype": "overshirt",
+  "colors": [
+   "light blue"
+  ],
+  "material": "denim",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_vf28ktbdhmtz",
+  "name": "brown cotton chinos",
+  "category": "bottom",
+  "subtype": "chinos",
+  "colors": [
+   "brown"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "slim"
+ },
+ {
+  "id": "g_vtbi91noucd3",
+  "name": "light blue denim jacket",
+  "category": "outerwear",
+  "subtype": "jacket",
+  "colors": [
+   "light blue",
+   "cream"
+  ],
+  "material": "denim",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_vzqle7zdtpis",
+  "name": "blue knit sweater",
+  "category": "top",
+  "subtype": "sweater",
+  "colors": [
+   "blue",
+   "ivory"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_wgarjdurj7yp",
+  "name": "brown leather sneakers",
+  "category": "footwear",
+  "subtype": "sneakers",
+  "colors": [
+   "brown"
+  ],
+  "material": "leather",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_whgv0gu6m08l",
+  "name": "beige corduroy blazer",
+  "category": "outerwear",
+  "subtype": "blazer",
+  "colors": [
+   "beige"
+  ],
+  "material": "corduroy",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_wwy9b2pusds3",
+  "name": "brown suede bomber jacket",
+  "category": "outerwear",
+  "subtype": "bomber jacket",
+  "colors": [
+   "brown",
+   "cream"
+  ],
+  "material": "suede",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 4,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_wymz2j18s6wh",
+  "name": "brown suede mules",
+  "category": "footwear",
+  "subtype": "mules",
+  "colors": [
+   "brown"
+  ],
+  "material": "suede",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_x1vivoqz2ixd",
+  "name": "maroon/brown wool trousers",
+  "category": "bottom",
+  "subtype": "trousers",
+  "colors": [
+   "maroon/brown"
+  ],
+  "material": "wool",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular",
+  "tuck": "either"
+ },
+ {
+  "id": "g_x4adkv9zu9yu",
+  "name": "navy/black corduroy jacket",
+  "category": "outerwear",
+  "subtype": "jacket",
+  "colors": [
+   "navy/black"
+  ],
+  "material": "corduroy",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_xbt3gpjuo1p4",
+  "name": "burgundy knit sweater",
+  "category": "top",
+  "subtype": "sweater",
+  "colors": [
+   "burgundy"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_xc4gr022xmvm",
+  "name": "cream knit cardigan",
+  "category": "outerwear",
+  "subtype": "cardigan",
+  "colors": [
+   "cream"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 4,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "relaxed"
+ },
+ {
+  "id": "g_xi3w7tz3aren",
+  "name": "tan cotton chinos",
+  "category": "bottom",
+  "subtype": "chinos",
+  "colors": [
+   "tan"
+  ],
+  "material": "cotton",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "tuck": "either"
+ },
+ {
+  "id": "g_xowln4uos3ug",
+  "name": "beige knit sweater",
+  "category": "top",
+  "subtype": "sweater",
+  "colors": [
+   "beige"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 2,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_xuqvrfy5ocv4",
+  "name": "olive knit zip sweater",
+  "category": "top",
+  "subtype": "zip sweater",
+  "colors": [
+   "olive"
+  ],
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_yae8h1k9pjm1",
+  "name": "brown leather loafers",
+  "category": "footwear",
+  "subtype": "loafers",
+  "colors": [
+   "brown"
+  ],
+  "material": "leather",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 2,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
   "id": "g_yfkavdj5irwe",
   "name": "light grey woven trousers",
   "category": "bottom",
@@ -2567,16 +3072,14 @@
   "fit": "relaxed"
  },
  {
-  "id": "g_b8n14erlispm",
-  "name": "grey suede sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
+  "id": "g_yo7mwga1xi3m",
+  "name": "light blue denim shirt",
+  "category": "top",
+  "subtype": "shirt",
   "colors": [
-   "grey",
-   "cream",
-   "beige"
+   "light blue"
   ],
-  "material": "suede",
+  "material": "denim",
   "brand": "",
   "notes": "",
   "formality": 2,
@@ -2589,24 +3092,26 @@
   "fit": "regular"
  },
  {
-  "id": "g_gyc76ur3ikb9",
-  "name": "beige trousers",
-  "category": "bottom",
-  "subtype": "trousers",
+  "id": "g_z6syv3lx30tn",
+  "name": "brown shirt",
+  "category": "top",
+  "subtype": "shirt",
   "colors": [
-   "beige"
+   "brown",
+   "light blue",
+   "white"
   ],
   "material": "",
   "brand": "",
   "notes": "",
   "formality": 3,
-  "warmth": 2,
+  "warmth": 3,
   "seasons": [],
   "demo": false,
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
+  "tuck": "either"
  },
  {
   "id": "g_z7nhuz8vidky",
@@ -2629,14 +3134,35 @@
   "fit": "regular"
  },
  {
-  "id": "g_5josnvyoi4z9",
-  "name": "navy wool blazer",
-  "category": "outerwear",
-  "subtype": "blazer",
+  "id": "g_z8gvd1zvrcif",
+  "name": "brown knit zip sweater",
+  "category": "top",
+  "subtype": "zip sweater",
   "colors": [
-   "navy"
+   "brown"
   ],
-  "material": "wool",
+  "material": "knit",
+  "brand": "",
+  "notes": "",
+  "formality": 3,
+  "warmth": 3,
+  "seasons": [],
+  "demo": false,
+  "wornOn": [],
+  "archived": false,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "fit": "regular"
+ },
+ {
+  "id": "g_zc85ll18q9kn",
+  "name": "cream cotton shirt",
+  "category": "top",
+  "subtype": "shirt",
+  "colors": [
+   "cream",
+   "white"
+  ],
+  "material": "cotton",
   "brand": "",
   "notes": "",
   "formality": 3,
@@ -2669,17 +3195,17 @@
   "fit": "regular"
  },
  {
-  "id": "g_vf28ktbdhmtz",
-  "name": "brown cotton chinos",
+  "id": "g_zw51yaqdsx0q",
+  "name": "white denim jeans",
   "category": "bottom",
-  "subtype": "chinos",
+  "subtype": "jeans",
   "colors": [
-   "brown"
+   "white"
   ],
-  "material": "cotton",
+  "material": "denim",
   "brand": "",
   "notes": "",
-  "formality": 3,
+  "formality": 2,
   "warmth": 2,
   "seasons": [],
   "demo": false,
@@ -2689,250 +3215,25 @@
   "fit": "slim"
  },
  {
-  "id": "g_mir3akjyhwnr",
-  "name": "light blue cotton t-shirt",
-  "category": "top",
-  "subtype": "t-shirt",
-  "colors": [
-   "light blue"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 1,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_2rtuat7aheik",
-  "name": "light blue cotton dress shirt",
+  "id": "g_zzrq3j5n2njk",
+  "name": "pink cotton dress shirt",
   "category": "top",
   "subtype": "dress shirt",
   "colors": [
-   "light blue"
+   "pink",
+   "cream"
   ],
   "material": "cotton",
   "brand": "",
   "notes": "",
   "formality": 4,
-  "warmth": 1,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_szj91ziihfpw",
-  "name": "blue linen shirt",
-  "category": "top",
-  "subtype": "shirt",
-  "colors": [
-   "blue"
-  ],
-  "material": "linen",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
   "warmth": 2,
   "seasons": [],
   "demo": false,
   "wornOn": [],
   "archived": false,
   "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_1gb6slz8h71n",
-  "name": "cream cotton button-up",
-  "category": "top",
-  "subtype": "button-up",
-  "colors": [
-   "cream",
-   "blue"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_5gfabeezh485",
-  "name": "white jacket",
-  "category": "outerwear",
-  "subtype": "jacket",
-  "colors": [
-   "white",
-   "beige"
-  ],
-  "material": "",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_v7uvadckh79p",
-  "name": "light blue denim overshirt",
-  "category": "top",
-  "subtype": "overshirt",
-  "colors": [
-   "light blue"
-  ],
-  "material": "denim",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_h7dy95xdgnh8",
-  "name": "black cotton hoodie",
-  "category": "top",
-  "subtype": "hoodie",
-  "colors": [
-   "black"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 1,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "relaxed"
- },
- {
-  "id": "g_08shegj8gqie",
-  "name": "grey suede sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
-  "colors": [
-   "grey",
-   "white",
-   "cream"
-  ],
-  "material": "suede",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_nq7il0e0glnn",
-  "name": "white leather sneakers",
-  "category": "footwear",
-  "subtype": "sneakers",
-  "colors": [
-   "white",
-   "green",
-   "beige"
-  ],
-  "material": "leather",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 2,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_d1awqw83gd3c",
-  "name": "navy knit sweater",
-  "category": "top",
-  "subtype": "sweater",
-  "colors": [
-   "navy",
-   "red"
-  ],
-  "material": "knit",
-  "brand": "",
-  "notes": "",
-  "formality": 2,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "fit": "regular"
- },
- {
-  "id": "g_1pg9y05mlkek",
-  "name": "brown suede field jacket",
-  "category": "outerwear",
-  "subtype": "field jacket",
-  "colors": [
-   "brown"
-  ],
-  "material": "suede",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "tuck": "either"
- },
- {
-  "id": "g_qnmo5yzgl50b",
-  "name": "navy cotton field jacket",
-  "category": "outerwear",
-  "subtype": "field jacket",
-  "colors": [
-   "navy"
-  ],
-  "material": "cotton",
-  "brand": "",
-  "notes": "",
-  "formality": 3,
-  "warmth": 3,
-  "seasons": [],
-  "demo": false,
-  "wornOn": [],
-  "archived": false,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "tuck": "either"
+  "fit": "slim",
+  "tuck": "in"
  }
 ]

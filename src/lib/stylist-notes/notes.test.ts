@@ -1,5 +1,5 @@
 /**
- * Stylist memory on the snapshot closet (engine-garments.json + redress-extra.json): a
+ * Stylist memory on the snapshot closet (engine-garments.json): a
  * stated never or lean saves with its kind and date, a correction of the shown look notes
  * that piece, a newer note on the same topic supersedes the older one and keeps it, a Skip
  * writes nothing, Delete removes a note, and closet.v6 is byte-identical around a save.
@@ -11,14 +11,13 @@ import { describe, expect, it } from "vitest";
 import { packPersist } from "../store-persist.ts";
 import { useCloset } from "../store.ts";
 import type { Garment } from "../types.ts";
-import { TEST_CLOSET_COUNT } from "../__fixtures__/snapshot.ts";
+import { TEST_CLOSET_COUNT, testCloset } from "../__fixtures__/snapshot.ts";
 import { classifyNote, isSkipMessage } from "./classify.ts";
 import { addNote, deleteNote, listActive, memoryNotes, noteDateLabel, type StylistNote } from "./notes.ts";
 import { NOTES_PER_ASK, noteMatchScore, notesBlock, relevantNotes } from "./rank.ts";
 import { rememberFromAsk } from "./remember.ts";
 
-const read = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8")) as Garment[];
-const CLOSET: Garment[] = [...read("../__fixtures__/engine-garments.json"), ...read("../__fixtures__/redress-extra.json")];
+const CLOSET: Garment[] = testCloset;
 const NOW = Date.parse("2026-10-13T15:00:00.000Z");
 const TODAY = "2026-10-13";
 

@@ -1,6 +1,6 @@
 /**
  * Redress rotation: every in-season piece gets a turn before anything repeats. The fixture is
- * the 142-piece stripped closet the engine snapshot uses, the clock frozen at the snapshot's
+ * the stripped live closet the engine snapshot uses, the clock frozen at the snapshot's
  * instant. Repeated Re-dresses are simulated as the Lookbook page does them: the week row
  * (weekRotationRow), then the idea rows (rowWays) with the week's pieces already on screen,
  * the rotation advanced after each.

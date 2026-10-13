@@ -46,3 +46,14 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   the server loader (`notes.server.ts`, caller token under RLS). `askStylist` appends a REMEMBERED
   block after NOTES. The notes view is `components/shell/stylist-notes.tsx`, toggled in the dock.
   `policy.test.ts` runs the migration verbatim in PGlite with a stubbed auth schema.
+- real-fixture (Oct 13 2026, claude/stylist-memory): the test closet is the owner's real pieces
+  only. `engine-garments.json` holds all 157 active pieces of the Oct 13 export (the 15 added Oct
+  10 included); the 15 hand-drafted `x_*` stand-ins in `redress-extra.json` are gone, and
+  `__fixtures__/snapshot.ts` exports one list (`testCloset` = `liveSnapshot`). The refresh
+  script takes `--from-file <path>` to reduce an export kept outside the repo with the same
+  filter and strip as the Supabase read (no network). `engine-snapshot.json` was re-recorded
+  from the 58d7b8c tree on the 157 pieces. Finding: the "out" chapter's week row has 5 cards on
+  the real closet (five or six non-sneaker shoe groups pair, and a row never repeats a piece);
+  the stand-ins' fake shoes and jackets had hidden that. `redress-fill.test.ts` now asks for a
+  full week row only where the scarcest core slot has eight look-alike groups, and
+  `redress-rowdupe.test.ts` allows one look in a relaxed plain row, as redress-fill already did.

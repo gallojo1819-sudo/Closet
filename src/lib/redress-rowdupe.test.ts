@@ -5,11 +5,10 @@
  * two got different keys and passed the in-row guard. And the header always read "8 looks":
  * it counted only the week row (capped at 8) while fifteen to twenty cards rendered.
  *
- * The closet is the snapshot fixture (engine-garments.json + redress-extra.json) plus the two
+ * The closet is the snapshot fixture (engine-garments.json) plus the two
  * same-name trousers and a second "Light Blue denim jacket" next to the stored one. Six pages
  * (the first load and five Re-dress taps) per chapter are simulated as the page does them.
  */
-import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   RELAXED_CAP,
@@ -27,9 +26,9 @@ import {
 import { screenLookCount } from "./lookbook-status.ts";
 import { advanceRotation, emptyRotation, type Rotation } from "./rotation.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
+import { testCloset } from "./__fixtures__/snapshot.ts";
 
-const read = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8")) as Garment[];
-const STORED: Garment[] = [...read("./__fixtures__/engine-garments.json"), ...read("./__fixtures__/redress-extra.json")];
+const STORED: Garment[] = testCloset;
 
 /** The live bug's pieces: one name stored twice, the material field differing. */
 const TROUSERS = STORED.find((g) => /\btrousers\b/i.test(g.name) && g.category !== "outerwear")!;
@@ -164,7 +163,7 @@ describe("same-name pieces are twins", () => {
   });
 });
 
-describe("six pages per chapter on the 160-piece closet", () => {
+describe(`six pages per chapter on the ${CLOSET.length}-piece closet`, () => {
   it("a. no twin key twice inside any row, jackets included", () => {
     for (const run of RUNS) {
       for (const page of run.pages) {
@@ -190,12 +189,13 @@ describe("six pages per chapter on the 160-piece closet", () => {
     }
   });
 
-  it("c. exactly four idea rows a page, each at least ROW_MIN looks", () => {
+  it("c. exactly four idea rows a page, each at least ROW_MIN looks (a relaxed plain row, one)", () => {
     for (const run of RUNS) {
       for (const page of run.pages) {
         expect(page.rows.length, `${run.occasion} page ${page.n} rows: ${page.rows.map((r) => r.id).join(",")}`).toBe(STORY_ROWS);
         for (const row of page.rows) {
-          expect(row.looks.length, `${run.occasion} page ${page.n} / ${row.title}`).toBeGreaterThanOrEqual(ROW_MIN);
+          /* A plain row the section owed may run relaxed when the scope is scarce ("out": the non-sneaker shoes). */
+          expect(row.looks.length, `${run.occasion} page ${page.n} / ${row.title}`).toBeGreaterThanOrEqual(row.relaxed ? 1 : ROW_MIN);
         }
       }
     }

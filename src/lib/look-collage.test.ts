@@ -148,7 +148,7 @@ describe("lookTitle and pieceLine", () => {
     );
   });
 
-  it("every look in the 142-piece fixture titles clean of house names", () => {
+  it("every look in the live-closet fixture titles clean of house names", () => {
     for (const season of ["fall", "winter"] as Season[]) {
       for (const occasion of ["weekday", "weekend"] as Occasion[]) {
         for (const way of storedRows(visibleDetectors(FIXTURE, { occasion, season }), FIXTURE, { occasion, season })) {
@@ -176,7 +176,7 @@ describe("tileTint", () => {
   });
 });
 
-describe("storedRows (the pre-variety fill) on the 142-piece fixture", () => {
+describe("storedRows (the pre-variety fill) on the live-closet fixture", () => {
   const CTX: { occasion: Occasion; season: Season }[] = [
     { occasion: "weekday", season: "fall" },
     { occasion: "weekend", season: "fall" },

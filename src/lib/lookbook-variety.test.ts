@@ -4,7 +4,7 @@
  * screen, titles say what differs, and a "Forgotten pieces" row shows what has not been worn
  * or suggested in a while. Summer themes (linen, camp collar, resort, short-sleeve polo) stay in
  * summer, and a jacket theme puts a jacket on every card, named first. The fixture is the
- * 142-piece stripped closet the engine snapshot uses, with the clock frozen at the snapshot's
+ * stripped live closet the engine snapshot uses, with the clock frozen at the snapshot's
  * instant.
  */
 import { describe, it, mock } from "node:test";
