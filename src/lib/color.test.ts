@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { canonicalize, colorLine, harmony, nearestName, preferPixels } from "./color.ts";
+import { canonicalize, colorLine, harmony, nameWithColor, nearestName, preferPixels } from "./color.ts";
 import type { Garment } from "./types.ts";
 
 function g(
@@ -94,5 +94,26 @@ describe("canonicalize", () => {
   it("maps gray to grey", () => {
     assert.equal(canonicalize("Gray"), "grey");
     assert.equal(canonicalize("navy blue"), "navy");
+  });
+});
+
+describe("nameWithColor", () => {
+  it("renames the leading colour word", () => {
+    assert.equal(nameWithColor("Navy chinos", "olive"), "Olive chinos");
+    assert.equal(nameWithColor("Light grey pleated trousers", "charcoal"), "Charcoal pleated trousers");
+  });
+  it("leaves a name that does not lead with a colour, or is only a colour, alone", () => {
+    assert.equal(nameWithColor("Denim jacket", "navy"), "Denim jacket");
+    assert.equal(nameWithColor("Dark denim jacket", "navy"), "Dark denim jacket");
+    assert.equal(nameWithColor("Navy", "olive"), "Navy");
+    assert.equal(nameWithColor("Navy chinos", "  "), "Navy chinos");
+  });
+  it("replaces the whole colour phrase and strips store junk, so saving twice never stacks", () => {
+    const color = "navy blue/brown. match original";
+    const once = nameWithColor("Navy denim trousers", color);
+    assert.equal(once, "Navy Blue/brown denim trousers");
+    assert.equal(nameWithColor(once, color), once);
+    assert.equal(nameWithColor(once, "olive"), "Olive denim trousers");
+    assert.equal(nameWithColor("Off white sneakers", "cream"), "Cream sneakers");
   });
 });

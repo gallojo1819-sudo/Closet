@@ -157,18 +157,51 @@ export function twinKey(g: Garment): string {
   return `${slotOf(g)}|${color}|${material}|${noun}`;
 }
 
+/**
+ * The slot and the whole name, normalised (case, punctuation, a trailing plural): two pieces
+ * stored under one name are one piece whatever their material fields say. A re-added "light
+ * grey pleated trousers" with material "wool" beside one with none gets two twinKeys (the
+ * material falls back to a name word); this key puts them in one group.
+ */
+function nameKey(g: Garment): string {
+  const words = g.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length) words[words.length - 1] = words[words.length - 1]!.replace(/(?<!s)s$/, "");
+  return `${slotOf(g)}|${words.join(" ")}`;
+}
+
 export type Twins = {
   key: (g: Garment) => string;
   /** The pieces that share a key with `g`, `g` among them. */
   of: (g: Garment) => readonly Garment[];
 };
 
-/** The twin groups of a pool: built once per page, read by every row. */
+/**
+ * The twin groups of a pool: built once per page, read by every row. twinKey groups first;
+ * then groups whose members share a nameKey are merged into one (only ever more grouping,
+ * never a split), so same-name pieces are one piece to the caps and the rows.
+ */
 export function twinGroups(pool: readonly Garment[]): Twins {
+  const alias = new Map<string, string>();
+  const find = (key: string): string => {
+    let out = key;
+    while (alias.has(out)) out = alias.get(out)!;
+    return out;
+  };
+  const byName = new Map<string, string>();
+  for (const g of pool) {
+    const key = find(twinKey(g));
+    const have = byName.get(nameKey(g));
+    if (have === undefined) byName.set(nameKey(g), key);
+    else if (find(have) !== key) alias.set(key, find(have));
+  }
   const keys = new Map<string, string>();
   const groups = new Map<string, Garment[]>();
   for (const g of pool) {
-    const key = twinKey(g);
+    const key = find(twinKey(g));
     keys.set(g.id, key);
     const group = groups.get(key);
     if (group) group.push(g);
@@ -923,12 +956,15 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     for (const [i, way] of short.entries()) {
       const cell = cellKit.cells().find((row) => row.id === way.id);
       const jacket = cell ? cellKit.jacketTheme(cell) : false;
-      const kept = maxDisjoint(stored[i]?.looks[occasion] ?? []).filter(
-        (look) =>
-          look.every((g) => (counts.get(g.id) ?? 0) < SCREEN_CAP) &&
-          cellKit.seasonFits(look, season) &&
-          (!jacket || look.some(isOuterPiece)),
-      );
+      /* Disjoint by id, and by look-alike: a twin key once per row, its twins under the page cap. */
+      const rowUsed = new Set<string>();
+      const kept: Garment[][] = [];
+      for (const look of maxDisjoint(stored[i]?.looks[occasion] ?? [])) {
+        if (!look.every((g) => twinCount(counts, twins, g) < SCREEN_CAP && !rowUsed.has(twins.key(g)))) continue;
+        if (!cellKit.seasonFits(look, season) || (jacket && !look.some(isOuterPiece))) continue;
+        for (const g of look) rowUsed.add(twins.key(g));
+        kept.push(look);
+      }
       if (!kept.length) continue;
       for (const look of kept) for (const g of look) counts.set(g.id, (counts.get(g.id) ?? 0) + 1);
       out.push({ ...way, pieces: kept[0]!, looks: { ...way.looks, [occasion]: kept } });

@@ -37,7 +37,7 @@ import {
   unusedFromLooks,
   visibleHero,
 } from "@/lib/lookbook";
-import { lookbookCountLine, weekShowsEmptyReason, weekShowsSkeletons } from "@/lib/lookbook-status";
+import { lookbookCountLine, screenLookCount, weekShowsEmptyReason, weekShowsSkeletons } from "@/lib/lookbook-status";
 import { seasonChipRow, seasonControlLabel, seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { cardTag, spreadTitle } from "@/lib/look";
@@ -543,6 +543,12 @@ function LookbookPage() {
     null;
   const openPieces = openLook ? piecesFor(openLook) : [];
   const sectionLooks = renderedSectionLooks(shownWays, occasion);
+  /* The count line: the week cards that render (a card with under three pieces renders nothing)
+     plus the idea-row cards, the same arrays the JSX draws from. */
+  const shownCount = screenLookCount(
+    cards.map((card) => (card.look.gate || card.look.needsPieces ? [] : piecesFor(card.look))),
+    sectionLooks,
+  );
   const heroCards = hero && heroShown.length > 0 && !openLook ? realWeekLooks(heroShown, ownedIds) : [];
   const screenLooks = (() => {
     const seen = new Set<string>();
@@ -602,7 +608,7 @@ function LookbookPage() {
           <p className="mt-3 text-ink-soft max-w-xl" data-look-count data-resolved={weekResolved ? "1" : "0"}>
             {lookbookCountLine({
               resolved: weekResolved,
-              count: weekRow.length,
+              count: shownCount,
               chapter: chapterLabel,
               season: seasonLabel.replace(/^Auto · /, ""),
             })}

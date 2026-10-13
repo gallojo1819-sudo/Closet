@@ -21,3 +21,13 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
 - Overlays go through a body portal (`Overlay`, `BodyPortal`): the page containers animate with a
   transform (`.rise`), which traps `position: fixed`.
 - Tests need Node 22 (`--experimental-strip-types`): `npm test`, `npm run typecheck`, `npm run lint`.
+
+## Round log
+
+- row-dupe-count (Oct 13 2026): a piece sat twice in one Lookbook row because two garments stored
+  under one name ("light grey pleated trousers", material "wool" vs. empty) got different twinKeys
+  (the material falls back to a name word). Fix: `twinGroups` in `detectors/ideas.ts` merges groups
+  whose members share `slot|normalised name` (only ever groups more); the storedRows fallback in
+  `rowWays` now checks twins per row too. The header read "8 looks" because it counted only the
+  week row (capped at 8): `screenLookCount` in `lookbook-status.ts` counts the week cards that
+  render plus the idea-row cards. `nameWithColor` replaces the whole leading colour phrase.

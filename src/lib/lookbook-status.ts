@@ -14,6 +14,14 @@ export function lookbookCountLine(opts: {
   return `${opts.count} looks · ${opts.chapter} · ${opts.season}`;
 }
 
+/**
+ * Look cards on the screen: the week cards that render (three or more resolvable pieces) plus
+ * the idea-row cards the section renders. The hero strip and the open look are not counted.
+ */
+export function screenLookCount(weekCards: readonly (readonly unknown[])[], sectionLooks: readonly unknown[]): number {
+  return weekCards.filter((pieces) => pieces.length >= 3).length + sectionLooks.length;
+}
+
 /** Skeletons stand in while the row is unresolved and nothing real is on screen yet. */
 export function weekShowsSkeletons(opts: { resolved: boolean; shown: number }): boolean {
   return !opts.resolved && opts.shown === 0;

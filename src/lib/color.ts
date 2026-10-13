@@ -178,8 +178,31 @@ export function preferPixels(
   return far ? sampled : [t0, ...sampled.filter((c) => c !== t0)].slice(0, 2);
 }
 
-const COLOR_LEAD =
-  /^(?:(?:dark|light|pale|bright|deep|off)\s+)?(?:navy|olive|khaki|cream|white|black|brown|maroon|burgundy|pink|blue|grey|gray|tan|camel|ivory|red|green|charcoal|beige|stone|ecru|wine|rust|chocolate|blush|forest|gold)\s+/i;
+const COLOR_MOD = /^(?:dark|light|pale|bright|deep|off)$/i;
+const COLOR_WORD =
+  /^(?:navy|olive|khaki|cream|white|black|brown|maroon|burgundy|pink|blue|grey|gray|tan|camel|ivory|red|green|charcoal|beige|stone|ecru|wine|rust|chocolate|blush|forest|gold)$/i;
+
+/**
+ * How many leading words of a name are its colour phrase ("Navy Blue/brown" in "Navy Blue/brown
+ * denim trousers"): modifiers and colour words, slash-joined ones included, with at least one
+ * true colour word and something left after them. 0 when the name does not lead with a colour.
+ */
+function colorLeadWords(words: readonly string[]): number {
+  let n = 0;
+  let colored = false;
+  while (n < words.length) {
+    const parts = words[n]!.split("/").filter(Boolean);
+    if (!parts.length || !parts.every((w) => COLOR_MOD.test(w) || COLOR_WORD.test(w))) break;
+    if (parts.some((w) => COLOR_WORD.test(w))) colored = true;
+    n += 1;
+  }
+  return colored && n < words.length ? n : 0;
+}
+
+/** A colour as typed, minus store junk after a full stop ("navy blue/brown. match original"). */
+function cleanColor(color: string): string {
+  return color.replace(/[.;][\s\S]*$/, "").trim();
+}
 
 export function paletteCss(name: string): string {
   const n = canonicalize(name);
@@ -197,11 +220,18 @@ export function titleColor(color: string): string {
     .join(" ");
 }
 
+/**
+ * The name with its whole leading colour phrase swapped for `color`: saving a colour twice
+ * never stacks ("Navy Blue/brown denim trousers" stays itself). A name that does not lead with
+ * a colour is returned as is.
+ */
 export function nameWithColor(name: string, color: string): string {
-  const titled = titleColor(color);
+  const titled = titleColor(cleanColor(color));
   if (!titled) return name;
-  if (COLOR_LEAD.test(name)) return name.replace(COLOR_LEAD, `${titled} `);
-  return name;
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const n = colorLeadWords(words);
+  if (!n) return name;
+  return `${titled} ${words.slice(n).join(" ")}`;
 }
 
 const SAND = new Set<PaletteColor>(["cream", "beige", "tan", "camel", "khaki", "ivory"]);

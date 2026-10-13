@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { FINDING_LOOKS, lookbookCountLine, weekShowsEmptyReason, weekShowsSkeletons } from "./lookbook-status.ts";
+import { FINDING_LOOKS, lookbookCountLine, screenLookCount, weekShowsEmptyReason, weekShowsSkeletons } from "./lookbook-status.ts";
 
 describe("Lookbook loading state", () => {
   it("never says 0 looks before the row resolves", () => {
@@ -10,6 +10,14 @@ describe("Lookbook loading state", () => {
   it("counts once resolved, including a true zero", () => {
     assert.equal(lookbookCountLine({ resolved: true, count: 8, chapter: "Weekday", season: "Fall" }), "8 looks · Weekday · Fall");
     assert.equal(lookbookCountLine({ resolved: true, count: 0, chapter: "Comfy", season: "Winter" }), "0 looks · Comfy · Winter");
+  });
+  it("counts the week cards that render plus the idea-row cards, not the week row alone", () => {
+    const three = ["a", "b", "c"];
+    const week = [three, three, ["a", "b"], three, [], three];
+    const rows = Array.from({ length: 11 }, (_, i) => ({ id: `r${i}` }));
+    assert.equal(screenLookCount(week, rows), 4 + 11);
+    assert.equal(screenLookCount(week, []), 4);
+    assert.equal(screenLookCount([], []), 0);
   });
   it("skeletons while unresolved and empty; the empty reason only after", () => {
     assert.equal(weekShowsSkeletons({ resolved: false, shown: 0 }), true);
