@@ -5,7 +5,7 @@
  * two got different keys and passed the in-row guard. And the header always read "8 looks":
  * it counted only the week row (capped at 8) while fifteen to twenty cards rendered.
  *
- * The closet is the 157-piece fixture (engine-garments.json + redress-extra.json) plus the two
+ * The closet is the snapshot fixture (engine-garments.json + redress-extra.json) plus the two
  * same-name trousers and a second "Light Blue denim jacket" next to the stored one. Six pages
  * (the first load and five Re-dress taps) per chapter are simulated as the page does them.
  */

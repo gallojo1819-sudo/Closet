@@ -6,7 +6,7 @@
  * no look), and checks the header number against the sum on six pages (the first load and
  * five Re-dress taps) per chapter.
  *
- * The closet is the 157-piece fixture (engine-garments.json + redress-extra.json): the owner's
+ * The closet is the snapshot fixture (engine-garments.json + redress-extra.json): the owner's
  * pieces, brands stripped. The "Your usual" branch uses a thin closet of five of those pieces
  * (three tops, a bottom, a shoe), which clears no way and so gets the usual row of three; a
  * closet of the same pieces without a bottom gets the usual's reason and no card.
@@ -30,6 +30,7 @@ import { looksFromRows, realWeekLooks } from "./lookbook.ts";
 import { screenLookCount } from "./lookbook-status.ts";
 import { advanceRotation, emptyRotation, type Rotation } from "./rotation.ts";
 import { OCCASIONS, type Garment, type Look, type Occasion, type Season } from "./types.ts";
+import { TEST_CLOSET_COUNT } from "./__fixtures__/snapshot.ts";
 
 const read = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8")) as Garment[];
 const CLOSET: Garment[] = [...read("./__fixtures__/engine-garments.json"), ...read("./__fixtures__/redress-extra.json")];
@@ -148,8 +149,8 @@ afterAll(() => {
 });
 
 describe("the header counts the cards on the screen", () => {
-  it("the closet is the owner's 157 pieces", () => {
-    expect(CLOSET.length).toBe(157);
+  it("the closet is the snapshot closet", () => {
+    expect(CLOSET.length).toBe(TEST_CLOSET_COUNT);
     expect(THIN.length).toBe(5);
     expect(new Set(THIN.map((g) => g.category))).toEqual(new Set(["top", "bottom", "footwear"]));
   });

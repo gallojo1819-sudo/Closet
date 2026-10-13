@@ -2,7 +2,7 @@
  * Redress fill: every Re-dress shows a full page, and over a few taps every piece that can pair
  * gets a turn. The closet is the 142-piece engine fixture plus 15 pieces (redress-extra.json:
  * button-downs, sweaters, a cardigan, a long-sleeve polo, bottoms, non-sneaker shoes, jackets
- * that are not brown suede), 157 in all; the clock is frozen at the snapshot's instant. Taps
+ * that are not brown suede), the snapshot closet in all; the clock is frozen at the snapshot's instant. Taps
  * are simulated as the Lookbook page does them: the week row (weekRotationRow), then the rows
  * (rowWays) with the week's pieces on screen, the rotation advanced after each.
  */
@@ -33,6 +33,7 @@ import { lookFitsSeason } from "./season.ts";
 import { isBrownSuedeOuter } from "./style.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
+import { EXTRA_PIECE_COUNT, TEST_CLOSET_COUNT } from "./__fixtures__/snapshot.ts";
 
 const read = (rel: string) => JSON.parse(readFileSync(new URL(rel, import.meta.url), "utf8")) as Garment[];
 const CLOSET: Garment[] = [...read("./__fixtures__/engine-garments.json"), ...read("./__fixtures__/redress-extra.json")];
@@ -134,15 +135,16 @@ afterAll(() => {
   vi.useRealTimers();
 });
 
-describe("the 157-piece test closet", () => {
+describe("the snapshot test closet", () => {
   it("is the fixture plus fifteen distinct, brand-free pieces", () => {
-    expect(CLOSET.length).toBe(157);
-    expect(new Set(CLOSET.map((g) => g.id)).size).toBe(157);
+    expect(EXTRA_PIECE_COUNT).toBe(15);
+    expect(CLOSET.length).toBe(TEST_CLOSET_COUNT);
+    expect(new Set(CLOSET.map((g) => g.id)).size).toBe(TEST_CLOSET_COUNT);
     for (const g of CLOSET) expect(g.brand ?? "", g.name).toBe("");
   });
 });
 
-describe("six Re-dresses on the 157-piece closet, every chapter", () => {
+describe("six Re-dresses on the snapshot closet, every chapter", () => {
   it("every tap shows a full week row of eight looks and the story rows", () => {
     for (const run of RUNS) {
       for (const tap of run.taps) {
