@@ -501,11 +501,33 @@ function rackHas(
   });
 }
 
+/**
+ * A top with sleeves to the wrist: a shirt (button-down, flannel, dress shirt, denim), a sweater
+ * or cardigan, a long-sleeve polo, a henley or a sweatshirt. Tees, tanks, camp and bowling
+ * shirts and anything marked short-sleeve are not. Hoodies and graphics fail weekday elsewhere.
+ */
+export function isLongSleeveTop(g: Garment): boolean {
+  const slot = slotOf(g);
+  if (slot !== "top" && slot !== "dress") return false;
+  const b = pieceBlob(g);
+  if (/long[- ]?sleeved?|dress shirt/.test(b)) return true;
+  if (/\bt-?shirts?\b|\btees?\b|\btanks?\b|short[- ]?sleeved?|\bcamp\b|bowling|hawaiian|resort|\bdress(es)?\b/.test(b)) return false;
+  return /shirt|oxford|button|flannel|chambray|denim|poplin|sweater|knit|cardigan|cable|merino|polo|henley|turtleneck|roll ?neck|sweatshirt|quarter[- ]?zip|half[- ]?zip|pullover|rugby|overshirt|jumper|crewneck/.test(
+    b,
+  );
+}
+
+export type OccasionGateOptions = {
+  /** Weekday admits any long-sleeve top (isLongSleeveTop), not only oxfords, polos and knits. The rotation rows use this; the engine does not. */
+  wideWeekdayTops?: boolean;
+};
+
 export function lookFitsOccasion(
   pieces: Garment[],
   occ: string,
   pool?: Garment[],
   house?: House,
+  gate?: OccasionGateOptions,
 ): boolean {
   if (occ === "all") return true;
   if (lookClashes(pieces)) return false;
@@ -587,7 +609,8 @@ export function lookFitsOccasion(
       );
     }
     if (hoodie || graphic) return false;
-    if (!(oxford || polo || cable || knit)) return false;
+    const longSleeve = Boolean(gate?.wideWeekdayTops) && tops.some(isLongSleeveTop);
+    if (!(oxford || polo || cable || knit || longSleeve)) return false;
     if (!legalBottom) return false;
     if (loafer || boot) return true;
     if (cleanSneaker) return true;

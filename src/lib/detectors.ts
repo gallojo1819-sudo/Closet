@@ -4,6 +4,11 @@ export type { CellContext, Way } from "./detectors/cells.ts";
 export type { IdeaContext } from "./detectors/ideas.ts";
 export {
   capScreenLooks,
+  colorFamily,
+  FAMILY_SHARE,
+  familyShares,
+  FILL_ID,
+  FILL_TITLES,
   FORGOTTEN_DAYS,
   FORGOTTEN_ID,
   FORGOTTEN_TITLE,
@@ -17,8 +22,11 @@ export {
   rotationEligible,
   rowWays,
   SCREEN_CAP,
+  STORY_ROWS,
+  SUEDE_SHARE,
   themePieces,
   weekRotationRow,
+  type ColorFamily,
   type WeekRotation,
 } from "./detectors/ideas.ts";
 export {

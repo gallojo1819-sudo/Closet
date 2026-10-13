@@ -2,9 +2,12 @@
  * Redress rotation: every in-season piece gets a turn before anything repeats. The Lookbook
  * rows, the week row and Re-dress all draw from one queue of piece ids ordered by
  * least-recently-shown. A page leads with the front of the queue; what it shows goes to the
- * back. Coverage counts the pieces shown since the last reset; once every eligible piece has
- * appeared (pieces that can never pair are set aside, see weekRotationRow in ideas.ts) the
- * cycle resets and the looks seen so far may come back. The state is per session, client-side
+ * back. Lists never shrink: when the unseen looks run out a page is filled from the back of the
+ * queue (fillRow in ideas.ts), so every tap is a full page. Coverage counts the pieces shown
+ * since the last reset; once every eligible piece has appeared (pieces that can never pair are
+ * set aside, see weekRotationRow in ideas.ts), or a whole page adds no new piece, the cycle
+ * resets: the looks seen so far may come back and the least-recently-shown pieces lead again,
+ * so the rotation never stalls at nothing new. The state is per session, client-side
  * (sessionStorage or memory); nothing here writes to the store or the database. Pure: no React,
  * no DOM, relative imports only.
  */

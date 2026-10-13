@@ -481,6 +481,8 @@ function passesCheap(
   season: Season,
   pool: Garment[],
   owed = 0,
+  /** Weekday admits any long-sleeve top (the idea rows); the stored rows keep the engine's gate. */
+  wideTops = false,
 ): boolean {
   if (pieces.some((g) => DELETED.has(g.id))) return false;
   const top = pieces.find((g) => slotRole(g, cell) === "top");
@@ -491,7 +493,7 @@ function passesCheap(
   if (new Set(pieces.map((g) => g.id)).size !== pieces.length) return false;
   if (!slotGradeOk(cell, { top, bottom, shoe, layer }, owed)) return false;
   if (globalFail(cell, pieces) || cellFail(cell, pieces)) return false;
-  if (!lookFitsOccasion(pieces, occasion, pool, undefined)) return false;
+  if (!lookFitsOccasion(pieces, occasion, pool, undefined, wideTops ? { wideWeekdayTops: true } : undefined)) return false;
   if (!seasonOk(pieces, season)) return false;
   return true;
 }
