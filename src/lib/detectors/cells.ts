@@ -996,29 +996,55 @@ function stampLooks(
   }));
 }
 
-/** Look cards a section actually renders. A way with no true look here is absent. */
+/** One row the section draws: its cards in order, each with the chapter its collage is captioned for. */
+export type SectionRow = {
+  id: string;
+  title: string;
+  looks: { look: Garment[]; occasion: Occasion }[];
+  usual: boolean;
+};
+
+/**
+ * The rows the section renders, card for card, in order. DetectorSections draws from this and
+ * the header counts it, so the two cannot drift. The usual way is one row of its looks across
+ * the chapters (ROW_MAX per chapter, three pieces or more); with fewer than three cards the row
+ * is absent and the section shows the usual's reason instead. Otherwise one row per way with a
+ * true look in this chapter, the tapped way first.
+ */
+export function sectionRows(
+  ways: readonly Way[],
+  occasion: Occasion | string,
+  activeId?: string | null,
+): { usual: Way | undefined; rows: SectionRow[] } {
+  const here = (occasion || "weekday") as Occasion;
+  const usual = ways.find((way) => way.usual);
+  if (usual) {
+    const looks = OCCASION_ORDER.flatMap((key) =>
+      (usual.looks[key] ?? []).slice(0, ROW_MAX).map((look) => ({ look, occasion: key })),
+    ).filter((plate) => plate.look.length >= 3);
+    if (looks.length < 3) return { usual, rows: [] };
+    return { usual, rows: [{ id: usual.id, title: usual.title, looks, usual: true }] };
+  }
+  const rows: SectionRow[] = [];
+  for (const way of activeFirst(ways, activeId)) {
+    if (way.usual) continue;
+    const looks = dressedLooks(way, here);
+    if (looks.length < 1) continue;
+    rows.push({ id: way.id, title: way.title, looks: looks.map((look) => ({ look, occasion: here })), usual: false });
+  }
+  return { usual, rows };
+}
+
+/** Look cards a section actually renders: sectionRows flattened, one stamped id per card. */
 export function renderedSectionLooks(
   ways: readonly Way[],
   occasion: Occasion | string,
   activeId?: string | null,
 ): { id: string; garmentIds: string[] }[] {
   const here = (occasion || "weekday") as Occasion;
-  const usual = ways.find((way) => way.usual);
-  if (usual) {
-    const looks = OCCASION_ORDER.flatMap((key) => (usual.looks[key] ?? []).slice(0, ROW_MAX)).filter(
-      (look) => look.length >= 3,
-    );
-    if (looks.length < 3) return [];
-    return stampLooks("usual", here, looks);
-  }
-  const out: { id: string; garmentIds: string[] }[] = [];
-  for (const way of activeFirst(ways, activeId)) {
-    if (way.usual) continue;
-    const looks = dressedLooks(way, here);
-    if (looks.length < 1) continue;
-    out.push(...stampLooks(way.id, here, looks));
-  }
-  return out;
+  return sectionRows(ways, here, activeId).rows.flatMap((row) =>
+    stampLooks(row.id, here, row.looks.map((plate) => plate.look)),
+  );
 }
 
 /** The tapped way leads. Every other way stays where it was. */

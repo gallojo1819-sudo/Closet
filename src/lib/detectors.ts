@@ -47,6 +47,7 @@ export {
   maxDisjoint,
   OCCASION_ORDER,
   renderedSectionLooks,
+  sectionRows,
   ROW_MAX,
   seasonFits,
   sharedDetector,

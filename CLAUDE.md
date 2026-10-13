@@ -31,3 +31,9 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   `rowWays` now checks twins per row too. The header read "8 looks" because it counted only the
   week row (capped at 8): `screenLookCount` in `lookbook-status.ts` counts the week cards that
   render plus the idea-row cards. `nameWithColor` replaces the whole leading colour phrase.
+- header-count (Oct 13 2026): the header's "N looks" and DetectorSections read one list,
+  `sectionRows` in `detectors/cells.ts` (both branches, "Your usual" included);
+  `renderedSectionLooks` is that list flattened. `lookbook-header-count.test.tsx` renders the
+  section to markup over six Re-dress pages per chapter on the 157-piece fixture and checks the
+  header against the cards drawn. `detectors.test.ts` pins the component's import line and the
+  `{row.title}` heading. vitest resolves `@/` via an alias in `vitest.config.ts`.

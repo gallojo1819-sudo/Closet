@@ -486,7 +486,7 @@ describe("detectors", () => {
     const imports = source.split("\n").filter((line) => line.startsWith("import "));
     assert.deepEqual(imports, [
       'import { LookCollage } from "@/components/closet/look-collage";',
-      'import { activeFirst, OCCASION_ORDER, ROW_MAX, visibleDetectors, type Way } from "@/lib/detectors";',
+      'import { sectionRows, visibleDetectors, type Way } from "@/lib/detectors";',
       'import { ideaTitle, pieceLine } from "@/lib/look-collage";',
       'import type { Garment, Occasion, Season } from "@/lib/types";',
       'import { PlateRack } from "@/components/closet/plate-rack";',
@@ -556,7 +556,7 @@ describe("detectors", () => {
       "utf8",
     );
     const book = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
-    assert.match(sections, /<h2[^>]*>\{way\.title\}<\/h2>/);
+    assert.match(sections, /<h2[^>]*>\{row\.title\}<\/h2>/);
     assert.equal(BANNED.test(sections), false);
     // Joe removed the Houses and ways chip rows; the app is for everyone.
     assert.equal(book.includes("data-house-row"), false);

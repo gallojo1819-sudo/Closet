@@ -1,5 +1,5 @@
 import { LookCollage } from "@/components/closet/look-collage";
-import { activeFirst, OCCASION_ORDER, ROW_MAX, visibleDetectors, type Way } from "@/lib/detectors";
+import { sectionRows, visibleDetectors, type Way } from "@/lib/detectors";
 import { ideaTitle, pieceLine } from "@/lib/look-collage";
 import type { Garment, Occasion, Season } from "@/lib/types";
 import { PlateRack } from "@/components/closet/plate-rack";
@@ -13,10 +13,6 @@ const OCCASION_LABEL: Record<Occasion, string> = {
 };
 
 const NOTE = "Not enough of your pieces for this here yet.";
-
-function chapterLooks(way: Way, occasion: Occasion): Garment[][] {
-  return (way.looks[occasion] ?? []).filter((look) => look.length >= 3);
-}
 
 /**
  * One rack card: the jacket-first collage (its own 1:1.28 box, nothing clipped, the jacket on
@@ -77,7 +73,10 @@ function Chapter({
   );
 }
 
-/** Ways this closet can dress. A short way shows what it has and says so. A way with no look is not rendered. */
+/**
+ * Ways this closet can dress. A short way shows what it has and says so. A way with no look is
+ * not rendered. The rows come from sectionRows, the same lists the Lookbook header counts.
+ */
 export function DetectorSections({
   garments,
   ways,
@@ -96,11 +95,9 @@ export function DetectorSections({
   onOpen?: OpenPlate;
 }) {
   const found = ways ?? visibleDetectors(garments, { occasion, season, color });
-  const usual = found.find((way) => way.usual);
+  const { usual, rows } = sectionRows(found, occasion, activeId);
   if (usual) {
-    const looks = OCCASION_ORDER.flatMap((id) =>
-      (usual.looks[id] ?? []).map((look) => ({ look, occasion: id })).slice(0, ROW_MAX),
-    ).filter((plate) => plate.look.length >= 3);
+    const looks = rows[0]?.looks ?? [];
     if (looks.length < 3) {
       return (
         <div data-detectors className="mt-8">
@@ -125,16 +122,12 @@ export function DetectorSections({
   }
   return (
     <div data-detectors className="mt-8 space-y-6">
-      {activeFirst(found, activeId).map((way) => {
-        const looks = chapterLooks(way, occasion);
-        if (looks.length < 1) return null;
-        return (
-          <section key={way.id}>
-            <h2 className="font-editorial text-2xl tracking-tight">{way.title}</h2>
-            <Chapter title={way.title} occasion={occasion} looks={looks} onOpen={onOpen} />
-          </section>
-        );
-      })}
+      {rows.map((row) => (
+        <section key={row.id}>
+          <h2 className="font-editorial text-2xl tracking-tight">{row.title}</h2>
+          <Chapter title={row.title} occasion={occasion} looks={row.looks.map((plate) => plate.look)} onOpen={onOpen} />
+        </section>
+      ))}
     </div>
   );
 }
