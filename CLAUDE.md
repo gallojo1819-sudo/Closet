@@ -135,3 +135,33 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   in `look.test.ts`, `stylist-page.test.ts`, `look-collage.test.ts`, `lookbook.test.ts`,
   `data/copies.test.ts`. `diag/qa-today-pin.mjs` loads the preview twice (CHROME_PATH,
   CLOSET_V6_FILE) and compares the page with the dock.
+- today-consistency-fix (Oct 14 2026, claude/today-consistency-fix): the live check of f51a011
+  (signed in) still failed on three counts. (1) Dock: the daily pick lived in the Today page's
+  effect, so on any other page (or before its weather fetch) the dock read yesterday's drop,
+  and "this session" was a module-load timestamp (a kept-alive tab or a future-stamped message
+  from another device counted). Now `useDailyPick` (`src/lib/use-daily-pick.ts`, called by
+  AppShell) rolls the pick on every page; `todayLookPieces` falls back to the pick itself
+  (`dailyPickIds` → `pickDropIds` in `drop-pick.ts`, the pure assembly `rerollDrop` now also
+  uses, under the bucket from `today-season.ts`) when no cell holds today's look, so the page,
+  the dock and `answerTodayAsk` agree before and after the effect lands. The dock's thread is
+  the ids it pushed this session (`stylist-session.ts`: `sessionThread` with the dock's own
+  echo, `thisLookMessage` = a stylist answer pushed today), and an ask is bounded:
+  `askWithDeadline` (8 s) then `localStylistReply` (composeAtlasLook) so a reply always
+  renders; `xaiFetch` has `AbortSignal.timeout` and the notes read a 3 s race. (2) Names:
+  `displayName` in `piece-label.ts` sets aside untrusted stored names (placeholders, bare
+  category words, filenames, the old renamer's "Cream knit" with no cream tagged) and builds
+  one from the fields; `pieceLabel` groups by the shown name and suffixes with a real word
+  (colour, material, subtype, fit, pattern), then formality/warmth words, then "added <day>",
+  and an ordinal only when every field is the same (on the fixture: one white/blue sneaker
+  pair, the two "other" placeholders). `pieceLine`, `plainName`, `nameLook`, `speakPiece`
+  and the plate fallbacks read it; nothing writes a name. (3) Lookbook: a piece leads at most
+  one card on the whole page, where a card's lead is what it shows first: a week card its top
+  (`weekLeadPiece`, the stacked plate's first band), an idea card its jacket else its top
+  (`leadPiece` in `look-collage.ts`). `RowOpts.led` (twin keys) is threaded through heroRow,
+  spreadJackets, the forgotten row and the stored fallback; `weekRotationRow` returns `leads`
+  and the route hands them to `rowWays` as `leadIds`. Week rows unchanged (6 out/fall, 8
+  elsewhere); on weekday/fall seven rows across six pages are 1–2 cards shorter than at
+  f51a011 because every card there must carry a jacket, 15 jacket groups pair, and
+  `wayCanDress` (exhaustive, theme-aware) shows no row could take the one un-led jacket left;
+  `lookbook-crossrow.test.ts` pins the f51a011 row sizes (BEFORE) and allows a shorter row only
+  under that proof. `diag/lookbook-leads.ts <occasion>` prints the un-led jackets per page.

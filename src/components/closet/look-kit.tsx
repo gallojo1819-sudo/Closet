@@ -1,6 +1,7 @@
 import { useSyncExternalStore, type CSSProperties } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { kitBand, kitCells } from "@/lib/look";
+import { displayName } from "@/lib/piece-label";
 import { coverByteRev, hasCleanCover, subscribeCoverBytes } from "@/lib/plate";
 import type { Garment } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -99,7 +100,7 @@ function CoverArt({
   if (!hasCleanCover(garment)) {
     return (
       <div className={cn("flex h-full w-full items-center justify-center px-3 text-center", className)}>
-        <p className="text-sm leading-snug">{garment.name}</p>
+        <p className="text-sm leading-snug">{displayName(garment)}</p>
       </div>
     );
   }

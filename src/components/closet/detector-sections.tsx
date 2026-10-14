@@ -35,7 +35,7 @@ function PlateCard({
       <button
         type="button"
         onClick={(e) => onOpen?.(look, occasion, e.currentTarget)}
-        aria-label={`Open ${look.map((g) => g.name).join(", ")}`}
+        aria-label={`Open ${pieceLine(look).replaceAll(" · ", ", ")}`}
         className="block w-full text-left focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-ink"
       >
         <LookCollage pieces={look} />

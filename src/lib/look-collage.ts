@@ -4,6 +4,7 @@
  * a tmpdir next to the real detectors file.
  */
 import { PALETTE, paletteCss } from "./color.ts";
+import { displayName } from "./piece-label.ts";
 import { slotOf } from "./style.ts";
 import { wearSlot } from "./stylist/jackets.ts";
 import type { Garment } from "./types.ts";
@@ -155,7 +156,7 @@ const COLOR_WORDS = new Set<string>([
 
 /** The name without its brand and its colour words. "Cream half-zip" → "half-zip". */
 export function plainName(g: Garment): string {
-  let name = (g.name ?? "").trim();
+  let name = displayName(g);
   const brand = (g.brand ?? "").trim();
   if (brand) name = name.split(new RegExp(brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig")).join(" ");
   const words = name
@@ -191,7 +192,7 @@ export function pieceLine(pieces: Garment[]): string {
   return collageSlots(pieces)
     .slice()
     .sort((x, y) => order.indexOf(x.slot) - order.indexOf(y.slot))
-    .map((p) => p.g.name)
+    .map((p) => displayName(p.g))
     .join(" · ");
 }
 
@@ -345,4 +346,17 @@ export function ideaTitle(pieces: Garment[]): string {
     return first ? capFirst(plainName(first).toLowerCase() || first.name.toLowerCase()) : "";
   }
   return capFirst(parts.join(", "));
+}
+
+/**
+ * The piece an idea card leads with, as the card shows it: the outer layer (the collage's big
+ * upper-left piece, the first word of ideaTitle and pieceLine), else the top (a mid layer over
+ * a shirt leads), else the first piece. A week card leads with its top instead (weekLeadPiece
+ * in look.ts: the stacked plate's first band). The Lookbook's one-lead-per-page rule
+ * (ideas.ts) and its tests read these, so the rule and the cards cannot drift.
+ */
+export function leadPiece(pieces: readonly Garment[]): Garment | null {
+  const slots = collageSlots([...pieces]);
+  const by = (slot: CollageSlot) => slots.find((p) => p.slot === slot)?.g;
+  return by("outer") ?? by("top") ?? by("top2") ?? pieces[0] ?? null;
 }

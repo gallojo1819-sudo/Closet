@@ -10,7 +10,7 @@ import {
   slotOf,
 } from "./style.ts";
 import type { House } from "./houses.ts";
-import { pieceLabel } from "./piece-label.ts";
+import { displayName, pieceLabel } from "./piece-label.ts";
 import { hasCleanCover } from "./plate.ts";
 import { wearSlot } from "./stylist/jackets.ts";
 
@@ -143,11 +143,20 @@ export function kitCells(pieces: Garment[]): Garment[] {
   return [top, bottom, outer, shoe].filter((g): g is Garment => Boolean(g));
 }
 
+/**
+ * The piece a week card leads with, as the card shows it: the first band of the stacked plate
+ * (LookKit "stack": the top, then the jacket, bottom, shoe) and the first name in its caption.
+ * An idea card leads with its jacket instead (leadPiece in look-collage.ts).
+ */
+export function weekLeadPiece(pieces: readonly Garment[]): Garment | null {
+  return kitCells([...pieces])[0] ?? pieces[0] ?? null;
+}
+
 export function nameLook(pieces: Garment[]): string {
   const sorted = sortLook(pieces);
   if (sorted.length === 0) return "Nothing on the rack";
-  if (sorted.length === 1) return sorted[0]!.name;
-  return `${sorted[0]!.name} · ${sorted[1]!.name}`;
+  if (sorted.length === 1) return displayName(sorted[0]!);
+  return `${displayName(sorted[0]!)} · ${displayName(sorted[1]!)}`;
 }
 
 /** Today's hero is the strip cell when that cell has a thumbnail. Otherwise the drop. */

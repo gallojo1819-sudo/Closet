@@ -40,7 +40,7 @@ import {
 import { lookbookCountLine, screenLookCount, weekShowsEmptyReason, weekShowsSkeletons } from "@/lib/lookbook-status";
 import { seasonChipRow, seasonControlLabel, seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
-import { cardTag, spreadTitle } from "@/lib/look";
+import { cardTag, spreadTitle, weekLeadPiece } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
@@ -421,9 +421,16 @@ function LookbookPage() {
      and lift pieces the store has not put in front of the user lately. Nothing is written. */
   const weekKey = weekRow.map((look) => look.garmentIds.join(",")).join("|");
   const weekIds = useMemo(() => weekKey.split("|").flatMap((ids) => (ids ? ids.split(",") : [])), [weekKey]);
-  /* The week row's first card leads that row: no idea row leads with its pieces. */
-  const leadKey = weekKey.split("|")[0] ?? "";
-  const leadIds = useMemo(() => (leadKey ? leadKey.split(",") : []), [leadKey]);
+  /* Each week card's lead piece (weekLeadPiece: the stacked plate's first band, the top) leads
+     that card; a piece leads one card a page, so no idea row card leads with any of them. */
+  const leadIds = useMemo(
+    () =>
+      weekKey
+        .split("|")
+        .map((ids) => weekLeadPiece(ids.split(",").map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g)))?.id)
+        .filter((id): id is string => Boolean(id)),
+    [weekKey, byId],
+  );
   const suggested = useMemo(() => lastSuggested({ drop, journal, looks: looksAll }), [drop, journal, looksAll]);
   useEffect(() => {
     const inputs = [garments, occasion, season, color, pageWeather];
@@ -940,7 +947,7 @@ function LookbookPage() {
           <div className="p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-3">
               <p className="font-editorial text-2xl tracking-tight">
-                5 looks with {hero.name}
+                5 looks with {pieceLabel(hero, garments)}
               </p>
               <button
                 type="button"

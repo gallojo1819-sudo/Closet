@@ -26,6 +26,7 @@ import {
   putThumb,
 } from "@/lib/images";
 import { costPerWear, money } from "@/lib/look";
+import { displayName } from "@/lib/piece-label";
 import { PALETTE, nameWithColor } from "@/lib/color";
 import { derivedCategory } from "@/lib/garment-category";
 import { colorsForName, shownColors } from "@/lib/garment-color";
@@ -371,7 +372,7 @@ export function GarmentDetail({
             >
               {view === "print" && needsReprintTile(garment) ? (
                 <div className="flex h-full w-full flex-col items-center justify-center bg-paper-deep px-6 text-center">
-                  <p className="font-editorial text-2xl tracking-tight">{garment.name}</p>
+                  <p className="font-editorial text-2xl tracking-tight">{displayName(garment)}</p>
                   <p className="micro mt-3 text-ink-soft">{REPRINT_CAPTION}</p>
                 </div>
               ) : view === "print" ? (

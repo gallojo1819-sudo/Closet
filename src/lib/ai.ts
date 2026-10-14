@@ -56,19 +56,32 @@ function xaiErrorMessage(json: unknown, text: string, status: number): string {
   return `xAI request failed (${status})`;
 }
 
-async function xaiFetch(url: string, body: unknown): Promise<XaiResult> {
+/** How long one model call may take before it is given up as a failed call (the caller falls back). */
+export const XAI_TIMEOUT_MS = 20000;
+/** How long the stylist waits for the account's notes before answering without them. */
+export const NOTES_TIMEOUT_MS = 3000;
+
+async function xaiFetch(url: string, body: unknown, timeoutMs = XAI_TIMEOUT_MS): Promise<XaiResult> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {
     return { ok: false, status: 0, error: "Set XAI_API_KEY.", json: null };
   }
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      /* A call that never returns is a failed call, not a hung request: the caller's fallback answers. */
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (e) {
+    const name = e instanceof Error ? e.name : "";
+    return { ok: false, status: 0, error: name === "TimeoutError" ? "xAI request timed out" : "xAI request failed", json: null };
+  }
   const text = await res.text();
   let json: unknown = null;
   try {
@@ -636,9 +649,13 @@ export const askStylist = createServerFn({ method: "POST" })
     });
     const noteBody = [data.context, pageNotes(page)].filter(Boolean).join("\n");
     const notes = noteBody ? `\n\nNOTES\n${noteBody}` : "";
-    /* What he told the stylist, as the caller under RLS: the top eight by topic match, then recency. */
+    /* What he told the stylist, as the caller under RLS: the top eight by topic match, then recency.
+       A notes read that hangs or throws costs the answer nothing: the ask goes on without them. */
     const { loadActiveNotes } = await import("./stylist-notes/notes.server");
-    const active = await loadActiveNotes(context.callerId, context.sbToken);
+    const active = await Promise.race([
+      loadActiveNotes(context.callerId, context.sbToken).catch(() => []),
+      new Promise<never[]>((resolve) => setTimeout(() => resolve([]), NOTES_TIMEOUT_MS)),
+    ]);
     const remembered = notesBlock(
       relevantNotes(active, { prompt: data.prompt, garments: rack, lockedIds: data.lockedIds }),
       rack,

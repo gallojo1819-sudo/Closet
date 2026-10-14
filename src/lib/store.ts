@@ -30,7 +30,7 @@ import {
   stripRepeatBlazers,
 } from "./lookbook";
 import { scrubRack } from "./rack";
-import { DAILY_MOMENT, dailyPickWeather, dailySalt, liveIdsKey } from "./daily-pick";
+import { pickDropIds, type DailyPick } from "./drop-pick";
 import {
   mergeClosetPersist,
   openPersistGate,
@@ -43,22 +43,12 @@ import {
   type SeenLooks,
 } from "./store-persist";
 import {
-  coreComboKey,
-  defaultOccasion,
   lastWornDays,
-  isMulePiece,
-  momentOfDay,
-  comfyCostume,
-  pickLook,
   slotOf,
   todayOccasion,
-  weekUniformKeys,
   type House,
 } from "./style";
-import { isLinenCampPiece, seasonFromWeather } from "./season";
-import { legalWithJacket } from "./stylist/legal";
-import { jacketRequired } from "./stylist/jackets";
-import { mapOccasion, type DailyDrop, type Garment, type Look, type Moment, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
+import { mapOccasion, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
 import { forgetCoverSha } from "./cloud/blobs";
 import { noteRefPhotoEdit, noteUserEdit } from "./cloud/edit";
@@ -79,9 +69,6 @@ import { todayISO, uid } from "./utils";
 
 export { mergeClosetPersist, openPersistGate, persistGate };
 export type { PersistedCloset };
-
-/** The day's first pick: the frozen season bucket is its only weather input (daily-pick.ts). */
-export type DailyPick = { season: Season };
 
 type ClosetState = {
   garments: Garment[];
@@ -151,68 +138,6 @@ type ClosetState = {
     drop: DailyDrop | null;
   }) => void;
 };
-
-function pickDrop(
-  garments: Garment[],
-  weather?: WeatherSnap,
-  occasion?: Occasion,
-  avoid?: Record<string, number>,
-  recentWorn?: string[],
-  previousIds?: string[],
-  lockedIds?: string[],
-  repeatPairs?: Set<string>,
-  extra?: {
-    salt?: number;
-    usedCount?: Map<string, number>;
-    excludeKeys?: string[];
-    skip?: boolean;
-    taste?: TasteMemory;
-    /** The daily pick: the day's frozen bucket and a fixed moment, so the clock is not an input. */
-    season?: Season;
-    moment?: Moment;
-  },
-  now: Date = new Date(),
-): string[] {
-  const occ = occasion ?? defaultOccasion(now);
-  /* A measured reading only. A missing reading stays missing; pickLook's 68 is for scoring. */
-  const tempF = weather?.measured ? weather.f : undefined;
-  const season = extra?.season ?? seasonFromWeather(weather?.f, now);
-  const cold = season === "fall" || season === "winter";
-  const ctx = { occasion: occ, season, ...(tempF !== undefined ? { weatherF: tempF } : {}) };
-  const needJacket = jacketRequired(occ, season, tempF);
-  return pickLook(garments, {
-    weather,
-    occasion: occ,
-    moment: extra?.moment ?? momentOfDay(now),
-    requireOuter: needJacket,
-    avoid,
-    recentWorn,
-    previousIds,
-    lockedIds,
-    repeatPairs,
-    salt: extra?.salt ?? 1,
-    usedCount: extra?.usedCount,
-    excludeKeys: extra?.excludeKeys,
-    minSlotChange: extra?.skip ? 2 : 0,
-    requireSilhouetteChange: Boolean(extra?.skip),
-    taste: extra?.taste,
-    legalCombo: (pieces) => {
-      if (occ === "comfy" && comfyCostume(pieces)) return false;
-      if (
-        cold &&
-        pieces.some(
-          (g) =>
-            isMulePiece(g) ||
-            isLinenCampPiece(g) ||
-            ((g.seasons?.length ?? 0) > 0 && g.seasons.every((s) => s === "summer")),
-        )
-      ) {
-        return false;
-      }
-      return legalWithJacket(pieces, ctx);
-    },
-  });
-}
 
 /** Marks a drop the user set on this device. Stamped only while the persist gate is open. */
 function stampDrop<T extends DailyDrop>(drop: T): T {
@@ -545,74 +470,16 @@ export const useCloset = create<ClosetState>()(
       },
       setDrop: (drop) => set({ drop: stampDrop(drop) }),
       rerollDrop: (weather, occasion, previousIds, skippedKeys, daily) => {
-        const prev = get().drop;
-        const occ = mapOccasion(
-          occasion ?? (prev?.date === todayISO() ? prev?.occasion : undefined) ?? defaultOccasion(),
-        );
-        /* The drop shows the clock's moment; the daily pick scores against DAILY_MOMENT. */
-        const moment = momentOfDay();
-        const lastWorn = get().journal.find((j) => j.verdict === "worn")?.garmentIds;
-        const sameDay = prev?.date === todayISO();
-        const lockedIds = sameDay ? (prev?.lockedIds ?? []) : [];
-        const repeats = weekUniformKeys(get().journal, get().garments);
-        /* The week row is memory-only and lands after an idle callback: not a daily-pick input. */
-        const weekKeys = daily
-          ? []
-          : get()
-              .thisWeek.slice(0, 6)
-              .map((l) => comboKey(l.garmentIds));
-        const wornKeys = get()
-          .journal.filter((j) => j.verdict === "worn")
-          .slice(0, 7)
-          .map((j) => comboKey(j.garmentIds));
-        /* Only today's skips stay off. Yesterday's skip was "not that day", so it can come back. */
-        const todaySkipped = [
-          ...new Set(sameDay ? [...(prev?.skippedKeys ?? []), ...(skippedKeys ?? [])] : (skippedKeys ?? [])),
-        ];
-        const skippedToday = [
-          ...get()
-            .journal.filter((j) => j.verdict === "skipped" && j.date === todayISO())
-            .map((j) => j.garmentIds),
-          ...todaySkipped.map((key) => key.split("|")),
-        ];
-        /* pickLook bans by core key, so the jacket must not hide a skipped look. */
-        const skipKeys = [
-          ...new Set(skippedToday.flatMap((ids) => [comboKey(ids), coreComboKey(ids, get().garments)])),
-        ];
-        const currentKey = prev?.garmentIds?.length ? comboKey(prev.garmentIds) : "";
-        const currentCore = prev?.garmentIds?.length
-          ? coreComboKey(prev.garmentIds, get().garments)
-          : "";
-        const skip = Boolean(previousIds?.length);
-        /* The daily pick: a salt from the day and the live closet, the bucket's weather, no
-           clock, no week row, no Lookbook auto-look counts (those move when the Lookbook builds,
-           not when the user does anything). Skip and Reshuffle keep their own salts. */
-        const salt = daily
-          ? dailySalt(todayISO(), liveIdsKey(get().garments))
-          : skip
-            ? get().skipCount || 1
-            : get().reshuffleCount || 1;
-        const shownWeather = weather ?? prev?.weather;
-        const ids = pickDrop(
-          get().garments,
-          daily ? dailyPickWeather(daily.season) : shownWeather,
-          occ,
-          get().avoid,
-          lastWorn,
+        /* One pure assembly (drop-pick.ts): the same inputs Today and the stylist dock read before
+           the pick lands, so the page and the store agree. */
+        const { ids, occ, moment, lockedIds, sameDay, todaySkipped, shownWeather } = pickDropIds(get(), {
+          weather,
+          occasion,
           previousIds,
-          lockedIds,
-          repeats,
-          {
-            salt,
-            usedCount: daily ? undefined : lookCountMap(get().looks),
-            excludeKeys: [...weekKeys, ...wornKeys, ...skipKeys, currentKey, currentCore].filter(
-              Boolean,
-            ),
-            skip,
-            taste: get().taste,
-            ...(daily ? { season: daily.season, moment: DAILY_MOMENT } : {}),
-          },
-        );
+          skippedKeys,
+          daily,
+        });
+        const prev = get().drop;
         const picked = ids
           .map((id) => get().garments.find((g) => g.id === id))
           .filter((g): g is Garment => Boolean(g));
@@ -1071,4 +938,4 @@ export const useCloset = create<ClosetState>()(
   ),
 );
 
-export { pickDrop };
+export { pickDrop, type DailyPick } from "./drop-pick";

@@ -1,3 +1,4 @@
+import { displayName } from "./piece-label.ts";
 import { clashes, daysIdle, slotOf, todayOccasion } from "./style.ts";
 import { scoreLook } from "./stylist/legal.ts";
 import { OCCASIONS, SEASONS, type DailyDrop, type Garment, type Occasion, type Season } from "./types.ts";
@@ -272,7 +273,8 @@ function labelOf(kind: "occasion" | "season", id?: string): string {
 
 function speakPiece(g: Garment): string {
   const brand = (g.brand ?? "").trim();
-  const original = g.name.trim();
+  /* The name the piece shows (piece-label.ts): a placeholder or the old renamer's default is not spoken. */
+  const original = displayName(g);
   let name = original;
   if (brand) {
     const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -639,6 +641,9 @@ export function answerTodayAsk(input: {
   /** The wear journal and the memory-only week row: with the drop, what the Today page shows. */
   journal?: TodayLookState["journal"];
   thisWeek?: TodayLookState["thisWeek"];
+  /** The daily pick's other inputs and the day's bucket, as the page hands them (today-look.ts). */
+  avoid?: TodayLookState["avoid"];
+  season?: TodayLookState["season"];
   today?: string;
   taste?: TasteMemory;
   weatherF?: number;
@@ -648,7 +653,15 @@ export function answerTodayAsk(input: {
   const occasion = todayOccasion(input.drop, today);
   /* The look on the Today page (today-look.ts), not a fresh roll. */
   const pieces = todayLookPieces(
-    { drop: input.drop, journal: input.journal, thisWeek: input.thisWeek, garments: owned },
+    {
+      drop: input.drop,
+      journal: input.journal,
+      thisWeek: input.thisWeek,
+      garments: owned,
+      avoid: input.avoid,
+      taste: input.taste,
+      season: input.season,
+    },
     today,
   );
   if (pieces.length >= 2) {

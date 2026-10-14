@@ -13,6 +13,7 @@ import { livePool } from "@/lib/rack";
 import { engineCacheReady, loadEngineCache } from "@/lib/engine-cache";
 import { migrateImagesToIdb } from "@/lib/migrate";
 import { bootCloset, openPersistGate, seedState, useCloset } from "@/lib/store";
+import { useDailyPick } from "@/lib/use-daily-pick";
 import { cn } from "@/lib/utils";
 import { noteRoute } from "@/lib/stylist-page";
 import { BottomNav } from "./bottom-nav";
@@ -122,6 +123,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const userId = account.user?.id ?? null;
   const cleaning = usePlatePassNote();
+  /* Today's look lands in the store on every page, so the stylist dock reads it wherever it opens. */
+  useDailyPick();
 
   useEffect(() => {
     if (!hydrated || !userId) return;

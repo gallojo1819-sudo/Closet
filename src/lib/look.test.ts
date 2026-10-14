@@ -221,7 +221,7 @@ describe("today agrees", () => {
     const page = readFileSync(new URL("../routes/index.tsx", import.meta.url), "utf8");
     assert.equal(page.includes("heroPieces"), false);
     /* Today's pieces come from the one selector the dock and the ask read (today-look.ts). */
-    assert.match(page, /todayLookPieces\(\{ drop, journal, thisWeek, garments \}, today\)/);
+    assert.match(page, /todayLookPieces\(\{ drop, journal, thisWeek, garments, avoid, taste, season: todaySeason \}, today\)/);
     const selector = readFileSync(new URL("./today-look.ts", import.meta.url), "utf8");
     assert.match(selector, /cells\.find\(\(c\) => c\.iso === today\)/);
     assert.match(page, /unwornLine/);

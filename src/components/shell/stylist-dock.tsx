@@ -34,7 +34,15 @@ import {
 import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
 import { todayLookPieces } from "@/lib/today-look";
-import { StylistThread, replyLines, sessionMessages } from "./stylist-thread";
+import { todaySeasonBucket } from "@/lib/today-season";
+import {
+  ASK_DEADLINE_MS,
+  askWithDeadline,
+  localStylistReply,
+  sessionThread,
+  thisLookMessage,
+} from "@/lib/stylist-session";
+import { StylistThread, replyLines } from "./stylist-thread";
 import { daysIdle, defaultOccasion, momentOfDay, todayOccasion } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { accountNotes } from "@/lib/stylist-notes/client";
@@ -53,13 +61,14 @@ import {
   techniqueUsed,
   trendDue,
 } from "@/lib/taste";
-import { OCCASIONS, type Garment, type Occasion } from "@/lib/types";
+import { OCCASIONS, type Garment, type Occasion, type StylistMessage } from "@/lib/types";
 import { cn, todayISO } from "@/lib/utils";
 
 let trendPassStarted = false;
-/* This session's thread starts when the app opened: "This look" is Today's look until an ask
-   in this session answers with another; an earlier session's last answer is not this look. */
-const SESSION_START = new Date().toISOString();
+/* This session's thread is what this dock pushed since the app opened, by id (stylist-session.ts):
+   "This look" is Today's look until an ask in this session answers today with another; an
+   earlier session's last answer, whatever its timestamp, is not this look. */
+const SESSION_IDS = new Set<string>();
 
 const panelListeners = new Set<() => void>();
 
@@ -91,7 +100,19 @@ export function StylistDock() {
   const owned = garments;
   const forStylist = garments;
   const messages = useCloset((s) => s.messages);
-  const pushMessage = useCloset((s) => s.pushMessage);
+  const avoid = useCloset((s) => s.avoid);
+  const tasteNow = useCloset((s) => s.taste);
+  const pushStore = useCloset((s) => s.pushMessage);
+  /* The dock's own copy of what it pushed this session: the thread renders it even if the store's
+     list is replaced under it (a rehydrate, a merge). */
+  const [echo, setEcho] = useState<StylistMessage[]>([]);
+  const pushMessage = (m: Omit<StylistMessage, "id" | "createdAt">): string => {
+    const id = pushStore(m);
+    SESSION_IDS.add(id);
+    const stored = useCloset.getState().messages.find((x) => x.id === id);
+    setEcho((list) => [...list, stored ?? { ...m, id, createdAt: new Date().toISOString() }]);
+    return id;
+  };
   const stampMessage = useCloset((s) => s.stampMessage);
   const saveLook = useCloset((s) => s.saveLook);
   const setDrop = useCloset((s) => s.setDrop);
@@ -102,6 +123,15 @@ export function StylistDock() {
     () => screenSentence(page, owned, rememberedLooks(page)),
     [page, owned],
   );
+  /* Until an ask in this session answers today with a look, "This look" is Today's look: the
+     same pieces the Today page shows (today-look.ts: the drop dated today, else the daily pick
+     under today's frozen bucket), read the instant the panel opens, on every page. */
+  const todaySeason = todaySeasonBucket(drop?.weather?.f);
+  const todayPieces = useMemo(
+    () => todayLookPieces({ drop, journal, thisWeek, garments: owned, avoid, taste: tasteNow ?? undefined, season: todaySeason }),
+    [drop, journal, thisWeek, owned, avoid, tasteNow, todaySeason],
+  );
+  const todayLine = todayPieces.length >= 2 ? lookReply(todayPieces) : null;
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const explicitWrite = useRef(false);
@@ -180,10 +210,10 @@ export function StylistDock() {
     setBusy(true);
     try {
     /* The last look answered in this session; an earlier session's answer is not "this look". */
-    const previous = [...sessionMessages(before.messages, SESSION_START)]
+    const previous = [...sessionThread(before.messages, SESSION_IDS, echo)]
       .reverse()
       .find((m) => m.role === "stylist" && m.garmentIds?.length);
-    const todayIds = todayLookPieces({ drop, journal, thisWeek, garments: owned }).map((g) => g.id);
+    const todayIds = todayPieces.map((g) => g.id);
     const taste = learnFromAsk(before.taste ?? emptyTaste(), {
       text: q,
       garments: owned,
@@ -207,6 +237,8 @@ export function StylistDock() {
         journal,
         thisWeek,
         garments: owned,
+        avoid,
+        season: todaySeason,
         taste,
         ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
       });
@@ -402,17 +434,47 @@ export function StylistDock() {
       .filter(Boolean)
       .join(" · ");
     const thread = before.messages.slice(-8).map((m) => ({ role: m.role, text: m.text }));
-    const res = await askStylist({
-      data: stylistAskFields({
-        prompt: q,
-        context,
-        garments: forStylist,
-        taste,
-        lockedIds: named.map((g) => g.id),
-        thread,
-        page: here,
+    /* The server has ASK_DEADLINE_MS. Past it, or on an error, the closet answers for itself
+       (stylist-session.ts), so the panel always shows a reply. */
+    const res = await askWithDeadline(
+      askStylist({
+        data: stylistAskFields({
+          prompt: q,
+          context,
+          garments: forStylist,
+          taste,
+          lockedIds: named.map((g) => g.id),
+          thread,
+          page: here,
+        }),
       }),
-    });
+      ASK_DEADLINE_MS,
+    );
+    if (res === null) {
+      const local = localStylistReply({
+        prompt: q,
+        garments: owned,
+        occasion: pageOccasion(here.occasion, todayOccasion(drop)),
+        taste,
+        ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
+      });
+      if (!local) {
+        pushMessage({ role: "stylist", text: "Couldn't reach the stylist, and nothing in your closet makes a full look. Try again." });
+        return;
+      }
+      const pieces = local.garmentIds
+        .map((id) => owned.find((g) => g.id === id))
+        .filter((g): g is Garment => Boolean(g));
+      pushMessage({
+        role: "stylist",
+        text: local.text,
+        garmentIds: local.garmentIds,
+        draftName: nameLook(pieces),
+        draftOccasion: local.occasion,
+        technique: local.technique ?? undefined,
+      });
+      return;
+    }
     const payload = await stylistPayload(res);
     const painted = replyFromStylistResult(payload, owned);
     const pieces = painted.garmentIds
@@ -491,17 +553,11 @@ export function StylistDock() {
     </form>
   );
 
-  const thread = sessionMessages(messages, SESSION_START);
-  const lastStylist = [...thread].reverse().find((m) => m.role === "stylist");
+  const thread = sessionThread(messages, SESSION_IDS, echo);
+  /* "This look": this session's last stylist answer when it was pushed today; else Today's look. */
+  const lastStylist = thisLookMessage(thread);
   const error = lastStylist?.text === NOT_IN_CLOSET ? lastStylist.text : null;
   const look = lastStylist && !error ? lastStylist : null;
-  /* Until an ask in this session answers with a look, "This look" is Today's look: the same
-     pieces the Today page shows (today-look.ts). */
-  const todayPieces = useMemo(
-    () => todayLookPieces({ drop, journal, thisWeek, garments: owned }),
-    [drop, journal, thisWeek, owned],
-  );
-  const todayLine = todayPieces.length >= 2 ? lookReply(todayPieces) : null;
 
   return (
     <>

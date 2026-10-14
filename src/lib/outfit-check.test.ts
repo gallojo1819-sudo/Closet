@@ -421,7 +421,8 @@ describe("outfit check", () => {
       }
     }
     assert.ok(n >= 5000, `${n} checks`);
-    const store = readFileSync(new URL("./store.ts", import.meta.url), "utf8");
+    /* pickDrop lives in drop-pick.ts now (the pure pick the store and today-look.ts share). */
+    const store = readFileSync(new URL("./drop-pick.ts", import.meta.url), "utf8");
     assert.equal(store.includes("legalWithJacket(pieces, ctx)"), true);
     assert.equal(store.includes("missingJacketOnly("), false);
   });

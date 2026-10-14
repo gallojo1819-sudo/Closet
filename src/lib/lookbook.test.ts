@@ -1763,12 +1763,15 @@ describe("lookbook card stack", () => {
     const gaps = readFileSync(new URL("./gaps.ts", import.meta.url), "utf8");
     assert.equal(gaps.includes("houseOf("), false);
     assert.equal(gaps.includes("Faloni in summer"), false);
-    // Today keeps today's look. The open effect rerolls only without a sound today drop, never as a
-    // skip, and only once the closet has settled (daily-pick.ts: the pick is the day's, by live ids).
-    const start = today.indexOf("if (!hydrated || !settled) return;");
-    const end = today.indexOf("}, [hydrated, settled, liveKey]);");
+    // Today keeps today's look. The open effect (use-daily-pick.ts, run by AppShell on every page)
+    // rerolls only without a sound today drop, never as a skip, and only once the closet has
+    // settled (daily-pick.ts: the pick is the day's, by live ids).
+    const pick = readFileSync(new URL("./use-daily-pick.ts", import.meta.url), "utf8");
+    assert.equal(today.includes("getNycWeather"), false, "the Today page only reads the pick");
+    const start = pick.indexOf("if (!hydrated || !settled) return;");
+    const end = pick.indexOf("}, [hydrated, settled, liveKey]);");
     assert.ok(start >= 0 && end > start, "the Today effect waits for a settled closet and re-runs on the live ids");
-    const effect = today.slice(start, end);
+    const effect = pick.slice(start, end);
     assert.match(effect, /rerollDrop\([^;]*\{ season \}/, "the open pick is the daily pick");
     const guard = effect.indexOf("current.date === todayISO()");
     assert.ok(guard >= 0 && guard < effect.indexOf("rerollDrop("), "date-today guard before the reroll");
@@ -1816,6 +1819,7 @@ export function GarmentImg(props) {
       const specs = [
         ["@/components/closet/gimg", pathToFileURL(stub).href],
         ["@/lib/look", href("./look.ts")],
+        ["@/lib/piece-label", href("./piece-label.ts")],
         ["@/lib/plate", href("./plate.ts")],
         ["@/lib/style", href("./style.ts")],
         ["@/lib/utils", href("./utils.ts")],

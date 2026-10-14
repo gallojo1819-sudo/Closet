@@ -43,7 +43,7 @@ export function GarmentTile({
       >
         {paper ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-paper-deep px-3 text-center">
-            <p className="text-sm leading-snug">{garment.name}</p>
+            <p className="text-sm leading-snug">{pieceLabel(garment, pool)}</p>
             {reprint ? <span className="micro mt-3 underline">Reprint</span> : null}
           </div>
         ) : (

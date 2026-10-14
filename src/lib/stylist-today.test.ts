@@ -68,11 +68,14 @@ describe("one selector for Today, the dock and the ask", () => {
   });
 
   it("no drop and nothing worn: the week row fills the strip's empty days in order, today last", () => {
-    /* One queued look lands on the earliest empty day, so today is empty on the page and the ask composes. */
-    const one = { drop: null, journal: [], thisWeek: [week(OTHER)], garments: CLOSET };
-    expect(pageShown(one)).toEqual([]);
+    /* One queued look lands on the earliest empty day, so today's cell is empty: the page and the
+       ask both show the daily pick itself (today-look.ts), never nothing. */
+    const one = { drop: null, journal: [], thisWeek: [week(OTHER)], garments: CLOSET, season: "fall" as const };
+    const picked = pageShown(one);
+    expect(picked.length).toBeGreaterThanOrEqual(3);
+    expect(picked).not.toEqual([...OTHER].sort());
     const composed = answerTodayAsk({ ...one, today: TODAY });
-    expect(composed.garmentIds.length).toBeGreaterThanOrEqual(2);
+    expect(composed.garmentIds).toEqual(picked);
     /* Seven queued looks reach today: the page's today cell and the ask are the same seventh look. */
     const seven = Array.from({ length: 7 }, (_, i) => ({ ...week(i === 6 ? OTHER : LOOK_IDS), id: `week_${i}` }));
     const full = { drop: null, journal: [], thisWeek: seven, garments: CLOSET };
