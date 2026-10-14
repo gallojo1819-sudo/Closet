@@ -1,6 +1,6 @@
 # Why the out chapter pairs under half the closet
 
-`redress-fill.test.ts` and `rotation.test.ts` ask every chapter to pair at least 45% of its
+`redress-fill.test.ts` and `rotation.test.ts` ask every chapter to pair at least 48% of its
 eligible pieces. The out chapter in fall sits just above that floor on the test closet
 (`src/lib/__fixtures__/engine-garments.json`, 157 pieces, 144 eligible in fall). This note
 derives, by running the engine, which pieces the chapter refuses and which rule or gate each

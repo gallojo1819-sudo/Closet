@@ -242,7 +242,7 @@ describe("six Re-dresses on the snapshot closet, every chapter", () => {
       /* The loose weekday gate and the plain rows keep most of the closet in play; out (no sneakers
          while loafers are owned, every clash the pattern words carry) sits near the floor, as in
          rotation.test.ts. */
-      expect(allowed.length, `${run.occasion}: allowed pieces`).toBeGreaterThanOrEqual(Math.ceil(0.45 * run.eligible.length));
+      expect(allowed.length, `${run.occasion}: allowed pieces`).toBeGreaterThanOrEqual(Math.ceil(0.48 * run.eligible.length));
     }
   });
 
