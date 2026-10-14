@@ -42,7 +42,7 @@ const FIXTURE = JSON.parse(
   readFileSync(new URL("./__fixtures__/engine-garments.json", import.meta.url), "utf8"),
 ) as Garment[];
 const BY_ID = new Map(FIXTURE.map((g) => [g.id, g]));
-/** The page's merged groups (four white sneakers, or two same-name pieces, are one piece): what the rotation gets and coverage counts. */
+/** The page's twin groups (four white sneakers are one piece; two shirts under one name are two): what the rotation gets and coverage counts. */
 const GROUPS = twinGroups(FIXTURE);
 const KEY = new Map(FIXTURE.map((g) => [g.id, GROUPS.key(g)]));
 const ALIKE = KEY;

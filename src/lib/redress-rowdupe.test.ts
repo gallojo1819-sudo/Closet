@@ -1,14 +1,18 @@
 /**
  * Two Lookbook bugs seen live after 4e0db3d. A piece sat twice in one row ("light grey pleated
- * trousers" on two cards of "More from your closet"): the closet stored it twice, once with
+ * trousers" on two cards of "More from your closet"): one photo was added twice, once with
  * material "wool" and once with none, and twinKey's material falls back to a name word, so the
- * two got different keys and passed the in-row guard. And the header always read "8 looks":
- * it counted only the week row (capped at 8) while fifteen to twenty cards rendered.
+ * two records got different keys and passed the in-row guard. And the header always read "8
+ * looks": it counted only the week row (capped at 8) while fifteen to twenty cards rendered.
  *
- * The closet is the snapshot fixture (engine-garments.json) plus the two
- * same-name trousers and a second "Light Blue denim jacket" next to the stored one. Six pages
- * (the first load and five Re-dress taps) per chapter are simulated as the page does them. A
- * row may hold one look only where the chapter has fewer pairable shoe groups than ROW_MIN; the
+ * A piece stored twice is one piece only when the records are true look-alikes: one twinKey
+ * (the four white leather sneakers) or one photo (fileHash). A shared name alone merges
+ * nothing: the closet holds two different shirts both named "brown blue plaid shirt".
+ *
+ * The closet is the snapshot fixture (engine-garments.json) plus the two trousers added from
+ * one photo and a second "Light Blue denim jacket" next to the stored one. Six pages (the
+ * first load and five Re-dress taps) per chapter are simulated as the page does them. A row
+ * may hold one look only where the chapter has fewer pairable shoe groups than ROW_MIN; the
  * header's "N looks" is the number of cards on the page.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -32,12 +36,15 @@ import { testCloset } from "./__fixtures__/snapshot.ts";
 
 const STORED: Garment[] = testCloset;
 
-/** The live bug's pieces: one name stored twice, the material field differing. */
+/** The live bug's pieces: one photo stored twice, the material field differing. */
 const TROUSERS = STORED.find((g) => /\btrousers\b/i.test(g.name) && g.category !== "outerwear")!;
+const PHOTO = "sha256-dupe-trousers-photo";
 const DUPES: Garment[] = [
-  { ...TROUSERS, id: "g_dupe_trousers_wool", name: "light grey pleated trousers", colors: ["light grey"], material: "wool" },
-  { ...TROUSERS, id: "g_dupe_trousers_none", name: "light grey pleated trousers", colors: ["light grey"], material: "" },
+  { ...TROUSERS, id: "g_dupe_trousers_wool", name: "light grey pleated trousers", colors: ["light grey"], material: "wool", fileHash: PHOTO },
+  { ...TROUSERS, id: "g_dupe_trousers_none", name: "light grey pleated trousers", colors: ["light grey"], material: "", fileHash: PHOTO },
 ];
+/** Two different shirts the closet stores under one name: a regular collar (warmth 3) and a button-down (warmth 2). */
+const PLAID_SHIRTS = ["g_z6syv3lx30tn", "g_21b6d3qcohmu"] as const;
 const DENIM_JACKET = STORED.find((g) => g.name === "light blue denim jacket")!;
 const DENIM_TWIN: Garment = { ...DENIM_JACKET, id: "g_dupe_denim_jacket", name: "Light Blue denim jacket" };
 
@@ -151,17 +158,27 @@ afterAll(() => {
   vi.useRealTimers();
 });
 
-describe("same-name pieces are twins", () => {
-  it("the closet reproduces the live bug: one name, two twinKeys", () => {
+describe("pieces stored twice are twins by photo or twinKey, never by name", () => {
+  it("the closet reproduces the live bug: one photo, two twinKeys", () => {
     expect(CLOSET.length).toBe(160);
     expect(twinKey(DUPES[0]!)).not.toBe(twinKey(DUPES[1]!));
   });
-  it("twinGroups puts each same-name pair in one group", () => {
+  it("twinGroups puts the two records of one photo in one group", () => {
     expect(TWINS.key(DUPES[0]!)).toBe(TWINS.key(DUPES[1]!));
     /* The group may also hold a stored look-alike (same slot, colour, material and noun). */
     for (const g of DUPES) expect(TWINS.of(DUPES[0]!)).toContain(g);
     expect(TWINS.key(DENIM_TWIN)).toBe(TWINS.key(DENIM_JACKET));
     expect(TWINS.of(DENIM_JACKET)).toContain(DENIM_TWIN);
+  });
+  it("two shirts under one name, two photos, stay two pieces", () => {
+    const [a, b] = PLAID_SHIRTS.map((id) => BY_ID.get(id)!);
+    expect(a!.name).toBe(b!.name);
+    expect(twinKey(a!)).not.toBe(twinKey(b!));
+    expect(TWINS.key(a!)).not.toBe(TWINS.key(b!));
+    expect(TWINS.of(a!)).not.toContain(b);
+    /* Same name, two different photos: still two pieces. */
+    const withPhotos = twinGroups([...CLOSET, { ...a!, id: "g_plaid_a", fileHash: "photo-a" }, { ...b!, id: "g_plaid_b", fileHash: "photo-b" }]);
+    expect(withPhotos.key({ ...a!, id: "g_plaid_a", fileHash: "photo-a" })).not.toBe(withPhotos.key({ ...b!, id: "g_plaid_b", fileHash: "photo-b" }));
   });
   it("only ever groups more: every twinKey group is inside one twins group", () => {
     const byTwinKey = new Map<string, Set<string>>();

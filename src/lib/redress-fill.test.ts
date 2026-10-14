@@ -45,7 +45,7 @@ const NAVY_CAMP_SHIRT = "g_b82609ex2nd7";
 /** The brown suede mules: casual and dressy, a fall shoe for out and weekend; a mule sits out winter (XC-SEA-3). */
 const MULES = "g_wymz2j18s6wh";
 const BY_ID = new Map(CLOSET.map((g) => [g.id, g]));
-/** The page's merged groups (four white sneakers, or two pieces stored under one name, are one piece): what the rotation gets and coverage counts. */
+/** The page's twin groups (four white sneakers are one piece; two shirts under one name are two): what the rotation gets and coverage counts. */
 const TWINS = twinGroups(CLOSET);
 const KEY = new Map(CLOSET.map((g) => [g.id, TWINS.key(g)]));
 const ALIKE = KEY;

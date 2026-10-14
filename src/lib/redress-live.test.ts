@@ -38,7 +38,7 @@ import { LIVE_SNAPSHOT_COUNT, liveSnapshot } from "./__fixtures__/snapshot.ts";
 
 const CLOSET: Garment[] = liveSnapshot;
 const BY_ID = new Map(CLOSET.map((g) => [g.id, g]));
-/** What the page hands the rotation and what coverage counts: the merged groups (same-name pieces are one piece). */
+/** What the page hands the rotation and what coverage counts: the twin groups (twinKey, or one photo; never the name alone). */
 const TWINS = twinGroups(CLOSET);
 const KEY = new Map(CLOSET.map((g) => [g.id, TWINS.key(g)]));
 const ALIKE = KEY;
@@ -54,6 +54,8 @@ const FRESH_MIN = 10;
 const COVER_BY = 5;
 
 const WHITE_SNEAKERS = twinKey(BY_ID.get("g_01xaga54r12h")!);
+/** Two different shirts stored under one name: a regular collar (warmth 3) and a button-down (warmth 2). */
+const PLAID_SHIRTS = ["g_z6syv3lx30tn", "g_21b6d3qcohmu"] as const;
 const BROWN_SUEDE_JACKET = twinKey(BY_ID.get("g_py2swfwot1ed")!);
 
 const ids = (look: readonly Garment[]) => look.map((g) => g.id);
@@ -156,6 +158,15 @@ afterAll(() => {
 });
 
 describe("the live closet", () => {
+  it("stores two different shirts under one name; they are two pieces to the caps and the cycle", () => {
+    const [a, b] = PLAID_SHIRTS.map((id) => BY_ID.get(id)!);
+    expect(a!.name).toBe(b!.name);
+    expect(a!.subtype).not.toBe(b!.subtype);
+    expect(twinKey(a!)).not.toBe(twinKey(b!));
+    expect(KEY.get(a!.id)).not.toBe(KEY.get(b!.id));
+    expect(TWINS.of(a!)).not.toContain(b);
+  });
+
   it("stores look-alike pieces apart: four white leather sneakers, four brown suede jackets", () => {
     expect(CLOSET.length).toBe(LIVE_SNAPSHOT_COUNT);
     const groups = new Map<string, Garment[]>();
@@ -281,6 +292,20 @@ describe("six Re-dresses on the live closet, every chapter", () => {
         }
       }
     }
+  });
+
+  it("both shirts under one name take their own turn: each allowed one is on a card within the taps", () => {
+    const [a, b] = PLAID_SHIRTS.map((id) => BY_ID.get(id)!);
+    let chaptersWithBoth = 0;
+    for (const run of RUNS) {
+      const allowed = run.taps.at(-1)!.allowedTwins;
+      const shown = new Set(run.taps.flatMap((tap) => [...tap.pieces]));
+      const here = [a!, b!].filter((g) => allowed.has(KEY.get(g.id)!));
+      for (const g of here) expect(shown.has(g.id), `${run.occasion}: ${g.id} (${g.subtype}) never on a card in ${TAPS} taps`).toBe(true);
+      if (here.length === 2) chaptersWithBoth += 1;
+    }
+    /* Out refuses both at the gate (a plain shirt is not an oxford, polo, camp collar or knit); the other chapters take both. */
+    expect(chaptersWithBoth, "chapters where both shirts pair").toBeGreaterThan(0);
   });
 
   it("reports new pieces per tap", () => {

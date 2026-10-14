@@ -28,9 +28,10 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
 
 - row-dupe-count (Oct 13 2026): a piece sat twice in one Lookbook row because two garments stored
   under one name ("light grey pleated trousers", material "wool" vs. empty) got different twinKeys
-  (the material falls back to a name word). Fix: `twinGroups` in `detectors/ideas.ts` merges groups
+  (the material falls back to a name word). Fix: `twinGroups` in `detectors/ideas.ts` merged groups
   whose members share `slot|normalised name` (only ever groups more); the storedRows fallback in
-  `rowWays` now checks twins per row too. The header read "8 looks" because it counted only the
+  `rowWays` now checks twins per row too. (The name merge was replaced by a photo-hash merge in
+  twin-by-photo, Oct 13 2026: a shared name is not a shared piece.) The header read "8 looks" because it counted only the
   week row (capped at 8): `screenLookCount` in `lookbook-status.ts` counts the week cards that
   render plus the idea-row cards. `nameWithColor` replaces the whole leading colour phrase.
 - header-count (Oct 13 2026): the header's "N looks" and DetectorSections read one list,
@@ -83,8 +84,24 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   `COLOR_ROW_MIN` (3) re-dresses the next matrix looks with a legal in-season jacket that carries
   the colour (colour rows are not among the pinned engine outputs; `publish` is untouched).
   With the names back, two "brown blue plaid shirt" pieces get different twinKeys but one merged
-  group (nameKey), so the route now hands `advanceRotation` the merged `twinGroups` key (was
-  twinKey): otherwise the never-shown name-twin blocks the cycle reset. The rotation tests count
-  coverage by the same merged key. The rule JSON (`2026-09-30-proposed-stylist-rules.json`) is a law
+  group (nameKey), so the route handed `advanceRotation` the merged `twinGroups` key (was
+  twinKey): otherwise the never-shown name-twin blocked the cycle reset (undone in twin-by-photo,
+  below). The rule JSON (`2026-09-30-proposed-stylist-rules.json`) is a law
   file pinned by hash in `profiles.test.ts`, so its XC-SEA-3 #1 case ("fail: mules in fall") is
   overridden in `rules.test.ts` (`SUPERSEDED`), not edited.
+- twin-by-photo (Oct 13 2026, claude/stylist-memory): the name merge was wrong. g_z6syv3lx30tn
+  (regular collar, warmth 3) and g_21b6d3qcohmu (button-down, warmth 2) are two shirts both stored
+  as "brown blue plaid shirt"; merged, the second never led a row (a group ranks by its
+  latest-shown member) and never got a card. `twinGroups` now merges twinKey groups only when
+  members share a photo (`photoKey`: slot + `fileHash`, the source-file fingerprint rack.ts
+  already dedupes on); a name alone never merges. With the shirts apart, every chapter's cycle
+  closes on twinKey-level keys, so the route hands the rotation `twinGroups(garments).key`
+  (= twinKey on the fixture, which has no hashes) and the tests' `ALIKE`/`KEY` are the same.
+  `redress-live.test.ts` pins the shirts as two pieces that each get a card where allowed;
+  `redress-rowdupe.test.ts` gives its two trousers one `fileHash` and checks the shirts stay
+  apart. In the Oct 13 export no same-name pair shares a hash (one unrelated pair does). Row
+  counts unchanged; out's final unpairable count is 74 (was 75). `docs/closet-out-clashes.md`
+  derives, by running the engine on the fixture before and after the renames, why out pairs
+  under half the closet: the out gate (top must be an oxford, polo, camp collar or knit; no
+  sneaker while loafers are owned; no distressed jeans), not the pattern words; XC-PAT-1 hard
+  hits are 0.3% of sampled out looks and cost no piece its pairability.

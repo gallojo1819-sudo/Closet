@@ -347,7 +347,7 @@ function LookbookPage() {
         closet: garments.map((g) => g.id),
         eligible: rotationEligible(garments, season, taste).map((g) => g.id),
         stuck,
-        /* Look-alikes stored apart (four pairs of one sneaker, two pieces under one name) are one turn of the cycle: the rows' merged groups. */
+        /* Look-alikes stored apart (four pairs of one sneaker, two records from one photo) are one turn of the cycle: the rows' groups, keyed by twinKey and photo hash, never by name. */
         alike: new Map(garments.map((g) => [g.id, twins.key(g)])),
       });
       rotationRef.current = next;

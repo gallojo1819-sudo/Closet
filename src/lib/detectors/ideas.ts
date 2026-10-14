@@ -158,19 +158,13 @@ export function twinKey(g: Garment): string {
 }
 
 /**
- * The slot and the whole name, normalised (case, punctuation, a trailing plural): two pieces
- * stored under one name are one piece whatever their material fields say. A re-added "light
- * grey pleated trousers" with material "wool" beside one with none gets two twinKeys (the
- * material falls back to a name word); this key puts them in one group.
+ * The photo a piece was added from (fileHash: the fingerprint of the source file, see rack.ts).
+ * Two garments made from one photo are one piece stored twice, whatever their name or material
+ * fields say; a piece with no hash stands on its own.
  */
-function nameKey(g: Garment): string {
-  const words = g.name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-  if (words.length) words[words.length - 1] = words[words.length - 1]!.replace(/(?<!s)s$/, "");
-  return `${slotOf(g)}|${words.join(" ")}`;
+function photoKey(g: Garment): string | null {
+  const hash = (g.fileHash ?? "").trim();
+  return hash ? `${slotOf(g)}|${hash}` : null;
 }
 
 export type Twins = {
@@ -181,8 +175,10 @@ export type Twins = {
 
 /**
  * The twin groups of a pool: built once per page, read by every row. twinKey groups first;
- * then groups whose members share a nameKey are merged into one (only ever more grouping,
- * never a split), so same-name pieces are one piece to the caps and the rows.
+ * then groups whose members share a photo (photoKey) are merged into one (only ever more
+ * grouping, never a split). A name alone never merges: two shirts both stored as "brown blue
+ * plaid shirt" (a regular collar, warmth 3, and a button-down, warmth 2) are two shirts, so
+ * each gets its own cards under the caps and its own turn of the rotation.
  */
 export function twinGroups(pool: readonly Garment[]): Twins {
   const alias = new Map<string, string>();
@@ -191,11 +187,13 @@ export function twinGroups(pool: readonly Garment[]): Twins {
     while (alias.has(out)) out = alias.get(out)!;
     return out;
   };
-  const byName = new Map<string, string>();
+  const byPhoto = new Map<string, string>();
   for (const g of pool) {
+    const photo = photoKey(g);
+    if (!photo) continue;
     const key = find(twinKey(g));
-    const have = byName.get(nameKey(g));
-    if (have === undefined) byName.set(nameKey(g), key);
+    const have = byPhoto.get(photo);
+    if (have === undefined) byPhoto.set(photo, key);
     else if (find(have) !== key) alias.set(key, find(have));
   }
   const keys = new Map<string, string>();
