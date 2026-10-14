@@ -26,7 +26,8 @@
  * ids (the house, jacket and colour rule JSON key on them), the stored name without the maker
  * (fixtureName: the brand phrase, house words and logo initials cut, so the pattern and colour
  * words the engine reads stay: "red gingham shirt", "blue pinstripe trousers"), empty brand,
- * notes and wear dates, a fixed createdAt.
+ * notes and wear dates. createdAt is kept as stored: when a piece was added is no secret, and
+ * the labels (src/lib/piece-label.ts) tell same-name pieces apart by it.
  *
  * The fixture is the whole test closet: every piece in it is in the account (the fifteen
  * hand-drafted `x_*` stand-ins that used to sit in redress-extra.json are gone).
@@ -51,8 +52,14 @@ export const KEY_NAMES = [
 export const TOKEN_NAMES = ["CLOSET_USER_TOKEN", "SUPABASE_USER_TOKEN"] as const;
 export const USER_NAMES = ["CLOSET_USER_ID", "SUPABASE_USER_ID"] as const;
 
-/** The pieces are stored with the same createdAt so the fixture carries no real dates. */
-export const FIXTURE_CREATED_AT = "2026-01-01T00:00:00.000Z";
+/** A stored piece with no readable createdAt gets this one (the app always stamps one; none in the export lacks it). */
+export const FALLBACK_CREATED_AT = "2026-01-01T00:00:00.000Z";
+
+/** The stored createdAt when it parses as a date, else the fallback. Kept verbatim: the labels read it. */
+export function storedCreatedAt(createdAt: unknown): string {
+  if (typeof createdAt !== "string" || !createdAt.trim()) return FALLBACK_CREATED_AT;
+  return Number.isNaN(Date.parse(createdAt)) ? FALLBACK_CREATED_AT : createdAt;
+}
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -208,7 +215,7 @@ export function stripGarment(g: StoredGarment): Garment {
     demo: false,
     wornOn: [] as string[],
     archived: false,
-    createdAt: FIXTURE_CREATED_AT,
+    createdAt: storedCreatedAt(g.createdAt),
   };
   const fit = FITS.find((f) => f === g.fit);
   const tuck = TUCKS.find((t) => t === g.tuck);

@@ -164,4 +164,17 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   f51a011 because every card there must carry a jacket, 15 jacket groups pair, and
   `wayCanDress` (exhaustive, theme-aware) shows no row could take the one un-led jacket left;
   `lookbook-crossrow.test.ts` pins the f51a011 row sizes (BEFORE) and allows a shorter row only
-  under that proof. `diag/lookbook-leads.ts <occasion>` prints the un-led jackets per page.
+  under that proof.
+- added-time-labels (Oct 14 2026, claude/today-consistency-fix): no label ends in a bare number.
+  `pieceLabel` tells same-name pieces alike in every real field apart by when they were added, in
+  Eastern time (`ADDED_TIME_ZONE`): the day ("added Sep 12"), the minute when the day is shared
+  ("added Sep 12, 5:07 PM"), the second when the minute is, then the id; the "· 2" ordinal and
+  `labelIsOrdinal` are gone. The fixture keeps the stored createdAt (`storedCreatedAt` in the
+  refresh script; only an unreadable one gets `FALLBACK_CREATED_AT`), so the two white leather
+  sneakers (Sep 12, four minutes apart) and the two placeholders (Oct 10, eight minutes apart)
+  read their added time in tests as they do live. Real dates feed `daysIdle`, so
+  `engine-snapshot.json` was re-recorded from the 58d7b8c tree with the mules-fall rules patch
+  (the recipe reproduced the old pin byte for byte first), and `lookbook-variety.test.ts` runs
+  on Oct 14 2026: on Oct 9 no piece of a closet begun Sep 12 is 30 days idle, so no forgotten
+  row forms and the out screen falls back to two one-look stored rows. `diag/lookbook-leads.ts`
+  is removed.

@@ -13,6 +13,7 @@ import {
   builtName,
   closetFromStored,
   exportGarments,
+  FALLBACK_CREATED_AT,
   fetchLiveCloset,
   fixtureName,
   fixtureText,
@@ -40,12 +41,12 @@ describe("the snapshot closet", () => {
     }
   });
 
-  it("carries nothing personal: no brand, notes, wear dates, images or real dates", () => {
+  it("carries nothing personal: no brand, notes, wear dates or images; the day added is kept", () => {
     for (const g of testCloset) {
       expect(g.brand, g.id).toBe("");
       expect(g.notes, g.id).toBe("");
       expect(g.wornOn, g.id).toEqual([]);
-      expect(g.createdAt, g.id).toBe("2026-01-01T00:00:00.000Z");
+      expect(Number.isNaN(Date.parse(g.createdAt)), g.id).toBe(false);
       expect("imageSrc" in g, g.id).toBe(false);
       expect("cutoutSrc" in g, g.id).toBe(false);
       expect("productUrl" in g, g.id).toBe(false);
@@ -94,7 +95,7 @@ describe("the refresh script", () => {
       const closet = readExportCloset(path);
       expect(closet.pieces.map((g) => g.id)).toEqual(["a", "e"]);
       expect(closet).toMatchObject({ stored: 5, tombstones: 1, demo: 1, archived: 1 });
-      expect(closet.pieces[0]).toMatchObject({ brand: "", notes: "", wornOn: [], createdAt: "2026-01-01T00:00:00.000Z" });
+      expect(closet.pieces[0]).toMatchObject({ brand: "", notes: "", wornOn: [], createdAt: "2025-01-01" });
       expect(closet.pieces[1]!.name).toBe("olive linen shirt");
       expect(closet.pieces[1]!.id).toBe("e");
       writeFileSync(path, "{ not json");
@@ -157,7 +158,10 @@ describe("the refresh script", () => {
     expect(stripped.brand).toBe("");
     expect(stripped.notes).toBe("");
     expect(stripped.wornOn).toEqual([]);
-    expect(stripped.createdAt).toBe("2026-01-01T00:00:00.000Z");
+    /* The stored createdAt stays: the labels tell same-name pieces apart by it. An unreadable one gets the fallback. */
+    expect(stripped.createdAt).toBe("2025-01-01");
+    expect(stripGarment({ id: "b", createdAt: "not a date" }).createdAt).toBe(FALLBACK_CREATED_AT);
+    expect(stripGarment({ id: "c" }).createdAt).toBe(FALLBACK_CREATED_AT);
   });
 
   it("explains missing env without touching a file", () => {

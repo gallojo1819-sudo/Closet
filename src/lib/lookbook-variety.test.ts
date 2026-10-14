@@ -47,8 +47,11 @@ const FIXTURE = JSON.parse(
   readFileSync(new URL("./__fixtures__/engine-garments.json", import.meta.url), "utf8"),
 ) as Garment[];
 const BY_ID = new Map(FIXTURE.map((g) => [g.id, g]));
-const NOW = Date.parse("2026-10-09T15:00:00.000Z");
-const TODAY = "2026-10-09";
+/* The export day. The fixture keeps the stored createdAt (the pieces date from Sep 12 2026 on), so
+   the forgotten row (FORGOTTEN_DAYS idle, nothing worn in the fixture) needs a clock at least a
+   month after the closet began; on Oct 9 no piece was forgotten yet. */
+const NOW = Date.parse("2026-10-14T15:00:00.000Z");
+const TODAY = "2026-10-14";
 const SEASON: Season = "fall";
 const ALL: Occasion[] = OCCASIONS.map((o) => o.id);
 const BANNED = /\b(Polo|Purple|RRL|ALD|Faloni|545|Sweet Stable|Italian summer|Italian winter)\b/;

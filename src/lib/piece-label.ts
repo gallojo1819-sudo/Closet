@@ -13,9 +13,11 @@
  * When other pieces in the pool show the same name, each gets a suffix unique within that
  * same-name group, a real word before anything else: a colour the name does not say, the
  * material, the subtype, the fit, the pattern word. Members still sharing the plain name are
- * told apart by the tagged formality or warmth, then the day the piece was added, and only
- * when every field is the same by "· 2", "· 3" in a stable order (createdAt, then id). Maker
- * text is never a label (no house names in Closet).
+ * told apart by the tagged formality or warmth, then by when the piece was added, in Eastern
+ * time: the day ("added Sep 12"), then the minute ("added Sep 12, 5:07 PM") when the day is
+ * shared, then the second ("added Sep 12, 5:07:55 PM") when the minute is. Pieces added in the
+ * same second carry their id, the one field no two pieces share. A label never ends in a bare
+ * number, and maker text is never a label (no house names in Closet).
  */
 import { isFakeName, patternWord } from "./rack.ts";
 import type { Garment } from "./types.ts";
@@ -105,24 +107,56 @@ function primary(g: Named): string[] {
 
 const FORMALITY_WORD: Record<number, string> = { 1: "lounge", 2: "casual", 3: "smart", 4: "dressy", 5: "formal" };
 const WARMTH_WORD: Record<number, string> = { 1: "sheer", 2: "light", 3: "midweight", 4: "warm", 5: "heavy" };
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** The day the piece was added, as "added Oct 10"; nothing for a date that does not parse. */
-function addedWord(g: Named): string | null {
-  const d = new Date(g.createdAt);
-  if (!g.createdAt || Number.isNaN(d.getTime())) return null;
-  return `added ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+/** The owner's clock: the added day and time read in Eastern time, whatever zone the device is in. */
+export const ADDED_TIME_ZONE = "America/New_York";
+
+const DAY_FORMAT = new Intl.DateTimeFormat("en-US", { timeZone: ADDED_TIME_ZONE, month: "short", day: "numeric" });
+const MINUTE_FORMAT = new Intl.DateTimeFormat("en-US", { timeZone: ADDED_TIME_ZONE, hour: "numeric", minute: "2-digit", hour12: true });
+const SECOND_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: ADDED_TIME_ZONE,
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: true,
+});
+
+/** Intl's narrow no-break space before AM/PM, as a plain space. */
+function plain(formatted: string): string {
+  return formatted.replace(/[\u202f\u00a0]/g, " ");
 }
 
-/** The tagged attributes a reader cannot see on the piece, used only to tell same-name pieces apart. */
+/** The moment the piece was added, or null for a date that does not parse. */
+function addedAt(g: Named): Date | null {
+  if (!g.createdAt) return null;
+  const d = new Date(g.createdAt);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * When the piece was added, coarse to fine: "added Sep 12", "added Sep 12, 5:07 PM",
+ * "added Sep 12, 5:07:55 PM". Nothing for a date that does not parse.
+ */
+function addedWords(g: Named): string[] {
+  const d = addedAt(g);
+  if (!d) return [];
+  const day = `added ${plain(DAY_FORMAT.format(d))}`;
+  return [day, `${day}, ${plain(MINUTE_FORMAT.format(d))}`, `${day}, ${plain(SECOND_FORMAT.format(d))}`];
+}
+
+/**
+ * The tagged attributes a reader cannot see on the piece, used only to tell same-name pieces
+ * apart: the formality and warmth words, then when the piece was added (day, minute, second),
+ * then the id, which no other piece holds.
+ */
 function secondary(g: Named): string[] {
   const out: string[] = [];
   const formality = typeof g.formality === "number" ? FORMALITY_WORD[g.formality] : undefined;
   const warmth = typeof g.warmth === "number" ? WARMTH_WORD[g.warmth] : undefined;
   if (formality) out.push(formality);
   if (warmth) out.push(warmth);
-  const added = addedWord(g);
-  if (added) out.push(added);
+  out.push(...addedWords(g));
+  out.push(g.id);
   return out;
 }
 
@@ -143,8 +177,7 @@ function uniqueIn(mine: readonly string[], among: readonly Named[], tokensOf: (g
 /**
  * The suffix for `g` within its same-name group, or null for the plain name. A primary token
  * held by exactly one member is that member's. Members with none are told apart by a secondary
- * token unique among them; of those still alike, the first keeps the plain name and the rest
- * take their ordinal.
+ * token unique among them; the id, last in that list, always is.
  */
 function suffixFor(g: Named, group: readonly Named[]): string | null {
   if (group.length < 2) return null;
@@ -152,11 +185,7 @@ function suffixFor(g: Named, group: readonly Named[]): string | null {
   if (own) return own;
   const plain = group.filter((member) => !uniqueIn(primary(member), group, primary));
   if (plain.length < 2) return null;
-  const second = uniqueIn(secondary(g), plain, secondary);
-  if (second) return second;
-  const alike = plain.filter((member) => !uniqueIn(secondary(member), plain, secondary));
-  const at = alike.findIndex((member) => member.id === g.id);
-  return at <= 0 ? null : String(at + 1);
+  return uniqueIn(secondary(g), plain, secondary);
 }
 
 /** The label: the shown name, with a group-unique suffix when the pool shows the same name. */
@@ -164,9 +193,4 @@ export function pieceLabel(g: Named, pool: readonly Named[]): string {
   const suffix = suffixFor(g, sameNameGroup(g, pool));
   const name = displayName(g);
   return suffix ? `${name} · ${suffix}` : name;
-}
-
-/** True when the label falls back to an ordinal: every field the label layer reads is the same. */
-export function labelIsOrdinal(g: Named, pool: readonly Named[]): boolean {
-  return /^\d+$/.test(suffixFor(g, sameNameGroup(g, pool)) ?? "");
 }
