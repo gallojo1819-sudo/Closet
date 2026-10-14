@@ -274,8 +274,11 @@ describe("stylist page", () => {
     assert.deepEqual(visibleReplyLines("Wear your oxford with the tan chinos and the suede loafers."), [
       "Wear your oxford with the tan chinos and the suede loafers.",
     ]);
+    /* The dock draws its lines through the thread component (stylist-thread.tsx). */
+    const thread = readFileSync(new URL("../components/shell/stylist-thread.tsx", import.meta.url), "utf8");
+    assert.match(thread, /visibleReplyLines\(text\)/);
     const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
-    assert.match(dock, /visibleReplyLines\(text\)/);
+    assert.match(dock, /from "\.\/stylist-thread"/);
   });
 
   it("c) a line break ends a garment qualifier: the occasion never glues onto the piece", () => {
@@ -484,7 +487,9 @@ describe("stylist page", () => {
     const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
     assert.match(dock, /replyFromStylistResult/);
     assert.match(dock, /stylistPayload/);
-    assert.match(dock, /stylistProse/);
+    /* The prose fallback lives with the thread's lines (stylist-thread.tsx). */
+    const thread = readFileSync(new URL("../components/shell/stylist-thread.tsx", import.meta.url), "utf8");
+    assert.match(thread, /stylistProse/);
   });
 
   it("acceptance: /stylist keeps the lookbook context and its sentence", () => {

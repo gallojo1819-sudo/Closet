@@ -154,6 +154,26 @@ export function Studio() {
       .catch(() => setCanPrint(false));
   }, []);
 
+  /* The relational copy (garments_v2) gets its row when the piece is added, not only when the
+     camera tag lands: a piece whose tag failed or timed out stayed "New piece" and had no row. */
+  const mirrorAdded = useCallback((id: string) => {
+    const g = useCloset.getState().garments.find((item) => item.id === id);
+    if (!g) return;
+    void mirrorGarmentFields(
+      garmentWriter(getSupabase()),
+      getAccount().user?.id ?? null,
+      garmentV2Fields({
+        id,
+        name: g.name,
+        category: g.category,
+        subtype: g.subtype,
+        colors: g.colors,
+        material: g.material,
+        brand: g.brand,
+      }),
+    ).catch(() => false);
+  }, []);
+
   const commit = useCallback(
     async (opts: {
       id: string;
@@ -203,9 +223,10 @@ export function Studio() {
         },
         { quiet: opts.quiet },
       );
+      mirrorAdded(id);
       return { id, name: opts.name, category: opts.category, cutout: opts.cover };
     },
-    [addGarment],
+    [addGarment, mirrorAdded],
   );
 
   const landMatte = useCallback(
@@ -249,6 +270,7 @@ export function Studio() {
         { quiet: true },
       );
       enqueueTag(opts.id, opts.cover);
+      mirrorAdded(opts.id);
       enqueuePrint(opts.id, opts.original);
       return {
         id: opts.id,
@@ -257,7 +279,7 @@ export function Studio() {
         cutout: opts.cover,
       };
     },
-    [addGarment],
+    [addGarment, mirrorAdded],
   );
 
   const pullWornBox = useCallback(
@@ -443,6 +465,7 @@ export function Studio() {
             },
             { quiet: true },
           );
+          mirrorAdded(opts.id);
           if (w.message) setError(w.message);
         },
       });
@@ -455,7 +478,7 @@ export function Studio() {
         reprint: tile === "",
       };
     },
-    [addGarment, nameCameraPiece],
+    [addGarment, mirrorAdded, nameCameraPiece],
   );
 
   const processScanFile = useCallback(
@@ -811,6 +834,7 @@ export function Studio() {
               },
               { quiet: true },
             );
+            mirrorAdded(id);
             setSaved((cur) => [
               { id, name: NEW_PIECE_NAME, category: "other", cutout: cover },
               ...cur.filter((s) => s.id !== id),
@@ -830,7 +854,7 @@ export function Studio() {
         setBusy(false);
       }
     },
-    [addGarment, commitHeldPhoto, nameCameraPiece],
+    [addGarment, commitHeldPhoto, mirrorAdded, nameCameraPiece],
   );
 
   useEffect(() => {

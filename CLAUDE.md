@@ -105,3 +105,33 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   under half the closet: the out gate (top must be an oxford, polo, camp collar or knit; no
   sneaker while loafers are owned; no distressed jeans), not the pattern words; XC-PAT-1 hard
   hits are 0.3% of sampled out looks and cost no piece its pairability.
+- today-consistency (Oct 14 2026, claude/today-consistency): four live-audit findings. (1) Today
+  changed on every load: the open effect's `rerollDrop` ran in memory (never persisted) with
+  inputs that moved between loads (`momentOfDay`, the live degrees, the memory-only `thisWeek`
+  row, `lookCountMap(looks)`, and an `ownedCount` dep that re-ran on the sample rack and again
+  on the real closet). Now `rerollDrop(..., { season })` is the daily pick (`src/lib/daily-pick.ts`):
+  salt = FNV of `todayISO()` + the sorted live ids, moment fixed to `DAILY_MOMENT`, weather =
+  `weatherForSeason(bucket)` (unmeasured, so jackets go by season), no week keys, no auto-look
+  counts; Skip/Reshuffle keep their salts. The bucket is frozen per day under localStorage
+  `closet.today-season.v1` (not closet.v6). The effect waits for a settled closet (`hasRealPieces`
+  or a local-only sample) and re-runs on `liveIdsKey`, not `ownedCount`. The pick stays in memory
+  on purpose: a gate-open `setDrop` stamps `setAt`, which `mergeDrop` lets outrank a Skip made on
+  another device. (2) The dock's "This look" was the last persisted stylist message; it is now
+  Today's look through one selector, `todayLookPieces` in `src/lib/today-look.ts` (the Today
+  page's `shown`, `answerTodayAsk`, the dock), until an ask in this session answers; the thread
+  (`components/shell/stylist-thread.tsx`) renders the user's own messages in order;
+  `swapBaseIds` takes `todayIds` and `asksAboutToday`. (3) `retitleFakeNames` wrote "Cream knit"
+  into stored names on every load (`nameFromPixels` defaulted lead "Cream" and kind "knit"): the
+  store action and its app-shell call are gone; `nameFromPixels` names only with a sampled colour
+  and a real kind (an "other" stays a "piece", pattern word kept). `pieceLabel` picks a suffix
+  unique within the same-name group (colour, material, subtype, fit; never brand), else "· 2".
+  The two "New piece" ids had no `garments_v2` row because the mirror ran only after a camera
+  tag; the studio now mirrors at add time (`mirrorAdded`); the backfill for the two existing ids
+  is written up in `docs/relational-copy-backfill.md`, not run. (5) A piece led several rows:
+  `rowWays` keeps a page-wide `leads` set (twin keys of each row's first card, the week row's
+  via `leadIds`), and `heroRow` orders lead heroes last and keeps lead partners off a row's first
+  card while another hero can dress. Row counts unchanged (6 out/fall, 8 elsewhere). Tests:
+  `today-pin`, `stylist-today`, `piece-label`, `lookbook-crossrow` (vitest). Source pins updated
+  in `look.test.ts`, `stylist-page.test.ts`, `look-collage.test.ts`, `lookbook.test.ts`,
+  `data/copies.test.ts`. `diag/qa-today-pin.mjs` loads the preview twice (CHROME_PATH,
+  CLOSET_V6_FILE) and compares the page with the dock.

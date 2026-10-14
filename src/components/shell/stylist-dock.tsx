@@ -15,6 +15,7 @@ import {
   NOT_IN_CLOSET,
   answerAsked,
   answerTodayAsk,
+  asksAboutToday,
   briefLine,
   briefOccasion,
   isAdviceAsk,
@@ -27,13 +28,13 @@ import {
   screenSentence,
   stylistAskFields,
   stylistPayload,
-  stylistProse,
   subscribeStylistPage,
   swapBaseIds,
-  visibleReplyLines,
 } from "@/lib/stylist-page";
 import { nameLook } from "@/lib/look";
 import { livePool } from "@/lib/rack";
+import { todayLookPieces } from "@/lib/today-look";
+import { StylistThread, replyLines, sessionMessages } from "./stylist-thread";
 import { daysIdle, defaultOccasion, momentOfDay, todayOccasion } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { accountNotes } from "@/lib/stylist-notes/client";
@@ -56,18 +57,15 @@ import { OCCASIONS, type Garment, type Occasion } from "@/lib/types";
 import { cn, todayISO } from "@/lib/utils";
 
 let trendPassStarted = false;
+/* This session's thread starts when the app opened: "This look" is Today's look until an ask
+   in this session answers with another; an earlier session's last answer is not this look. */
+const SESSION_START = new Date().toISOString();
 
 const panelListeners = new Set<() => void>();
 
 /** Open the one agent's panel from anywhere (top bar, /stylist). No navigation. */
 export function openStylistPanel(): void {
   for (const fn of panelListeners) fn();
-}
-
-/** The visible lines of a reply: plain ink, never a LOOK row or a bare occasion id on top. */
-function replyLines(text: string): string[] {
-  const lines = visibleReplyLines(text);
-  return lines.length ? lines : [stylistProse(text)];
 }
 
 function pageOccasion(value: string | undefined, fallback: Occasion): Occasion {
@@ -88,6 +86,7 @@ export function StylistDock() {
   const garmentsAll = useCloset((s) => s.garments);
   const drop = useCloset((s) => s.drop);
   const journal = useCloset((s) => s.journal);
+  const thisWeek = useCloset((s) => s.thisWeek);
   const garments = useMemo(() => livePool(garmentsAll), [garmentsAll]);
   const owned = garments;
   const forStylist = garments;
@@ -180,7 +179,11 @@ export function StylistDock() {
     setText("");
     setBusy(true);
     try {
-    const previous = [...before.messages].reverse().find((m) => m.role === "stylist" && m.garmentIds?.length);
+    /* The last look answered in this session; an earlier session's answer is not "this look". */
+    const previous = [...sessionMessages(before.messages, SESSION_START)]
+      .reverse()
+      .find((m) => m.role === "stylist" && m.garmentIds?.length);
+    const todayIds = todayLookPieces({ drop, journal, thisWeek, garments: owned }).map((g) => g.id);
     const taste = learnFromAsk(before.taste ?? emptyTaste(), {
       text: q,
       garments: owned,
@@ -201,6 +204,8 @@ export function StylistDock() {
     if (isTodayOutfitAsk(q)) {
       const today = answerTodayAsk({
         drop,
+        journal,
+        thisWeek,
         garments: owned,
         taste,
         ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
@@ -217,7 +222,8 @@ export function StylistDock() {
       });
       return;
     }
-    /* A swap edits the last stylist look, else the look on this page, else today's drop. */
+    /* A swap edits Today's look when the ask says "today" or "this look"; else this session's
+       last stylist look, else the look on this page, else Today's. */
     const slot = swapSlot(q);
     const base = slot
       ? swapBaseIds({
@@ -225,6 +231,8 @@ export function StylistDock() {
           page: here,
           looks: rememberedLooks(here),
           drop,
+          todayIds,
+          aboutToday: asksAboutToday(q),
           garments: owned,
         })
       : [];
@@ -483,9 +491,17 @@ export function StylistDock() {
     </form>
   );
 
-  const lastStylist = [...messages].reverse().find((m) => m.role === "stylist");
+  const thread = sessionMessages(messages, SESSION_START);
+  const lastStylist = [...thread].reverse().find((m) => m.role === "stylist");
   const error = lastStylist?.text === NOT_IN_CLOSET ? lastStylist.text : null;
   const look = lastStylist && !error ? lastStylist : null;
+  /* Until an ask in this session answers with a look, "This look" is Today's look: the same
+     pieces the Today page shows (today-look.ts). */
+  const todayPieces = useMemo(
+    () => todayLookPieces({ drop, journal, thisWeek, garments: owned }),
+    [drop, journal, thisWeek, owned],
+  );
+  const todayLine = todayPieces.length >= 2 ? lookReply(todayPieces) : null;
 
   return (
     <>
@@ -531,7 +547,16 @@ export function StylistDock() {
             <>
             <div className="mt-3 border-t border-hairline px-4 pt-3">
               <p className="micro text-ink-soft">This look</p>
-              {look ? (
+              {!look && todayLine ? (
+                <div
+                  data-stylist-today
+                  data-garment-ids={todayPieces.map((g) => g.id).join(",")}
+                  className="mt-1 space-y-1"
+                >
+                  <p className="text-sm leading-relaxed text-ink">{todayLine}</p>
+                  <p className="micro text-ink-soft">Today’s look</p>
+                </div>
+              ) : look ? (
                 <>
                   <div className="mt-1 space-y-1">
                     {replyLines(look.text).map((l, i) => (
@@ -583,6 +608,7 @@ export function StylistDock() {
                 <p className="mt-1 text-sm text-ink-soft">Nothing yet.</p>
               )}
             </div>
+            <StylistThread messages={thread} />
             <div className="mt-3 border-t border-hairline px-4 pt-3 pb-4">
               {form}
               {error ? (

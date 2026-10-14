@@ -11,7 +11,6 @@ import {
   putClosetMeta,
   putImage,
   refImageKey,
-  resolveImage,
 } from "./images";
 import { SEED_GARMENTS, SEED_LOOKS } from "./seed";
 import {
@@ -30,9 +29,8 @@ import {
   seenKey,
   stripRepeatBlazers,
 } from "./lookbook";
-import { isFakeName, nameFromPixels, scrubRack } from "./rack";
-import { preferPixels, sampleCover } from "./color";
-import { colorsForName, looseColors } from "./garment-color";
+import { scrubRack } from "./rack";
+import { DAILY_MOMENT, dailyPickWeather, dailySalt, liveIdsKey } from "./daily-pick";
 import {
   mergeClosetPersist,
   openPersistGate,
@@ -60,7 +58,7 @@ import {
 import { isLinenCampPiece, seasonFromWeather } from "./season";
 import { legalWithJacket } from "./stylist/legal";
 import { jacketRequired } from "./stylist/jackets";
-import { mapOccasion, type DailyDrop, type Garment, type Look, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
+import { mapOccasion, type DailyDrop, type Garment, type Look, type Moment, type Occasion, type Season, type StylistMessage, type WearEntry, type WeatherSnap } from "./types";
 import { isAccountSignedIn } from "./cloud/account";
 import { forgetCoverSha } from "./cloud/blobs";
 import { noteRefPhotoEdit, noteUserEdit } from "./cloud/edit";
@@ -81,6 +79,9 @@ import { todayISO, uid } from "./utils";
 
 export { mergeClosetPersist, openPersistGate, persistGate };
 export type { PersistedCloset };
+
+/** The day's first pick: the frozen season bucket is its only weather input (daily-pick.ts). */
+export type DailyPick = { season: Season };
 
 type ClosetState = {
   garments: Garment[];
@@ -115,6 +116,7 @@ type ClosetState = {
     occasion?: Occasion,
     previousIds?: string[],
     skippedKeys?: string[],
+    daily?: DailyPick,
   ) => boolean;
   swapDropPiece: (id: string) => void;
   removeDropPiece: (id: string) => void;
@@ -126,7 +128,6 @@ type ClosetState = {
   restoreRefPhoto: () => Promise<void>;
   restoreFromIdbMeta: () => Promise<void>;
   purgeDemoRack: () => void;
-  retitleFakeNames: () => Promise<void>;
   ensureLookbook: (salt?: number) => void;
   ensureOccasionBook: (occasion: Occasion, season?: Season, house?: House) => void;
   shuffleChapter: (occasion: Occasion, season?: Season, house?: House) => number;
@@ -166,20 +167,23 @@ function pickDrop(
     excludeKeys?: string[];
     skip?: boolean;
     taste?: TasteMemory;
+    /** The daily pick: the day's frozen bucket and a fixed moment, so the clock is not an input. */
+    season?: Season;
+    moment?: Moment;
   },
   now: Date = new Date(),
 ): string[] {
   const occ = occasion ?? defaultOccasion(now);
   /* A measured reading only. A missing reading stays missing; pickLook's 68 is for scoring. */
   const tempF = weather?.measured ? weather.f : undefined;
-  const season = seasonFromWeather(weather?.f, now);
+  const season = extra?.season ?? seasonFromWeather(weather?.f, now);
   const cold = season === "fall" || season === "winter";
   const ctx = { occasion: occ, season, ...(tempF !== undefined ? { weatherF: tempF } : {}) };
   const needJacket = jacketRequired(occ, season, tempF);
   return pickLook(garments, {
     weather,
     occasion: occ,
-    moment: momentOfDay(now),
+    moment: extra?.moment ?? momentOfDay(now),
     requireOuter: needJacket,
     avoid,
     recentWorn,
@@ -540,19 +544,23 @@ export const useCloset = create<ClosetState>()(
         notifyLookRemoved(id);
       },
       setDrop: (drop) => set({ drop: stampDrop(drop) }),
-      rerollDrop: (weather, occasion, previousIds, skippedKeys) => {
+      rerollDrop: (weather, occasion, previousIds, skippedKeys, daily) => {
         const prev = get().drop;
         const occ = mapOccasion(
           occasion ?? (prev?.date === todayISO() ? prev?.occasion : undefined) ?? defaultOccasion(),
         );
+        /* The drop shows the clock's moment; the daily pick scores against DAILY_MOMENT. */
         const moment = momentOfDay();
         const lastWorn = get().journal.find((j) => j.verdict === "worn")?.garmentIds;
         const sameDay = prev?.date === todayISO();
         const lockedIds = sameDay ? (prev?.lockedIds ?? []) : [];
         const repeats = weekUniformKeys(get().journal, get().garments);
-        const weekKeys = get()
-          .thisWeek.slice(0, 6)
-          .map((l) => comboKey(l.garmentIds));
+        /* The week row is memory-only and lands after an idle callback: not a daily-pick input. */
+        const weekKeys = daily
+          ? []
+          : get()
+              .thisWeek.slice(0, 6)
+              .map((l) => comboKey(l.garmentIds));
         const wornKeys = get()
           .journal.filter((j) => j.verdict === "worn")
           .slice(0, 7)
@@ -576,10 +584,18 @@ export const useCloset = create<ClosetState>()(
           ? coreComboKey(prev.garmentIds, get().garments)
           : "";
         const skip = Boolean(previousIds?.length);
-        const salt = skip ? get().skipCount || 1 : get().reshuffleCount || 1;
+        /* The daily pick: a salt from the day and the live closet, the bucket's weather, no
+           clock, no week row, no Lookbook auto-look counts (those move when the Lookbook builds,
+           not when the user does anything). Skip and Reshuffle keep their own salts. */
+        const salt = daily
+          ? dailySalt(todayISO(), liveIdsKey(get().garments))
+          : skip
+            ? get().skipCount || 1
+            : get().reshuffleCount || 1;
+        const shownWeather = weather ?? prev?.weather;
         const ids = pickDrop(
           get().garments,
-          weather ?? prev?.weather,
+          daily ? dailyPickWeather(daily.season) : shownWeather,
           occ,
           get().avoid,
           lastWorn,
@@ -588,12 +604,13 @@ export const useCloset = create<ClosetState>()(
           repeats,
           {
             salt,
-            usedCount: lookCountMap(get().looks),
+            usedCount: daily ? undefined : lookCountMap(get().looks),
             excludeKeys: [...weekKeys, ...wornKeys, ...skipKeys, currentKey, currentCore].filter(
               Boolean,
             ),
             skip,
             taste: get().taste,
+            ...(daily ? { season: daily.season, moment: DAILY_MOMENT } : {}),
           },
         );
         const picked = ids
@@ -610,7 +627,7 @@ export const useCloset = create<ClosetState>()(
               drop: stampDrop({
                 ...prev,
                 occasion: occ,
-                weather: weather ?? prev.weather,
+                weather: shownWeather,
                 lockNote: "No other look fits right now. This one stays.",
               }),
             });
@@ -637,7 +654,7 @@ export const useCloset = create<ClosetState>()(
             garmentIds: ids,
             worn: false,
             verdict: "pending",
-            weather: weather ?? prev?.weather,
+            weather: shownWeather,
             occasion: occ,
             moment,
             lockedIds,
@@ -914,36 +931,6 @@ export const useCloset = create<ClosetState>()(
           rest.looks.length !== s.looks.length
         ) {
           set(rest);
-        }
-      },
-      retitleFakeNames: async () => {
-        const list = get().garments;
-        for (const g of list) {
-          if (g.demo === true || !isFakeName(g.name)) continue;
-          let colors = g.colors;
-          try {
-            const src = g.cutoutSrc || g.imageSrc;
-            const url = await resolveImage(src);
-            if (url) {
-              const sampled = await sampleCover(url);
-              /* The tag's words first ("blue" is navy): the sample only wins a far hue. */
-              colors = preferPixels(sampled, looseColors(g.colors));
-            }
-          } catch {
-            /* pixels optional */
-          }
-          const name = nameFromPixels(g, colors);
-          colors = colorsForName(name, colors);
-          if (name && name !== g.name) {
-            get().updateGarment(
-              g.id,
-              {
-                name,
-                colors: colors.length ? colors : g.colors,
-              },
-              { quiet: true },
-            );
-          }
         }
       },
       restoreFromIdbMeta: async () => {

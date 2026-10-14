@@ -2,6 +2,7 @@ import { clashes, daysIdle, slotOf, todayOccasion } from "./style.ts";
 import { scoreLook } from "./stylist/legal.ts";
 import { OCCASIONS, SEASONS, type DailyDrop, type Garment, type Occasion, type Season } from "./types.ts";
 import { composeAtlasLook, emptyTaste, type TasteMemory } from "./taste.ts";
+import { todayLookPieces, type TodayLookState } from "./today-look.ts";
 import { todayISO } from "./utils.ts";
 
 /** The page he is on. Replaced wholesale so a previous page cannot leak. */
@@ -635,6 +636,9 @@ function wearLine(pieces: readonly Garment[]): string {
 export function answerTodayAsk(input: {
   drop: DailyDrop | null | undefined;
   garments: readonly Garment[];
+  /** The wear journal and the memory-only week row: with the drop, what the Today page shows. */
+  journal?: TodayLookState["journal"];
+  thisWeek?: TodayLookState["thisWeek"];
   today?: string;
   taste?: TasteMemory;
   weatherF?: number;
@@ -642,13 +646,13 @@ export function answerTodayAsk(input: {
   const today = input.today ?? todayISO();
   const owned = input.garments.filter((g) => !g.archived);
   const occasion = todayOccasion(input.drop, today);
-  if (input.drop?.date === today) {
-    const pieces = input.drop.garmentIds
-      .map((id) => owned.find((g) => g.id === id))
-      .filter((g): g is Garment => Boolean(g));
-    if (pieces.length >= 2) {
-      return { text: wearLine(pieces), garmentIds: pieces.map((g) => g.id), occasion };
-    }
+  /* The look on the Today page (today-look.ts), not a fresh roll. */
+  const pieces = todayLookPieces(
+    { drop: input.drop, journal: input.journal, thisWeek: input.thisWeek, garments: owned },
+    today,
+  );
+  if (pieces.length >= 2) {
+    return { text: wearLine(pieces), garmentIds: pieces.map((g) => g.id), occasion };
   }
   const rolled = composeAtlasLook({
     garments: [...owned],
@@ -657,10 +661,10 @@ export function answerTodayAsk(input: {
     taste: input.taste ?? emptyTaste(),
     ...(typeof input.weatherF === "number" && Number.isFinite(input.weatherF) ? { weatherF: input.weatherF } : {}),
   });
-  const pieces = rolled.garmentIds
+  const composed = rolled.garmentIds
     .map((id) => owned.find((g) => g.id === id))
     .filter((g): g is Garment => Boolean(g));
-  return { text: wearLine(pieces), garmentIds: pieces.map((g) => g.id), occasion };
+  return { text: wearLine(composed), garmentIds: composed.map((g) => g.id), occasion };
 }
 
 const ADVICE_ASK = /\b(?:how (?:do|can|should|would) i|how to|best way to|tips? (?:for|on))\b/i;
@@ -679,15 +683,27 @@ export function isAdviceAsk(text: string): boolean {
   return ADVICE_ASK.test(t) || CARE_WORD.test(t);
 }
 
+const ABOUT_TODAY = /\b(?:today'?s?|this look|the look|today's look)\b/i;
+
+/** An ask that says "this look" or "today": the base is Today's look, whatever was answered last. */
+export function asksAboutToday(text: string): boolean {
+  return ABOUT_TODAY.test(text);
+}
+
 /**
- * The look a swap edits: the last stylist look, else the first look on this page, else
- * today's drop when it is dated today. Owned ids only; empty when none holds two.
+ * The look a swap edits: Today's look when the ask says so (todayIds, else the drop dated
+ * today); otherwise the last stylist look of this session, else the first look on this page,
+ * else Today's. Owned ids only; empty when none holds two.
  */
 export function swapBaseIds(input: {
   previousIds?: readonly string[] | null;
   page?: StylistPageContext;
   looks?: readonly ScreenLook[];
   drop?: { date: string; garmentIds: readonly string[] } | null;
+  /** Today's look as the page shows it (todayLookIds). Preferred over the raw drop. */
+  todayIds?: readonly string[] | null;
+  /** The ask names today or this look: Today's ids lead the candidates. */
+  aboutToday?: boolean;
   garments: readonly Garment[];
   today?: string;
 }): string[] {
@@ -695,11 +711,12 @@ export function swapBaseIds(input: {
   const keep = (ids: readonly string[] | null | undefined) => (ids ?? []).filter((id) => owned.has(id));
   const page = input.page ?? readStylistPage();
   const today = input.today ?? todayISO();
-  const candidates: (readonly string[] | null | undefined)[] = [
+  const todays = input.todayIds?.length ? input.todayIds : input.drop?.date === today ? input.drop.garmentIds : [];
+  const rest: (readonly string[] | null | undefined)[] = [
     input.previousIds,
     (input.looks ?? rememberedLooks(page))[0]?.garmentIds,
-    input.drop?.date === today ? input.drop.garmentIds : [],
   ];
+  const candidates = input.aboutToday ? [todays, ...rest] : [...rest, todays];
   for (const ids of candidates) {
     const held = keep(ids);
     if (held.length >= 2) return held;

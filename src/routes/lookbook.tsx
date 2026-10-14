@@ -421,6 +421,9 @@ function LookbookPage() {
      and lift pieces the store has not put in front of the user lately. Nothing is written. */
   const weekKey = weekRow.map((look) => look.garmentIds.join(",")).join("|");
   const weekIds = useMemo(() => weekKey.split("|").flatMap((ids) => (ids ? ids.split(",") : [])), [weekKey]);
+  /* The week row's first card leads that row: no idea row leads with its pieces. */
+  const leadKey = weekKey.split("|")[0] ?? "";
+  const leadIds = useMemo(() => (leadKey ? leadKey.split(",") : []), [leadKey]);
   const suggested = useMemo(() => lastSuggested({ drop, journal, looks: looksAll }), [drop, journal, looksAll]);
   useEffect(() => {
     const inputs = [garments, occasion, season, color, pageWeather];
@@ -435,6 +438,7 @@ function LookbookPage() {
         weatherF: pageWeather,
         salt: rowSalt,
         onScreen: weekIds,
+        leadIds,
         suggested,
         rotation: getRotation(),
         stuck: stuckFor(),
@@ -455,7 +459,7 @@ function LookbookPage() {
       cancelled = true;
       window.clearTimeout(id);
     };
-  }, [garments, occasion, season, color, pageWeather, rowSalt, weekIds, suggested, getRotation, stuckFor, recordPage]);
+  }, [garments, occasion, season, color, pageWeather, rowSalt, weekIds, leadIds, suggested, getRotation, stuckFor, recordPage]);
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const rack = useMemo(

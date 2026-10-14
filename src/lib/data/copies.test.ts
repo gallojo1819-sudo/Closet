@@ -281,7 +281,9 @@ describe("piece labels", () => {
       colors: ["brown"],
     });
     assert.equal(pieceLabel(named, [named, twin]), "Brown suede jacket · tan");
-    assert.equal(pieceLabel(twin, [named, twin]), "Brown suede jacket · leather");
+    /* Both plates carry the default material: a token both hold tells them apart no better
+       than the name, so the twin takes the one field only it has (its fit). */
+    assert.equal(pieceLabel(twin, [named, twin]), "Brown suede jacket · slim");
 
     const jeansA = plate({
       id: "d1",

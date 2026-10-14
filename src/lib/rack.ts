@@ -22,12 +22,30 @@ export function isFakeName(name: string): boolean {
   return false;
 }
 
+const PATTERN_WORD = /\b(striped?|stripes|plaid|pinstriped?|gingham|checked|check|herringbone|houndstooth|tartan|paisley|floral|dotted|polka dot)\b/i;
+
+/** The pattern word a piece's own text carries (name, subtype, notes), lowercased, or null. */
+export function patternWord(text: string): string | null {
+  const m = text.match(PATTERN_WORD);
+  return m ? m[1]!.toLowerCase() : null;
+}
+
+/**
+ * A display name from sampled colours for a piece whose stored name is a placeholder. Only
+ * what there is evidence for: no colour sampled means no name (the stored name stands); a
+ * category of "other" with no subtype names no kind ("knit" was a guess), so the piece stays a
+ * "piece", flagged for the owner to name, with its pattern word kept. Never writes.
+ */
 export function nameFromPixels(
-  g: Pick<Garment, "category" | "subtype" | "name">,
+  g: Pick<Garment, "category" | "subtype" | "name"> & { notes?: string },
   colors: string[],
 ): string {
-  const lead = titleColor(colors[0] || "cream") || "Cream";
+  const sampled = (colors[0] ?? "").trim();
+  if (!sampled) return g.name;
+  const lead = titleColor(sampled);
+  if (!lead) return g.name;
   const b = `${g.subtype} ${g.category} ${g.name}`.toLowerCase();
+  const pattern = patternWord(`${g.name} ${g.subtype} ${g.notes ?? ""}`);
   const second = colors[1];
   const jacketish =
     g.category === "outerwear" ||
@@ -43,9 +61,9 @@ export function nameFromPixels(
     else if (g.category === "bottom") kind = "trousers";
     else if (g.category === "outerwear") kind = "jacket";
     else if (g.category === "top") kind = "top";
-    else kind = "knit";
+    else kind = "piece";
   }
-  return `${lead} ${kind}`;
+  return [lead, pattern, kind].filter(Boolean).join(" ");
 }
 
 export function resolveLookIds(ids: string[], allowed: Set<string>): string[] {

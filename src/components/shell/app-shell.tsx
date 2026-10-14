@@ -111,7 +111,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (s.garments.length > 0) {
         useCloset.setState({ garments: s.garments });
       }
-      void useCloset.getState().retitleFakeNames();
       void migrateImagesToIdb().catch(() => {});
       if (live) stopSync = startCloudSync();
     })();

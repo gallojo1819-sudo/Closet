@@ -1,30 +1,59 @@
+/**
+ * The label a piece shows. The stored name stands (its colour and pattern words with it); when
+ * other pieces in the pool share the name, each gets a suffix that is unique within that
+ * same-name group: a colour the name does not say, then the material, the subtype, the fit.
+ * A piece with nothing unique keeps the plain name once, then "· 2", "· 3" in a stable order
+ * (createdAt, then id). Maker text is never a label (no house names in Closet). Does not
+ * write garment.name.
+ */
 import type { Garment } from "./types.ts";
 
-/** Color, then brand, then material. Skip a token already written in the name. */
-function distinguisher(g: Garment): string | null {
-  const name = g.name.trim().toLowerCase();
-  const candidates = [...(g.colors ?? []), g.brand, g.material];
-  for (const raw of candidates) {
-    const token = (raw ?? "").trim();
-    if (!token) continue;
-    const low = token.toLowerCase();
-    if (low === name) continue;
-    if (name.includes(low)) continue;
-    return token;
+type Named = Pick<Garment, "id" | "name" | "colors" | "material" | "subtype" | "fit" | "createdAt">;
+
+function nameKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/** Suffix candidates in order, lowercased, none already said by the name. */
+function candidates(g: Named): string[] {
+  const name = nameKey(g.name);
+  const raw = [...(g.colors ?? []), g.material, g.subtype, g.fit];
+  const out: string[] = [];
+  for (const token of raw) {
+    const low = (token ?? "").trim().toLowerCase();
+    if (!low || low === name || name.includes(low) || out.includes(low)) continue;
+    out.push(low);
   }
-  return null;
+  return out;
+}
+
+function sameNameGroup(g: Named, pool: readonly Named[]): Named[] {
+  const key = nameKey(g.name);
+  const group = pool.filter((other) => nameKey(other.name) === key);
+  if (!group.some((other) => other.id === g.id)) group.push(g);
+  return group.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
 
 /**
- * Keep the plate name. When another piece in the pool has the same name,
- * append brand, else fit, else subtype, else the second color.
- * Does not write garment.name.
+ * The suffix for `g` within its same-name group, or null for the plain name. A token held by
+ * exactly one member is that member's; members with no such token are ordered, the first keeps
+ * the plain name and the rest take their ordinal.
  */
-export function pieceLabel(g: Garment, pool: readonly Garment[]): string {
-  const key = g.name.trim().toLowerCase();
-  const shared = pool.some((other) => other.id !== g.id && other.name.trim().toLowerCase() === key);
-  if (!shared) return g.name;
-  const extra = distinguisher(g);
-  if (!extra) return g.name;
-  return `${g.name} · ${extra}`;
+function suffixFor(g: Named, group: readonly Named[]): string | null {
+  if (group.length < 2) return null;
+  const mine = candidates(g);
+  const holders = new Map<string, number>();
+  for (const member of group) for (const token of new Set(candidates(member))) holders.set(token, (holders.get(token) ?? 0) + 1);
+  const unique = (list: readonly string[]) => list.find((token) => holders.get(token) === 1) ?? null;
+  const own = unique(mine);
+  if (own) return own;
+  const plain = group.filter((member) => !unique(candidates(member)));
+  const at = plain.findIndex((member) => member.id === g.id);
+  return at <= 0 ? null : String(at + 1);
+}
+
+/** The label: the stored name, with a group-unique suffix when the pool shares the name. */
+export function pieceLabel(g: Named, pool: readonly Named[]): string {
+  const suffix = suffixFor(g, sameNameGroup(g, pool));
+  return suffix ? `${g.name} · ${suffix}` : g.name;
 }

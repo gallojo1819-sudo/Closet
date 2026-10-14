@@ -267,7 +267,7 @@ describe("source pins", () => {
     assert.equal(/Reshuffle\s*<\/button>/.test(book), false, "the old Reshuffle button is gone");
     assert.match(
       book,
-      /rowWays\(found, garments, \{\s*occasion,\s*season,\s*color,\s*weatherF: pageWeather,\s*salt: rowSalt,\s*onScreen: weekIds,\s*suggested,\s*rotation: getRotation\(\),\s*stuck: stuckFor\(\),\s*\}\)/,
+      /rowWays\(found, garments, \{\s*occasion,\s*season,\s*color,\s*weatherF: pageWeather,\s*salt: rowSalt,\s*onScreen: weekIds,\s*leadIds,\s*suggested,\s*rotation: getRotation\(\),\s*stuck: stuckFor\(\),\s*\}\)/,
     );
   });
 

@@ -7,9 +7,11 @@ import { LookSheet } from "@/components/closet/look-sheet";
 import { OnMePanel } from "@/components/closet/on-me";
 import { WearButton } from "@/components/closet/wear-button";
 import { Button } from "@/components/ui/button";
-import { alternatives, dropNote, kitCells, unwornLine, sortLook } from "@/lib/look";
+import { alternatives, dropNote, kitCells, unwornLine } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
-import { isFakeName } from "@/lib/rack";
+import { hasRealPieces, isFakeName } from "@/lib/rack";
+import { freezeSeason, liveIdsKey, readFrozenSeason, TODAY_SEASON_KEY } from "@/lib/daily-pick";
+import { todayLookPieces } from "@/lib/today-look";
 import { rackCanDress, weekStripDays } from "@/lib/lookbook";
 import { engineCacheReady } from "@/lib/engine-cache";
 import { seasonFromWeather } from "@/lib/season";
@@ -22,11 +24,36 @@ import { emptyTaste, leftOffLine, techniqueLine } from "@/lib/taste";
 import { useCloset } from "@/lib/store";
 import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
 import { useIsClient } from "@/lib/use-client";
-import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
+import { OCCASIONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
 import { getNycWeather } from "@/lib/weather";
 import { cn, formatLongDate, lastDays, todayISO, weekdayLetter } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({ component: Today });
+
+/**
+ * The day's season bucket, frozen on first sight: a reading that crosses a bucket edge later
+ * in the day does not move today's look. Kept under its own localStorage key, never in
+ * closet.v6 or closet_meta. Without storage the live bucket is used.
+ */
+function frozenSeasonForToday(weatherF: number | undefined): Season {
+  const today = todayISO();
+  const live = seasonFromWeather(weatherF);
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(TODAY_SEASON_KEY);
+  } catch {
+    raw = null;
+  }
+  const { season, next } = freezeSeason(readFrozenSeason(raw), today, live);
+  if (next) {
+    try {
+      window.localStorage.setItem(TODAY_SEASON_KEY, JSON.stringify(next));
+    } catch {
+      /* memory only */
+    }
+  }
+  return season;
+}
 
 function Today() {
   const garmentsAll = useCloset((s) => s.garments);
@@ -57,9 +84,15 @@ function Today() {
   const dateLine = isClient ? formatLongDate() : "";
 
   const ownedCount = garments.filter((g) => !g.archived).length;
+  /* The pick re-runs when the set of live ids changes, not on every count blip. */
+  const liveKey = liveIdsKey(garments);
+  /* The sample rack is not a closet to dress while the real one is still coming: a signed-in
+     (or still pending) account loads its closet from the cloud after hydration. */
+  const sampleOnly = garments.length > 0 && !hasRealPieces(garmentsAll);
+  const settled = !sampleOnly || (!account.pending && !account.user);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !settled) return;
     let cancelled = false;
     (async () => {
       let weather = drop?.weather;
@@ -70,7 +103,7 @@ function Today() {
         weather = drop?.weather;
       }
       if (cancelled) return;
-      const owned = useCloset.getState().garments.filter((g) => !g.archived);
+      const owned = livePool(useCloset.getState().garments).filter((g) => !g.archived);
       const current = useCloset.getState().drop;
       const wasOpen = persistGate.open;
       const inMemory = (run: () => void) => {
@@ -116,14 +149,20 @@ function Today() {
         }
         return;
       }
-      /* No look for today, or a broken one. A new day's pick, never a skip. */
-      inMemory(() => useCloset.getState().rerollDrop(weather, todayOccasion(current)));
+      /* No look for today, or a broken one. The day's pick (daily-pick.ts): the same closet on
+         the same day gives the same look, under the season bucket frozen for today. It stays in
+         memory: an automatic pick must not carry a setAt stamp, which a gate-open write would
+         give it and which mergeDrop lets outrank a Skip the user made on another device. */
+      const season = frozenSeasonForToday(weather?.f);
+      inMemory(() =>
+        useCloset.getState().rerollDrop(weather, todayOccasion(current), undefined, undefined, { season }),
+      );
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, ownedCount]);
+  }, [hydrated, settled, liveKey]);
 
   useEffect(() => {
     if (!hydrated || ownedCount === 0) return;
@@ -194,14 +233,11 @@ function Today() {
       }),
     [today, drop, journal, thisWeek, garments],
   );
-  const shown = useMemo(() => {
-    const cell = weekCells.find((c) => c.iso === today);
-    return sortLook(
-      (cell?.look?.garmentIds ?? [])
-        .map((id) => garments.find((g) => g.id === id))
-        .filter((g): g is Garment => Boolean(g)),
-    );
-  }, [weekCells, today, garments]);
+  /* The one selector the stylist dock and answerTodayAsk read too (today-look.ts). */
+  const shown = useMemo(
+    () => todayLookPieces({ drop, journal, thisWeek, garments }, today),
+    [drop, journal, thisWeek, garments, today],
+  );
   const lookName =
     shown.length === 0
       ? "Nothing on the rack"

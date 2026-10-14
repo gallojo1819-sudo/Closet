@@ -1763,8 +1763,13 @@ describe("lookbook card stack", () => {
     const gaps = readFileSync(new URL("./gaps.ts", import.meta.url), "utf8");
     assert.equal(gaps.includes("houseOf("), false);
     assert.equal(gaps.includes("Faloni in summer"), false);
-    // Today keeps today's look. The open effect rerolls only without a sound today drop, never as a skip.
-    const effect = today.slice(today.indexOf("if (!hydrated) return;"), today.indexOf("}, [hydrated, ownedCount]);"));
+    // Today keeps today's look. The open effect rerolls only without a sound today drop, never as a
+    // skip, and only once the closet has settled (daily-pick.ts: the pick is the day's, by live ids).
+    const start = today.indexOf("if (!hydrated || !settled) return;");
+    const end = today.indexOf("}, [hydrated, settled, liveKey]);");
+    assert.ok(start >= 0 && end > start, "the Today effect waits for a settled closet and re-runs on the live ids");
+    const effect = today.slice(start, end);
+    assert.match(effect, /rerollDrop\([^;]*\{ season \}/, "the open pick is the daily pick");
     const guard = effect.indexOf("current.date === todayISO()");
     assert.ok(guard >= 0 && guard < effect.indexOf("rerollDrop("), "date-today guard before the reroll");
     assert.equal(/rerollDrop\([^;]*garmentIds/.test(effect), false, "open never passes previousIds");
