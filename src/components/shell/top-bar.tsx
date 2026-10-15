@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { AccountChip } from "@/components/shell/account-chip";
+import { PhotoSourceInputs } from "@/components/ui/photo-source";
+import { CHOOSE_PHOTOS_LABEL, TAKE_PHOTO_LABEL } from "@/lib/camera";
 import { useAccount } from "@/lib/cloud/account";
 import { compressRefBackup, putImage, refImageKey } from "@/lib/images";
 import { refPhotoLabel } from "@/lib/ref-photo-label";
@@ -74,11 +76,13 @@ async function fileToJpegBlob(file: File): Promise<Blob> {
   return blob;
 }
 
-function RefPhotoDialog({ onClose }: { onClose: () => void }) {
+/** The On-me sheet. Exported for the picker test; TopBar is the only mount. */
+export function RefPhotoDialog({ onClose }: { onClose: () => void }) {
   const refPhoto = useCloset((s) => s.refPhoto);
   const setRefPhoto = useCloset((s) => s.setRefPhoto);
   const src = useImageSrc(refPhoto);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const camRef = useRef<HTMLInputElement>(null);
+  const libRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState<string | null>(null);
@@ -153,9 +157,9 @@ function RefPhotoDialog({ onClose }: { onClose: () => void }) {
           One photo of you. 5′8, regular.
         </h2>
         <p className="mt-2 text-sm text-ink-soft">
-          Full body, plain background. Choose a photo, drop one here, or paste
-          (Ctrl+V). It never leaves this browser — the preview dresses this
-          man, not a stranger.
+          Full body, plain background. Take a photo, choose one from your
+          library, drop one here, or paste (Ctrl+V). It never leaves this
+          browser — the preview dresses this man, not a stranger.
         </p>
         {shown ? (
           <img
@@ -167,21 +171,30 @@ function RefPhotoDialog({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             disabled={busy}
-            onClick={() => fileRef.current?.click()}
+            onClick={() => libRef.current?.click()}
             className="mt-4 w-full aspect-[3/4] border border-dashed border-hairline-strong text-sm text-ink-soft"
           >
             Drop or paste a full-body photo
           </button>
         )}
         {error && <p className="mt-3 micro text-accent">{error}</p>}
-        <div className="mt-5 flex flex-wrap gap-2">
+        <p className="mt-5 micro text-ink-soft">{refPhotoLabel({ busy, shown })}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
             disabled={busy}
-            onClick={() => fileRef.current?.click()}
+            onClick={() => camRef.current?.click()}
             className="h-10 bg-accent px-4 text-sm text-paper disabled:opacity-40"
           >
-            {refPhotoLabel({ busy, shown })}
+            {TAKE_PHOTO_LABEL}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => libRef.current?.click()}
+            className="h-10 border border-hairline px-4 text-sm text-ink disabled:opacity-40"
+          >
+            {CHOOSE_PHOTOS_LABEL}
           </button>
           {refPhoto && (
             <button
@@ -206,17 +219,7 @@ function RefPhotoDialog({ onClose }: { onClose: () => void }) {
             Close
           </button>
         </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-          onChange={(e) => {
-            void onFile(e.target.files?.[0]);
-            e.target.value = "";
-          }}
-        />
+        <PhotoSourceInputs camRef={camRef} libRef={libRef} onFile={(file) => void onFile(file)} />
       </div>
     </div>
   );

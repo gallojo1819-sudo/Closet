@@ -31,6 +31,22 @@ export function libraryInputProps() {
   };
 }
 
+/** Button and aria labels for the two-way picker (full-body sheet, hangtag). */
+export const TAKE_PHOTO_LABEL = "Take photo";
+
+export const CHOOSE_PHOTOS_LABEL = "Choose from Photos";
+
+/**
+ * One photo from the library. No `capture` (on iOS and Android `capture` forces the camera
+ * and hides Photos) and no `multiple`: the sheet and the hangtag take one file.
+ */
+export function libraryPickProps() {
+  return {
+    type: "file" as const,
+    accept: CAMERA_ACCEPT,
+  };
+}
+
 export function isImageFile(file: { type: string; name: string }): boolean {
   const type = (file.type || "").toLowerCase();
   if (type.startsWith("image/")) return true;

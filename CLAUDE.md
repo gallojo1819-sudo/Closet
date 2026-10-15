@@ -178,3 +178,14 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   on Oct 14 2026: on Oct 9 no piece of a closet begun Sep 12 is 30 days idle, so no forgotten
   row forms and the out screen falls back to two one-look stored rows. `diag/lookbook-leads.ts`
   is removed.
+- photo-library (Oct 15 2026, claude/photo-library): the On-me sheet and the hangtag input were
+  camera-only on phones (`capture="environment"` hides Photos on iOS and Android). Both now
+  mount `PhotoSourceInputs` (`components/ui/photo-source.tsx`): a "Take photo" input
+  (`cameraInputProps`) and a "Choose from Photos" input (`libraryPickProps` in `camera.ts`: no
+  capture, no multiple, `CAMERA_ACCEPT` so HEIC comes through), with aria-labels
+  `TAKE_PHOTO_LABEL`/`CHOOSE_PHOTOS_LABEL`. The sheet's two buttons sit under the
+  `refPhotoLabel` caption ("Add photo"/"Replace photo"); the hangtag row is `HangtagSource`
+  (`components/add/hangtag-source.tsx`), and `processHangtag` reports `HEIC_ERROR` when a HEIC
+  fails to decode. `photo-source.test.tsx` (vitest) renders `RefPhotoDialog` (now exported) and
+  `HangtagSource` to markup and checks both inputs' attributes; it also pins that neither
+  component file carries `capture=` or `accept="image/*"` any more.

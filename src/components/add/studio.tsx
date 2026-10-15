@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, ClipboardPaste, Images, Link2, Loader2, Tag } from "lucide-react";
+import { Camera, Images, Link2, Loader2 } from "lucide-react";
+import { HangtagSource } from "@/components/add/hangtag-source";
 import { Button } from "@/components/ui/button";
 import { imageKey, putImage, putThumb, blobToDataUrl, dataUrlToBlob, deleteImage, fileFingerprint, getImage } from "@/lib/images";
 import {
@@ -10,6 +11,7 @@ import {
   handleCameraChange,
   HEIC_ERROR,
   imageFilesFromList,
+  isHeicFile,
   libraryInputProps,
   resumeCameraAction,
   PENDING_CAMERA_FLAG,
@@ -146,7 +148,6 @@ export function Studio() {
   } | null>(null);
   const pickRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
-  const tagRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     readAiStatus()
@@ -1024,7 +1025,8 @@ export function Studio() {
         hangtag: true,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not read that tag.");
+      if (isHeicFile(file)) setError(HEIC_ERROR);
+      else setError(e instanceof Error ? e.message : "Could not read that tag.");
     } finally {
       setBusy(false);
       setProgress("");
@@ -1268,28 +1270,7 @@ export function Studio() {
             Use listing
           </Button>
         </form>
-        <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
-          <Button variant="ghost" onClick={() => tagRef.current?.click()} disabled={busy}>
-            <Tag className="size-4" />
-            Hangtag
-          </Button>
-          <Button variant="ghost" disabled={busy} className="pointer-events-none opacity-70">
-            <ClipboardPaste className="size-4" />
-            Or paste
-          </Button>
-        </div>
-        <input
-          ref={tagRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void processHangtag(file);
-            e.target.value = "";
-          }}
-        />
+        <HangtagSource busy={busy} onFile={(file) => void processHangtag(file)} />
       </section>
       )}
 
