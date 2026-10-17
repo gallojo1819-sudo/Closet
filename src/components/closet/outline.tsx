@@ -2,16 +2,23 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { BodyPortal } from "@/components/closet/body-portal";
 import { classifyScan, printGarment } from "@/lib/ai";
 import { dataUrlToBlob, imageKey, notifyImage, putImage, putThumb } from "@/lib/images";
-import { readGarmentPhoto } from "@/lib/plate-pass";
+import { guardedPlatePatch, readGarmentPhoto, recolorFromPlate } from "@/lib/plate-pass";
 import { judgeHeldPlate } from "@/lib/packshot-search";
 import { OUTLINE_FAIL_MESSAGE, clampBox, coverRejected, cropToBox, holderCheckerText, type CropBox } from "@/lib/scan";
+import { singleGarmentNoun } from "@/lib/single-garment";
 import { useCloset } from "@/lib/store";
 import type { Garment } from "@/lib/types";
 import { useImageSrc } from "@/lib/use-image";
 
 const START: CropBox = { x: 0.18, y: 0.12, w: 0.64, h: 0.76 };
 
-/** One box on the original. Confirm reprints that crop and runs the clean check. */
+export const SINGLE_FAIL_MESSAGE = "Still seeing more than this piece — tighten the box.";
+
+/**
+ * One box on the original. Confirm reprints that crop, runs the hand check, then the
+ * single-garment check; a plate that shows another piece is written busy (the paper tile),
+ * never clean, and the tool stays open for a tighter box. A clean plate re-reads the colours.
+ */
 export function OutlineJacket({
   garment,
   onClose,
@@ -114,17 +121,25 @@ export function OutlineJacket({
         return;
       }
       const key = imageKey(garment.id, "c");
+      const patch = await guardedPlatePatch({
+        id: garment.id,
+        photoSrc: garment.imageSrc,
+        written: { reprint: false, cutoutSrc: plate },
+        plateKey: key,
+        noun: singleGarmentNoun(garment),
+      });
+      if (patch.matteQuality !== "clean") {
+        /* The old cut-out may be the one that bled: it is not kept as clean. */
+        useCloset.getState().updateGarment(garment.id, patch);
+        setLine(SINGLE_FAIL_MESSAGE);
+        return;
+      }
       await putImage(key, dataUrlToBlob(plate));
       await putThumb(garment.id, plate).catch(() => {});
       notifyImage(key);
       notifyImage(imageKey(garment.id, "t"));
-      useCloset.getState().updateGarment(garment.id, {
-        cutoutSrc: key,
-        imageSource: "cutout",
-        matteQuality: "clean",
-        reprint: false,
-        plated: true,
-      });
+      useCloset.getState().updateGarment(garment.id, patch);
+      void recolorFromPlate(garment.id, plate);
       onClose();
     } catch {
       setLine(OUTLINE_FAIL_MESSAGE);

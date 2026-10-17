@@ -16,6 +16,13 @@ import {
   resetBlobHashes,
   runPlatePass,
 } from "./plate.ts";
+import { checkSingleGarment } from "./single-garment.ts";
+
+/* The single-garment check said yes (a mocked verdict: the only mock these tests use). */
+const YES = await checkSingleGarment(
+  { image: "data:image/jpeg;base64,plate", noun: "jacket" },
+  async () => ({ one: "yes", why: "" }),
+);
 
 const photo = {
   id: "suede",
@@ -183,6 +190,7 @@ describe("a camera photo labeled cutout is not a plate", () => {
       { reprint: false, cutoutSrc: "data:image/jpeg;base64,plate" },
       "c-aabbccdd.jpg",
       keptPlateKey(camera),
+      YES,
     );
     assert.equal(printed.plated, true);
     assert.equal(printed.cutoutSrc, "c-aabbccdd.jpg");
@@ -199,6 +207,7 @@ describe("a camera photo labeled cutout is not a plate", () => {
       { reprint: true, cutoutSrc: camera.imageSrc },
       "c-aabbccdd.jpg",
       keptPlateKey(camera),
+      YES,
     );
     assert.equal("plated" in refused, false);
     assert.equal(refused.cutoutSrc, "");
@@ -226,6 +235,8 @@ describe("plate patch", () => {
       "idb:suede:o",
       { reprint: false, cutoutSrc: "data:image/jpeg;base64,plate" },
       "idb:suede:c",
+      "",
+      YES,
     );
     assert.equal("imageSrc" in ok, false);
     assert.equal(ok.cutoutSrc, "idb:suede:c");
@@ -235,6 +246,8 @@ describe("plate patch", () => {
       "idb:suede:o",
       { reprint: true, cutoutSrc: "idb:suede:o" },
       "idb:suede:c",
+      "",
+      YES,
     );
     assert.equal(refused.cutoutSrc, "");
     assert.equal(refused.imageSource, "cutout");
@@ -248,6 +261,7 @@ describe("plate patch", () => {
       { reprint: true, cutoutSrc: "" },
       "idb:suede:c",
       "idb:suede:c",
+      YES,
     );
     assert.equal(kept.cutoutSrc, "idb:suede:c");
     assert.equal(kept.reprint, false);
@@ -297,6 +311,7 @@ describe("a copied phone photo is not a plate", () => {
       { reprint: true, cutoutSrc: "" },
       "idb:suede-copy:c",
       copy.cutoutSrc,
+      YES,
     );
     assert.equal(refused.cutoutSrc, "");
     assert.equal(refused.reprint, true);
@@ -307,6 +322,7 @@ describe("a copied phone photo is not a plate", () => {
       { reprint: false, cutoutSrc: copy.cutoutSrc },
       "idb:suede-copy:c",
       copy.cutoutSrc,
+      YES,
     );
     assert.equal(marked.cutoutSrc, "");
     assert.equal(marked.reprint, true);

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { classifyScan, printGarment } from "./ai.ts";
+import { classifyScan, printGarment, tagGarment } from "./ai.ts";
 import { fetchCloudBlob } from "./cloud/blobs.ts";
 import { closetImagesBucket, getSupabase } from "./cloud/client.ts";
 import { isCloudSrc, parseCloudSrc } from "./cloud/src.ts";
@@ -15,7 +15,7 @@ import {
   putThumb,
 } from "./images.ts";
 import { getAccount } from "./cloud/account.ts";
-import { findOfficialCover, judgeHeldPlate } from "./packshot-search.ts";
+import { findOfficialCover, judgeHeldPlate, judgeSingleGarment } from "./packshot-search.ts";
 import { maySearchOfficial, officialCoverPatch } from "./packshot.ts";
 import {
   coverBytesKnown,
@@ -24,11 +24,25 @@ import {
   keptPlateKey,
   markBlobUnreadable,
   noteBlob,
+  plateCandidate,
   plateResultPatch,
   runPlatePass,
+  type PlatePatch,
 } from "./plate.ts";
 import { cropToBox, holderCheckerText, placeHeldGarment } from "./scan.ts";
+import {
+  checkSingleGarment,
+  colorsFromPlateTag,
+  singleGarmentNoun,
+  type SingleGarmentAsk,
+  type SingleGarmentCheck,
+} from "./single-garment.ts";
 import { useCloset } from "./store.ts";
+
+export type PlateOpts = {
+  /** After a clean plate, read the colours off the plate (Joe's own action, never the auto pass). */
+  recolor?: boolean;
+};
 
 const autoStarted = new Set<string>();
 const searched = new Set<string>();
@@ -189,8 +203,76 @@ function startCoverJob(id: string, run: () => Promise<void>): Promise<void> {
 }
 
 /** Same held-jacket print as a camera shot. imageSrc is not written. */
-export function makePlate(id: string): Promise<void> {
-  return startCoverJob(id, () => printOnePlate(id));
+export function makePlate(id: string, opts: PlateOpts = {}): Promise<void> {
+  return startCoverJob(id, () => printOnePlate(id, opts));
+}
+
+/** The vision helper behind the single-garment check. A failed call is null (unclear). */
+export const askSingleGarment: SingleGarmentAsk = async ({ image, noun }) => {
+  try {
+    const shrunk = await shrinkForPrint(image, 768).catch(() => image);
+    const answer: { one: string; why: string } | null | undefined = await judgeSingleGarment({
+      data: { image: shrunk, noun },
+    });
+    return answer ?? null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The one door to a clean stamp. Every plate path (the jacket pass, the print queue, the
+ * outline box-crop, the add flow, the official cover) builds its patch here: the candidate
+ * cover is read, the single-garment check looks at it, and `plateResultPatch` stamps clean
+ * only on yes. `ask` is the server function; tests pass a mocked verdict.
+ */
+export async function guardedPlatePatch(input: {
+  id: string;
+  /** The garment's original photo key (its imageSrc). Read to tell a plate from the photo; never written. */
+  photoSrc: string;
+  written: { reprint: boolean; cutoutSrc: string };
+  plateKey: string;
+  previous?: string;
+  noun: string;
+  ask?: SingleGarmentAsk;
+}): Promise<PlatePatch> {
+  const previous = input.previous ?? "";
+  const candidate = plateCandidate(input.photoSrc, input.written, input.plateKey, previous);
+  let image = "";
+  if (candidate) {
+    image = candidate.image.startsWith("data:")
+      ? candidate.image
+      : ((await readGarmentPhoto(input.id, candidate.image).catch(() => null)) ?? "");
+  }
+  const check = await checkSingleGarment({ image, noun: input.noun }, input.ask ?? askSingleGarment);
+  return plateResultPatch(input.photoSrc, input.written, input.plateKey, previous, check);
+}
+
+/** A check of a picture that is not a plate result (the official cover). */
+export function checkCover(image: string, noun: string, ask: SingleGarmentAsk = askSingleGarment): Promise<SingleGarmentCheck> {
+  return checkSingleGarment({ image, noun }, ask);
+}
+
+/**
+ * Colours read off a clean cut-out, not the source photo: the sweater's navy and green came
+ * from the jacket and collar in the model shot. Writes only when the tag named a colour.
+ */
+export async function recolorFromPlate(
+  id: string,
+  plate: string,
+  tag: (input: { data: { image: string } }) => Promise<Parameters<typeof colorsFromPlateTag>[0]> = tagGarment,
+): Promise<string[]> {
+  try {
+    const image = await shrinkForPrint(plate, 768).catch(() => plate);
+    const colors = colorsFromPlateTag(await withTimeout(tag({ data: { image } }), 12000));
+    const g = useCloset.getState().garments.find((item) => item.id === id);
+    if (!g || !colors.length) return [];
+    const same = colors.length === g.colors.length && colors.every((c, i) => c === g.colors[i]);
+    if (!same) useCloset.getState().updateGarment(id, { colors });
+    return colors;
+  } catch {
+    return [];
+  }
 }
 
 async function heldChecker(plate: string): Promise<string> {
@@ -219,7 +301,7 @@ export async function cropHeldPhoto(photo: string): Promise<string | null> {
   }
 }
 
-async function printOnePlate(id: string): Promise<void> {
+async function printOnePlate(id: string, opts: PlateOpts = {}): Promise<void> {
   const started = useCloset.getState().garments.find((item) => item.id === id);
   if (!started || started.archived) return;
   await noteGarmentCoverBytes(started);
@@ -257,8 +339,16 @@ async function printOnePlate(id: string): Promise<void> {
       save: () => {},
     });
     const plateKey = imageKey(id, "c");
-    const patch = plateResultPatch(g.imageSrc, written, plateKey, previous);
-    if (!written.reprint && written.cutoutSrc.startsWith("data:")) {
+    const patch = await guardedPlatePatch({
+      id,
+      photoSrc: g.imageSrc,
+      written,
+      plateKey,
+      previous,
+      noun: singleGarmentNoun(g),
+    });
+    const fresh = patch.matteQuality === "clean" && written.cutoutSrc.startsWith("data:");
+    if (fresh) {
       await putImage(plateKey, dataUrlToBlob(written.cutoutSrc));
       await putThumb(id, written.cutoutSrc).catch(() => {});
     }
@@ -266,6 +356,7 @@ async function printOnePlate(id: string): Promise<void> {
     const current = useCloset.getState().garments.find((item) => item.id === id);
     if (current && hasCleanCover(current) && written.reprint) return;
     useCloset.getState().updateGarment(id, patch);
+    if (fresh && opts.recolor) await recolorFromPlate(id, written.cutoutSrc);
   } catch {
     const current = useCloset.getState().garments.find((item) => item.id === id);
     if (current && !hasCleanCover(current)) {
@@ -282,15 +373,15 @@ async function printOnePlate(id: string): Promise<void> {
  * One search, then the plate if nothing matched. imageSrc is not written.
  * A 403 or a rejected download falls through. It does not fail the tile.
  */
-export function findRealPhoto(id: string): Promise<void> {
-  return startCoverJob(id, () => searchThenPlate(id));
+export function findRealPhoto(id: string, opts: PlateOpts = {}): Promise<void> {
+  return startCoverJob(id, () => searchThenPlate(id, opts));
 }
 
-async function searchThenPlate(id: string): Promise<void> {
+async function searchThenPlate(id: string, opts: PlateOpts = {}): Promise<void> {
   const g = useCloset.getState().garments.find((item) => item.id === id);
   if (!g || g.archived) return;
   if (!maySearchOfficial(g.id, g.brand)) {
-    await printOnePlate(id);
+    await printOnePlate(id, opts);
     return;
   }
   if (searched.has(id)) return;
@@ -318,18 +409,26 @@ async function searchThenPlate(id: string): Promise<void> {
             ? hit.image
             : "";
         if (stored && useCloset.getState().garments.some((item) => item.id === id)) {
-          const plateKey = imageKey(id, "c");
-          await putImage(plateKey, dataUrlToBlob(stored));
-          await putThumb(id, stored).catch(() => {});
-          useCloset.getState().updateGarment(id, officialCoverPatch(plateKey, hit.pageUrl));
-          return;
+          /* A shop picture can be a model shot too: it is a cover only when it shows one piece. */
+          const patch = officialCoverPatch(
+            imageKey(id, "c"),
+            hit.pageUrl,
+            await checkCover(stored, singleGarmentNoun(g)),
+          );
+          if (patch.matteQuality === "clean") {
+            await putImage(patch.cutoutSrc, dataUrlToBlob(stored));
+            await putThumb(id, stored).catch(() => {});
+            useCloset.getState().updateGarment(id, patch);
+            if (opts.recolor) await recolorFromPlate(id, stored);
+            return;
+          }
         }
       }
     }
   } catch {
     /* the plate pass below */
   }
-  await printOnePlate(id);
+  await printOnePlate(id, opts);
 }
 
 let plateNote = "";

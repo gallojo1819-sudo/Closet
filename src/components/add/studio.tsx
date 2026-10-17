@@ -32,7 +32,8 @@ import { enqueuePrint, enqueueTag } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
 import { classifyScan, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
 import { judgeHeldPlate } from "@/lib/packshot-search";
-import { cropHeldPhoto } from "@/lib/plate-pass";
+import { cropHeldPhoto, guardedPlatePatch } from "@/lib/plate-pass";
+import { singleGarmentNoun } from "@/lib/single-garment";
 import { CAMERA_TAG_MS, decideCameraTag } from "@/lib/camera-tag";
 import { getAccount } from "@/lib/cloud/account";
 import { getSupabase } from "@/lib/cloud/client";
@@ -197,9 +198,20 @@ export function Studio() {
       quiet?: boolean;
     }): Promise<Saved> => {
       const id = opts.id;
-      await putImage(imageKey(id, "o"), dataUrlToBlob(opts.original));
-      await putImage(imageKey(id, "c"), dataUrlToBlob(opts.cover));
+      const photoKey = imageKey(id, "o");
+      const plateKey = imageKey(id, "c");
+      await putImage(photoKey, dataUrlToBlob(opts.original));
+      await putImage(plateKey, dataUrlToBlob(opts.cover));
       void putThumb(id, opts.cover).catch(() => {});
+      /* A shop or matte cover is stamped clean only after the single-garment check saw one piece. */
+      const checked = await guardedPlatePatch({
+        id,
+        photoSrc: photoKey,
+        written: { reprint: false, cutoutSrc: opts.cover },
+        plateKey,
+        noun: singleGarmentNoun({ subtype: opts.subtype, category: opts.category }),
+      });
+      const clean = checked.matteQuality === "clean";
       addGarment(
         {
           id,
@@ -214,10 +226,13 @@ export function Studio() {
           warmth: opts.warmth ?? 3,
           fit: opts.fit ?? "regular",
           seasons: [],
-          imageSrc: imageKey(id, "o"),
-          cutoutSrc: imageKey(id, "c"),
+          imageSrc: photoKey,
+          cutoutSrc: clean ? plateKey : "",
           imageSource: opts.source,
-          matteQuality: "clean",
+          matteQuality: checked.matteQuality,
+          reprint: checked.reprint,
+          ...(clean ? { plated: true as const } : {}),
+          cutoutCheck: checked.cutoutCheck,
           productUrl: opts.productUrl,
           fileHash: opts.fileHash,
           tuck: opts.tuck ?? guessTuck({ name: opts.name, subtype: opts.subtype ?? "", notes: opts.notes ?? "" }),
@@ -225,7 +240,13 @@ export function Studio() {
         { quiet: opts.quiet },
       );
       mirrorAdded(id);
-      return { id, name: opts.name, category: opts.category, cutout: opts.cover };
+      return {
+        id,
+        name: opts.name,
+        category: opts.category,
+        cutout: clean ? opts.cover : "",
+        reprint: !clean,
+      };
     },
     [addGarment, mirrorAdded],
   );
@@ -436,11 +457,22 @@ export function Studio() {
           opts.show(cover);
         },
         save: async (w) => {
-          const usePlate = !w.reprint && w.cutoutSrc.startsWith("data:");
+          /* The plate is stamped clean only after the single-garment check saw one piece in it. */
+          const checked = await guardedPlatePatch({
+            id: opts.id,
+            photoSrc: photoKey,
+            written: w,
+            plateKey,
+            noun: "garment",
+          });
+          const usePlate = checked.matteQuality === "clean" && w.cutoutSrc.startsWith("data:");
           await putImage(photoKey, opts.photoBlob);
           if (usePlate) {
             await putImage(plateKey, dataUrlToBlob(w.cutoutSrc)).catch(() => {});
             await putThumb(opts.id, w.cutoutSrc).catch(() => {});
+          } else if (tile) {
+            tile = "";
+            opts.show("");
           }
           addGarment(
             {
@@ -456,11 +488,8 @@ export function Studio() {
               warmth: 3,
               seasons: [],
               imageSrc: photoKey,
+              ...checked,
               cutoutSrc: usePlate ? plateKey : "",
-              imageSource: "cutout",
-              matteQuality: usePlate ? "clean" : "busy",
-              reprint: !usePlate,
-              ...(usePlate ? { plated: true as const } : {}),
               fileHash: opts.hash,
               tuck: guessTuck({ name: NEW_PIECE_NAME, subtype: "", notes: opts.notes }),
             },

@@ -3,11 +3,18 @@ import { Loader2 } from "lucide-react";
 import { BodyPortal } from "@/components/closet/body-portal";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
+import { OutlineJacket } from "@/components/closet/outline";
 import { Button } from "@/components/ui/button";
 import { describeCover, readAiStatus, recolorCover } from "@/lib/ai";
 import { findRealPhoto, makePlate } from "@/lib/plate-pass";
 import { maySearchOfficial } from "@/lib/packshot";
-import { coverIsOriginal, needsReprintTile, REPRINT_CAPTION } from "@/lib/plate";
+import {
+  coverIsOriginal,
+  cutoutCheckCaption,
+  hasCutout,
+  needsReprintTile,
+  REPRINT_CAPTION,
+} from "@/lib/plate";
 import { useCoverByteRev } from "@/lib/use-clean-cover";
 import {
   coversSameSilhouette,
@@ -154,6 +161,8 @@ export function GarmentDetail({
   const [coverError, setCoverError] = useState<string | null>(null);
   const [plating, setPlating] = useState(false);
   const [finding, setFinding] = useState(false);
+  /* "Redo cut-out": the outline box-crop on the original, then the single-garment check. */
+  const [redo, setRedo] = useState(false);
   useCoverByteRev();
   const originalSrc = useImageSrc(garment.imageSrc);
 
@@ -421,14 +430,21 @@ export function GarmentDetail({
               </button>
             )}
           </div>
-          {coverIsOriginal(garment) && view !== "me" && maySearchOfficial(garment.id, garment.brand) && (
+          {view !== "me" && cutoutCheckCaption(garment) ? (
+            <p className="micro px-4 py-2 text-ink-soft border-t border-hairline">
+              {cutoutCheckCaption(garment)}
+            </p>
+          ) : null}
+          {(coverIsOriginal(garment) || hasCutout(garment)) &&
+            view !== "me" &&
+            maySearchOfficial(garment.id, garment.brand) && (
             <button
               type="button"
               disabled={finding || plating}
               onClick={() => {
                 setFinding(true);
                 setCoverError(null);
-                void findRealPhoto(garment.id)
+                void findRealPhoto(garment.id, { recolor: true })
                   .then(() => {
                     const next = useCloset.getState().garments.find((item) => item.id === garment.id);
                     if (next?.reprint) setCoverError(REPRINT_CAPTION);
@@ -450,7 +466,7 @@ export function GarmentDetail({
               onClick={() => {
                 setPlating(true);
                 setCoverError(null);
-                void makePlate(garment.id)
+                void makePlate(garment.id, { recolor: true })
                   .then(() => {
                     const next = useCloset.getState().garments.find((item) => item.id === garment.id);
                     if (next?.reprint) setCoverError(REPRINT_CAPTION);
@@ -464,6 +480,35 @@ export function GarmentDetail({
             >
               {plating ? "Making a plate…" : "Make a plate"}
             </button>
+          )}
+          {hasCutout(garment) && view !== "me" && (
+            <button
+              type="button"
+              data-redo-cutout
+              disabled={plating || finding}
+              onClick={() => {
+                setCoverError(null);
+                setRedo(true);
+              }}
+              className="micro w-full py-2 text-ink border-t border-hairline hover:text-ink disabled:text-ink-soft"
+            >
+              Redo cut-out
+            </button>
+          )}
+          {redo && (
+            <OutlineJacket
+              garment={garment}
+              onClose={() => {
+                setRedo(false);
+                const next = useCloset.getState().garments.find((item) => item.id === garment.id);
+                if (next?.reprint) setCoverError(REPRINT_CAPTION);
+                else if (next && next.cutoutCheck?.at !== garment.cutoutCheck?.at) {
+                  setCoverNote("Cover updated — original photo unchanged.");
+                }
+                setCoverTick((n) => n + 1);
+                setView("print");
+              }}
+            />
           )}
 
         </div>

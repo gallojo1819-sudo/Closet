@@ -1,5 +1,6 @@
-import type { ImageSource } from "./types.ts";
+import type { CutoutCheck, ImageSource } from "./types.ts";
 import { PLATE_FAIL_MESSAGE } from "./scan.ts";
+import { cutoutCheckOf, type SingleGarmentCheck } from "./single-garment.ts";
 
 export const REPRINT_CAPTION = PLATE_FAIL_MESSAGE;
 
@@ -197,7 +198,47 @@ export type PlatePatch = {
   reprint: boolean;
   /** Set only when a real plate is saved. A refusal leaves this unset. */
   plated?: boolean;
+  /** The single-garment verdict the stamp rests on. */
+  cutoutCheck: CutoutCheck;
 };
+
+/** A stored cut-out apart from the phone photo: official, cutout or segmented, not refused. */
+export function hasCutout(g: CoverFields): boolean {
+  const cutout = g.cutoutSrc?.trim() ?? "";
+  if (!cutout || g.reprint === true) return false;
+  if (!PLATE_SOURCES.has(g.imageSource ?? "")) return false;
+  return !coverIsOriginal(g);
+}
+
+/**
+ * A cut-out the single-garment check has not passed: never checked (every cut-out made
+ * before Oct 16 2026), or checked and the verdict was no or unclear.
+ */
+export function cutoutNeedsRecheck(g: CoverFields & { cutoutCheck?: CutoutCheck }): boolean {
+  if (!hasCutout(g)) return false;
+  return g.cutoutCheck?.one !== "yes";
+}
+
+/** Short line for the detail sheet. Empty when the cut-out passed or there is none. */
+export function cutoutCheckCaption(g: CoverFields & { cutoutCheck?: CutoutCheck }): string {
+  if (!cutoutNeedsRecheck(g)) return "";
+  if (g.cutoutCheck?.one === "no") return "This cut-out showed more than this piece.";
+  return "This cut-out was never checked for a single piece.";
+}
+
+/**
+ * The only place a cover is stamped clean. "yes" is clean; "no" and "unclear" are busy and
+ * reprint, so no path stamps a cut-out clean without the check having looked at it.
+ */
+export function matteFromCheck(check: SingleGarmentCheck): {
+  matteQuality: "clean" | "busy";
+  reprint: boolean;
+  cutoutCheck: CutoutCheck;
+} {
+  const cutoutCheck = cutoutCheckOf(check);
+  if (check.one === "yes") return { matteQuality: "clean", reprint: false, cutoutCheck };
+  return { matteQuality: "busy", reprint: true, cutoutCheck };
+}
 
 function sameFileBytes(a: string, b: string): boolean {
   const left = a.trim();
@@ -210,44 +251,23 @@ function sameFileBytes(a: string, b: string): boolean {
 }
 
 /**
- * imageSrc is not in the patch. A clean plate is stored at plateKey.
- * A refusal does not point cutoutSrc at the phone photo.
- * A previous c- file that matches the original is not kept.
- * A previous plate whose bytes differ is left in place.
+ * Which picture would become the cover, before the single-garment check looks at it.
+ * `image` is the picture to check (a data URL for a fresh plate, else the stored key);
+ * `key` is what cutoutSrc would hold. Null: nothing to keep, the plate is refused.
  */
-export function plateResultPatch(
+export function plateCandidate(
   garmentImageSrc: string,
   written: { reprint: boolean; cutoutSrc: string },
   plateKey: string,
   previousCutout = "",
-): PlatePatch {
-  const refused = {
-    cutoutSrc: "",
-    imageSource: "cutout" as const,
-    matteQuality: "busy" as const,
-    reprint: true,
-  };
+): { image: string; key: string } | null {
   if (!written.reprint && written.cutoutSrc.startsWith("data:")) {
-    return {
-      cutoutSrc: plateKey,
-      imageSource: "cutout",
-      matteQuality: "clean",
-      reprint: false,
-      plated: true,
-    };
+    return { image: written.cutoutSrc, key: plateKey };
   }
   const prev = previousCutout.trim();
   const prevIsPhoto =
     !prev || prev === garmentImageSrc || prev.startsWith("data:") || sameFileBytes(prev, garmentImageSrc);
-  if (!prevIsPhoto) {
-    return {
-      cutoutSrc: prev,
-      imageSource: "cutout",
-      matteQuality: "clean",
-      reprint: false,
-      plated: true,
-    };
-  }
+  if (!prevIsPhoto) return { image: prev, key: prev };
   const fromWritten = written.cutoutSrc.trim();
   if (
     !written.reprint &&
@@ -256,15 +276,45 @@ export function plateResultPatch(
     !fromWritten.startsWith("data:") &&
     !sameFileBytes(fromWritten, garmentImageSrc)
   ) {
-    return {
-      cutoutSrc: fromWritten,
-      imageSource: "cutout",
-      matteQuality: "clean",
-      reprint: false,
-      plated: true,
-    };
+    return { image: fromWritten, key: fromWritten };
   }
-  return refused;
+  return null;
+}
+
+/**
+ * imageSrc is not in the patch. A clean plate is stored at plateKey.
+ * A refusal does not point cutoutSrc at the phone photo.
+ * A previous c- file that matches the original is not kept.
+ * A previous plate whose bytes differ is left in place.
+ * The candidate is stamped clean only when the single-garment check said yes about it;
+ * on no or unclear the patch is busy and reprint, never clean, whichever branch found it.
+ */
+export function plateResultPatch(
+  garmentImageSrc: string,
+  written: { reprint: boolean; cutoutSrc: string },
+  plateKey: string,
+  previousCutout: string,
+  check: SingleGarmentCheck,
+): PlatePatch {
+  const stamp = matteFromCheck(check);
+  const refused: PlatePatch = {
+    cutoutSrc: "",
+    imageSource: "cutout",
+    matteQuality: "busy",
+    reprint: true,
+    cutoutCheck: stamp.cutoutCheck,
+  };
+  const candidate = plateCandidate(garmentImageSrc, written, plateKey, previousCutout);
+  if (!candidate) return refused;
+  if (stamp.matteQuality !== "clean") return refused;
+  return {
+    cutoutSrc: candidate.key,
+    imageSource: "cutout",
+    matteQuality: stamp.matteQuality,
+    reprint: stamp.reprint,
+    plated: true,
+    cutoutCheck: stamp.cutoutCheck,
+  };
 }
 
 /** At most `concurrency` workers. Does not start until the caller awaits it. */

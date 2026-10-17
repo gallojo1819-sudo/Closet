@@ -1,4 +1,5 @@
-import { coverStillPhoto, type PlatePatch } from "./plate.ts";
+import { coverStillPhoto, matteFromCheck, type PlatePatch } from "./plate.ts";
+import type { SingleGarmentCheck } from "./single-garment.ts";
 
 /** The other brown suede. No brand. Never search it, and never give it the REISS photo. */
 export const UNBRANDED_SUEDE_ID = "g_py2swfwot1ed";
@@ -260,16 +261,25 @@ export function visionRejects(v: PackshotVerdict | null): boolean {
 
 export type OfficialPatch = PlatePatch & { productUrl?: string };
 
-/** imageSrc and notes are not in the patch. The page URL uses the existing productUrl field. */
-export function officialCoverPatch(plateKey: string, pageUrl: string): OfficialPatch {
+/**
+ * imageSrc and notes are not in the patch. The page URL uses the existing productUrl field.
+ * A shop picture is a cover only when the single-garment check saw one piece in it; on no or
+ * unclear the patch is busy with no cutoutSrc, and the caller falls through to the plate.
+ */
+export function officialCoverPatch(
+  plateKey: string,
+  pageUrl: string,
+  check: SingleGarmentCheck,
+): OfficialPatch {
+  const stamp = matteFromCheck(check);
+  const clean = stamp.matteQuality === "clean";
   const patch: OfficialPatch = {
-    cutoutSrc: plateKey,
+    cutoutSrc: clean ? plateKey : "",
     imageSource: "official",
-    matteQuality: "clean",
-    reprint: false,
-    plated: true,
+    ...stamp,
+    ...(clean ? { plated: true } : {}),
   };
   const page = pageUrl.trim();
-  if (page) patch.productUrl = page;
+  if (page && clean) patch.productUrl = page;
   return patch;
 }

@@ -21,6 +21,21 @@ export type ImageSource = (typeof IMAGE_SOURCES)[number];
 
 export type Tuck = "in" | "out" | "either";
 
+/** The single-garment check's answer: does the cut-out show exactly one piece? */
+export type SingleVerdict = "yes" | "no" | "unclear";
+
+/**
+ * Stored beside a cut-out once the single-garment check has looked at it. Absent on every
+ * cut-out made before Oct 16 2026: those never went through the check (the audit lists them).
+ */
+export type CutoutCheck = {
+  one: SingleVerdict;
+  /** A few words from the checker. Empty on yes. */
+  why: string;
+  /** ISO time the check ran. */
+  at: string;
+};
+
 export type Garment = {
   id: string;
   name: string;
@@ -41,6 +56,8 @@ export type Garment = {
   reprint?: boolean;
   /** A real plate was saved. Absent until then. A camera filename is not this. */
   plated?: boolean;
+  /** Single-garment check of the cut-out at cutoutSrc. Absent: never checked. */
+  cutoutCheck?: CutoutCheck;
   demo: boolean;
   wornOn: string[];
   paid?: number;
