@@ -17,6 +17,7 @@ import {
   visionRejects,
   type PackshotVerdict,
 } from "./packshot.ts";
+import { checkSingleGarment } from "./single-garment.ts";
 
 const reiss = {
   id: "g_1pg9y05mlkek",
@@ -207,18 +208,38 @@ describe("cover pass", () => {
     assert.equal(coverPassAction({ ...reiss, reprint: false }), "skip");
   });
 
-  it("writes the official cover without imageSrc or notes", () => {
-    const patch = officialCoverPatch("idb:g_1pg9y05mlkek:c", "https://www.reiss.com/jacket");
+  it("writes the official cover without imageSrc or notes", async () => {
+    const one = await checkSingleGarment(
+      { image: "data:image/jpeg;base64,shop", noun: "jacket" },
+      async () => ({ one: "yes", why: "" }),
+    );
+    const patch = officialCoverPatch("idb:g_1pg9y05mlkek:c", "https://www.reiss.com/jacket", one);
     assert.equal("imageSrc" in patch, false);
     assert.equal("notes" in patch, false);
     assert.equal(patch.cutoutSrc, "idb:g_1pg9y05mlkek:c");
     assert.equal(patch.imageSource, "official");
     assert.equal(patch.reprint, false);
     assert.equal(patch.plated, true);
+    assert.equal(patch.matteQuality, "clean");
+    assert.equal(patch.cutoutCheck.one, "yes");
     assert.equal(patch.productUrl, "https://www.reiss.com/jacket");
-    const noPage = officialCoverPatch("idb:g_qnmo5yzgl50b:c", "  ");
+    const noPage = officialCoverPatch("idb:g_qnmo5yzgl50b:c", "  ", one);
     assert.equal("productUrl" in noPage, false);
     assert.equal(noPage.imageSource, "official");
+  });
+
+  it("a shop picture that shows a model or a second piece is not an official cover", async () => {
+    const model = await checkSingleGarment(
+      { image: "data:image/jpeg;base64,shop", noun: "jacket" },
+      async () => ({ one: "no", why: "worn by a model" }),
+    );
+    const patch = officialCoverPatch("idb:g_1pg9y05mlkek:c", "https://www.reiss.com/jacket", model);
+    assert.equal(patch.matteQuality, "busy");
+    assert.equal(patch.reprint, true);
+    assert.equal(patch.cutoutSrc, "");
+    assert.equal("plated" in patch, false);
+    assert.equal("productUrl" in patch, false);
+    assert.equal(patch.cutoutCheck.why, "worn by a model");
   });
 
   it("puts Find the real photo above Make a plate", () => {

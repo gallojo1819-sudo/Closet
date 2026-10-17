@@ -6,9 +6,10 @@ import { garmentV2Fields, garmentWriter, mirrorGarmentFields } from "./data/mirr
 import { dataUrlToBlob, imageKey, putImage, putThumb } from "./images.ts";
 import { withTimeout } from "./ingest.ts";
 import { judgeHeldPlate } from "./packshot-search.ts";
-import { cropHeldPhoto, noteGarmentCoverBytes } from "./plate-pass.ts";
-import { hasCleanCover, keptPlateKey, plateResultPatch } from "./plate.ts";
+import { cropHeldPhoto, guardedPlatePatch, noteGarmentCoverBytes } from "./plate-pass.ts";
+import { hasCleanCover, keptPlateKey } from "./plate.ts";
 import { holderCheckerText, placeHeldGarment } from "./scan.ts";
+import { singleGarmentNoun } from "./single-garment.ts";
 import { useCloset } from "./store.ts";
 import { guessTuck } from "./tuck.ts";
 
@@ -133,8 +134,15 @@ export function enqueuePrint(id: string, original: string): void {
       });
       if (!useCloset.getState().garments.some((item) => item.id === id)) return;
       const plateKey = imageKey(id, "c");
-      const patch = plateResultPatch(g.imageSrc, written, plateKey, previous);
-      if (!written.reprint && written.cutoutSrc.startsWith("data:")) {
+      const patch = await guardedPlatePatch({
+        id,
+        photoSrc: g.imageSrc,
+        written,
+        plateKey,
+        previous,
+        noun: singleGarmentNoun(g),
+      });
+      if (patch.matteQuality === "clean" && written.cutoutSrc.startsWith("data:")) {
         const cutout = await shrinkJpeg(await toLocalDataUrl(written.cutoutSrc), 900, 0.85);
         await putImage(plateKey, dataUrlToBlob(cutout));
         await putThumb(id, cutout).catch(() => {});

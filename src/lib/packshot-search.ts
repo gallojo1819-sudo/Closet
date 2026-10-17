@@ -13,6 +13,7 @@ import {
   visionRejects,
   type PackshotVerdict,
 } from "./packshot.ts";
+import { parseSingleGarment, SINGLE_GARMENT_MS, singleGarmentQuestion } from "./single-garment.ts";
 
 export type OfficialCover =
   | { ok: true; image: string; pageUrl: string; title: string }
@@ -129,6 +130,49 @@ export const judgeHeldPlate = createServerFn({ method: "POST" })
       return parseJudge(text);
     }
     return UNREADABLE;
+  });
+
+/** The wire shape of the single-garment answer. `settle` in single-garment.ts reads it loosely. */
+export type SingleAnswer = { one: string; why: string };
+
+const UNCHECKED: SingleAnswer = { one: "unclear", why: "unreadable" };
+
+/**
+ * The single-garment check: does the cut-out show exactly one {noun}? The answer feeds
+ * `checkSingleGarment` (single-garment.ts), the only producer of the verdict `plateResultPatch`
+ * needs. No key, no image, a refused call or no JSON is unclear, which the guard stamps busy.
+ */
+export const judgeSingleGarment = createServerFn({ method: "POST" })
+  .middleware([closetCaller])
+  .validator((input: { image: string; noun: string }) => input)
+  .handler(async ({ data, context }): Promise<SingleAnswer> => {
+    const gate = await callerGate(context, "judgeSingleGarment");
+    if (!gate.ok) return UNCHECKED;
+    if (!process.env.XAI_API_KEY || !data.image) return UNCHECKED;
+    const messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: singleGarmentQuestion(data.noun) },
+          { type: "image_url", image_url: { url: data.image } },
+        ],
+      },
+    ];
+    for (const model of ["grok-4.7", "grok-4.3"] as const) {
+      const r = await xaiPost(
+        "https://api.x.ai/v1/chat/completions",
+        { model, temperature: 0, max_tokens: 80, messages },
+        SINGLE_GARMENT_MS,
+      );
+      if (!r.ok) {
+        if (r.status === 400 || r.status === 403 || r.status === 404 || r.status === 422) continue;
+        return UNCHECKED;
+      }
+      const text = chatText(r.json).trim();
+      if (!text) continue;
+      return parseSingleGarment(text);
+    }
+    return UNCHECKED;
   });
 
 async function searchOnce(query: string, brief: string, site: string | null): Promise<unknown> {

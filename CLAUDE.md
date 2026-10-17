@@ -178,3 +178,33 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   on Oct 14 2026: on Oct 9 no piece of a closet begun Sep 12 is 30 days idle, so no forgotten
   row forms and the out screen falls back to two one-look stored rows. `diag/lookbook-leads.ts`
   is removed.
+- clean-cutout (Oct 16 2026, claude/clean-cutout): a piece's cut-out shows only that piece. Joe
+  saw the olive field jacket's elbow patch inside the "Cream cable-knit sweater" plate
+  (g_mqjsmpqgwwvm: cut from a model shot, sweater under the jacket, stamped clean with nothing
+  looking; its navy and green came from the jacket and collar). `src/lib/single-garment.ts` is
+  the single-garment check: `checkSingleGarment` is the only producer of the branded
+  `SingleGarmentCheck` (the asker is an argument: live, `askSingleGarment` in plate-pass.ts
+  calls the server fn `judgeSingleGarment` in packshot-search.ts; tests pass a mocked verdict,
+  the one mock allowed) and asks "Does this image show exactly one {subtype}, with no part of
+  any other garment, body or background?". `plateResultPatch` (plate.ts) now requires the check
+  and stamps clean only on yes; no and unclear are busy, reprint, cutoutSrc "" in every branch
+  (fresh plate, kept previous, stored key). `matteFromCheck` is the one place the literal is
+  written; every path builds its patch through `guardedPlatePatch` in plate-pass.ts (the
+  jacket pass, the print queue, the outline box-crop, the add flow's held plate and its listing
+  `commit`, and the official cover via `checkCover` + `officialCoverPatch`, which falls through
+  to the plate when the shop picture fails). The verdict is stored as `cutoutCheck` on the
+  garment (absent = never checked; no display change: `hasCleanCover` does not read it).
+  `cutout-guard.test.ts` pins the branches, that `matteQuality: "clean"` appears only in
+  plate.ts (seed.ts is demo data, types.ts the type), that nothing casts into the brand, and
+  the entry points by source. Detail sheet: "Redo cut-out" for any piece with a cut-out
+  (`hasCutout`) opens `OutlineJacket` on the original; a plate that fails the check writes the
+  busy patch (paper tile, the bled cover is not kept as clean) and the tool stays open for a
+  tighter box; "Find the real photo" stays for branded pieces that already have a cut-out; a
+  caption (`cutoutCheckCaption`) says when the cut-out was never checked or showed more. After a
+  clean plate from Joe's own action (Redo, Make a plate, Find the real photo pass
+  `{ recolor: true }`) `recolorFromPlate` reads the colours off the plate (tagGarment on the
+  cut-out, `colorsFromPlateTag`), never off the source photo; the sign-in jacket pass never
+  recolours. `scripts/cutout-audit.ts` (read-only, no network, nothing written; the pure part is
+  `src/lib/cutout-audit.ts`) counts, on the Oct 14 export outside the repo, the cut-outs that
+  never went through the check: all of them, the sweater listed "needs re-check". Live vision
+  verdict UNVERIFIED (no network call in this round).
