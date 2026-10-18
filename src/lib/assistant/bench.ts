@@ -67,8 +67,6 @@ export const IDS = {
 /* Pieces the plan names by kind, found by name in the snapshot (benchEnv reports a miss). */
 export const NAMED = {
   shearling: /shearling/i,
-  shorts: /\bshorts?\b/i,
-  overcoat: /\b(overcoat|topcoat)\b/i,
 } as const;
 
 export type Turn = ModelReply | ((messages: ModelMessage[]) => ModelReply);
