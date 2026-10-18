@@ -219,3 +219,36 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   `src/lib/cutout-audit.ts`) counts, on the Oct 14 export outside the repo, the cut-outs that
   never went through the check: all of them, the sweater listed "needs re-check". Live vision
   verdict UNVERIFIED (no network call in this round).
+- assistant-r1 (Oct 18 2026, claude/closet-assistant-r1): the core of an in-app assistant, nothing
+  user-visible (no server function, no UI, no network; askStylist and the dock untouched).
+  `src/lib/assistant/registry.ts`: `defineRegistry` caps a registry at 15 tools, every name
+  `closet_`-prefixed, no duplicates; `toModelTools` gives the JSON-schema function list
+  (`z.toJSONSchema`); `runTool` never throws (unknown tool or a schema miss is
+  `{ ok: false, error }`, any `g_` id in the args that is not in `ctx.pool` is "That piece is not
+  in this closet.", a tool whose risk is not "read" is "needs approval"). `tools.ts` holds the 12
+  read tools as wrappers over livePool, pieceLabel, resolvePiecesFromText, composeAtlasLook and
+  dressThisPiece, isLegal/explain, checkVerdict/checkSwaps, lookOpinion, looksForHero and
+  forceLooksForPiece, the season helpers, todayLookPieces, unusedFromLooks and rotationRank,
+  rackNotes, listActive and relevantNotes: every list caps at 10 plus `more`, every piece carries
+  id and pieceLabel, reasons go through REASON_BY_RULE, "shown" never "worn", the weather tool
+  reads `ctx.weatherF` and says "unmeasured" without one. (`lookbook.ts` is imported first there:
+  legal.ts and matrix.ts import each other and resolve only in that order.) `loop.ts` is the
+  step-capped ReAct loop over an injected model (stopReason answer / repeat = the same call with
+  the same args twice in a row / max_steps = 12; the final text is scrubbed with scrubHouseNames
+  and must pass acceptStylistReply, else NOT_IN_CLOSET; garmentIds are the LOOK row, bare ids and
+  labels the answer names). `system.ts` states the hard rules at the top and again at the bottom,
+  among them Joe's oversized-knit rule (the six knits go only under an oversized jacket or coat,
+  never a regular-fit one: stated to the model, not enforced anywhere in the engine; the Knitwear
+  round owns enforcement), with three example answers from snapshot pieces by id.
+  `assistant.test.ts` and the scripted bench (`bench.ts`, `bench.test.ts`: scenarios 1-21, 28 and
+  29 on testCloset with a 58°F reading and memoryNotes(); 22-27 and 30 skipped as Round 2/3 write,
+  server or UI work; one summary line `closet-bench scripted: 23/23 passed, 7 skipped, snapshot
+  pieces: <LIVE_SNAPSHOT_COUNT>`) run under vitest (`src/lib/assistant/**/*.test.ts` added to the
+  include). Findings: a REASON_BY_RULE line that names a generic garment ("A sport coat over a
+  chunky knit.") cannot be quoted in a final answer, because acceptStylistReply reads "chunky
+  knit" as a piece the closet lacks; the atlas with a locked piece can return a look out of
+  season (weekend/fall around the corduroys gives the navy floral camp shirt), so
+  `closet_build_look` retries with the out-of-season pieces on the avoid list, then
+  dressThisPiece, then the piece's hero looks, and reports `legal: false` honestly when none
+  holds. leftOffLine did not fit (it needs a skipped look and its replacement); the rotation is
+  an optional `ctx.rotation` the caller may hand in.
