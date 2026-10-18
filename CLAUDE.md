@@ -247,12 +247,14 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   testCloset with memoryNotes() and the row's fixed reading (45°F row 1, 38°F row 2, 72°F row
   3, 45°F rows 10-11, 30°F rows 17 and 21, else 58°F); rows 22-27 are skipped as "memory notes
   and approval cards: Round 3" and row 30 as "xAI down / dock fallback needs the server
-  function: Round 2" (saving looks, logging wears and skipping are not tools, ever). Three rows
-  are known engine gaps, run and listed apart from passed with the reason, and the test fails if
+  function: Round 2" (saving looks, logging wears and skipping are not tools, ever). One row
+  is a known engine gap, run and listed apart from passed with the reason, and the test fails if
   a gap closes without the list changing: 8 (every owned jean under the navy blazer hits the
-  sport-coat denim rule hard on weekday; ecru is soft only on weekend and travel), 10 (the out
-  gate admits knit tops, so the fair isle half-zip is offered for out), 17 (the snapshot holds
-  no shorts). One summary line: `closet-bench scripted: 20/23 passed, 3 known engine gaps, 7
+  sport-coat denim rule hard on weekday; ecru is soft only on weekend and travel; closed by the
+  denim-blazer round, branch claude/denim-blazer). Row 10 expects the fair isle half-zip allowed
+  for out too (any out look offered around it must be legal); row 17 is a January season clash
+  on an owned piece (the pink linen shirt, 30°F, date pinned to 2027-01-15) refused with an
+  in-season swap. One summary line: `closet-bench scripted: 22/23 passed, 1 known engine gaps, 7
   skipped, snapshot pieces: <LIVE_SNAPSHOT_COUNT>`. The final text collapses newlines, so an
   answer carries one LOOK row; row 13 lists its three ways in prose and the test resolves them
   by label. Findings: a REASON_BY_RULE line that names a generic garment ("A sport coat over a
@@ -263,3 +265,5 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   dressThisPiece, then the piece's hero looks, and reports `legal: false` honestly when none
   holds. leftOffLine did not fit (it needs a skipped look and its replacement); the rotation is
   an optional `ctx.rotation` the caller may hand in.
+
+Follow-ups (logged, not fixed): season.ts / outfit-check XC-SEA-3 shows "A summer piece in fall." for a summer piece checked in winter (bench row 16, mules in winter); in winter it should read "A summer piece in winter."

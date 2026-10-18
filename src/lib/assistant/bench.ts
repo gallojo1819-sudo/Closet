@@ -29,6 +29,8 @@ import { emptyTaste } from "../taste.ts";
 import { mapOccasion, type Garment, type Occasion } from "../types.ts";
 
 export const BENCH_DATE = "2026-10-18";
+/** Row 17: a January day, so the season clash is judged in winter. */
+export const JANUARY_DATE = "2027-01-15";
 /** The reading a row gets when the plan names none. */
 export const BENCH_WEATHER_F = 58;
 
@@ -416,7 +418,7 @@ export const SCENARIOS: Scenario[] = [
     prompt: "Jeans with the navy blazer for the office",
     occasion: "weekday",
     gap:
-      "no jeans in the snapshot pass under the navy blazer on weekday: the engine's sport-coat rule hard-fails light-wash, white, striped and distressed denim everywhere and ecru denim on weekday (ecru is soft only on weekend and travel); brute force over every top and shoe finds 0 legal jeans-and-blazer weekday looks",
+      "fixed by the denim-blazer round (branch claude/denim-blazer: ecru and mid-wash jeans under a sport coat become a soft -15 on weekday and out); until it lands, no jeans in the snapshot pass under the navy blazer on weekday: the engine's sport-coat rule hard-fails light-wash, white, striped and distressed denim everywhere and ecru denim on weekday (ecru is soft only on weekend and travel); brute force over every top and shoe finds 0 legal jeans-and-blazer weekday looks",
     script: [
       call("closet_check_look", look([IDS.whiteShirt, IDS.creamJeans, IDS.blazer, IDS.tasselLoafers], "weekday")),
       call("closet_suggest_swap", look([IDS.whiteShirt, IDS.creamJeans, IDS.blazer, IDS.tasselLoafers], "weekday")),
@@ -465,12 +467,10 @@ export const SCENARIOS: Scenario[] = [
   {
     n: 10,
     title: "Fair isle half-zip for a weekday",
-    passWhen: "Allowed on weekday; not offered for out",
+    passWhen: "Allowed on weekday; allowed for out too (a knit top passes the out gate)",
     prompt: "Fair isle half-zip for a weekday",
     weatherF: 45,
     occasion: "weekday",
-    gap:
-      "the engine offers the cream fair isle half-zip for out: closet_looks_for_piece returns a legal out look around it (tan trousers, brown suede tassel loafers, brown suede jacket), closet_build_look locked on it for out returns legal: true, and brute force finds thousands of legal out looks with it in fall at 58°F, because the out gate admits a knit top and the half-zip is a knit",
     script: [
       call("closet_looks_for_piece", { id: IDS.fairIsle, limit: 10 }),
       (messages) => {
@@ -483,9 +483,10 @@ export const SCENARIOS: Scenario[] = [
       const problems: string[] = [];
       const worn = lookRowIds(run.text, ctx.pool);
       if (!worn.includes(IDS.fairIsle)) problems.push("no weekday look with the fair isle");
+      /* Out is allowed for the half-zip: any out look offered around it must itself be legal. */
       const d = firstStepData(run, "closet_looks_for_piece");
-      const outLook = (d?.looks ?? []).find((l: LookData) => l.occasion === "out" && l.legal);
-      if (outLook) problems.push(`the fair isle is offered for out: ${outLook.pieces.map((p: Ref) => p.label).join(" + ")}`);
+      const badOut = (d?.looks ?? []).find((l: LookData) => l.occasion === "out" && l.legal === false);
+      if (badOut) problems.push(`an out look around the fair isle was offered but is not legal: ${(badOut.pieces ?? []).map((p: Ref) => p.label).join(" + ")}`);
       return problems;
     },
   },
@@ -692,35 +693,34 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     n: 17,
-    title: "Shorts in January",
+    title: "The pink linen shirt in January",
     passWhen: "Refused (season clash), with an owned in-season swap",
-    prompt: "Shorts in January",
+    prompt: "Can I wear the pink linen shirt to work today?",
     weatherF: 30,
     occasion: "weekday",
-    gap: "the snapshot holds no shorts (no piece's name or kind says shorts), so there is no shorts piece to refuse and the season clash cannot be judged; the answer can only say none are owned and offer a winter look",
+    /* A January day at 30°F: the season comes from the date and the reading, as live. */
+    ctx: (base) => ({ ...base, date: JANUARY_DATE }),
     script: [
-      call("closet_search_pieces", { query: "shorts" }),
+      call("closet_check_look", look([IDS.linen, IDS.chinos, IDS.tasselLoafers], "weekday")),
+      call("closet_build_look", { prompt: "a January weekday at 30°F", occasion: "weekday" }),
       (messages) => {
-        const found = lastData(messages)?.found?.items ?? [];
-        return found.length
-          ? { toolCalls: [{ name: "closet_check_look", args: look([found[0].id, IDS.shirt, IDS.tasselLoafers], "weekday", "winter") }] }
-          : { toolCalls: [{ name: "closet_build_look", args: { prompt: "a January weekday", occasion: "weekday", season: "winter" } }] };
-      },
-      (messages) => {
+        const check = dataBack(messages, 1) as LookData | null;
+        if (check?.legal !== false) return { text: `Yes, today.\n${lookLine("weekday", check?.pieces ?? [])}` };
         const d = lookFrom(lastData(messages));
         const worn = d ? dressedPieces(d) : null;
-        const offer = worn ? `\n${lookLine("weekday", worn)}` : "";
-        return { text: `No shorts in January: you own none, and it is winter anyway. Wear this instead.${offer}` };
+        const offer = worn ? ` Wear this instead.\n${lookLine("weekday", worn)}` : "";
+        return { text: `Not in January: the pink linen shirt is a summer piece and it is 30°F.${offer}` };
       },
     ],
     expect: (run, ctx) => {
       const problems: string[] = [];
-      const found = firstStepData(run, "closet_search_pieces")?.found?.items ?? [];
-      if (!found.length) problems.push("no shorts in the snapshot, so no season clash was judged");
-      const check = lastStepData(run, "closet_check_look") as LookData | null;
-      if (!check || check.legal !== false || !(check.reasons ?? []).some((r) => /season|winter/i.test(r))) problems.push("shorts were not refused as a season clash");
+      const check = firstStepData(run, "closet_check_look") as LookData | null;
+      if (check?.season !== "winter") problems.push(`the check was judged for ${check?.season}, not winter`);
+      if (!check || check.legal !== false || !(check.reasons ?? []).some((r) => /season|winter|summer/i.test(r))) problems.push(`the linen shirt was not refused as a season clash: ${(check?.reasons ?? []).join(" | ")}`);
+      if (!/^Not in January/.test(run.text)) problems.push("the answer does not refuse January");
       const worn = pieces(ctx, lookRowIds(run.text, ctx.pool));
       if (!worn.length) problems.push("no owned in-season swap was offered");
+      if (worn.some((g) => g.id === IDS.linen)) problems.push("the swap still wears the linen shirt");
       if (!worn.every((g) => pieceFitsSeason(g, "winter"))) problems.push("the swap is not in season");
       return problems;
     },
