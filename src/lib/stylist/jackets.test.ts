@@ -2,12 +2,15 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Plate } from "../house-profiles/evaluate.ts";
+import { LIVE_SNAPSHOT_COUNT, testCloset } from "../__fixtures__/snapshot.ts";
 import { HOUSES } from "../houses.ts";
 import type { Garment } from "../types.ts";
 import platesFile from "./__tests__/fixtures/plates-2026-09-30.json" with { type: "json" };
 import classFile from "./data/2026-09-30-jacket-classification.json" with { type: "json" };
 import jacketRules from "./data/2026-09-30-jacket-rules.json" with { type: "json" };
+import { isLegal } from "./legal.ts";
 import { buildHouseMatrix, clearMatrixCache, type MatrixLook } from "./matrix.ts";
+import { wash } from "./rules.ts";
 import {
   CUT_CONFIRM,
   SUEDE_FAMILY,
@@ -17,6 +20,7 @@ import {
   jacketHits,
   jacketInfo,
   jacketRequired,
+  slotPieces,
   wearSlot,
   type JacketHit,
 } from "./jackets.ts";
@@ -88,6 +92,60 @@ describe("T1 jacket rules", () => {
       const mine = kept(rule.id, hits);
       const seen = mine.map((h) => `${h.id}:${h.severity}:${h.delta}:${h.why}`).join(" | ") || "(no hit)";
       expect(grade(test.expected, mine), seen).toBe(true);
+    });
+  }
+});
+
+/* Joe 2026-10-18: "jeans can go with blazer sometimes if it works". On the owner's real closet, ecru and
+   mid-wash clean jeans under the navy blazer are a soft mark-down (-15 weekday, out and comfy; -10 weekend
+   and travel), never a block; light-wash, white, striped and distressed jeans stay hard everywhere. */
+describe("JKT-LAY-3 jeans with a sport coat on the live snapshot", () => {
+  const live = (id: string): Garment => {
+    const g = testCloset.find((x) => x.id === id);
+    if (!g) throw new Error(`${id} is not in the snapshot`);
+    return g;
+  };
+  const BLAZER = "g_5josnvyoi4z9"; /* navy blazer */
+  const SHIRT = "g_pa7kfg14rtzl"; /* white button-up shirt */
+  const LOAFERS = "g_8nrtffa2s13s"; /* brown suede tassel loafers */
+  const SOFT = [
+    { id: "g_j994h3k9l8ot", wash: 0 } /* cream straight-leg jeans: ecru */,
+    { id: "g_btael28aebgu", wash: 2 } /* beige patchwork jeans: mid */,
+  ];
+  const HARD = ["g_rvrs9hibr981", "g_8t9o3g4r78c2", "g_lxqx9egrqg14", "g_zw51yaqdsx0q"]; /* light, light, striped, white distressed */
+  const OCCASIONS = ["weekday", "out", "comfy", "weekend", "travel"] as const;
+  const lay3 = (look: Garment[], occasion: string) =>
+    jacketHits(slotPieces(look as unknown as Plate[]), { occasion, season: "fall" }).filter((h) => h.id === "JKT-LAY-3");
+
+  it("reads the real snapshot", () => {
+    expect(testCloset).toHaveLength(LIVE_SNAPSHOT_COUNT);
+    for (const { id, wash: w } of SOFT) expect(wash(live(id) as unknown as Plate), id).toBe(w);
+  });
+
+  for (const { id } of SOFT) {
+    for (const occasion of OCCASIONS) {
+      const delta = occasion === "weekend" || occasion === "travel" ? -10 : -15;
+      it(`${id} under the navy blazer on ${occasion}: soft LAY-3 ${delta}, no hard ${occasion === "comfy" ? "LAY-3" : "hit"}`, () => {
+        const look = [live(SHIRT), live(id), live(BLAZER), live(LOAFERS)];
+        /* Comfy keeps its own formality block on a sport coat (JKT-FORM-1); the denim itself is never the block. */
+        const all = jacketHits(slotPieces(look as unknown as Plate[]), { occasion, season: "fall" }).filter((h) => occasion !== "comfy" || h.id === "JKT-LAY-3");
+        expect(all.filter((h) => h.severity === "hard")).toEqual([]);
+        expect(lay3(look, occasion).map((h) => [h.severity, h.delta])).toEqual([["soft", delta]]);
+      });
+    }
+  }
+
+  it("weekday navy blazer with the cream straight-leg jeans is a legal look", () => {
+    const look = [live(SHIRT), live("g_j994h3k9l8ot"), live(BLAZER), live(LOAFERS)];
+    expect(isLegal(look, { occasion: "weekday", season: "fall" })).toBe(true);
+  });
+
+  for (const id of HARD) {
+    it(`${id} under the navy blazer stays a hard LAY-3 on every occasion`, () => {
+      for (const occasion of OCCASIONS) {
+        const look = [live(SHIRT), live(id), live(BLAZER), live(LOAFERS)];
+        expect(lay3(look, occasion).some((h) => h.severity === "hard"), `${id} on ${occasion}`).toBe(true);
+      }
     });
   }
 });
@@ -180,7 +238,8 @@ describe("T3 classification", () => {
     const sha = (path: string) =>
       createHash("sha256").update(readFileSync(path, "utf8").replace(/\r\n/g, "\n")).digest("hex");
     expect(sha("src/lib/stylist/data/2026-09-30-jacket-rules.json")).toBe(
-      "474b455e7d01a93da73e12e81087c5ae46f7d2c2a02235fbc02958331b8df983",
+      // Re-pinned 2026-10-18: JKT-LAY-3 ecru/mid jeans on weekday/out are a -15 mark-down, not hard (Joe).
+      "093441455afa5614e9a68b83767d0dd25e47465a006ba073b0ee7511c8542c07",
     );
     expect(sha("src/lib/stylist/data/2026-09-30-jacket-classification.json")).toBe(
       // Re-pinned: the Khaki varsity left plates[] and misfiled[] (it is a top), casual count 17 -> 16.

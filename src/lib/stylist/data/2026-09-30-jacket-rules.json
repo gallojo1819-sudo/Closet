@@ -908,7 +908,7 @@
    "name": "sport_coat_bottoms",
    "type": "pair_ban",
    "target_file": "_cross_chip.json",
-   "description": "With a sport coat: wool/flannel/pleated trousers, chinos/cotton trousers and cords are fine. Jeans only DARK and clean (denim_wash >= 3). Light-wash, white, striped, distressed/frayed jeans: hard. Ecru or mid-wash clean jeans: -10 on Weekend/Travel, hard on Weekday/Out. Track/fleece/ribbed-knit lounge pants: hard.",
+   "description": "With a sport coat: wool/flannel/pleated trousers, chinos/cotton trousers and cords are fine. Jeans only DARK and clean (denim_wash >= 3). Light-wash, white, striped, distressed/frayed jeans: hard. Ecru or mid-wash clean jeans: -10 on Weekend/Travel, -15 on Weekday/Out/Comfy (Joe 2026-10-18: jeans can go with a blazer sometimes if it works; a mark-down, never a block). Track/fleece/ribbed-knit lounge pants: hard.",
    "logic": {
     "if": {
      "slot": "outer",
@@ -923,15 +923,15 @@
       "2_mid": {
        "weekend": -10,
        "travel": -10,
-       "weekday": "hard",
-       "out": "hard"
+       "weekday": -15,
+       "out": -15
       },
       "1_light": "hard",
       "0_ecru": {
        "weekend": -10,
        "travel": -10,
-       "weekday": "hard",
-       "out": "hard"
+       "weekday": -15,
+       "out": -15
       }
      }
     }
@@ -981,15 +981,15 @@
       "bottom": "g_j994h3k9l8ot",
       "shoe": "g_5g4fqg77s4rw"
      },
-     "expected": "fail",
+     "expected": "soft -15",
      "context": {
       "occasion": "out",
       "season": "fall"
      },
-     "why": "OUT_IVORY_DB_DENIM on Out with ecru jeans",
+     "why": "OUT_IVORY_DB_DENIM on Out with ecru jeans (Joe 2026-10-18: a -15 mark-down, not a block)",
      "result": "PASS",
      "hits": [
-      "JKT-LAY-3 hard: ecru jean Cream straight-leg jeans with a sport coat on out"
+      "JKT-LAY-3 soft -15: ecru jean Cream straight-leg jeans with a sport coat on out"
      ]
     },
     {

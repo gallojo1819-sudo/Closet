@@ -633,8 +633,9 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
         const w = wash(bottom);
         if (w === 1) hit("JKT-LAY-3", "hard", 0, `light-wash jean ${bottom.name} with a sport coat`);
         else if (w === 0 || w === 2) {
+          /* Joe 2026-10-18: jeans can go with a blazer sometimes if it works. A mark-down, never a block. */
           if (occ === "weekend" || occ === "travel") hit("JKT-LAY-3", "soft", -10, `ecru or mid jean ${bottom.name} with a sport coat`);
-          else hit("JKT-LAY-3", "hard", 0, `ecru or mid jean ${bottom.name} with a sport coat`);
+          else hit("JKT-LAY-3", "soft", -15, `ecru or mid jean ${bottom.name} with a sport coat`);
         }
       }
     }
