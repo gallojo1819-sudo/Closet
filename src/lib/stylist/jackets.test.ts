@@ -246,7 +246,7 @@ describe("T3 classification", () => {
       "184ffd3fd7b8ad77ae809bc5c3b8ab7e5ddf7743d54dee78a94be9615d1a83a0",
     );
     expect(sha("docs/stylist/2026-09-30-jacket-rules.md")).toBe(
-      "14efdc9e217bbb995f9a01097bd961efc2f151c7e3bbeff41395d0fec5a51cb1",
+      "e78ace3ac0e01ed3943f169dc2b94e6b69c912eeaf5721c601aaa93ac2c97b0a",
     );
     expect(sha("src/lib/stylist/__tests__/fixtures/plates-2026-09-30.json")).toBe(
       "dd4788a465042c9f22519a8880fd90bfbbb3459fa6ad0a32d6aef4c09abae126",

@@ -417,8 +417,6 @@ export const SCENARIOS: Scenario[] = [
     passWhen: "Allowed when otherwise legal (jeans are first-class)",
     prompt: "Jeans with the navy blazer for the office",
     occasion: "weekday",
-    gap:
-      "fixed by the denim-blazer round (branch claude/denim-blazer: ecru and mid-wash jeans under a sport coat become a soft -15 on weekday and out); until it lands, no jeans in the snapshot pass under the navy blazer on weekday: the engine's sport-coat rule hard-fails light-wash, white, striped and distressed denim everywhere and ecru denim on weekday (ecru is soft only on weekend and travel); brute force over every top and shoe finds 0 legal jeans-and-blazer weekday looks",
     script: [
       call("closet_check_look", look([IDS.whiteShirt, IDS.creamJeans, IDS.blazer, IDS.tasselLoafers], "weekday")),
       call("closet_suggest_swap", look([IDS.whiteShirt, IDS.creamJeans, IDS.blazer, IDS.tasselLoafers], "weekday")),

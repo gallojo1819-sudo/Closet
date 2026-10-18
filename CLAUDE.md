@@ -247,14 +247,13 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   testCloset with memoryNotes() and the row's fixed reading (45°F row 1, 38°F row 2, 72°F row
   3, 45°F rows 10-11, 30°F rows 17 and 21, else 58°F); rows 22-27 are skipped as "memory notes
   and approval cards: Round 3" and row 30 as "xAI down / dock fallback needs the server
-  function: Round 2" (saving looks, logging wears and skipping are not tools, ever). One row
-  is a known engine gap, run and listed apart from passed with the reason, and the test fails if
-  a gap closes without the list changing: 8 (every owned jean under the navy blazer hits the
-  sport-coat denim rule hard on weekday; ecru is soft only on weekend and travel; closed by the
-  denim-blazer round, branch claude/denim-blazer). Row 10 expects the fair isle half-zip allowed
+  function: Round 2" (saving looks, logging wears and skipping are not tools, ever). No row
+  is a known engine gap today (row 8, jeans with the navy blazer on weekday, passes since the
+  denim-blazer round made ecru and mid-wash jeans a soft -15); a future gap is run and listed
+  apart from passed with the reason, and the test fails if a gap closes without the list changing. Row 10 expects the fair isle half-zip allowed
   for out too (any out look offered around it must be legal); row 17 is a January season clash
   on an owned piece (the pink linen shirt, 30°F, date pinned to 2027-01-15) refused with an
-  in-season swap. One summary line: `closet-bench scripted: 22/23 passed, 1 known engine gaps, 7
+  in-season swap. One summary line: `closet-bench scripted: 23/23 passed, 0 known engine gaps, 7
   skipped, snapshot pieces: <LIVE_SNAPSHOT_COUNT>`. The final text collapses newlines, so an
   answer carries one LOOK row; row 13 lists its three ways in prose and the test resolves them
   by label. Findings: a REASON_BY_RULE line that names a generic garment ("A sport coat over a

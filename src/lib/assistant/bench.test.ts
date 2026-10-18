@@ -35,8 +35,8 @@ describe("closet-bench (scripted)", () => {
     );
     expect(report.run).toBe(PLAN_RUN.length);
     expect(report.failed.map((r) => `#${r.n} ${r.title}: ${[...r.problems, ...r.rowProblems].join("; ")}`)).toEqual([]);
-    /* The known gap today: jeans under the blazer on weekday (8), closed by the denim-blazer round (claude/denim-blazer). */
-    expect(report.gaps.map((r) => r.n)).toEqual([8]);
+    /* No known engine gaps: row 8 (jeans with the navy blazer on weekday) passes since the denim-blazer round. */
+    expect(report.gaps.map((r) => r.n)).toEqual([]);
     for (const r of report.gaps) expect(r.problems).toEqual([]);
     expect(report.passed + report.gaps.length).toBe(report.run);
   });
