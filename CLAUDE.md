@@ -240,11 +240,22 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   among them Joe's oversized-knit rule (the six knits go only under an oversized jacket or coat,
   never a regular-fit one: stated to the model, not enforced anywhere in the engine; the Knitwear
   round owns enforcement), with three example answers from snapshot pieces by id.
-  `assistant.test.ts` and the scripted bench (`bench.ts`, `bench.test.ts`: scenarios 1-21, 28 and
-  29 on testCloset with a 58°F reading and memoryNotes(); 22-27 and 30 skipped as Round 2/3 write,
-  server or UI work; one summary line `closet-bench scripted: 23/23 passed, 7 skipped, snapshot
-  pieces: <LIVE_SNAPSHOT_COUNT>`) run under vitest (`src/lib/assistant/**/*.test.ts` added to the
-  include). Findings: a REASON_BY_RULE line that names a generic garment ("A sport coat over a
+  `assistant.test.ts` and the scripted bench (`bench.ts`, `bench.test.ts`) run under vitest
+  (`src/lib/assistant/**/*.test.ts` added to the include). The bench follows the plan's
+  Closet-bench table row for row (the plan's ask is the prompt, its "pass when" the row's
+  `expect`, on top of the checks every scenario gets): rows 1-21, 28 and 29 run scripted on
+  testCloset with memoryNotes() and the row's fixed reading (45°F row 1, 38°F row 2, 72°F row
+  3, 45°F rows 10-11, 30°F rows 17 and 21, else 58°F); rows 22-27 are skipped as "memory notes
+  and approval cards: Round 3" and row 30 as "xAI down / dock fallback needs the server
+  function: Round 2" (saving looks, logging wears and skipping are not tools, ever). Three rows
+  are known engine gaps, run and listed apart from passed with the reason, and the test fails if
+  a gap closes without the list changing: 8 (every owned jean under the navy blazer hits the
+  sport-coat denim rule hard on weekday; ecru is soft only on weekend and travel), 10 (the out
+  gate admits knit tops, so the fair isle half-zip is offered for out), 17 (the snapshot holds
+  no shorts). One summary line: `closet-bench scripted: 20/23 passed, 3 known engine gaps, 7
+  skipped, snapshot pieces: <LIVE_SNAPSHOT_COUNT>`. The final text collapses newlines, so an
+  answer carries one LOOK row; row 13 lists its three ways in prose and the test resolves them
+  by label. Findings: a REASON_BY_RULE line that names a generic garment ("A sport coat over a
   chunky knit.") cannot be quoted in a final answer, because acceptStylistReply reads "chunky
   knit" as a piece the closet lacks; the atlas with a locked piece can return a look out of
   season (weekend/fall around the corduroys gives the navy floral camp shirt), so
