@@ -565,30 +565,6 @@ export function evaluatePlates(profile: Profile, ps: Partial<Record<string, Plat
   return { passed: hardFails.length === 0, hardFails, soft, minSignalGroups: got };
 }
 
-export function rankBonus(profile: Profile, ps: Partial<Record<string, Plate>>, ctx: EvalCtx): number {
-  const lib = profile.keywords;
-  let tot = 0;
-  for (const rb of profile.rank_bonus ?? []) {
-    if (rb.occasions && !rb.occasions.includes(ctx.occasion ?? "")) continue;
-    if (Object.values(ps).some((g) => g && rb.signals.some((s) => sig(g, s, lib)))) tot += rb.bonus;
-  }
-  return tot;
-}
-
-/** 10×min_signal_groups + soft deltas − 0.05×usage + rank_bonus. Illegal looks score −Infinity. */
-export function scorePlates(
-  profile: Profile,
-  ps: Partial<Record<string, Plate>>,
-  ctx: EvalCtx,
-  usage = 0,
-): { score: number; eval: EvalResult } {
-  const ev = evaluatePlates(profile, ps, ctx);
-  if (!ev.passed) return { score: Number.NEGATIVE_INFINITY, eval: ev };
-  const soft = ev.soft.reduce((sum, [, d]) => sum + d, 0);
-  const score = 10 * ev.minSignalGroups + soft - 0.05 * usage + rankBonus(profile, ps, ctx);
-  return { score, eval: ev };
-}
-
 export function pieceBanned(g: Plate, profile: Profile, ctx: EvalCtx): boolean {
   const lib = profile.keywords;
   const slot = slotOfPlate(g);

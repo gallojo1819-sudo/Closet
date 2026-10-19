@@ -32,6 +32,7 @@ import {
 import { screenLookCount } from "./lookbook-status.ts";
 import { advanceRotation, emptyRotation, type Rotation } from "./rotation.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
+import { NEXT_PLAIN_ROW, roomLeft, roomLine } from "./__fixtures__/page-room.ts";
 import { testCloset } from "./__fixtures__/snapshot.ts";
 
 const STORED: Garment[] = testCloset;
@@ -83,12 +84,15 @@ type Page = {
   header: number;
   weekRendered: number;
   sectionRendered: number;
+  /** What was listed unpairable when the page was built. */
+  stuck: Set<string>;
 };
 
 type Sim = {
   pages: Page[];
-  /** Look-alike groups of shoes that pair in this chapter (eligible, not unpairable): a row may go short only below ROW_MIN of them. */
+  /** Look-alike groups of shoes that pair in this chapter (eligible, not unpairable). */
   shoeGroups: number;
+  eligible: string[];
 };
 
 function simulate(occasion: Occasion): Sim {
@@ -135,6 +139,7 @@ function simulate(occasion: Occasion): Sim {
       header: screenLookCount(weekPieces, section),
       weekRendered: weekPieces.filter((pieces) => pieces.length >= 3).length,
       sectionRendered: section.length,
+      stuck: new Set(stuck),
     });
     prev = twins;
   }
@@ -143,10 +148,17 @@ function simulate(occasion: Occasion): Sim {
   const shoeGroups = new Set(
     CLOSET.filter((g) => g.category === "footwear" && eligible.includes(g.id) && !unpairable.has(g.id)).map((g) => TWINS.key(g)),
   ).size;
-  return { pages: out, shoeGroups };
+  return { pages: out, shoeGroups, eligible };
 }
 
-let RUNS: { occasion: Occasion; pages: Page[]; shoeGroups: number }[] = [];
+let RUNS: { occasion: Occasion; pages: Page[]; shoeGroups: number; eligible: string[] }[] = [];
+
+/** The exhaustive proof that a row has no card left (page-room.ts), as an assertion message; null when it is full. */
+function proof(run: { occasion: Occasion; eligible: string[] }, page: Page, rowId: string): string | null {
+  return roomLine(
+    roomLeft({ closet: CLOSET, occasion: run.occasion, season: SEASON, today: TODAY, week: page.week, rows: page.rows, stuck: page.stuck, eligible: new Set(run.eligible) }, rowId),
+  );
+}
 
 beforeAll(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -218,14 +230,14 @@ describe(`six pages per chapter on the ${CLOSET.length}-piece closet`, () => {
     }
   });
 
-  it("c. exactly four idea rows a page, each at least ROW_MIN looks unless the chapter has fewer pairable shoe groups than that; the header counts the cards shown", () => {
+  it("c. idea rows as full as the rules allow: a row short of ROW_MIN or a page short of four rows has no card left (exhaustive); the header counts the cards shown", () => {
     for (const run of RUNS) {
-      /* A one-look row is allowed only where the chapter cannot seat three distinct shoes at all. */
-      const floor = run.shoeGroups < ROW_MIN ? 1 : ROW_MIN;
       for (const page of run.pages) {
-        expect(page.rows.length, `${run.occasion} page ${page.n} rows: ${page.rows.map((r) => r.id).join(",")}`).toBe(STORY_ROWS);
+        expect(page.rows.length, `${run.occasion} page ${page.n} rows: ${page.rows.map((r) => r.id).join(",")}`).toBeLessThanOrEqual(STORY_ROWS);
+        if (page.rows.length < STORY_ROWS) expect(proof(run, page, NEXT_PLAIN_ROW), `${run.occasion} page ${page.n}: ${page.rows.length} rows, yet another plain row`).toBeNull();
         for (const row of page.rows) {
-          expect(row.looks.length, `${run.occasion} page ${page.n} / ${row.title} (${run.shoeGroups} pairable shoe groups)`).toBeGreaterThanOrEqual(floor);
+          expect(row.looks.length, `${run.occasion} page ${page.n} / ${row.title}: empty`).toBeGreaterThan(0);
+          if (row.looks.length < ROW_MIN) expect(proof(run, page, row.id), `${run.occasion} page ${page.n} / ${row.title} (${run.shoeGroups} pairable shoe groups)`).toBeNull();
         }
         expect(page.header, `${run.occasion} page ${page.n}: "N looks" vs the cards on the page`).toBe(page.page.length);
       }

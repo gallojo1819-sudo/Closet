@@ -152,11 +152,23 @@ function misfile(wayId: string, look: Garment[]): string | null {
       if (!shoes(look).some((g) => /sneaker/.test(said(g)))) return "no sneaker";
       return null;
     case "12": {
-      const prints = look.filter((g) =>
-        /print|jacquard|paisley|embroider|pattern|abstract|plaid|gingham|stripe/.test(said(g)),
-      ).length;
+      /* The cell's own words (cells.ts): a print is print, jacquard, paisley or pattern, a top may be a rich texture, and a plain bottom carries no print or graphic. */
+      const prints = look.filter((g) => /print|jacquard|paisley|pattern|textur|embroider|resort/.test(said(g))).length;
+      if (bottoms(look).some((g) => /print|jacquard|paisley|graphic/.test(said(g)))) return "printed bottom";
       return prints === 1 ? null : `${prints} prints`;
     }
+    case "14":
+      if (!bottoms(look).some((g) => /black|distressed|denim|jean|washed|frayed|worn/.test(said(g)))) return "no worn-in jean";
+      if (!shoes(look).some((g) => /chelsea|boot|suede|sneaker/.test(said(g)))) return "no chelsea, boot or worn sneaker";
+      return null;
+    case "1":
+      if (!bottoms(look).some((g) => /denim|jean|selvedge|chino/.test(said(g)))) return "no denim or work chino";
+      if (!shoes(look).some((g) => /boot/.test(said(g)))) return "no boot";
+      return null;
+    case "4":
+      if (!bottoms(look).some((g) => /suit|pinstripe|tailored|wool|trouser/.test(said(g)))) return "no tailored trouser";
+      if (!shoes(look).some((g) => /loafer|derby|oxford|calf|dress/.test(said(g)))) return "no dress shoe";
+      return null;
     default:
       throw new Error(`unchecked way ${wayId}`);
   }
@@ -467,9 +479,11 @@ describe("the loose phrases stay out of henley and oxford", () => {
       "g_8nrtffa2s13s",
       "g_5josnvyoi4z9",
     ) as [Garment, Garment, Garment, Garment];
-    const ctx = { occasion: "out", season: "summer", pool: RACK };
+    /* Fall: the wool blazer is a summer-cloth fail (XC-SEA-1) now that every rule is pass or fail. */
+    const ctx = { occasion: "out", season: "fall", pool: RACK };
     assert.notEqual(sharedDetector([polo, chinos, loafers], ctx, RACK)?.title, "Oxford, chino, navy blazer");
     assert.equal(sharedDetector([polo, chinos, loafers, blazer], ctx, RACK)?.title, "Oxford, chino, navy blazer");
+    assert.equal(sharedDetector([polo, chinos, loafers, blazer], { ...ctx, season: "summer" }, RACK), null);
   });
 });
 

@@ -3,15 +3,18 @@
  * Keyword trips are not the predicate. Slots, gates, and isLegal are.
  */
 import library from "./library.json" with { type: "json" };
+import { liveIdsKey } from "../daily-pick.ts";
+import { drawSeed, rngFromSalt, shuffle } from "../draw.ts";
 import { garmentMemo } from "../garment-memo.ts";
 import { comboKey, lookFitsOccasion } from "../lookbook.ts";
 import { livePool } from "../rack.ts";
 import { lookFitsSeason, seasonsOf, type Season } from "../season.ts";
 import { slotOf } from "../style.ts";
-import { DELETED_SNEAKERS, isLegal } from "../stylist/legal.ts";
+import { relaxTiers, ruleHits, type RuleHits } from "../stylist/legal.ts";
+import { DELETED_SET } from "../stylist/deleted.ts";
 import { jacketRequired } from "../stylist/jackets.ts";
 import type { Garment, Look, Occasion } from "../types.ts";
-import { todayISO } from "../utils.ts";
+import { todayISO, todayNY } from "../utils.ts";
 import { detectorColor } from "./palette.ts";
 import { usualFromCloset } from "./usual.ts";
 
@@ -21,7 +24,7 @@ const CAP = 4;
 const BUCKET = 14;
 const ATTEMPT_CAP = 4000;
 const STORE_CAP = 24;
-const DELETED = new Set<string>(DELETED_SNEAKERS);
+const DELETED = DELETED_SET;
 
 type SlotName = "top" | "bottom" | "shoe" | "layer";
 type Grade = "core" | "compatible" | "no";
@@ -66,6 +69,8 @@ export type Way = {
   reason?: string;
   /** A plain row the section owed that took pieces past the page cap (RELAXED_CAP in ideas.ts). */
   relaxed?: boolean;
+  /** Per card of the chapter's looks, the soft rules the relax ladder waived for it (ideas.ts); empty for a strict card. */
+  waived?: string[][];
 };
 
 type Built = {
@@ -461,25 +466,53 @@ export function isJacketWay(wayId: string): boolean {
   return cell ? jacketTheme(cell) : false;
 }
 
-const LEGAL = new Map<string, boolean>();
+/** The rule hits per look and context (ruleHits), so a look is judged once and read under any relax tier. */
+const LEGAL = new Map<string, RuleHits>();
 
 function finiteTemp(n: unknown): number | undefined {
   return typeof n === "number" && Number.isFinite(n) ? n : undefined;
 }
 
-function legalOk(pieces: Garment[], occasion: string, season: string, weatherF?: number): boolean {
+function hitsOf(pieces: Garment[], occasion: string, season: string, weatherF?: number): RuleHits {
   const temp = finiteTemp(weatherF);
   const key = `${occasion}|${season}|${temp ?? ""}|${pieces.map((g) => g.id).sort().join(",")}`;
   const hit = LEGAL.get(key);
   if (hit !== undefined) return hit;
-  const ok = isLegal(pieces, {
+  const hits = ruleHits(pieces, {
     house: null,
     occasion,
     season,
     ...(temp !== undefined ? { weatherF: temp } : {}),
   });
-  LEGAL.set(key, ok);
-  return ok;
+  LEGAL.set(key, hits);
+  if (LEGAL.size > 200_000) LEGAL.clear();
+  return hits;
+}
+
+/**
+ * The rules (passesRules): every hard and soft rule as a pass/fail check, cached per look and
+ * context. `relax` names the soft rules a relax tier waives (ideas.ts: a hero no strict look
+ * can hold); a hard rule is never waived.
+ */
+function legalOk(pieces: Garment[], occasion: string, season: string, weatherF?: number, relax?: readonly string[]): boolean {
+  const hits = hitsOf(pieces, occasion, season, weatherF);
+  if (hits.hard.length) return false;
+  if (!hits.soft.length) return true;
+  if (!relax?.length) return false;
+  return hits.soft.every((id) => relax.includes(id));
+}
+
+/**
+ * The lowest relax tier (relaxTiers: 0 strict) under which the look passes, or -1 when a hard
+ * rule, or a soft rule no tier waives, fails it. One rule check, read per tier.
+ */
+function ruleTier(pieces: Garment[], occasion: string, season: string, weatherF?: number): number {
+  const hits = hitsOf(pieces, occasion, season, weatherF);
+  if (hits.hard.length) return -1;
+  if (!hits.soft.length) return 0;
+  const tiers = relaxTiers();
+  for (let t = 1; t < tiers.length; t += 1) if (hits.soft.every((id) => tiers[t]!.includes(id))) return t;
+  return -1;
 }
 
 function passesCheap(
@@ -693,31 +726,11 @@ function openOccasions(cell: Cell, season: string): Occasion[] {
   return OCCASION_ORDER.filter((occasion) => cellGateOpen(cell.key, occasion, season));
 }
 
-function rankOf(built: Built, season: string, color: string | null) {
+/** A cell is open for a chapter when the closet dresses a look there; with no chapter, when it clears three looks somewhere. */
+function cellOpen(built: Built, season: string, color: string | null, occasion?: Occasion): boolean {
   const counts = countsFor(built, color);
-  const open = openOccasions(built.cell, season);
-  const cleared = open.filter((occasion) => counts[occasion] >= 3);
-  const weakest = cleared.length ? Math.min(...cleared.map((occasion) => counts[occasion])) : 0;
-  const pooled = open.reduce((sum, occasion) => sum + counts[occasion], 0);
-  const cores = new Set<string>();
-  for (const occasion of open) {
-    let rows = built.looks[occasion];
-    if (color) rows = rows.filter((look) => detectorColor(look, color, built.cell.key).passed);
-    for (const look of rows) {
-      const top = look.find((g) => slotOf(g) !== "bottom" && slotOf(g) !== "footwear" && slotOf(g) !== "outerwear") ?? look[0];
-      const bottom = look.find((g) => slotOf(g) === "bottom");
-      const shoe = look.find((g) => slotOf(g) === "footwear");
-      if (top && bottom && shoe) cores.add(`${top.id}|${bottom.id}|${shoe.id}`);
-    }
-  }
-  return {
-    counts,
-    cleared: cleared.length,
-    ratio: open.length ? cleared.length / open.length : 0,
-    weakest,
-    pooled,
-    cores: cores.size,
-  };
+  if (occasion) return (counts[occasion] ?? 0) >= 1;
+  return openOccasions(built.cell, season).some((occ) => counts[occ] >= 3);
 }
 
 function toWay(built: Built, season: string, color: string | null, usual: boolean): Way {
@@ -863,10 +876,18 @@ export function storedRows(
   });
 }
 
-export function visibleDetectors(
-  garments: Garment[],
-  ctx: { occasion?: Occasion | string; season?: Season | string; color?: string | null; weatherF?: number } = {},
-): Way[] {
+export type WaysContext = {
+  occasion?: Occasion | string;
+  season?: Season | string;
+  color?: string | null;
+  weatherF?: number;
+  /** The day of the draw (drawSeed); the clock's when absent. */
+  today?: string;
+  /** A Re-dress counter mixed into the seed. */
+  salt?: number;
+};
+
+export function visibleDetectors(garments: Garment[], ctx: WaysContext = {}): Way[] {
   const season = (ctx.season || "fall") as Season;
   const occasion = (ctx.occasion || undefined) as Occasion | undefined;
   const ranked = rankedWays(garments, ctx);
@@ -874,34 +895,23 @@ export function visibleDetectors(
   return ranked.slice(0, CAP);
 }
 
-/** Every open cell with a look here, in visibleDetectors' order and without its cap. Never the usual. */
-export function rankedWays(
-  garments: Garment[],
-  ctx: { occasion?: Occasion | string; season?: Season | string; color?: string | null; weatherF?: number } = {},
-): Way[] {
+/**
+ * Every open cell with a look here, without visibleDetectors' cap, in the day's seeded order
+ * (drawSeed: the day, the surface "lookbook:<occasion>", the closet and the salt): no count
+ * ranks a theme. Never the usual.
+ */
+export function rankedWays(garments: Garment[], ctx: WaysContext = {}): Way[] {
   const season = (ctx.season || "fall") as Season;
   const color = ctx.color ?? null;
   const weatherF = finiteTemp(ctx.weatherF);
   const occasion = (ctx.occasion || undefined) as Occasion | undefined;
   const book = warmCellBook(garments, season, weatherF);
-  const ranked = book
-    .map((built) => ({ built, rank: rankOf(built, season, color) }))
-    .filter((row) => (occasion ? (row.rank.counts[occasion] ?? 0) >= 1 : row.rank.cleared > 0))
-    .sort((a, b) => {
-      if (occasion) {
-        const onScreen = (b.rank.counts[occasion] ?? 0) - (a.rank.counts[occasion] ?? 0);
-        if (onScreen) return onScreen;
-      }
-      return (
-        b.rank.cleared - a.rank.cleared ||
-        b.rank.ratio - a.rank.ratio ||
-        b.rank.weakest - a.rank.weakest ||
-        b.rank.pooled - a.rank.pooled ||
-        b.rank.cores - a.rank.cores ||
-        a.built.cell.id.localeCompare(b.built.cell.id, undefined, { numeric: true })
-      );
-    });
-  return ranked.map((row) => toWay(row.built, season, color, false));
+  const open = book
+    .filter((built) => cellOpen(built, season, color, occasion))
+    .sort((a, b) => a.cell.id.localeCompare(b.cell.id, undefined, { numeric: true }));
+  const today = ctx.today ?? todayNY();
+  const seed = drawSeed(today, `lookbook:${occasion ?? "all"}:${season}:${color ?? ""}`, liveIdsKey(livePool(garments)), ctx.salt ?? 0);
+  return shuffle(open, rngFromSalt(seed)).map((built) => toWay(built, season, color, false));
 }
 
 export function cellLooks(detector: string, garments: Garment[], occasion: Occasion | string, season: Season | string): Garment[][] {
@@ -1096,6 +1106,7 @@ export const cellKit = {
   globalFail,
   passesCheap,
   legalOk,
+  ruleTier,
   seasonOk,
   seasonFits,
   jacketTheme,

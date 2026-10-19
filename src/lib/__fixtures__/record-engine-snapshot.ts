@@ -1,4 +1,11 @@
-/** Run once on the pre-speed base (58d7b8c) to record the outputs the faster engine must keep. */
+/**
+ * Record the engine outputs engine-speed.test.ts pins (runEngine on the snapshot closet). First
+ * run on the pre-speed base (58d7b8c); re-run on Oct 15 2026 for the probability round, when
+ * every output became a seeded draw among rule-passing looks and the pinned values changed by
+ * design. Run it only when the engine's outputs are meant to change:
+ *
+ *   node --experimental-strip-types src/lib/__fixtures__/record-engine-snapshot.ts
+ */
 import { writeFileSync } from "node:fs";
 import { runEngine, SNAPSHOT_URL } from "./engine-run.ts";
 

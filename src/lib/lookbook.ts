@@ -1,4 +1,6 @@
-import { canonicalize, harmony } from "./color.ts";
+import { canonicalize } from "./color.ts";
+import { liveIdsKey } from "./daily-pick.ts";
+import { drawOrder, drawSeed, pieceWeight, rngFromSalt, type Rng, type WeightCtx } from "./draw.ts";
 import { garmentMemo } from "./garment-memo.ts";
 import { livePool } from "./rack.ts";
 import {
@@ -7,25 +9,24 @@ import {
   isBlazerPiece,
   isBrownSuedeOuter,
   isCampCollar,
-  isDistressedJean,
   isFairIsle,
   isGraphic,
   isHeavyCable,
   isHoodiePiece,
   isRugbyPiece,
-  isShortsPiece,
   isTrueOuter,
   isWeekendSoftJacket,
   HOUSE_CHIPS,
   leadHouse,
   lookHouses,
+  lookRotationWeight,
   outerKind,
   pickLook,
   pickTrueOuter,
   slotOf,
   type House,
 } from "./style.ts";
-import { applyAtlas, pieceVetoIds, techniqueWeight, type TasteMemory } from "./taste.ts";
+import { applyAtlas, pieceVetoIds, type TasteMemory } from "./taste.ts";
 import {
   bottomType,
   houseFingerprintOk,
@@ -43,23 +44,17 @@ import {
 } from "./houses.ts";
 import { buildHouseMatrix, type MatrixLook } from "./stylist/matrix.ts";
 import { engineKey, engineStore } from "./engine-store.ts";
-import { isLegal } from "./stylist/legal.ts";
+import { lookFitsOccasion } from "./occasion-gate.ts";
+import { isLegal, passesRules, pieceRuleFails } from "./stylist/legal.ts";
 import { fwEligibleJackets, houseCode, jacketHits, jacketRequired, slotPieces, wearSlot as jacketWearSlot } from "./stylist/jackets.ts";
 import { rep3Fails, repCaps, recipeOuterIssue } from "./stylist/row.ts";
 import { approvedProfile } from "./house-profiles/load.ts";
 import { evaluateColor, colorEmptyCopy } from "./stylist/colorChip.ts";
 import { assignSlots } from "./house-profiles/evaluate.ts";
-import {
-  emptyChapter,
-  isCreamCable,
-  matchRecipe,
-  noteChapterLook,
-  pickRecipe,
-  type ChapterTrack,
-} from "./recipes.ts";
-import { lookFitsSeason, seasonRank, weatherForSeason } from "./season.ts";
+import { isCreamCable, matchRecipe } from "./recipes.ts";
+import { lookFitsSeason, seasonFromWeather, weatherForSeason } from "./season.ts";
 import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion, type Season, type WeatherSnap } from "./types.ts";
-import { todayISO } from "./utils.ts";
+import { todayISO, todayNY } from "./utils.ts";
 
 export const CHAPTER_CAP = 10;
 
@@ -105,24 +100,16 @@ export function lookClashes(pieces: Garment[]): boolean {
   return styleClashes(pieces);
 }
 
-function pieceScore(g: Garment, today: string): number {
-  let s = Math.min(daysIdle(g, today), 90) / 10;
-  if (g.wornOn.at(-1) === today) s -= 6;
-  return s;
-}
-
-function hashSalt(id: string, salt: number): number {
-  let h = salt >>> 0;
-  for (const c of id) h = (Math.imul(h, 33) + c.charCodeAt(0)) >>> 0;
-  return h;
-}
-
+/** The pieces in a weighted draw order (draw.ts): rotation weights for the day, a stream from the salt. */
 function rank(list: Garment[], today: string, salt = 0): Garment[] {
-  return [...list].sort((a, b) => {
-    const d = pieceScore(b, today) - pieceScore(a, today);
-    if (d !== 0 && salt === 0) return d;
-    return hashSalt(a.id, salt) - hashSalt(b.id, salt) || a.id.localeCompare(b.id);
-  });
+  const ctx: WeightCtx = { today };
+  return drawOrder(list, (g) => pieceWeight(g, ctx), rngFromSalt(hashSeed(`${today}|${salt}`)));
+}
+
+function hashSeed(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i += 1) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0) || 1;
 }
 
 export function comboKey(ids: string[]): string {
@@ -289,7 +276,7 @@ function maybeAttachBlazer(
     if (lookClashes(next)) return null;
     if (beigePlateCount(next) >= 3) return null;
     if (season && !lookFitsSeason(next, season)) return null;
-    if (harmony(next, { occasion, f: season ? undefined : 64 }) < 0) return null;
+    if (!passesRules(next, { occasion: occasion ?? "weekday", season: season ?? "fall" }).pass) return null;
     return next;
   };
   if (occasion === "weekend") {
@@ -299,7 +286,7 @@ function maybeAttachBlazer(
       if (jacketBlocked(next, occasion, season)) continue;
       if (lookClashes(next)) continue;
       if (season && !lookFitsSeason(next, season)) continue;
-      if (harmony(next, { occasion, f: season ? undefined : 64 }) < 0) continue;
+      if (!passesRules(next, { occasion, season: season ?? "fall" }).pass) continue;
       return next;
     }
   }
@@ -330,7 +317,7 @@ function maybeAttachBlazer(
     if (jacketBlocked(next, occasion, season)) continue;
     if (lookClashes(next)) continue;
     if (season && !lookFitsSeason(next, season)) continue;
-    if (harmony(next, { occasion, f: season ? undefined : 58 }) < 0) continue;
+    if (!passesRules(next, { occasion: occasion ?? "weekday", season: season ?? "fall" }).pass) continue;
     return next;
   }
   return core;
@@ -358,18 +345,12 @@ function repairJacketQuotas(
   const attach = (l: Look, prefer: (g: Garment) => boolean): Look => {
     const core = piecesOf(l);
     if (core.some(isTrueOuter)) return l;
-    const o = pickTrueOuter(
-      outers.filter((x) => prefer(x) && !atCap(x)),
-      core,
-      undefined,
-      {
-        occasion,
-        house,
-        f: season === "summer" ? 78 : 58,
-        legalCombo: house ? (p) => houseLegalCombo(p, house, occasion, undefined, pool) : undefined,
-        usedOuters: usedBlazers,
-      },
-    );
+    const o = pickTrueOuter(outers.filter((x) => prefer(x) && !atCap(x)), core, {
+      ctx: { occasion, season: season ?? "fall", house: house ?? null, pool },
+      salt: hashSeed(l.id),
+      legalCombo: house ? (p) => houseLegalCombo(p, house, occasion, undefined, pool) : undefined,
+      usedOuters: usedBlazers,
+    });
     if (!o) return l;
     const next = [...core, o];
     if (jacketBlocked(next, occasion, season, house)) return l;
@@ -441,7 +422,7 @@ function preferSingleBrownSuede(looks: Look[], pool: Garment[]): Look[] {
  */
 export function buildLookbook(
   garments: Garment[],
-  today = todayISO(),
+  today = todayNY(),
   salt = 0,
 ): Look[] {
   const all: Look[] = [];
@@ -470,10 +451,6 @@ function buildPieceBlob(g: Garment): string {
   return `${g.subtype} ${g.name} ${g.notes ?? ""}`.toLowerCase();
 }
 
-function lookBlob(pieces: Garment[]): string {
-  return pieces.map(pieceBlob).join(" ");
-}
-
 function topsOf(pieces: Garment[]): Garment[] {
   return pieces.filter((g) => {
     const s = slotOf(g);
@@ -489,214 +466,7 @@ function shoesOf(pieces: Garment[]): Garment[] {
   return pieces.filter((g) => slotOf(g) === "footwear");
 }
 
-function hasKind(list: Garment[], re: RegExp): boolean {
-  return list.some((g) => re.test(pieceBlob(g)));
-}
-
-/** Whether a pool owns a kind of piece in a slot: one scan per pool, slot and pattern. */
-const RACK_HAS = new WeakMap<Garment[], Map<string, boolean>>();
-
-function rackHas(
-  pool: Garment[] | undefined,
-  slot: "top" | "bottom" | "footwear",
-  re: RegExp,
-): boolean {
-  if (!pool) return false;
-  let memo = RACK_HAS.get(pool);
-  if (!memo) {
-    memo = new Map();
-    RACK_HAS.set(pool, memo);
-  }
-  const key = `${slot}|${re.source}|${re.flags}`;
-  const hit = memo.get(key);
-  if (hit !== undefined) return hit;
-  const found = pool.some((g) => {
-    const s = slotOf(g);
-    if (slot === "top") {
-      if (s !== "top" && s !== "dress") return false;
-    } else if (s !== slot) return false;
-    return re.test(pieceBlob(g));
-  });
-  memo.set(key, found);
-  return found;
-}
-
-/**
- * A top with sleeves to the wrist: a shirt (button-down, flannel, dress shirt, denim), a sweater
- * or cardigan, a long-sleeve polo, a henley or a sweatshirt. Tees, tanks, camp and bowling
- * shirts and anything marked short-sleeve are not. Hoodies and graphics fail weekday elsewhere.
- */
-export function isLongSleeveTop(g: Garment): boolean {
-  const slot = slotOf(g);
-  if (slot !== "top" && slot !== "dress") return false;
-  const b = pieceBlob(g);
-  if (/long[- ]?sleeved?|dress shirt/.test(b)) return true;
-  if (/\bt-?shirts?\b|\btees?\b|\btanks?\b|short[- ]?sleeved?|\bcamp\b|bowling|hawaiian|resort|\bdress(es)?\b/.test(b)) return false;
-  return /shirt|oxford|button|flannel|chambray|denim|poplin|sweater|knit|cardigan|cable|merino|polo|henley|turtleneck|roll ?neck|sweatshirt|quarter[- ]?zip|half[- ]?zip|pullover|rugby|overshirt|jumper|crewneck/.test(
-    b,
-  );
-}
-
-export type OccasionGateOptions = {
-  /** Weekday admits any long-sleeve top (isLongSleeveTop), not only oxfords, polos and knits. The rotation rows use this; the engine does not. */
-  wideWeekdayTops?: boolean;
-};
-
-export function lookFitsOccasion(
-  pieces: Garment[],
-  occ: string,
-  pool?: Garment[],
-  house?: House,
-  gate?: OccasionGateOptions,
-): boolean {
-  if (occ === "all") return true;
-  if (lookClashes(pieces)) return false;
-  const o = mapOccasion(occ);
-  const blob = lookBlob(pieces);
-  const tops = topsOf(pieces);
-  const bottoms = bottomsOf(pieces);
-  const shoes = shoesOf(pieces);
-  const graphic = pieces.some(isGraphic);
-  const hoodie = pieces.some(isHoodiePiece);
-  const sneaker = hasKind(shoes, /sneaker|trainer|\b990\b/);
-  const gymShoe = hasKind(shoes, /gym|runner|running|athletic/);
-  const loafer = hasKind(shoes, /loafer/);
-  const mule = hasKind(shoes, /mule/);
-  const boot = hasKind(shoes, /boot/);
-  const trouser = hasKind(bottoms, /trouser/) && !hasKind(bottoms, /\bjeans?\b|denim/);
-  const chino = hasKind(bottoms, /chino/);
-  const jean = hasKind(bottoms, /\bjeans?\b|denim/);
-  const cord = hasKind(bottoms, /cord/);
-  const rugby = pieces.some(isRugbyPiece) || /rugby/.test(blob);
-  const oxford = hasKind(tops, /oxford/);
-  const polo = hasKind(tops, /polo/);
-  const cable = hasKind(tops, /cable/);
-  const knit = hasKind(tops, /knit|sweater|merino|cable/) && !hoodie;
-  const overshirt = pieces.some((g) => /overshirt/.test(pieceBlob(g)));
-  const fairIsle = pieces.some(isFairIsle);
-  const camp = pieces.some(isCampCollar);
-  const cleanSneaker = sneaker && !gymShoe;
-  const hoodieOnly = tops.length > 0 && tops.every((g) => isHoodiePiece(g) || isGraphic(g));
-  const distressed = bottoms.some(isDistressedJean);
-  const shorts = bottoms.some(isShortsPiece);
-  const blazer = pieces.some(isBlazerPiece);
-  const legalBottom = chino || trouser || jean || cord;
-
-  if (shorts && o === "weekday") return false;
-  if (distressed && o !== "weekend" && o !== "comfy") return false;
-
-  if (o === "weekday") {
-    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
-    if (rugby && blazer) return false;
-    if (house === "rrl") {
-      const work = /western|pearl\s*snap|work shirt|chambray|flannel/.test(blob);
-      const denim = jean || /selvedge|denim/.test(blob);
-      const fashion = shoes.some((g) => {
-        const b = pieceBlob(g);
-        return /sneaker/.test(b) && !/court|\b990\b|\bboot/.test(b);
-      });
-      const court = shoes.some((g) => /court/.test(pieceBlob(g)));
-      if (loafer || mule || fashion || court) return false;
-      if (!(denim || work)) return false;
-      const ownsBoot = (pool ?? pieces).some((g) => shoeFamily(g) === "boot");
-      if (ownsBoot) return boot || /chelsea/.test(blob);
-      return true;
-    }
-    if (house === "ald") {
-      return (hoodie || rugby || graphic) && (jean || chino) && (sneaker || loafer);
-    }
-    if (rugby && (jean || chino) && loafer) return true;
-    if (house === "faloni") {
-      return (camp || /linen/.test(blob)) && legalBottom && (loafer || mule) && !hoodie;
-    }
-    if (house === "sweetStable") {
-      return (
-        (fairIsle || rugby || /gingham/.test(blob)) &&
-        (chino || jean || cord) &&
-        (loafer || boot || sneaker) &&
-        !mule
-      );
-    }
-    if (fairIsle && (chino || jean || cord) && (loafer || boot) && !mule) return true;
-    if (house === "italianWinter") {
-      return knit && legalBottom && loafer;
-    }
-    if (house === "fiveFourFive") {
-      return (
-        (camp || /linen|sangallo|serafino|bowling/.test(blob)) &&
-        legalBottom &&
-        (loafer || mule || sneaker)
-      );
-    }
-    if (hoodie || graphic) return false;
-    const longSleeve = Boolean(gate?.wideWeekdayTops) && tops.some(isLongSleeveTop);
-    if (!(oxford || polo || cable || knit || longSleeve)) return false;
-    if (!legalBottom) return false;
-    if (loafer || boot) return true;
-    if (cleanSneaker) return true;
-    return false;
-  }
-
-  if (o === "out") {
-    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
-    if (house === "ald") {
-      return (hoodie || rugby || graphic || oxford || polo) && (jean || chino) && (sneaker || loafer);
-    }
-    if (hoodieOnly || hoodie) return false;
-    if (!(oxford || polo || camp || knit)) return false;
-    if (!legalBottom) return false;
-    const dressShoe = loafer || mule || boot;
-    if (!dressShoe) {
-      if (!sneaker) return false;
-      if (!pool || rackHas(pool, "footwear", /loafer|mule|boot/)) return false;
-    }
-    return true;
-  }
-
-  if (o === "weekend") {
-    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
-    if ((hoodie || graphic) && !((jean || chino) && sneaker)) return false;
-    // oxford + trouser + loafer is legal Ralph weekend — not a tuxedo ban
-    return (
-      legalBottom ||
-      rugby ||
-      fairIsle ||
-      camp ||
-      sneaker ||
-      loafer ||
-      boot ||
-      mule ||
-      oxford ||
-      polo ||
-      knit ||
-      /sangallo|serafino|bowling/.test(blob)
-    );
-  }
-
-  if (o === "comfy") {
-    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
-    const varsity = /varsity|letterman|bomber/.test(blob);
-    const cord = /cord/.test(blob) || hasKind(bottoms, /cord/);
-    const boot = hasKind(shoes, /boot/);
-    const mule = hasKind(shoes, /mule/);
-    const topOk = knit || rugby || varsity || hoodie || fairIsle || polo;
-    const botOk = chino || jean || cord;
-    const shoeOk = sneaker || mule || loafer || boot;
-    return topOk && botOk && shoeOk;
-  }
-
-  if (o === "travel") {
-    if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
-    if (hoodieOnly || (hoodie && graphic)) return false;
-    if (gymShoe) return false;
-    const topOk = knit || overshirt || oxford || polo;
-    const botOk = chino || trouser || jean;
-    const shoeOk = loafer || sneaker || boot;
-    return topOk && botOk && shoeOk;
-  }
-
-  return true;
-}
+export { isLongSleeveTop, lookFitsOccasion, type OccasionGateOptions } from "./occasion-gate.ts";
 
 export function lookFitsHouse(
   pieces: Garment[],
@@ -859,7 +629,7 @@ export function buildChapter(
 ): Look[] {
   const cap = opts?.cap ?? CHAPTER_CAP;
   const exclude = opts?.exclude ?? new Set<string>();
-  const today = opts?.today ?? todayISO();
+  const today = opts?.today ?? todayNY();
   const salt = opts?.salt ?? 0;
   const season = opts?.season;
   const house = opts?.house;
@@ -918,23 +688,29 @@ export function buildChapter(
     return true;
   };
 
-  const track = emptyChapter();
   const weatherUse = season ? weatherForSeason(season) : weather;
+  const seed = drawSeed(today, `chapter:${occasion}:${house ?? ""}`, liveIdsKey(pool), salt);
+  /* A jacket is one plate of the chapter: a draw that seats a jacket already on a card is refused, so the draw finds another. */
+  const jacketFree = (p: Garment[]) => {
+    const outer = p.find(isTrueOuter);
+    return !outer || !usedBlazers.has(outer.id);
+  };
+  const combo = (p: Garment[]) => jacketFree(p) && (!house || houseLegalCombo(p, house, occasion, undefined, pool));
 
   for (let i = 0; i < 220 && out.length < cap; i++) {
     const available = pool.filter((g) => !atCap(g));
     if (available.length < 3) break;
-    const recipe = pickRecipe(occasion, available, { house, track });
     const ids = pickLook(available, {
       occasion,
-      moment: "day",
       weather: weatherUse,
+      ...(season ? { season } : {}),
       previousIds: prev,
       usedCount,
       house,
-      recipeId: recipe.id,
-      chapter: track,
-      legalCombo: house ? (p) => houseLegalCombo(p, house, occasion, undefined, pool) : undefined,
+      salt: seed + i,
+      today,
+      excludeKeys: used,
+      legalCombo: combo,
     });
     if (ids.length < 3) break;
     prev = ids;
@@ -971,7 +747,6 @@ export function buildChapter(
       const lastPieces = last.garmentIds
         .map((id) => byId.get(id))
         .filter((g): g is Garment => Boolean(g));
-      noteChapterLook(track, lastPieces, (last.recipeId as ChapterTrack["lastRecipe"]) ?? recipe.id, occasion);
       for (const g of lastPieces) {
         if (isBlazer(g) || isTrueOuter(g)) {
           if (isBlazer(g)) blazerLooks += 1;
@@ -987,29 +762,24 @@ export function buildChapter(
       if (!slot) return false;
       return (usedCount.get(g.id) ?? 0) === 0;
     });
-    for (const g of leftovers) {
+    for (const [i, g] of leftovers.entries()) {
       if (out.length >= cap) break;
       const ids = pickLook(pool.filter((x) => x.id === g.id || !atCap(x)), {
         occasion,
-        moment: "day",
         weather,
+        ...(season ? { season } : {}),
         lockedIds: [g.id],
         house,
-        chapter: track,
-        legalCombo: house ? (p) => houseLegalCombo(p, house, occasion, undefined, pool) : undefined,
+        salt: seed + 1000 + i,
+        today,
+        excludeKeys: used,
+        legalCombo: combo,
       });
       const pieces = ids.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
       if (!pieces.some((x) => x.id === g.id)) continue;
-      if (tryPush(pieces, true)) {
-        const last = out[out.length - 1]!;
-        const lastPieces = last.garmentIds
-          .map((id) => byId.get(id))
-          .filter((x): x is Garment => Boolean(x));
-        noteChapterLook(track, lastPieces, last.recipeId as ChapterTrack["lastRecipe"], occasion);
-      }
+      if (tryPush(pieces, true)) for (const x of pieces) if (isBlazer(x) || isTrueOuter(x)) usedBlazers.add(x.id);
     }
   }
-  void salt;
   return repairJacketQuotas(out, pool, occasion, house, season, usedBlazers, atCap);
 }
 
@@ -1250,8 +1020,9 @@ function lookColors(pieces: Garment[]): Set<string> {
 }
 
 /**
- * Same occasion + shared colors/houses. At least two wear-slots different.
- * Prefers idle pieces. Returns up to `n` looks, never the seed.
+ * Same occasion + shared colors/houses. At least two wear-slots different. Those are the
+ * gates; among the looks that pass them, up to `n` are drawn by rotation weight (draw.ts),
+ * seeded by the day and the seed look, never the seed itself.
  */
 export function moreLikeThis(
   look: Look,
@@ -1259,6 +1030,7 @@ export function moreLikeThis(
   garments: Garment[],
   n = 3,
   lockedIds: string[] = [],
+  today = todayNY(),
 ): Look[] {
   const byId = new Map(garments.map((g) => [g.id, g]));
   const pieces = look.garmentIds
@@ -1272,39 +1044,52 @@ export function moreLikeThis(
   const resolve = (l: Look) =>
     l.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
-  const score = (cand: Look): number => {
-    if (cand.id === look.id) return Number.NEGATIVE_INFINITY;
+  const alike = (cand: Look): boolean => {
+    if (cand.id === look.id) return false;
     const p = resolve(cand);
-    if (p.length < 3) return Number.NEGATIVE_INFINITY;
-    if (lockedIds.length && lockedIds.some((id) => !cand.garmentIds.includes(id))) {
-      return Number.NEGATIVE_INFINITY;
-    }
+    if (p.length < 3) return false;
+    if (lockedIds.length && lockedIds.some((id) => !cand.garmentIds.includes(id))) return false;
     const minDiff = lockedIds.length ? 1 : 2;
-    if (slotsDifferent(pieces, p) < minDiff) return Number.NEGATIVE_INFINITY;
+    if (slotsDifferent(pieces, p) < minDiff) return false;
     const sharedH = lookHouses(p).filter((h) => houses.has(h)).length;
     let sharedC = 0;
     for (const c of lookColors(p)) if (colors.has(c)) sharedC += 1;
-    if (sharedH === 0 && sharedC === 0) return Number.NEGATIVE_INFINITY;
-    if (lookClashes(p)) return Number.NEGATIVE_INFINITY;
-    const idleN = p.filter((g) => daysIdle(g) >= 21).length;
-    const idleDays = p.reduce((n, g) => n + daysIdle(g), 0);
-    const s = sharedH * 3 + sharedC * 2 + idleN * 5 + idleDays / 20;
-    if (cand.occasion !== occ) return Number.NEGATIVE_INFINITY;
-    return s;
+    if (sharedH === 0 && sharedC === 0) return false;
+    if (lookClashes(p)) return false;
+    return cand.occasion === occ;
   };
 
-  const ranked = looks
-    .map((l) => ({ l, s: score(l) }))
-    .filter((x) => x.s > Number.NEGATIVE_INFINITY)
-    .sort((a, b) => b.s - a.s || a.l.id.localeCompare(b.l.id));
-
-  return ranked.slice(0, n).map((x) => x.l);
+  const candidates = looks.filter(alike);
+  const wctx: WeightCtx = { today };
+  const rng = rngFromSalt(drawSeed(today, `more-like:${look.id}`, liveIdsKey(garments)));
+  return drawOrder(candidates, (l) => Math.max(lookRotationWeight(resolve(l), wctx), Number.MIN_VALUE), rng).slice(0, n);
 }
 
 const HERO_OCCASIONS: Occasion[] = ["weekday", "out", "weekend", "travel", "comfy"];
+/** How many looks "N looks with this" fills toward. */
+export const HERO_LOOKS = 5;
+/**
+ * Rule checks one hero draw may spend (pickLook's maxTries): the sheet's count must not freeze
+ * the page on a piece no look holds (a heavy shearling in fall searched every partner for
+ * seconds per occasion). The daily pick and Outfit with this stay exhaustive.
+ */
+export const HERO_PICK_TRIES = 1500;
 
-function heroOccasions(_g: Garment): Occasion[] {
-  return HERO_OCCASIONS;
+/**
+ * The hero occasions a piece can be dressed for at all, in the fixed order: the five, less those
+ * whose per-piece rules refuse the piece on its own (pieceRuleFails: a hoodie on a weekday, a
+ * summer piece under the occasion's weather). No partner search here; a look is still found or
+ * not by the draw.
+ */
+export function heroOccasionsFor(g: Garment, pool?: readonly Garment[]): Occasion[] {
+  return HERO_OCCASIONS.filter(
+    (occasion) => pieceRuleFails(g, { house: null, occasion, season: seasonFromWeather(weatherForOcc(occasion).f), pool }).length === 0,
+  );
+}
+
+/** "1 look with this", "3 looks with this": the heading and the button say the real count. */
+export function looksWithLabel(n: number, who = "this"): string {
+  return `${n} ${n === 1 ? "look" : "looks"} with ${who}`;
 }
 
 function heroHonest(g: Garment, occ: Occasion, pieces: Garment[]): boolean {
@@ -1335,15 +1120,20 @@ function starLook(
   occasion: Occasion,
   seen: Set<string>,
   previousIds: string[],
+  turn = 0,
 ): Look | null {
   const pool = lookbookPool(garments);
   const byId = new Map(pool.map((x) => [x.id, x]));
+  const today = todayNY();
   const ids = pickLook(pool, {
     occasion,
-    moment: "day",
     weather: weatherForOcc(occasion),
     lockedIds: [g.id],
     previousIds,
+    excludeKeys: seen,
+    salt: drawSeed(today, `hero:${g.id}:${occasion}`, liveIdsKey(pool), turn),
+    today,
+    maxTries: HERO_PICK_TRIES,
   });
   const ordered = ids.includes(g.id) ? ids : [g.id, ...ids.filter((id) => id !== g.id)];
   if (ordered.length < 3 || !ordered.includes(g.id)) return null;
@@ -1364,8 +1154,10 @@ function starLook(
 }
 
 /**
- * 5 looks starring this piece: weekday / out / weekend / travel / comfy.
- * Skip an occasion only when clashes make it impossible, then PoloDefault fill to 5.
+ * Up to HERO_LOOKS looks starring this piece: one draw (the surface `hero:<id>:<occasion>`) per
+ * hero occasion the piece can be dressed for (heroOccasionsFor), then further turns of the same
+ * occasions until the count is reached or the draws run dry. Every look passes the rules
+ * (pickLook draws among rule-passing looks); nothing pads. The caller shows the real count.
  */
 export function looksForHero(
   g: Garment,
@@ -1375,26 +1167,28 @@ export function looksForHero(
   const seen = new Set(opts?.seen ?? []);
   const previous: string[] = [];
   const out: Look[] = [];
-  for (const occasion of heroOccasions(g)) {
-    const look = starLook(g, garments, occasion, seen, previous);
-    if (!look) continue;
+  const occasions = heroOccasionsFor(g, lookbookPool(garments));
+  const take = (occasion: Occasion, turn: number): boolean => {
+    const look = starLook(g, garments, occasion, seen, previous, turn);
+    if (!look) return false;
     const pieces = look.garmentIds
       .map((id) => garments.find((x) => x.id === id))
       .filter((x): x is Garment => Boolean(x));
-    if (!lookFitsOccasion(pieces, occasion, garments) && !heroHonest(g, occasion, pieces)) {
-      continue;
-    }
+    if (!lookFitsOccasion(pieces, occasion, garments) && !heroHonest(g, occasion, pieces)) return false;
     out.push(look);
     seen.add(comboKey(look.garmentIds));
     previous.push(...look.garmentIds.filter((id) => id !== g.id));
-    if (out.length >= 5) return out;
-  }
-  for (let t = 0; t < 12 && out.length < 5; t++) {
-    const look = starLook(g, garments, "weekday", seen, previous);
-    if (!look) break;
-    out.push(look);
-    seen.add(comboKey(look.garmentIds));
-    previous.push(...look.garmentIds.filter((id) => id !== g.id));
+    return true;
+  };
+  /* An occasion whose first draw finds nothing is dropped: a later turn only reseeds the same exhaustive search. */
+  const live = occasions.filter((occasion) => {
+    const found = take(occasion, 0);
+    return found;
+  });
+  if (out.length >= HERO_LOOKS) return out.slice(0, HERO_LOOKS);
+  /* Further turns of the occasions that dressed the piece, in order, until the count is reached or the draws run dry. */
+  for (let t = 0; t < 12 && out.length < HERO_LOOKS && live.length; t++) {
+    take(live[t % live.length]!, Math.floor(t / live.length) + 1);
   }
   return out;
 }
@@ -1633,7 +1427,6 @@ export function chapterVisible(
         const cb = lookHasColor(pb, opts.color) ? 1 : 0;
         if (cb !== ca) return cb - ca;
       }
-      if (season) return seasonRank(pb, season) - seasonRank(pa, season);
       return 0;
     });
   const shown = (byHouse: boolean) => enforcePieceCap(stripRepeatBlazers(order(byHouse), garments), garments);
@@ -1704,9 +1497,10 @@ export function coverUnused(garments: Garment[], looks: Look[]): Look[] {
       isGraphic(g) || isHoodiePiece(g) ? "weekend" : isCampCollar(g) ? "weekend" : "weekday";
     const ids = pickLook(pool, {
       occasion: occ,
-      moment: "day",
       weather: { f: 64, label: "Mild", code: 2 },
       lockedIds: [g.id],
+      excludeKeys: keys,
+      salt: drawSeed(todayNY(), `cover:${g.id}`, liveIdsKey(pool)),
     });
     const ordered = ids.includes(g.id) ? ids : [g.id, ...ids.filter((id) => id !== g.id)];
     if (ordered.length < 3 || !ordered.includes(g.id)) continue;
@@ -1970,6 +1764,7 @@ function finishStyled(
     salt?: number;
     color?: string | null;
     taste?: TasteMemory;
+    today?: string;
   },
 ): Look[] {
   const cap = opts?.cap ?? RESHUFFLE_ROW;
@@ -1980,32 +1775,29 @@ function finishStyled(
   const matrix = buildHouseMatrix(pool, occasion, season);
   const house = opts?.house;
   const color = opts?.color?.trim().toLowerCase() || "";
+  const today = opts?.today ?? todayNY();
+  /*
+   * The surface's draw: the day, the row (week strip, a house or colour row), the closet and the
+   * Reshuffle counter. A colour row is the same draw with or without a house: the house only
+   * re-orders it (below), so the house is not in a colour row's seed.
+   */
+  const rng = rngFromSalt(drawSeed(today, `week-strip:${occasion}:${color ? "" : (house ?? "")}:${color}`, liveIdsKey(pool), opts?.salt ?? 0));
+  const wctx: WeightCtx = { today };
 
+  /** The matrix's looks that stand under the vetoes, drawn by rotation weight (draw.ts). */
   const publish = (looks: MatrixLook[], tag?: House): Look[] => {
-    const weighted = Boolean(opts?.taste?.techniques.some((t) => t.weight > 0));
-    const accepted: { pieces: Garment[]; demoted?: MatrixLook["demoted"]; score: number }[] = [];
-    const plain: { pieces: Garment[]; demoted?: MatrixLook["demoted"]; score: number }[] = [];
+    const accepted: { pieces: Garment[]; demoted?: MatrixLook["demoted"] }[] = [];
+    const plain: { pieces: Garment[]; demoted?: MatrixLook["demoted"] }[] = [];
     for (const look of looks) {
       const raw = piecesOfLook(look, byId);
       if (raw.length < 3) continue;
       if (DELETED_HIT(raw)) continue;
-      plain.push({ pieces: raw, demoted: look.demoted, score: look.score });
+      plain.push({ pieces: raw, demoted: look.demoted });
       const pieces = opts?.taste ? applyAtlas(raw, opts.taste) : raw;
       if (!pieces) continue;
-      accepted.push({ pieces, demoted: look.demoted, score: look.score });
+      accepted.push({ pieces, demoted: look.demoted });
     }
-    let ranked = accepted.length ? accepted : plain;
-    if (weighted && opts?.taste) {
-      const taste = opts.taste;
-      const indexed = ranked.map((item, i) => ({ item, i }));
-      indexed.sort((a, b) => {
-        const as = a.item.score + techniqueWeight(taste, a.item.pieces) * 8;
-        const bs = b.item.score + techniqueWeight(taste, b.item.pieces) * 8;
-        if (bs !== as) return bs - as;
-        return a.i - b.i;
-      });
-      ranked = indexed.map((row) => row.item);
-    }
+    const ranked = drawOrder(accepted.length ? accepted : plain, (item) => Math.max(lookRotationWeight(item.pieces, wctx), Number.MIN_VALUE), rng);
     const out: Look[] = [];
     for (const item of ranked) {
       const pieces = item.pieces;
@@ -2129,6 +1921,12 @@ function finishStyled(
       row.push(look);
       if (row.length >= cap) break;
     }
+    /* House ranks: the looks that fit the house lead, in their drawn order; the rest follow. */
+    const fitsHouse = (look: Look) => {
+      const pieces = look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+      return pieces.length >= 3 && lookFitsHouse(pieces, house, occasion, pool, season);
+    };
+    row.sort((a, b) => Number(fitsHouse(b)) - Number(fitsHouse(a)));
     if (row.length === 0 && cell.gate) {
       return [
         lookFromPieces([], occasion, 0, house, {
@@ -2300,6 +2098,8 @@ export function buildReshuffleRow(
     mustInclude?: string[];
     color?: string | null;
     taste?: TasteMemory;
+    /** The day of the draw (drawSeed); the clock's when absent. */
+    today?: string;
   },
 ): Look[] {
   const cap = opts?.cap ?? RESHUFFLE_ROW;
@@ -2314,27 +2114,12 @@ export function buildReshuffleRow(
   const live = opts?.weather?.measured ? opts.weather : null;
   const weather = live ?? (season ? weatherForSeason(season) : weatherForOcc(occasion));
   const banned = new Set(opts?.excludeKeys ?? []);
-  const replacingRecipes = new Set(
-    (opts?.replacing ?? []).map((l) => l.recipeId).filter((id): id is string => Boolean(id)),
-  );
-  const track = emptyChapter();
-  const usedCount = opts?.usedCount ?? new Map<string, number>();
+  const today = opts?.today ?? todayNY();
   const salt0 = opts?.salt ?? 1;
-  let a = (salt0 >>> 0) || 1;
-  const rng = () => {
-    a = (Math.imul(a, 1664525) + 1013904223) >>> 0;
-    return a / 4294967296;
-  };
-  const shuffle = <T,>(list: T[]): T[] => {
-    const x = [...list];
-    for (let i = x.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      const t = x[i]!;
-      x[i] = x[j]!;
-      x[j] = t;
-    }
-    return x;
-  };
+  const rng: Rng = rngFromSalt(drawSeed(today, `week-strip:${occasion}:${house ?? ""}`, liveIdsKey(pool), salt0));
+  const wctx: WeightCtx = { today };
+  /** A weighted draw order (draw.ts): rotation weights, the surface's stream. */
+  const shuffle = (list: Garment[]): Garment[] => drawOrder(list, (g) => pieceWeight(g, wctx), rng);
   const vetoIds = opts?.taste ? pieceVetoIds(opts.taste) : new Set<string>();
   const open = (list: Garment[]) => {
     if (!vetoIds.size) return list;
@@ -2484,27 +2269,10 @@ export function buildReshuffleRow(
     }
   }
   if (house) {
-    const spec = houseProfile(house);
-    const rackReady = spec.requireOwned.every((token) => profilePhraseHits(pool, token, occasion));
-    const score = (pieces: Garment[]) => {
-      const banned = housePieceBanned(pieces, house, occasion);
-      const finger = houseFingerprintOk(pieces, house, occasion, pool);
-      const hard =
-        finger &&
-        rackReady &&
-        spec.requireOwned.every((token) => profilePhraseHits(pieces, token, occasion));
-      if (hard) return 1000 + spec.signals.length;
-      let s = banned ? 0 : 40;
-      if (finger) s += 300;
-      s += spec.signals.filter((sig) => profilePhraseHits(pieces, sig, occasion)).length;
-      return s;
-    };
-    const taste = opts?.taste;
-    draws.sort((left, right) => {
-      const base = score(right) - score(left);
-      if (base || !taste) return base;
-      return techniqueWeight(taste, right) - techniqueWeight(taste, left);
-    });
+    /* A house row leads with the looks that are the house's own; the rest follow in draw order. */
+    const own = draws.filter((pieces) => houseFingerprintOk(pieces, house, occasion, pool) && !housePieceBanned(pieces, house, occasion));
+    const rest = draws.filter((pieces) => !own.includes(pieces));
+    draws.splice(0, draws.length, ...own, ...rest);
   }
   if (!draws.length && rawDraws.length) {
     for (const pieces of rawDraws) {
@@ -2516,22 +2284,19 @@ export function buildReshuffleRow(
       draws.push(pieces);
     }
   }
-  if (!house && opts?.taste?.techniques.some((t) => t.weight > 0)) {
-    const taste = opts.taste;
-    draws.sort((a, b) => techniqueWeight(taste, b) - techniqueWeight(taste, a));
-  }
-  void usedCount;
-  void replacingRecipes;
   let picks = 0;
   while (picks < RESHUFFLE_MAX_PICKS && draws.length < cap) {
     picks += 1;
     const ids = pickLook(pool, {
       occasion,
-      moment: "day",
       weather,
-      salt: salt0 + picks,
+      ...(season ? { season } : {}),
+      salt: drawSeed(today, `week-strip:${occasion}:pick`, liveIdsKey(pool), salt0 * 100 + picks),
       house,
       taste: opts?.taste,
+      excludeKeys: seenDraw,
+      usedCount: opts?.usedCount,
+      today,
     });
     const pieces = ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
     pushDraw(pieces);
@@ -2606,7 +2371,6 @@ export function buildReshuffleRow(
       if (strict.uniqueIds) for (const p of pieces) used.add(p.id);
       for (const p of pieces) seen.set(p.id, (seen.get(p.id) ?? 0) + 1);
       if (top && isCreamCable(top)) cable = true;
-      noteChapterLook(track, pieces, recipeId, occasion);
       const jacketOn = pieces.some((g) => jacketWearSlot(g) === "outer");
       const demoted =
         season != null && jacketRequired(occasion, season, live?.f) && !jacketOn
@@ -2699,11 +2463,11 @@ const WEEKS = new Map<string, Look[]>();
  */
 export function buildWeek(
   garments: Garment[],
-  today = todayISO(),
+  today = todayNY(),
   opts?: { excludeKeys?: string[]; usedCount?: Map<string, number>; house?: House },
 ): Look[] {
   const used = [...(opts?.usedCount ?? new Map<string, number>()).entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  const key = engineKey("week", [today, todayISO(), opts?.excludeKeys ?? [], used, opts?.house ?? null, garments]);
+  const key = engineKey("week", [today, todayNY(), opts?.excludeKeys ?? [], used, opts?.house ?? null, garments]);
   const kept = WEEKS.get(key) ?? (engineStore()?.get(key) as Look[] | undefined);
   if (kept) return structuredClone(kept);
   const week = buildWeekFresh(garments, today, opts);
@@ -2744,20 +2508,21 @@ function buildWeekFresh(
           a.id.localeCompare(b.id),
       );
 
-  const track = emptyChapter();
+  const seed = drawSeed(today, `week-strip${opts?.house ? `:${opts.house}` : ""}`, liveIdsKey(pool));
+  let turn = 0;
   const pushLook = (occ: Occasion, locked: string[], i: number): boolean => {
     const avail = available();
     const lockedOk = locked.filter((id) => !weekUsed.has(id) && byId.has(id));
-    const recipe = pickRecipe(occ, avail, { house: opts?.house, track });
+    turn += 1;
     const ids = pickLook(avail, {
       occasion: occ,
-      moment: "day",
       weather: weatherForOcc(occ),
       lockedIds: lockedOk,
       usedCount,
       house: opts?.house,
-      recipeId: recipe.id,
-      chapter: track,
+      salt: seed + turn,
+      today,
+      excludeKeys: keys,
       legalCombo: opts?.house
         ? (p) =>
             houseLegalCombo(p, opts.house, occ, undefined, pool) &&
@@ -2786,8 +2551,7 @@ function buildWeekFresh(
     if (keys.has(key)) return false;
     keys.add(key);
     for (const id of lookIds) weekUsed.add(id);
-    const recipeId = matchRecipe(pieces, occ, opts?.house) ?? recipe.id;
-    noteChapterLook(track, pieces, recipeId, occ);
+    const recipeId = matchRecipe(pieces, occ, opts?.house);
     out.push({
       id: `week_${monday}_${i}`,
       name: nameOf(pieces),

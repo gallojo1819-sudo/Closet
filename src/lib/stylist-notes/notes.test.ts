@@ -231,9 +231,13 @@ describe("stylist notes on the owner's closet", () => {
     const loadAt = block.indexOf("loadActiveNotes(context.callerId, context.sbToken)");
     expect(gateAt).toBeGreaterThan(0);
     expect(loadAt).toBeGreaterThan(gateAt);
-    expect(block.includes("relevantNotes(active, { prompt: data.prompt, garments: rack, lockedIds: data.lockedIds })")).toBe(true);
-    expect(block.includes("content: `${system}${notes}${remembered}`")).toBe(true);
-    expect(block.indexOf("xaiFetch(")).toBeGreaterThan(loadAt);
+    /* The ask itself (stylist-ask.ts) reads the notes beside the prompt build, then puts them in the system message before any model call. */
+    const core = src("../stylist-ask.ts");
+    expect(block.includes("askStylistCore(data, {")).toBe(true);
+    expect(core.includes("relevantNotes(active, { prompt: data.prompt, garments: rack, lockedIds: data.lockedIds })")).toBe(true);
+    expect(core.includes("content: `${system}${notes}${remembered}`")).toBe(true);
+    expect(core.indexOf("deps.chat(")).toBeGreaterThan(core.indexOf("await notesRead"));
+    expect(block.includes("xaiFetch(")).toBe(false);
     /* No second model call: the classifier is the pure one in classify.ts. */
     expect(src("./classify.ts").includes("xaiFetch")).toBe(false);
     expect(src("./classify.ts").includes("scrubHouseNames")).toBe(true);

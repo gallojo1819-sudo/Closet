@@ -130,6 +130,11 @@ const FIXTURE: Garment[] = [
     warmth: 5,
     seasons: ["winter"],
   }),
+  /* A fall weekday or night out is a jacket day, and a week wears each piece once: one jacket a day. */
+  plate({ id: "chore-olive", name: "Olive chore coat", category: "outerwear", subtype: "chore coat", colors: ["olive"] }),
+  plate({ id: "field-tan", name: "Tan field jacket", category: "outerwear", subtype: "field jacket", colors: ["tan"] }),
+  plate({ id: "trucker", name: "Indigo denim trucker", category: "outerwear", subtype: "denim jacket", colors: ["indigo"], material: "denim" }),
+  plate({ id: "suede-brown", name: "Brown suede jacket", category: "outerwear", subtype: "suede jacket", colors: ["brown"], material: "suede" }),
 ];
 
 const RALPH_WEEKEND = [
@@ -235,16 +240,15 @@ describe("lookbook invariants", () => {
     assert.equal(chapterExhausted(5, 3, 0), false);
   });
 
-  it("INVARIANT 4 — whole rack is in the book", () => {
+  it("INVARIANT 4 — whole in-season rack is in the book", () => {
     const book = coverUnused(FIXTURE, buildLookbook(FIXTURE, "2026-09-12"));
     const stats = lookbookStats(book, FIXTURE);
-    const unused = stats.unusedNames;
-    const slots = new Set(
-      FIXTURE.map((g) => g.category).filter((c) =>
-        ["top", "bottom", "footwear", "outerwear"].includes(c),
-      ),
+    /* A piece tagged for another season only (the summer camps, the winter coat) fails the season rule in a September book and is never forced in. */
+    const offSeason = new Set(
+      FIXTURE.filter((g) => g.seasons.length && !g.seasons.includes("fall")).map((g) => g.name),
     );
-    void slots;
+    const unused = stats.unusedNames.filter((name) => !offSeason.has(name));
+    assert.ok(offSeason.size >= 1);
     assert.equal(
       unused.length,
       0,
@@ -344,11 +348,8 @@ describe("lookbook invariants", () => {
     const week = buildWeek(FIXTURE, "2026-09-14");
     assert.equal(week.length, 7, `week ${week.length}`);
     const book = coverUnused(FIXTURE, [...week, ...buildLookbook(FIXTURE, "2026-09-14")]);
-    assert.equal(
-      unusedFromLooks(FIXTURE, book).length,
-      0,
-      `unused ${unusedFromLooks(FIXTURE, book).map((g) => g.name).slice(0, 8).join(", ")}`,
-    );
+    const unused = unusedFromLooks(FIXTURE, book).filter((g) => !g.seasons.length || g.seasons.includes("fall"));
+    assert.equal(unused.length, 0, `unused ${unused.map((g) => g.name).slice(0, 8).join(", ")}`);
     const ox = FIXTURE.find((g) => g.id === "ox-lb")!;
     const five = looksForHero(ox, FIXTURE);
     assert.equal(five.length, 5, `hero looks ${five.length}`);

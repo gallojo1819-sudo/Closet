@@ -77,12 +77,26 @@ const flat = groups.flatMap((rule) =>
   (rule.tests ?? []).filter((t) => t.look && (t.expected === "fail" || t.expected === "pass" || t.expected.startsWith("soft"))).map((test, i) => ({ rule, test, i })),
 );
 
+/*
+ * The rule JSON is a law file pinned by hash (profiles.test.ts), so a case the owner's later
+ * rule overrides is graded here against the override, not edited there. JKT-LAY-2 (probability
+ * round): a woven shirt, a tee or a fine knit under a sport coat passes; only a chunky or cable
+ * knit, a graphic or collegiate piece under one fails.
+ */
+const SUPERSEDED: Record<string, string> = {
+  "JKT-LAY-2#1": "pass",
+  "JKT-LAY-2#2": "pass",
+  "JKT-LAY-2#4": "pass",
+};
+
 describe("T1 jacket rules", () => {
   it("loads 63 graded tests", () => {
     expect(flat).toHaveLength(63);
   });
 
-  for (const { rule, test, i } of flat) {
+  for (const { rule, test: given, i } of flat) {
+    const override = SUPERSEDED[`${rule.id}#${i + 1}`];
+    const test = override ? { ...given, expected: override, why: `${given.why ?? ""} (superseded: ${override})` } : given;
     it(`${rule.id} #${i + 1} ${test.expected} ${test.why ?? ""}`, () => {
       const hits = jacketHits(pieces(test.look ?? {}), {
         occasion: test.context?.occasion ?? "weekday",

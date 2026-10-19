@@ -16,7 +16,7 @@ import { useCloset } from "./store";
 import { persistGate } from "./store-persist";
 import { todayOccasion } from "./style";
 import { freezeTodaySeason } from "./today-season";
-import { todayISO } from "./utils";
+import { todayNY } from "./utils";
 import { getNycWeather } from "./weather";
 
 export function useDailyPick(): void {
@@ -60,7 +60,7 @@ export function useDailyPick(): void {
         if (weather && current?.weather?.f !== weather.f) {
           inMemory(() =>
             setDrop({
-              date: todayISO(),
+              date: todayNY(),
               garmentIds: [],
               worn: false,
               verdict: "pending",
@@ -72,7 +72,7 @@ export function useDailyPick(): void {
       }
       const wornToday =
         current &&
-        current.date === todayISO() &&
+        current.date === todayNY() &&
         (current.worn || current.verdict === "worn");
       if (wornToday) {
         if (weather && current.weather?.f !== weather.f) {
@@ -82,7 +82,7 @@ export function useDailyPick(): void {
       }
       const liveToday =
         current &&
-        current.date === todayISO() &&
+        current.date === todayNY() &&
         current.garmentIds.filter((id) => owned.some((g) => g.id === id)).length >= 2;
       if (liveToday) {
         /* Today's look stays. Only its weather is refreshed, in memory. */

@@ -32,12 +32,14 @@ import {
   firstWeekLooks,
   lookbookPool,
   looksForHero,
+  looksWithLabel,
   looksFromRows,
   realWeekLooks,
   unusedFromLooks,
   visibleHero,
 } from "@/lib/lookbook";
-import { lookbookCountLine, screenLookCount, weekShowsEmptyReason, weekShowsSkeletons } from "@/lib/lookbook-status";
+import { NO_OUTFIT_NOTE } from "@/lib/dress";
+import { lookbookCountLine, pageResolved, screenLookCount, weekShowsEmptyReason, weekShowsSkeletons } from "@/lib/lookbook-status";
 import { seasonChipRow, seasonControlLabel, seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
 import { cardTag, spreadTitle, weekLeadPiece } from "@/lib/look";
@@ -308,7 +310,8 @@ function LookbookPage() {
   const piecesFor = (look: Look) =>
     look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
-  const tasteKey = `${taste.vetoes.length}:${taste.techniques.map((t) => t.weight).join(",")}`;
+  /* The vetoes are the one taste input the rows read; the stored technique weights are never read. */
+  const tasteKey = `${taste.vetoes.length}`;
   const filterKey = `${occasion}:${season}:${color ?? ""}:${garments.length}:${tasteKey}:${pageWeather ?? ""}`;
   const preview = useMemo(
     () =>
@@ -417,6 +420,8 @@ function LookbookPage() {
   const visible = cards;
   /* "0 looks" is only a fact once the ranked row for these filters has come back. */
   const weekResolved = Boolean(rankedReady);
+  /* The count line, the skeletons and the empty reason wait for both the week row and the idea rows: never a partial number. */
+  const countResolved = pageResolved({ week: weekResolved, ways: waysReady });
   /* The idea rows count the week row's pieces as already on screen (SCREEN_CAP across the page),
      and lift pieces the store has not put in front of the user lately. Nothing is written. */
   const weekKey = weekRow.map((look) => look.garmentIds.join(",")).join("|");
@@ -437,7 +442,7 @@ function LookbookPage() {
     let cancelled = false;
     const run = () => {
       if (cancelled) return;
-      const found = visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather });
+      const found = visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather, salt: rowSalt });
       const shown = rowWays(found, garments, {
         occasion,
         season,
@@ -484,6 +489,10 @@ function LookbookPage() {
       min: 3,
     });
   }, [hero, heroLooks, garments, occasion, season, color]);
+  /* The cards the hero sheet draws: a look with three or more resolvable pieces. The heading counts these. */
+  const heroDrawn = useMemo(() => heroShown.filter((look) => look.garmentIds.filter((id) => byId.has(id)).length >= 3), [heroShown, byId]);
+  /* "Outfit with this" on a piece no occasion can dress: the note, not a silent no-op. */
+  const [noOutfitFor, setNoOutfitFor] = useState<string | null>(null);
 
   const highlightId = focusLook ?? null;
 
@@ -617,9 +626,9 @@ function LookbookPage() {
       </div>
       {hydrated && (
         <>
-          <p className="mt-3 text-ink-soft max-w-xl" data-look-count data-resolved={weekResolved ? "1" : "0"}>
+          <p className="mt-3 text-ink-soft max-w-xl" data-look-count data-resolved={countResolved ? "1" : "0"}>
             {lookbookCountLine({
-              resolved: weekResolved,
+              resolved: countResolved,
               count: shownCount,
               chapter: chapterLabel,
               season: seasonLabel.replace(/^Auto · /, ""),
@@ -808,7 +817,7 @@ function LookbookPage() {
         <p className="micro text-ink-soft">This week</p>
         {colorOpen && !color ? (
           <p className="mt-3 text-sm text-ink-soft">Pick a colour.</p>
-        ) : weekShowsSkeletons({ resolved: weekResolved, shown: visible.length }) ? (
+        ) : weekShowsSkeletons({ resolved: countResolved, shown: visible.length }) ? (
           <ul data-week-skeleton aria-busy="true" className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {[0, 1, 2].map((i) => (
               <li key={i}>
@@ -816,7 +825,7 @@ function LookbookPage() {
               </li>
             ))}
           </ul>
-        ) : weekShowsEmptyReason({ resolved: weekResolved, shown: visible.length }) ? (
+        ) : weekShowsEmptyReason({ resolved: countResolved, shown: visible.length }) ? (
           <p className="mt-3 text-sm text-ink-soft" data-week-reason>
             {weekReason ||
               emptyFilterCopy(
@@ -916,7 +925,11 @@ function LookbookPage() {
                     type="button"
                     onClick={() => {
                       const look = outfitWith([g.id], occasion);
-                      if (!look) return;
+                      if (!look) {
+                        setNoOutfitFor(g.id);
+                        return;
+                      }
+                      setNoOutfitFor(null);
                       setDressed(look);
                       setOpenId(look.id);
                     }}
@@ -927,6 +940,11 @@ function LookbookPage() {
                 </span>
               ))}
             </div>
+            {noOutfitFor && unused.some((g) => g.id === noOutfitFor) ? (
+              <p data-outfit-note className="mt-3 text-sm text-ink-soft">
+                {NO_OUTFIT_NOTE}
+              </p>
+            ) : null}
           </>
         )}
       </section>
@@ -946,8 +964,8 @@ function LookbookPage() {
         <Overlay onClose={() => setHeroId(null)} getAnchor={getAnchor} zClass="z-[55]">
           <div className="p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <p className="font-editorial text-2xl tracking-tight">
-                5 looks with {pieceLabel(hero, garments)}
+              <p className="font-editorial text-2xl tracking-tight" data-hero-heading>
+                {looksWithLabel(heroDrawn.length, pieceLabel(hero, garments))}
               </p>
               <button
                 type="button"
@@ -964,9 +982,8 @@ function LookbookPage() {
               </button>
             </div>
             <ul className="mt-4 grid grid-cols-2 gap-3">
-              {heroShown.map((look) => {
+              {heroDrawn.map((look) => {
                 const pieces = piecesFor(look);
-                if (pieces.length < 3) return null;
                 return (
                   <li key={look.id}>
                     <button

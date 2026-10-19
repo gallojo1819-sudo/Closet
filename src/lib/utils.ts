@@ -17,6 +17,15 @@ export function todayISO(): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Today's date in New York (America/New_York), as YYYY-MM-DD: the day the draws are seeded by
+ * (draw.ts) and the daily pick is for, whatever time zone the device keeps. todayISO() stays the
+ * device's day for everything else.
+ */
+export function todayNY(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
 export function formatLongDate(iso = todayISO()): string {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y ?? 2026, (m ?? 1) - 1, d ?? 1).toLocaleDateString("en-US", {

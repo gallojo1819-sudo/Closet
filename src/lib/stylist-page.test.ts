@@ -43,8 +43,9 @@ function piece(partial: Pick<Garment, "id" | "name" | "category"> & Partial<Garm
     brand: "",
     notes: "",
     formality: 3,
-    warmth: 3,
-    seasons: ["fall"],
+    warmth: 2,
+    /* Untagged: these pieces serve every season's page (a fall tag would fail the summer page's season rule). */
+    seasons: [],
     imageSrc: "/x.jpg",
     cutoutSrc: "/x.jpg",
     imageSource: "photo",
@@ -602,7 +603,9 @@ describe("stylist page", () => {
     const dock = readFileSync(new URL("../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
     assert.match(dock, /stylistPayload\(res\)/);
     assert.match(dock, /replyFromStylistResult\(payload, owned\)/);
-    assert.match(dock, /text: painted\.text/);
+    /* The painted text is what the thread shows, marked as the closet's own when the server composed it. */
+    assert.match(dock, /const spoken = sentence \?\? painted\.text;/);
+    assert.match(dock, /payload\.source === "closet" \? markClosetReply\(spoken\) : spoken/);
     assert.match(dock, /NOT_IN_CLOSET/);
   });
 
@@ -876,7 +879,7 @@ describe("stylist routing", () => {
   it("4) a server block paints as one sentence, in every shape", () => {
     const pieces = [polo, cords, woven, field];
     const ids = pieces.map((g) => g.id);
-    const block = atlasText({ technique: null, pieces, occasion: "weekday", missing: null });
+    const block = atlasText({ pieces, occasion: "weekday", missing: null });
     const want = "Wear your Cream long-sleeve polo with the Navy corduroy trousers and the Black woven loafers under the Olive field jacket.";
     assert.deepEqual(replyFromStylistResult({ ok: true, text: block, garmentIds: ids }, rack), { text: want, garmentIds: ids });
     assert.deepEqual(replyFromStylistResult({ ok: true, text: block }, rack), { text: want, garmentIds: ids });

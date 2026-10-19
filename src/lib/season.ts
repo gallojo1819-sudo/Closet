@@ -204,10 +204,3 @@ export function pieceFitsSeason(g: Garment, season: Season): boolean {
   }
   return true;
 }
-
-export function seasonRank(pieces: Garment[], season: Season): number {
-  if (!lookFitsSeason(pieces, season)) return -1;
-  const target = seasonWarmth(season);
-  return pieces.filter((g) => g.category !== "accessory" && Math.abs(g.warmth - target) <= 1)
-    .length;
-}

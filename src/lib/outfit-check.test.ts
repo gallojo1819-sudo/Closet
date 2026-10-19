@@ -119,7 +119,8 @@ function assertOwnedLegal(ids: string[], ctx: CheckCtx, at: string) {
   if (outer) assert.notEqual(outer.id, VARSITY, `${at}: varsity as the outer`);
 }
 
-const TRIO = ["g_21b6d3qcohmu", "g_k75fdfdsnak0", "g_8nrtffa2s13s"];
+/* Cream long-sleeve polo, navy corduroy trousers, brown suede tassel loafers: at 62F its only fail is the jacket day; at 73F it passes. */
+const TRIO = ["g_oimadifuvalb", "g_v3ovns4bv344", "g_8nrtffa2s13s"];
 const PRINTS = [
   synthetic("s_top", "Navy printed shirt", "top", "shirt", ["navy"]),
   synthetic("s_bot", "Olive printed trousers", "bottom", "trousers", ["olive"]),
@@ -185,7 +186,7 @@ describe("outfit check", () => {
     const v = checkVerdict(look, ctx, RACK);
     assert.equal(v.state, "doesnt");
     assert.equal(v.reason, "A summer shirt in fall.");
-    assert.ok(v.ruleIds.includes("SEASON"));
+    assert.ok(v.ruleIds.includes("SEA-PIECE"), v.ruleIds.join(","));
   });
 
   it("e) cant_tell for a missing slot or an unclear core piece", () => {
@@ -421,10 +422,12 @@ describe("outfit check", () => {
       }
     }
     assert.ok(n >= 5000, `${n} checks`);
-    /* pickDrop lives in drop-pick.ts now (the pure pick the store and today-look.ts share). */
+    /* pickDrop lives in drop-pick.ts now (the pure pick the store and today-look.ts share): the
+       jacket day is one input of the draw (requireOuter), never a second legality pass. */
     const store = readFileSync(new URL("./drop-pick.ts", import.meta.url), "utf8");
-    assert.equal(store.includes("legalWithJacket(pieces, ctx)"), true);
+    assert.equal(store.includes("requireOuter: needJacket"), true);
     assert.equal(store.includes("missingJacketOnly("), false);
+    assert.equal(store.includes("legalWithJacket("), false);
   });
 
   it("m) pieceLine is exported", () => {

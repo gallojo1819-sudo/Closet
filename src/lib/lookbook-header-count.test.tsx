@@ -11,6 +11,7 @@
  * (three tops, a bottom, a shoe), which clears no way and so gets the usual row of three; a
  * closet of the same pieces without a bottom gets the usual's reason and no card.
  */
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DetectorSections } from "@/components/closet/detector-sections";
@@ -26,7 +27,7 @@ import {
   type Way,
 } from "./detectors.ts";
 import { looksFromRows, realWeekLooks } from "./lookbook.ts";
-import { screenLookCount } from "./lookbook-status.ts";
+import { pageResolved, screenLookCount } from "./lookbook-status.ts";
 import { advanceRotation, emptyRotation, type Rotation } from "./rotation.ts";
 import { OCCASIONS, type Garment, type Look, type Occasion, type Season } from "./types.ts";
 import { TEST_CLOSET_COUNT, testCloset } from "./__fixtures__/snapshot.ts";
@@ -197,6 +198,14 @@ describe("the header counts the cards on the screen", () => {
       expect(page.sectionRendered, where).toBe(0);
       expect(page.header, where).toBe(page.weekRendered);
     }
+  });
+
+  it("the route shows a number only once both rows are in: the count line, the skeletons and the empty reason read pageResolved", () => {
+    const page = readFileSync(new URL("../routes/lookbook.tsx", import.meta.url), "utf8");
+    expect(page).toMatch(/const countResolved = pageResolved\(\{ week: weekResolved, ways: waysReady \}\);/);
+    expect(page.match(/resolved: countResolved/g)?.length).toBe(3);
+    expect(page).not.toMatch(/resolved: weekResolved/);
+    expect(pageResolved({ week: true, ways: false })).toBe(false);
   });
 
   it("reports the per-page numbers", () => {

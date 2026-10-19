@@ -1,0 +1,721 @@
+{
+  "occasion": "weekday",
+  "season": "winter",
+  "chips": {
+    "ald": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_mpvyy87tse1c",
+            "name": "Cream flag sweatshirt"
+          },
+          "bottom": {
+            "id": "g_fvc535elt23d",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_01xaga54r12h",
+            "name": "White leather sneakers"
+          },
+          "outer": {
+            "id": "g_8qqqzpwxuwti",
+            "name": "Brown chore jacket"
+          },
+          "recipeId": null,
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_dsqnx6ckt81v",
+            "name": "Beige quarter-zip sweatshirt"
+          },
+          "bottom": {
+            "id": "g_rvrs9hibr981",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_wgarjdurj7yp",
+            "name": "Brown leather sneakers"
+          },
+          "outer": {
+            "id": "g_3qjmw7n4wj2a",
+            "name": "Navy brown plaid jacket"
+          },
+          "recipeId": null,
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_6qz38nwsrupx",
+            "name": "Cream Polo Bear sweatshirt"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_wgarjdurj7yp",
+            "name": "Brown leather sneakers"
+          },
+          "outer": {
+            "id": "g_qnmo5yzgl50b",
+            "name": "Navy field jacket"
+          },
+          "recipeId": "WD_POLO_CLEAN",
+          "hardFails": []
+        }
+      ]
+    },
+    "faloni": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_9eip7wdtsxzd",
+            "name": "Pale yellow ribbed polo"
+          },
+          "bottom": {
+            "id": "g_6xkkzn06sbdm",
+            "name": "Beige trousers"
+          },
+          "shoe": {
+            "id": "g_5g4fqg77s4rw",
+            "name": "Black woven loafers"
+          },
+          "outer": {
+            "id": "g_1pg9y05mlkek",
+            "name": "Brown suede jacket"
+          },
+          "recipeId": "WD_SOFT_ITALIAN",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_9eip7wdtsxzd",
+            "name": "Pale yellow ribbed polo"
+          },
+          "bottom": {
+            "id": "g_yfkavdj5irwe",
+            "name": "Light grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_8ukg5mi9r3fc",
+            "name": "Brown suede loafers"
+          },
+          "outer": {
+            "id": "g_py2swfwot1ed",
+            "name": "Brown suede jacket"
+          },
+          "recipeId": "WD_SOFT_ITALIAN",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_bq9qnaa1vkon",
+            "name": "Brown knit polo"
+          },
+          "bottom": {
+            "id": "g_fvc535elt23d",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_8ukg5mi9r3fc",
+            "name": "Brown suede loafers"
+          },
+          "outer": {
+            "id": "g_8od90wk1sl9k",
+            "name": "Brown suede bomber jacket"
+          },
+          "recipeId": "WD_SOFT_ITALIAN",
+          "hardFails": []
+        }
+      ]
+    },
+    "fiveFourFive": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_ugyaieefqcxe",
+            "name": "White knit cardigan"
+          },
+          "bottom": {
+            "id": "g_x1vivoqz2ixd",
+            "name": "Maroon/brown trousers"
+          },
+          "shoe": {
+            "id": "g_9q0j6ksxlgcv",
+            "name": "White leather sneakers"
+          },
+          "outer": {
+            "id": "g_1pg9y05mlkek",
+            "name": "Brown suede jacket"
+          },
+          "recipeId": null,
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_m7bg5j5z10wc",
+            "name": "Light Blue henley"
+          },
+          "bottom": {
+            "id": "g_rvrs9hibr981",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_2wf48xbqlgcv",
+            "name": "White leather sneakers"
+          },
+          "outer": {
+            "id": "g_py2swfwot1ed",
+            "name": "Brown suede jacket"
+          },
+          "recipeId": null,
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_3821acdhupu9",
+            "name": "Cream ribbed half-zip sweater"
+          },
+          "bottom": {
+            "id": "g_x1vivoqz2ixd",
+            "name": "Maroon/brown trousers"
+          },
+          "shoe": {
+            "id": "g_9q0j6ksxlgcv",
+            "name": "White leather sneakers"
+          },
+          "recipeId": null,
+          "hardFails": [
+            "JKT-COV-1"
+          ]
+        }
+      ]
+    },
+    "purple": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_qrx875pbmh6n",
+            "name": "Beige textured sweater"
+          },
+          "bottom": {
+            "id": "g_6xkkzn06sbdm",
+            "name": "Beige trousers"
+          },
+          "shoe": {
+            "id": "g_8ukg5mi9r3fc",
+            "name": "Brown suede loafers"
+          },
+          "outer": {
+            "id": "g_x4adkv9zu9yu",
+            "name": "Navy/black corduroy jacket"
+          },
+          "recipeId": "WD_KNIT_CITY",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_ri78lj9vspyj",
+            "name": "Beige ribbed sweater"
+          },
+          "bottom": {
+            "id": "g_k75fdfdsnak0",
+            "name": "Light grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_om0dh5nps1ke",
+            "name": "Brown leather loafers"
+          },
+          "outer": {
+            "id": "g_wwy9b2pusds3",
+            "name": "Brown shearling bomber jacket"
+          },
+          "recipeId": "WD_KNIT_CITY",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_v2gxktsmsoov",
+            "name": "Beige crewneck sweater"
+          },
+          "bottom": {
+            "id": "g_k75fdfdsnak0",
+            "name": "Light grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_5g4fqg77s4rw",
+            "name": "Black woven loafers"
+          },
+          "outer": {
+            "id": "g_wwy9b2pusds3",
+            "name": "Brown shearling bomber jacket"
+          },
+          "recipeId": "WD_KNIT_CITY",
+          "hardFails": []
+        }
+      ]
+    },
+    "rrl": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_m7bg5j5z10wc",
+            "name": "Light Blue henley"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "outer": {
+            "id": "g_491tzu2suiv7",
+            "name": "Blue plaid shearling jacket"
+          },
+          "recipeId": "WD_RRL_SUEDE",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_j4qu90fgv347",
+            "name": "Light Blue plaid flannel"
+          },
+          "bottom": {
+            "id": "g_j994h3k9l8ot",
+            "name": "Cream straight-leg jeans"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "outer": {
+            "id": "g_8qqqzpwxuwti",
+            "name": "Brown chore jacket"
+          },
+          "recipeId": "WD_DENIM_UNDER_CHORE",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_teatot7o1lst",
+            "name": "Grey plaid shirt"
+          },
+          "bottom": {
+            "id": "g_fvc535elt23d",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "outer": {
+            "id": "g_sb0mc7s7v346",
+            "name": "Olive field jacket"
+          },
+          "recipeId": "WD_RRL_FIELD",
+          "hardFails": []
+        }
+      ]
+    },
+    "sweetStable": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_rpjfgscii90r",
+            "name": "Cream fair isle half-zip sweater"
+          },
+          "bottom": {
+            "id": "g_vf28ktbdhmtz",
+            "name": "Dark brown chinos"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "outer": {
+            "id": "g_x4adkv9zu9yu",
+            "name": "Navy/black corduroy jacket"
+          },
+          "recipeId": "WD_WESTERN_UNDER_NAVY",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_zzrq3j5n2njk",
+            "name": "Pink gingham shirt"
+          },
+          "bottom": {
+            "id": "g_ayfv9c97ohmv",
+            "name": "Brown corduroy trousers"
+          },
+          "shoe": {
+            "id": "g_om0dh5nps1ke",
+            "name": "Brown leather loafers"
+          },
+          "outer": {
+            "id": "g_wwy9b2pusds3",
+            "name": "Brown shearling bomber jacket"
+          },
+          "recipeId": "WD_TEXTURE",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_zzrq3j5n2njk",
+            "name": "Pink gingham shirt"
+          },
+          "bottom": {
+            "id": "g_v3ovns4bv344",
+            "name": "Navy corduroy trousers"
+          },
+          "shoe": {
+            "id": "g_om0dh5nps1ke",
+            "name": "Brown leather loafers"
+          },
+          "outer": {
+            "id": "g_1pg9y05mlkek",
+            "name": "Brown suede jacket"
+          },
+          "recipeId": "WD_TEXTURE",
+          "hardFails": []
+        }
+      ]
+    },
+    "italianSummer": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_ri78lj9vspyj",
+            "name": "Beige ribbed sweater"
+          },
+          "bottom": {
+            "id": "g_v3ovns4bv344",
+            "name": "Navy corduroy trousers"
+          },
+          "shoe": {
+            "id": "g_2wf48xbqlgcv",
+            "name": "White leather sneakers"
+          },
+          "outer": {
+            "id": "g_1pg9y05mlkek",
+            "name": "Brown suede jacket"
+          },
+          "recipeId": null,
+          "hardFails": [
+            "IS-P5"
+          ]
+        },
+        {
+          "top": {
+            "id": "g_z8gvd1zvrcif",
+            "name": "Brown knit zip sweater"
+          },
+          "bottom": {
+            "id": "g_v3ovns4bv344",
+            "name": "Navy corduroy trousers"
+          },
+          "shoe": {
+            "id": "g_fzekzikyrf50",
+            "name": "Navy suede sneakers"
+          },
+          "outer": {
+            "id": "g_8od90wk1sl9k",
+            "name": "Brown suede bomber jacket"
+          },
+          "recipeId": null,
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_mqjsmpqgwwvm",
+            "name": "Cream cable-knit sweater"
+          },
+          "bottom": {
+            "id": "g_fvc535elt23d",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_fzekzikyrf50",
+            "name": "Navy suede sneakers"
+          },
+          "outer": {
+            "id": "g_8od90wk1sl9k",
+            "name": "Brown suede bomber jacket"
+          },
+          "recipeId": "WD_KNIT_CITY",
+          "hardFails": []
+        }
+      ]
+    },
+    "italianWinter": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_xowln4uos3ug",
+            "name": "Beige knit sweater"
+          },
+          "bottom": {
+            "id": "g_k75fdfdsnak0",
+            "name": "Light grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_yae8h1k9pjm1",
+            "name": "Brown leather tassel loafers"
+          },
+          "outer": {
+            "id": "g_wwy9b2pusds3",
+            "name": "Brown shearling bomber jacket"
+          },
+          "recipeId": "WD_KNIT_CITY",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_ri78lj9vspyj",
+            "name": "Beige ribbed sweater"
+          },
+          "bottom": {
+            "id": "g_yfkavdj5irwe",
+            "name": "Light grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_yae8h1k9pjm1",
+            "name": "Brown leather tassel loafers"
+          },
+          "outer": {
+            "id": "g_1pg9y05mlkek",
+            "name": "Brown suede jacket"
+          },
+          "recipeId": "WD_KNIT_CITY",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_ri78lj9vspyj",
+            "name": "Beige ribbed sweater"
+          },
+          "bottom": {
+            "id": "g_bee1dg9rnfe5",
+            "name": "Grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_2djvq6l9qxbb",
+            "name": "Navy leather tassel loafers"
+          },
+          "outer": {
+            "id": "g_8od90wk1sl9k",
+            "name": "Brown suede bomber jacket"
+          },
+          "recipeId": "WD_KNIT_CITY",
+          "hardFails": []
+        }
+      ]
+    },
+    "polo": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_939onlwfrg9j",
+            "name": "Light blue long-sleeve polo"
+          },
+          "bottom": {
+            "id": "g_vf28ktbdhmtz",
+            "name": "Dark brown chinos"
+          },
+          "shoe": {
+            "id": "g_2wf48xbqlgcv",
+            "name": "White leather sneakers"
+          },
+          "outer": {
+            "id": "g_491tzu2suiv7",
+            "name": "Blue plaid shearling jacket"
+          },
+          "recipeId": "WD_POLO_CLEAN",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_teitg9jmpwxa",
+            "name": "Black cable-knit sweater"
+          },
+          "bottom": {
+            "id": "g_80sz9s08xpw1",
+            "name": "Cream trousers"
+          },
+          "shoe": {
+            "id": "g_2wf48xbqlgcv",
+            "name": "White leather sneakers"
+          },
+          "outer": {
+            "id": "g_1pg9y05mlkek",
+            "name": "Brown suede jacket"
+          },
+          "recipeId": "WD_KNIT_CITY",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_jhyr10t2vo13",
+            "name": "Beige cable-knit half-zip sweater"
+          },
+          "bottom": {
+            "id": "g_j994h3k9l8ot",
+            "name": "Cream straight-leg jeans"
+          },
+          "shoe": {
+            "id": "g_2wf48xbqlgcv",
+            "name": "White leather sneakers"
+          },
+          "outer": {
+            "id": "g_8od90wk1sl9k",
+            "name": "Brown suede bomber jacket"
+          },
+          "recipeId": "WD_KNIT_CITY",
+          "hardFails": []
+        }
+      ]
+    },
+    "all": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_yo7mwga1xi3m",
+            "name": "Light blue denim shirt"
+          },
+          "bottom": {
+            "id": "g_v3ovns4bv344",
+            "name": "Navy corduroy trousers"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "outer": {
+            "id": "g_wwy9b2pusds3",
+            "name": "Brown shearling bomber jacket"
+          },
+          "recipeId": "WD_RRL_SUEDE",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_bq9qnaa1vkon",
+            "name": "Brown knit polo"
+          },
+          "bottom": {
+            "id": "g_bee1dg9rnfe5",
+            "name": "Grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_8nrtffa2s13s",
+            "name": "Brown suede tassel loafers"
+          },
+          "outer": {
+            "id": "g_8qqqzpwxuwti",
+            "name": "Brown chore jacket"
+          },
+          "recipeId": "WD_KNIT_CITY",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_939onlwfrg9j",
+            "name": "Light blue long-sleeve polo"
+          },
+          "bottom": {
+            "id": "g_v3ovns4bv344",
+            "name": "Navy corduroy trousers"
+          },
+          "shoe": {
+            "id": "g_8nrtffa2s13s",
+            "name": "Brown suede tassel loafers"
+          },
+          "outer": {
+            "id": "g_8qqqzpwxuwti",
+            "name": "Brown chore jacket"
+          },
+          "recipeId": "WD_POLO_CLEAN",
+          "hardFails": []
+        }
+      ]
+    },
+    "color": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_z8gvd1zvrcif",
+            "name": "Brown knit zip sweater"
+          },
+          "bottom": {
+            "id": "g_gyc76ur3ikb9",
+            "name": "Beige trousers"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "outer": {
+            "id": "g_wwy9b2pusds3",
+            "name": "Brown shearling bomber jacket"
+          },
+          "recipeId": "WD_WESTERN_UNDER_NAVY",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_o739106dt8ym",
+            "name": "Cream abstract fleece half-zip"
+          },
+          "bottom": {
+            "id": "g_v3ovns4bv344",
+            "name": "Navy corduroy trousers"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "outer": {
+            "id": "g_wwy9b2pusds3",
+            "name": "Brown shearling bomber jacket"
+          },
+          "recipeId": "WD_WESTERN_UNDER_NAVY",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_ri78lj9vspyj",
+            "name": "Beige ribbed sweater"
+          },
+          "bottom": {
+            "id": "g_v3ovns4bv344",
+            "name": "Navy corduroy trousers"
+          },
+          "shoe": {
+            "id": "g_upni66uiqtgb",
+            "name": "Cream leather sneakers"
+          },
+          "outer": {
+            "id": "g_py2swfwot1ed",
+            "name": "Brown suede jacket"
+          },
+          "recipeId": null,
+          "hardFails": []
+        }
+      ]
+    }
+  }
+}

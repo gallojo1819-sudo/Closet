@@ -2,7 +2,9 @@
  * Equivalence run for the engine speed work. The stripped live closet (engine-garments.json:
  * real ids, which the rule JSON keys on; the stored names without the maker, so the pattern
  * and colour words stay; no brand, notes or wear dates), clock frozen,
- * same call order every time (the matrix counts jackets across builds).
+ * same call order every time (the matrix counts jackets across builds). Since the probability
+ * round (Oct 15 2026) every output is a seeded draw among rule-passing looks: the same inputs
+ * still give the same outputs, which is what the snapshot pins.
  */
 import { register } from "node:module";
 import { mock } from "node:test";
@@ -40,9 +42,7 @@ export function runEngine(garments: Garment[] = engineGarments): Record<string, 
     out.rowWeekend = plain(buildReshuffleRow(garments, "weekend", { season: "fall", salt: 1, cap: 8 }));
     out.rowHouse = plain(buildReshuffleRow(garments, "out", { house: HOUSES[0], season: "fall", salt: 2, cap: 8 }));
     out.week = plain(buildWeek(garments, "2026-10-09"));
-    out.drop = plain(
-      pickDrop(garments, weather, "weekday", undefined, undefined, undefined, undefined, undefined, { salt: 1 }, new Date(ENGINE_NOW)),
-    );
+    out.drop = plain(pickDrop(garments, weather, "weekday", { salt: 1, today: "2026-10-09" }, new Date(ENGINE_NOW)));
     out.ways = plain(
       visibleDetectors(garments, { occasion: "weekday", season: "fall" }).map((way) => ({
         id: way.id,

@@ -37,6 +37,7 @@ import { lookFitsSeason } from "./season.ts";
 import { isBrownSuedeOuter } from "./style.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
+import { NEXT_PLAIN_ROW, roomLeft, roomLine } from "./__fixtures__/page-room.ts";
 import { TEST_CLOSET_COUNT, testCloset } from "./__fixtures__/snapshot.ts";
 
 const CLOSET: Garment[] = testCloset;
@@ -69,6 +70,8 @@ type Tap = {
   pieces: Set<string>;
   /** Pieces allowed in this scope so far: eligible minus what is known unpairable after this tap. */
   allowed: string[];
+  /** What was listed unpairable when the tap was built. */
+  stuck: Set<string>;
   /** Look-alike groups (the page's merged keys) of the allowed pieces. */
   allowedTwins: Set<string>;
   coveredAllowed: number;
@@ -137,6 +140,7 @@ function simulate(occasion: Occasion, taps = TAPS, season: Season = SEASON): Run
       page,
       pieces,
       allowed,
+      stuck: new Set(stuck),
       allowedTwins: new Set(allowed.map((id) => KEY.get(id)!)),
       coveredAllowed: allowed.filter((id) => shownEver.has(id)).length,
       reset,
@@ -173,8 +177,15 @@ describe("the snapshot test closet", () => {
   });
 });
 
+/** The exhaustive proof that a row has no card left (page-room.ts), as an assertion message; null when it is full. */
+function proof(run: Run, tap: Tap, rowId: string): string | null {
+  return roomLine(
+    roomLeft({ closet: CLOSET, occasion: run.occasion, season: run.season, today: TODAY, week: tap.week, rows: tap.rows, stuck: tap.stuck, eligible: new Set(run.eligible) }, rowId),
+  );
+}
+
 describe("six Re-dresses on the snapshot closet, every chapter", () => {
-  it("every tap shows a week row exactly as full as the closet allows (the scarcest core slot's pairable look-alike groups, eight at most) and the story rows", () => {
+  it("every tap shows a week row exactly as full as the closet allows (the scarcest core slot's pairable look-alike groups, eight at most) and story rows as full as the rules allow", () => {
     let full = 0;
     for (const run of RUNS) {
       /* No piece twice in a row, so the pairable groups of the scarcest slot bound the row; the fill pass reaches that bound. */
@@ -182,9 +193,12 @@ describe("six Re-dresses on the snapshot closet, every chapter", () => {
       if (expected === WEEK) full += 1;
       for (const tap of run.taps) {
         expect(tap.week.length, `${run.occasion} tap ${tap.n} week row (${run.pairableCore} pairable groups in the scarcest core slot)`).toBe(expected);
-        expect(tap.rows.length, `${run.occasion} tap ${tap.n} rows: ${tap.rows.map((r) => r.id).join(",")}`).toBeGreaterThanOrEqual(STORY_ROWS);
+        expect(tap.rows.length, `${run.occasion} tap ${tap.n} rows: ${tap.rows.map((r) => r.id).join(",")}`).toBeLessThanOrEqual(STORY_ROWS);
+        /* Every rule is pass or fail: a page short of STORY_ROWS rows, or a row short of ROW_MIN, is right only when no card is left for it. */
+        if (tap.rows.length < STORY_ROWS) expect(proof(run, tap, NEXT_PLAIN_ROW), `${run.occasion} tap ${tap.n}: ${tap.rows.length} rows, yet another plain row`).toBeNull();
         for (const row of tap.rows) {
-          expect(row.looks.length, `${run.occasion} tap ${tap.n} / ${row.title}`).toBeGreaterThanOrEqual(row.relaxed ? 1 : ROW_MIN);
+          expect(row.looks.length, `${run.occasion} tap ${tap.n} / ${row.title}: empty`).toBeGreaterThan(0);
+          if (row.looks.length < ROW_MIN) expect(proof(run, tap, row.id), `${run.occasion} tap ${tap.n} / ${row.title}: ${row.looks.length} cards`).toBeNull();
           expect(row.title.length).toBeGreaterThan(0);
         }
       }
@@ -239,10 +253,8 @@ describe("six Re-dresses on the snapshot closet, every chapter", () => {
       const shown = shownTwinsBy(run, 5);
       const missing = allowed.filter((id) => !shown.has(KEY.get(id)!));
       expect(names(missing), `${run.occasion}: allowed pieces never shown in 5 taps`).toEqual([]);
-      /* The loose weekday gate and the plain rows keep most of the closet in play; out (no sneakers
-         while loafers are owned, every clash the pattern words carry) sits near the floor, as in
-         rotation.test.ts. */
-      expect(allowed.length, `${run.occasion}: allowed pieces`).toBeGreaterThanOrEqual(Math.ceil(0.48 * run.eligible.length));
+      /* No share floor: every eligible piece is shown or listed unpairable with the rules that refuse it (rotation.test.ts). */
+      expect(allowed.length, `${run.occasion}: allowed pieces`).toBeGreaterThan(0);
     }
   });
 

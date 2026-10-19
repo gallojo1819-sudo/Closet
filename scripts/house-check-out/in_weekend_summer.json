@@ -1,0 +1,597 @@
+{
+  "occasion": "weekend",
+  "season": "summer",
+  "chips": {
+    "ald": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_u0f8e90jp3ez",
+            "name": "Cream button-up shirt"
+          },
+          "bottom": {
+            "id": "g_rvrs9hibr981",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_fzekzikyrf50",
+            "name": "Navy suede sneakers"
+          },
+          "recipeId": "WE_ALD_STREET",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_u0f8e90jp3ez",
+            "name": "Cream button-up shirt"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_fzekzikyrf50",
+            "name": "Navy suede sneakers"
+          },
+          "recipeId": "WE_ALD_STREET",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_1zteshjh31ac",
+            "name": "Light Blue denim shirt"
+          },
+          "bottom": {
+            "id": "g_bee1dg9rnfe5",
+            "name": "Grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_upni66uiqtgb",
+            "name": "Cream leather sneakers"
+          },
+          "recipeId": "WE_DOUBLE_DENIM",
+          "hardFails": [
+            "ALD-P2",
+            "ALD-R2"
+          ]
+        }
+      ]
+    },
+    "faloni": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_zh2l854ghu1t",
+            "name": "Green herringbone knit shirt"
+          },
+          "bottom": {
+            "id": "g_6xkkzn06sbdm",
+            "name": "Beige trousers"
+          },
+          "shoe": {
+            "id": "g_om0dh5nps1ke",
+            "name": "Brown leather loafers"
+          },
+          "recipeId": "WE_SWEET_STABLE",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_9t24uvtl10wd",
+            "name": "Pink linen shirt"
+          },
+          "bottom": {
+            "id": "g_fvc535elt23d",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_wymz2j18s6wh",
+            "name": "Brown suede mules"
+          },
+          "recipeId": null,
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_9t24uvtl10wd",
+            "name": "Pink linen shirt"
+          },
+          "bottom": {
+            "id": "g_bee1dg9rnfe5",
+            "name": "Grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_wymz2j18s6wh",
+            "name": "Brown suede mules"
+          },
+          "recipeId": null,
+          "hardFails": []
+        }
+      ]
+    },
+    "fiveFourFive": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_m7bg5j5z10wc",
+            "name": "Light Blue henley"
+          },
+          "bottom": {
+            "id": "g_x1vivoqz2ixd",
+            "name": "Maroon/brown trousers"
+          },
+          "shoe": {
+            "id": "g_9q0j6ksxlgcv",
+            "name": "White leather sneakers"
+          },
+          "recipeId": "WE_PREP_SOFT",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_jkj2nzfzpf1o",
+            "name": "Black bowling shirt"
+          },
+          "bottom": {
+            "id": "g_k75fdfdsnak0",
+            "name": "Light grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_2wf48xbqlgcv",
+            "name": "White leather sneakers"
+          },
+          "recipeId": "WE_PREP_SOFT",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_jkj2nzfzpf1o",
+            "name": "Black bowling shirt"
+          },
+          "bottom": {
+            "id": "g_fvc535elt23d",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_2wf48xbqlgcv",
+            "name": "White leather sneakers"
+          },
+          "recipeId": "WE_DENIM_LAYER",
+          "hardFails": []
+        }
+      ]
+    },
+    "purple": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_zh2l854ghu1t",
+            "name": "Green herringbone knit shirt"
+          },
+          "bottom": {
+            "id": "g_yfkavdj5irwe",
+            "name": "Light grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_8ukg5mi9r3fc",
+            "name": "Brown suede loafers"
+          },
+          "recipeId": "WE_SWEET_STABLE",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_zh2l854ghu1t",
+            "name": "Green herringbone knit shirt"
+          },
+          "bottom": {
+            "id": "g_k75fdfdsnak0",
+            "name": "Light grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_8ukg5mi9r3fc",
+            "name": "Brown suede loafers"
+          },
+          "recipeId": "WE_SWEET_STABLE",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_ttw2m97ww8z5",
+            "name": "Light pink polo"
+          },
+          "bottom": {
+            "id": "g_yfkavdj5irwe",
+            "name": "Light grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_wgarjdurj7yp",
+            "name": "Brown leather sneakers"
+          },
+          "recipeId": "WE_PREP_SOFT",
+          "hardFails": [
+            "PL-A-shoe",
+            "PL-B1",
+            "PL-B4",
+            "PL-R1"
+          ]
+        }
+      ]
+    },
+    "rrl": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_yo7mwga1xi3m",
+            "name": "Light blue denim shirt"
+          },
+          "bottom": {
+            "id": "g_vf28ktbdhmtz",
+            "name": "Dark brown chinos"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "recipeId": "WE_RRL_DENIM",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_21b6d3qcohmu",
+            "name": "Brown blue plaid shirt"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "recipeId": "WE_RRL_DENIM",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_yo7mwga1xi3m",
+            "name": "Light blue denim shirt"
+          },
+          "bottom": {
+            "id": "g_lg5qftegw0qo",
+            "name": "Brown frayed-hem pants"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "recipeId": "WE_RRL_DENIM",
+          "hardFails": []
+        }
+      ]
+    },
+    "sweetStable": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_tqnnde1xmp0p",
+            "name": "Mauve button-up shirt"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_fzekzikyrf50",
+            "name": "Navy suede sneakers"
+          },
+          "recipeId": "WE_ALD_STREET",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_kh5r3xy9r1i5",
+            "name": "Light blue striped shirt"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_5g4fqg77s4rw",
+            "name": "Black woven loafers"
+          },
+          "recipeId": "WE_CHAMBRAY_ROLLED",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_1zteshjh31ac",
+            "name": "Light Blue denim shirt"
+          },
+          "bottom": {
+            "id": "g_bee1dg9rnfe5",
+            "name": "Grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_upni66uiqtgb",
+            "name": "Cream leather sneakers"
+          },
+          "recipeId": "WE_DOUBLE_DENIM",
+          "hardFails": []
+        }
+      ]
+    },
+    "italianSummer": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_i80zb0yen5gn",
+            "name": "Sage striped shirt"
+          },
+          "bottom": {
+            "id": "g_80sz9s08xpw1",
+            "name": "Cream trousers"
+          },
+          "shoe": {
+            "id": "g_8ukg5mi9r3fc",
+            "name": "Brown suede loafers"
+          },
+          "recipeId": "WE_SQUARZI_SUEDE",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_9t24uvtl10wd",
+            "name": "Pink linen shirt"
+          },
+          "bottom": {
+            "id": "g_lad85rg9nxs3",
+            "name": "Ivory pleated trousers"
+          },
+          "shoe": {
+            "id": "g_wgarjdurj7yp",
+            "name": "Brown leather sneakers"
+          },
+          "recipeId": "WE_PREP_SOFT",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_q3e47jxb10wb",
+            "name": "Charcoal button-up"
+          },
+          "bottom": {
+            "id": "g_0pfc8ytc1sbb",
+            "name": "Light Blue striped trousers"
+          },
+          "shoe": {
+            "id": "g_8ukg5mi9r3fc",
+            "name": "Brown suede loafers"
+          },
+          "recipeId": "WE_SQUARZI_SUEDE",
+          "hardFails": []
+        }
+      ]
+    },
+    "italianWinter": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_m7bg5j5z10wc",
+            "name": "Light Blue henley"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_08shegj8gqie",
+            "name": "Grey and white low-top sneakers"
+          },
+          "recipeId": "WE_ALD_STREET",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_2rtuat7aheik",
+            "name": "Light blue dress shirt"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_8ukg5mi9r3fc",
+            "name": "Brown suede loafers"
+          },
+          "recipeId": "WE_PREP_SOFT",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_1zteshjh31ac",
+            "name": "Light Blue denim shirt"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_2wf48xbqlgcv",
+            "name": "White leather sneakers"
+          },
+          "recipeId": "WE_DOUBLE_DENIM",
+          "hardFails": []
+        }
+      ]
+    },
+    "polo": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_mq1ob9uc1npn",
+            "name": "Rust button-down"
+          },
+          "bottom": {
+            "id": "g_rvrs9hibr981",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_8ukg5mi9r3fc",
+            "name": "Brown suede loafers"
+          },
+          "recipeId": "WE_PREP_SOFT",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_tqnnde1xmp0p",
+            "name": "Mauve button-up shirt"
+          },
+          "bottom": {
+            "id": "g_lad85rg9nxs3",
+            "name": "Ivory pleated trousers"
+          },
+          "shoe": {
+            "id": "g_yae8h1k9pjm1",
+            "name": "Brown leather tassel loafers"
+          },
+          "recipeId": "WE_PREP_SOFT",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_mq1ob9uc1npn",
+            "name": "Rust button-down"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_wgarjdurj7yp",
+            "name": "Brown leather sneakers"
+          },
+          "recipeId": "WE_PREP_SOFT",
+          "hardFails": []
+        }
+      ]
+    },
+    "all": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_ap5v0s67pg9d",
+            "name": "Dark brown button-up shirt"
+          },
+          "bottom": {
+            "id": "g_s5d2t696vryw",
+            "name": "Cream trousers"
+          },
+          "shoe": {
+            "id": "g_9q0j6ksxlgcv",
+            "name": "White leather sneakers"
+          },
+          "recipeId": "WE_PREP_SOFT",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_2rtuat7aheik",
+            "name": "Light blue dress shirt"
+          },
+          "bottom": {
+            "id": "g_s5d2t696vryw",
+            "name": "Cream trousers"
+          },
+          "shoe": {
+            "id": "g_b4zsf3dfrhdv",
+            "name": "Brown leather boots"
+          },
+          "recipeId": "WE_PREP_SOFT",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_1zteshjh31ac",
+            "name": "Light Blue denim shirt"
+          },
+          "bottom": {
+            "id": "g_bee1dg9rnfe5",
+            "name": "Grey pleated trousers"
+          },
+          "shoe": {
+            "id": "g_upni66uiqtgb",
+            "name": "Cream leather sneakers"
+          },
+          "recipeId": "WE_DOUBLE_DENIM",
+          "hardFails": []
+        }
+      ]
+    },
+    "color": {
+      "status": "ok",
+      "looks": [
+        {
+          "top": {
+            "id": "g_ap5v0s67pg9d",
+            "name": "Dark brown button-up shirt"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_nq7il0e0glnn",
+            "name": "White leather sneakers"
+          },
+          "recipeId": "WE_ALD_STREET",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_kh5r3xy9r1i5",
+            "name": "Light blue striped shirt"
+          },
+          "bottom": {
+            "id": "g_dzsh3qh7v6sb",
+            "name": "Navy Blue/brown. Match Original Blue/brown. Match Original denim trousers"
+          },
+          "shoe": {
+            "id": "g_5g4fqg77s4rw",
+            "name": "Black woven loafers"
+          },
+          "recipeId": "WE_CHAMBRAY_ROLLED",
+          "hardFails": []
+        },
+        {
+          "top": {
+            "id": "g_ap5v0s67pg9d",
+            "name": "Dark brown button-up shirt"
+          },
+          "bottom": {
+            "id": "g_rvrs9hibr981",
+            "name": "Light blue jeans"
+          },
+          "shoe": {
+            "id": "g_om0dh5nps1ke",
+            "name": "Brown leather loafers"
+          },
+          "recipeId": "WE_CHAMBRAY_ROLLED",
+          "hardFails": []
+        }
+      ]
+    }
+  }
+}

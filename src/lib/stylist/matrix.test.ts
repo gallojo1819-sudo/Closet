@@ -4,7 +4,7 @@ import { kitCells } from "../look.ts";
 import { buildReshuffleRow, dressableHouses } from "../lookbook.ts";
 import type { Garment, Look } from "../types.ts";
 import { buildHouseMatrix, clearMatrixCache } from "./matrix.ts";
-import { isLegal, rankLook } from "./legal.ts";
+import { isLegal, ruleFails } from "./legal.ts";
 import { rep4Same } from "./row.ts";
 import platesFile from "./__tests__/fixtures/plates-2026-09-30.json" with { type: "json" };
 
@@ -69,6 +69,15 @@ const OFF = new Set([
   "italianSummer|weekday|winter",
   "italianWinter|weekend|summer",
 ]);
+/**
+ * Open cells the rules leave short of three looks on this fixture (no score fills them any more).
+ * A cell's cards never repeat a top or a bottom, so the distinct tops among its passing cores
+ * (bare or with a jacket) cap it: on a summer weekend ALD's 24 passing cores share one top,
+ * Purple's three share one top and one shoe, and RRL's four share two tops. Italian Summer has
+ * 72 passing cores over three shoes, but the matrix's cross-house repeat caps (REP-1) leave it
+ * two open shoes once the other summer houses are placed, and a cell never repeats a shoe.
+ */
+const THIN = new Set(["ald|weekend|summer", "purple|weekend|summer", "rrl|weekend|summer", "italianSummer|weekend|summer"]);
 
 function core(look: { top: string; bottom: string; shoe: string }) {
   return `${look.top}|${look.bottom}|${look.shoe}`;
@@ -99,7 +108,9 @@ describe("fixture matrix", () => {
           continue;
         }
         expect(cell.gate, key).toBeNull();
-        expect(cell.looks, key).toHaveLength(3);
+        /* Every rule is pass or fail now: a house whose summer-weight pieces trip XC-SEA-1 (eight ALD pieces fit a summer weekend) may fill fewer than three. */
+        if (THIN.has(key)) expect(cell.looks.length, key).toBeLessThanOrEqual(3);
+        else expect(cell.looks, key).toHaveLength(3);
         outfits += cell.looks.length;
         for (const look of cell.looks) {
           const pieces = [look.top, look.bottom, look.shoe, look.outer]
@@ -126,7 +137,9 @@ describe("fixture matrix", () => {
         expect(cell.looks.map(core).join("||"), house).not.toBe(allCores);
       }
     }
-    expect(outfits).toBe(123);
+    /* 41 open cells; the THIN ones may fall short. */
+    expect(outfits).toBeGreaterThanOrEqual(41 * 3 - 3 * THIN.size);
+    expect(outfits).toBeLessThanOrEqual(41 * 3);
     expect(gates).toBe(4);
 
     const fall = matrices.find((m) => m.occ === "weekday" && m.season === "fall")!.matrix;
@@ -202,15 +215,18 @@ describe("fixture matrix", () => {
     }
   });
 
-  it("rankLook rejects a season clash outright: a summer shirt tops no fall look", () => {
+  it("a season clash is a hard fail, never a score: a summer shirt tops no fall look", () => {
     const by = new Map(RACK.map((g) => [g.id, g]));
     const camp = by.get("g_lqf1mrlsure9")!;
     const chino = RACK.find((g) => /chino/.test(g.name.toLowerCase()) && g.category === "bottom")!;
     const loafer = RACK.find((g) => /loafer/.test(g.name.toLowerCase()) && g.category === "footwear")!;
     expect(camp.name).toBe("Ivory camp collar shirt");
-    expect(rankLook([camp, chino, loafer], { occasion: "weekend", season: "fall" })).toBe(Number.NEGATIVE_INFINITY);
-    expect(rankLook([camp, chino, loafer], { occasion: "weekend", season: "winter" })).toBe(Number.NEGATIVE_INFINITY);
-    expect(Number.isFinite(rankLook([camp, chino, loafer], { occasion: "weekend", season: "summer" }))).toBe(true);
+    const fall = ruleFails([camp, chino, loafer], { occasion: "weekend", season: "fall", pool: RACK });
+    const winter = ruleFails([camp, chino, loafer], { occasion: "weekend", season: "winter", pool: RACK });
+    expect(fall.some((id) => id.startsWith("SEA-"))).toBe(true);
+    expect(winter.some((id) => id.startsWith("SEA-"))).toBe(true);
+    const summer = ruleFails([camp, chino, loafer], { occasion: "weekend", season: "summer", pool: RACK });
+    expect(summer.some((id) => id.startsWith("SEA-"))).toBe(false);
   });
 
   it("a house that cannot dress three looks is not in the row", () => {

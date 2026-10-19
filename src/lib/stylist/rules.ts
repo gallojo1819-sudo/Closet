@@ -105,10 +105,13 @@ function exceptionLook(ps: Partial<Record<string, Plate>>): boolean {
   return EXCEPTION.every((id) => ids.has(id));
 }
 
-/** Mule materials that are not summer fabrics: such a mule is a fall shoe (XC-SEA-3). */
+/**
+ * Mule materials that are not summer fabrics: such a mule is a fall shoe (XC-SEA-3). It passes
+ * in fall on every occasion (Joe, Oct 15 2026: the brown suede mules stay eligible for Out and
+ * Weekend; nothing scores, so the dated document's soft fall hit is superseded) and sits out
+ * winter only.
+ */
 const COLD_MULE = ["suede", "leather", "shearling", "wool", "felt", "velvet"];
-/** The mule_delta of XC-SEA-3 in the rule JSON: a cold-weather mule in fall weekday or out, soft. */
-const MULE_DELTA = -5;
 
 /** A mule, slide or slipper in a cold-weather material (its name, subtype or material field). */
 function coldMule(g: Plate): boolean {
@@ -294,8 +297,11 @@ export function stylistHits(
       hit("XC-TEX-3", "soft", -10, `tailored ${bot.name} + leather sneaker on ${occ}`);
     }
   }
+  /* XC-TEX-4's tassel-loafer half is superseded (Joe, Oct 15 2026): a hoodie or sweatshirt
+     with jeans or chinos may wear loafers; no rule bans loafers from that look. The tailored
+     trouser half stands. */
   if (top && sig(top, "sweat_fleece_top", SIG) && occ !== "comfy" && occ !== "travel") {
-    if ((bot && sig(bot, "tailored_trouser", SIG)) || (shoe && sig(shoe, "tassel_loafer", SIG))) {
+    if (bot && sig(bot, "tailored_trouser", SIG)) {
       hit("XC-TEX-4", "hard", 0, `sweat/fleece top ${top.name} with tailoring`);
     }
   }
@@ -360,7 +366,6 @@ export function stylistHits(
       if (!hot(g) || sig(g, "mule", SIG)) continue;
       hit("XC-SEA-3", "soft", -10, `resort piece in fall ${occ}: ${g.name}`);
     }
-    if (shoe && coldMule(shoe)) hit("XC-SEA-3", "soft", MULE_DELTA, `mules ${shoe.name} in fall ${occ}`);
   }
   /* A summer mule (canvas, raffia, woven, no material) sits out fall and winter; a cold-weather
      mule is a fall shoe, casual or dressy, and sits out winter only. */

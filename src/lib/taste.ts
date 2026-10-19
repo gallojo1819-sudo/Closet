@@ -1,27 +1,25 @@
+import { liveIdsKey } from "./daily-pick.ts";
+import { drawSeed } from "./draw.ts";
 import { resolvePiecesFromText } from "./dress.ts";
 import { isFakeName, livePool } from "./rack.ts";
-import {
-  defaultOccasion,
-  houseMixPenalty,
-  isHoodiePiece,
-  isTrueOuter,
-  momentOfDay,
-  pickLook,
-  slotOf,
-} from "./style.ts";
+import { clashes, defaultOccasion, isHoodiePiece, isTrueOuter, pickLook, slotOf } from "./style.ts";
 import type { Garment, Occasion } from "./types.ts";
+import { todayNY } from "./utils.ts";
 
 /**
  * Taste lives on the closet, next to the stylist thread.
  * A new account starts empty. Nothing here is copied from another closet.
  * Ralph, ALD, and Fortela are ways of stacking clothes, not a brand list.
+ *
+ * Since the probability round (Oct 15 2026) nothing here weighs a look: the technique weights
+ * a closet once earned are kept as stored (normalizeTaste rounds them through unchanged) and
+ * read by nothing; no wear, lock, save or ask moves them. The vetoes are the user's own rules
+ * and stay hard.
  */
 
 export const TASTE_AVOID_KEY = "__taste";
 const WEIGHT_CAP = 5;
-const WEARS_PER_STEP = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DECAY_MS = 30 * DAY_MS;
 const TREND_REFRESH_MS = 30 * DAY_MS;
 const TREND_SHOW_MS = 45 * DAY_MS;
 
@@ -299,26 +297,6 @@ function isTee(g: Garment): boolean {
   return /\btee\b|t-shirt|t shirt/.test(textOf(g));
 }
 
-function isChunkyKnit(g: Garment): boolean {
-  const t = textOf(g);
-  return /chunky|cable|aran|fisherman/.test(t) && /knit|sweater|cable/.test(t);
-}
-
-function isThinKnit(g: Garment): boolean {
-  const t = textOf(g);
-  if (slotOf(g) === "bottom" || slotOf(g) === "footwear") return false;
-  if (!/knit|merino|sweater|crewneck|\bcrew\b/.test(t)) return false;
-  if (isChunkyKnit(g)) return false;
-  return true;
-}
-
-function isWovenShirt(g: Garment): boolean {
-  if (isTee(g) || isThinKnit(g) || isChunkyKnit(g)) return false;
-  const slot = slotOf(g);
-  if (slot !== "top" && slot !== "dress") return false;
-  return /oxford|shirt|poplin|broadcloth|button|flannel|chambray|camp/.test(textOf(g));
-}
-
 function isPrintedOvershirt(g: Garment): boolean {
   if (isTee(g)) return false;
   const slot = slotOf(g);
@@ -330,85 +308,6 @@ function isPrintedOvershirt(g: Garment): boolean {
 function isSeparateJacket(g: Garment): boolean {
   if (isPrintedOvershirt(g) || isHoodiePiece(g)) return false;
   return isTrueOuter(g);
-}
-
-function isLoud(g: Garment): boolean {
-  const t = textOf(g);
-  if (/graphic|90s|90's|\bflag\b|\blogo\b/.test(t)) return true;
-  if (/print/.test(t)) return true;
-  if (/knit|sweater/.test(t) && /bright|yellow|red|pink|orange|purple|cobalt|lime/.test(t)) return true;
-  return false;
-}
-
-function isBoot(g: Garment): boolean {
-  return slotOf(g) === "footwear" && /boot/.test(textOf(g));
-}
-
-export function matchedTechniques(pieces: Garment[]): string[] {
-  const ids: string[] = [];
-  const shirt = pieces.some(isWovenShirt);
-  const thin = pieces.some(isThinKnit);
-  const jacket = pieces.some(isSeparateJacket);
-  const chunkyCoat = pieces.some(isChunkyKnit) && pieces.some((g) => /blazer|sport\s*coat/.test(textOf(g)));
-  if (shirt && thin && jacket && !chunkyCoat) ids.push("ordered-stack");
-  const loud = pieces.filter(isLoud);
-  if (loud.length === 1) ids.push("one-loud");
-  const tee = pieces.some(isTee);
-  const over = pieces.some(isPrintedOvershirt);
-  if (tee && over && !pieces.some(isSeparateJacket)) ids.push("open-overshirt");
-  const chore = pieces.some((g) => /chore|\bfield\b/.test(textOf(g)) && isSeparateJacket(g));
-  const cloth = pieces.some(
-    (g) => /flannel/.test(textOf(g)) || ((/jean|denim/.test(textOf(g)) && slotOf(g) === "bottom")),
-  );
-  if (chore && cloth && pieces.some(isBoot)) ids.push("workwear-stack");
-  return ids;
-}
-
-function closetCanFill(id: string, garments: Garment[]): boolean {
-  const pool = livePool(garments);
-  if (id === "ordered-stack") {
-    return pool.some(isWovenShirt) && pool.some(isThinKnit) && pool.some(isSeparateJacket);
-  }
-  if (id === "one-loud") {
-    return pool.some(isLoud) && pool.some((g) => !isLoud(g) && slotOf(g) !== null);
-  }
-  if (id === "open-overshirt") {
-    return pool.some(isTee) && pool.some(isPrintedOvershirt);
-  }
-  if (id === "workwear-stack") {
-    return (
-      pool.some((g) => /chore|\bfield\b/.test(textOf(g)) && isSeparateJacket(g)) &&
-      pool.some((g) => /flannel/.test(textOf(g)) || (/jean|denim/.test(textOf(g)) && slotOf(g) === "bottom")) &&
-      pool.some(isBoot)
-    );
-  }
-  return false;
-}
-
-function lastWearAt(memory: TasteMemory, techniqueId: string): string | null {
-  let best = "";
-  for (const w of memory.wears) {
-    if (w.techniqueId !== techniqueId) continue;
-    if (w.at > best) best = w.at;
-  }
-  return best || null;
-}
-
-export function decayTaste(memory: TasteMemory, now: number): TasteMemory {
-  let changed = false;
-  const techniques = memory.techniques.map((t) => {
-    if (t.weight <= 0) return t;
-    const last = lastWearAt(memory, t.id);
-    if (!last) return t;
-    const idle = now - Date.parse(last);
-    if (!Number.isFinite(idle) || idle < DECAY_MS) return t;
-    const decayed = t.decayedAt ? Date.parse(t.decayedAt) : 0;
-    if (decayed && now - decayed < DECAY_MS) return t;
-    changed = true;
-    return { ...t, weight: t.weight - 1, decayedAt: new Date(now).toISOString() };
-  });
-  if (!changed) return memory;
-  return { ...memory, techniques };
 }
 
 function piecesFromIds(garments: Garment[], ids: string[]): Garment[] {
@@ -483,11 +382,16 @@ function tuckTarget(text: string, garments: Garment[], previousIds: string[]): s
   return top?.id ?? null;
 }
 
+/**
+ * What the user typed becomes a veto (a piece, a pairing, a never-tuck habit) or lifts one.
+ * Nothing else in the memory moves: the stored technique weights are not read or written.
+ */
 export function learnFromAsk(
   memory: TasteMemory,
   opts: { text: string; garments: Garment[]; previousIds?: string[]; now: number },
 ): TasteMemory {
-  let next = decayTaste(normalizeTaste(memory), opts.now);
+  void opts.now;
+  let next = normalizeTaste(memory);
   const previous = opts.previousIds ?? [];
   const tuck = tuckTarget(opts.text, opts.garments, previous);
   if (tuck) next = addVeto(next, { kind: "habit", id: tuck, habit: "never tuck", source: "ask" });
@@ -521,115 +425,6 @@ export function learnFromAsk(
 
   for (const g of resolvePiecesFromText(opts.text, opts.garments)) readTags(g);
   return next;
-}
-
-function addEvidence(memory: TasteMemory, pieces: Garment[]): TasteMemory {
-  if (!pieces.length) return memory;
-  const matched = new Set(matchedTechniques(pieces));
-  if (!matched.size) return memory;
-  const ids = pieces.map((g) => g.id);
-  let changed = false;
-  const techniques = memory.techniques.map((t) => {
-    if (!matched.has(t.id)) return t;
-    const evidenceIds = [...new Set([...t.evidenceIds, ...ids])].slice(-24);
-    if (evidenceIds.length === t.evidenceIds.length) return t;
-    changed = true;
-    return { ...t, evidenceIds };
-  });
-  if (!changed) return memory;
-  return { ...memory, techniques };
-}
-
-/** A lock beats a trend. It does not raise a technique and it does not lift a veto. */
-export function learnFromLock(
-  memory: TasteMemory,
-  piece: Garment,
-  lookIds: string[],
-  garments: Garment[],
-  now: number,
-): TasteMemory {
-  readTags(piece);
-  const next = decayTaste(normalizeTaste(memory), now);
-  const pieces = piecesFromIds(garments, lookIds);
-  if (!pieces.some((g) => g.id === piece.id)) pieces.push(piece);
-  return addEvidence(next, pieces);
-}
-
-/** Save reads the stack. Weight moves on wears, not on the save itself. */
-export function learnFromSave(memory: TasteMemory, ids: string[], garments: Garment[], now: number): TasteMemory {
-  const next = decayTaste(normalizeTaste(memory), now);
-  const pieces = piecesFromIds(garments, ids);
-  for (const g of pieces) readTags(g);
-  return addEvidence(next, pieces);
-}
-
-function creditTechniques(techniques: TasteTechnique[], wears: TasteWear[], pieces: Garment[]): TasteTechnique[] {
-  const matched = new Set(matchedTechniques(pieces));
-  const ids = pieces.map((g) => g.id);
-  return techniques.map((t) => {
-    const total = wears.filter((w) => w.techniqueId === t.id).reduce((n, w) => n + w.count, 0);
-    const steps = Math.floor(total / WEARS_PER_STEP);
-    const applied = t.appliedSteps ?? 0;
-    let weight = t.weight;
-    let appliedSteps = applied;
-    if (steps > applied) {
-      weight = Math.min(WEIGHT_CAP, weight + (steps - applied));
-      appliedSteps = steps;
-    }
-    const evidenceIds = matched.has(t.id) ? [...new Set([...t.evidenceIds, ...ids])].slice(-24) : t.evidenceIds;
-    if (weight === t.weight && appliedSteps === applied && evidenceIds.length === t.evidenceIds.length) return t;
-    return { ...t, weight, appliedSteps, evidenceIds };
-  });
-}
-
-export function logWear(
-  memory: TasteMemory,
-  garments: Garment[],
-  ids: string[],
-  now: number,
-  lookId?: string,
-): TasteMemory {
-  const base = decayTaste(normalizeTaste(memory), now);
-  const pieces = piecesFromIds(garments, ids);
-  for (const g of pieces) readTags(g);
-  const matched = matchedTechniques(pieces);
-  if (!pieces.length || !matched.length) return base;
-  const at = new Date(now).toISOString();
-  const day = at.slice(0, 10);
-  const garmentKey = lookId ?? [...ids].filter(Boolean).sort().join("|");
-  const wears = base.wears.map((w) => ({ ...w }));
-  for (const techniqueId of matched) {
-    const row = wears.find((w) => w.techniqueId === techniqueId && w.id === garmentKey);
-    if (row) {
-      if (row.at.slice(0, 10) === day) continue;
-      row.count += 1;
-      row.at = at;
-    } else {
-      wears.push({ id: garmentKey, techniqueId, count: 1, at });
-    }
-  }
-  const techniques = creditTechniques(base.techniques, wears, pieces);
-  return { ...base, wears: wears.slice(-80), techniques };
-}
-
-export function techniqueUsed(taste: TasteMemory, pieces: Garment[]): string | null {
-  const matched = new Set(matchedTechniques(pieces));
-  let best: TasteTechnique | null = null;
-  for (const t of taste.techniques) {
-    if (t.weight <= 0 || !matched.has(t.id)) continue;
-    if (!best || t.weight > best.weight) best = t;
-  }
-  return best?.name ?? null;
-}
-
-/** Sum of matched technique weights. Weight 0 adds nothing and does not ban the look. */
-export function techniqueWeight(taste: TasteMemory, pieces: Garment[]): number {
-  const matched = new Set(matchedTechniques(pieces));
-  let n = 0;
-  for (const t of taste.techniques) {
-    if (t.weight > 0 && matched.has(t.id)) n += t.weight;
-  }
-  return n;
 }
 
 /**
@@ -672,18 +467,6 @@ export function leftOffLine(opts: {
     }
   }
   return null;
-}
-
-/** Technique name, then the pieces. Weight 0 stays silent. */
-export function techniqueLine(taste: TasteMemory, pieces: Garment[]): string | null {
-  const name = techniqueUsed(taste, pieces);
-  if (!name) return null;
-  const names = pieces
-    .filter((g) => slotOf(g) !== "accessory")
-    .map((g) => g.name.trim())
-    .filter(Boolean);
-  if (!names.length) return null;
-  return `${name}. ${names.join(", ")}.`;
 }
 
 export function trendVisible(taste: TasteMemory, now: number): string | null {
@@ -768,31 +551,14 @@ export function buildStylistSystem(opts: {
   const now = opts.now ?? Date.now();
   const taste = normalizeTaste(opts.taste);
   const pool = livePool(opts.garments);
-  const earned = taste.techniques
-    .filter((t) => t.weight > 0)
-    .slice()
-    .sort((a, b) => b.weight - a.weight);
-  const dormant = taste.techniques.filter((t) => t.weight === 0 && closetCanFill(t.id, pool));
   const lines: string[] = [
     "You are Atlas. You dress only from this closet. Never invent a piece, a layer, or a shop. Never name a brand that is not stored on a piece in the look.",
     "",
     "CLOSET",
     ...pool.map(pieceLine),
+    "",
+    "Dress from the rules and what he says. Do not invent a style the clothes have not shown.",
   ];
-  if (earned.length) {
-    lines.push("", "TECHNIQUES");
-    for (const t of earned) lines.push(`- ${t.name} (${t.weight}): ${t.rule}`);
-  }
-  if (dormant.length) {
-    lines.push("", "DORMANT");
-    for (const t of dormant) {
-      lines.push(`- ${t.name} (0): ${t.rule}`);
-      lines.push("This closet can fill it. It is not a habit yet. Do not prefer it.");
-    }
-  }
-  if (!earned.length && !dormant.length) {
-    lines.push("", "No earned technique yet. Do not invent a style the clothes have not shown.");
-  }
   const pieceVetoes = taste.vetoes.filter((v) => v.kind === "piece");
   const pairs = taste.vetoes.filter((v) => v.kind === "pairing");
   const habits = taste.vetoes.filter((v) => v.kind === "habit");
@@ -833,7 +599,7 @@ export function buildStylistSystem(opts: {
     weather === undefined ? occasion : `${occasion} ${weather}°`,
     "",
     "FORMAT",
-    "Line 1: one technique name, then the occasion. Omit the technique if none of the earned ones fit.",
+    "Line 1: the occasion.",
     "Then his exact names, one piece per line. No brand unless that brand is stored on a piece in this look.",
     "MISSING: one type he does not own, or omit the line.",
     "Last line exactly: LOOK: id,id,id",
@@ -885,14 +651,12 @@ function missingType(garments: Garment[]): string | null {
 }
 
 export function atlasText(opts: {
-  technique: string | null;
   pieces: Garment[];
   occasion: Occasion;
   missing: string | null;
 }): string {
   const ordered = orderPieces(opts.pieces);
-  const line1 = opts.technique ? `${opts.technique} — ${opts.occasion}` : opts.occasion;
-  const lines = [line1, ...ordered.map(pieceLabel)];
+  const lines = [opts.occasion, ...ordered.map(pieceLabel)];
   if (opts.missing) lines.push(`MISSING: ${opts.missing}`);
   lines.push(`LOOK: ${ordered.map((g) => g.id).join(",")}`);
   return lines.join("\n");
@@ -902,20 +666,22 @@ export type AtlasLook = {
   text: string;
   garmentIds: string[];
   occasion: Occasion;
-  technique: string | null;
 };
 
-function finishLook(pieces: Garment[], taste: TasteMemory, occasion: Occasion, garments: Garment[]): AtlasLook {
+function finishLook(pieces: Garment[], occasion: Occasion, garments: Garment[]): AtlasLook {
   const ordered = orderPieces(pieces);
-  const technique = techniqueUsed(taste, ordered);
   return {
-    text: atlasText({ technique, pieces: ordered, occasion, missing: missingType(garments) }),
+    text: atlasText({ pieces: ordered, occasion, missing: missingType(garments) }),
     garmentIds: ordered.map((g) => g.id),
     occasion,
-    technique,
   };
 }
 
+/**
+ * The stylist's look: the model's LOOK row when it is owned, legal and under the vetoes, else
+ * one drawn from the closet (pickLook, the surface "stylist", seeded by the day, the prompt and
+ * the closet) for the occasion.
+ */
 export function composeAtlasLook(opts: {
   garments: Garment[];
   prompt: string;
@@ -925,7 +691,14 @@ export function composeAtlasLook(opts: {
   lockedIds?: string[];
   previousIds?: string[];
   occasion?: Occasion;
-  avoid?: Record<string, number>;
+  /**
+   * Pieces to leave out of the draw: an exclusion set, not a weight. A record's keys are the
+   * ids (the assistant's retry hands one); the numbers mean nothing. A locked piece stays.
+   */
+  avoid?: Record<string, number> | readonly string[];
+  /** The seed of the draw (drawSeed); the day and the prompt when absent. */
+  salt?: number;
+  today?: string;
 }): AtlasLook {
   const taste = normalizeTaste(opts.taste);
   const pool = livePool(opts.garments);
@@ -938,55 +711,31 @@ export function composeAtlasLook(opts: {
     const pieces = modelIds
       .map((id) => pool.find((g) => g.id === id))
       .filter((g): g is Garment => Boolean(g));
-    return finishLook(pieces, taste, occasion, pool);
+    return finishLook(pieces, occasion, pool);
   }
-  const dressable = pool.filter((g) => !banned.has(g.id));
-  const avoid: Record<string, number> = { ...(opts.avoid ?? {}) };
-  for (const id of banned) avoid[id] = Math.max(avoid[id] ?? 0, 8);
-  const dress = (memory: TasteMemory, legalCombo: (pieces: Garment[]) => boolean): Garment[] => {
-    let ids = pickLook(dressable, {
-      occasion,
-      moment: momentOfDay(),
-      ...(typeof opts.weatherF === "number" && Number.isFinite(opts.weatherF)
-        ? { weather: { f: opts.weatherF, label: "Fair", code: 2 } }
-        : {}),
-      avoid,
-      lockedIds: locked,
-      previousIds: opts.previousIds,
-      taste: memory,
-      legalCombo,
-    });
-    ids = ids.filter((id) => owned.has(id) && !banned.has(id));
-    let pieces = ids
-      .map((id) => dressable.find((g) => g.id === id))
-      .filter((g): g is Garment => Boolean(g));
-    if (pairingBlocked(pieces, memory) || pieces.some((g) => banned.has(g.id))) {
-      pieces = pieces.filter((g) => !banned.has(g.id));
+  const excluded = new Set(Array.isArray(opts.avoid) ? (opts.avoid as readonly string[]) : Object.keys(opts.avoid ?? {}));
+  const dressable = pool.filter((g) => (!banned.has(g.id) && !excluded.has(g.id)) || locked.includes(g.id));
+  const today = opts.today ?? todayNY();
+  const salt = opts.salt ?? drawSeed(today, `stylist:${occasion}:${opts.prompt.trim().toLowerCase()}`, liveIdsKey(pool));
+  const ids = pickLook(dressable, {
+    occasion,
+    ...(typeof opts.weatherF === "number" && Number.isFinite(opts.weatherF)
+      ? { weather: { f: opts.weatherF, label: "Fair", code: 2 } }
+      : {}),
+    lockedIds: locked,
+    previousIds: opts.previousIds,
+    taste,
+    salt,
+    today,
+  }).filter((id) => owned.has(id) && (!banned.has(id) || locked.includes(id)));
+  const pieces = ids.map((id) => dressable.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g));
+  for (const id of locked) {
+    if (!pieces.some((g) => g.id === id)) {
+      const g = dressable.find((item) => item.id === id);
+      if (g) pieces.push(g);
     }
-    for (const id of locked) {
-      if (!pieces.some((g) => g.id === id)) {
-        const g = dressable.find((item) => item.id === id);
-        if (g) pieces.push(g);
-      }
-    }
-    return pieces;
-  };
-  let pieces = dress(taste, (p) => !pairingBlocked(p, taste) && houseMixPenalty(p) >= -8);
-  if (!coreDressed(pieces) && taste.vetoes.some((v) => v.kind === "pairing")) {
-    /* Every legal pair is vetoed. A pairing is soft, as in pickLook: never an empty look. Piece vetoes still hold. */
-    const open = { ...taste, vetoes: taste.vetoes.filter((v) => v.kind !== "pairing") };
-    pieces = dress(open, (p) => houseMixPenalty(p) >= -8);
   }
-  return finishLook(pieces, taste, occasion, pool);
-}
-
-/** A top (or dress), a bottom and a shoe. */
-function coreDressed(pieces: Garment[]): boolean {
-  return (
-    pieces.some((g) => slotOf(g) === "top" || slotOf(g) === "dress") &&
-    pieces.some((g) => slotOf(g) === "bottom") &&
-    pieces.some((g) => slotOf(g) === "footwear")
-  );
+  return finishLook(pieces, occasion, pool);
 }
 
 function acceptModelIds(ids: string[], pool: Garment[], taste: TasteMemory, locked: string[]): boolean {
@@ -999,9 +748,7 @@ function acceptModelIds(ids: string[], pool: Garment[], taste: TasteMemory, lock
     .filter((g): g is Garment => Boolean(g));
   if (!slotsOk(pieces)) return false;
   if (pairingBlocked(pieces, taste)) return false;
-  if (houseMixPenalty(pieces) < -8) return false;
-  const loud = taste.techniques.find((t) => t.id === "one-loud");
-  if (loud && loud.weight > 0 && pieces.filter(isLoud).length > 1) return false;
+  if (clashes(pieces)) return false;
   return true;
 }
 
@@ -1061,7 +808,7 @@ export function swapDraft(opts: {
   const locked = pieces.filter((g) => g.id !== current.id).map((g) => g.id);
   const look = composeAtlasLook({
     garments: opts.garments.filter((g) => g.id !== current.id),
-    prompt: "",
+    prompt: `swap ${opts.slot} ${opts.ids.join(",")}`,
     occasion: opts.occasion,
     weatherF: opts.weatherF,
     taste: opts.taste,

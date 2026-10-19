@@ -2,8 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   avoidedUniformLine,
+  clashes,
   coreComboKey,
-  houseMixPenalty,
   pairKey,
   pickLook,
   sameScaleChecks,
@@ -16,7 +16,7 @@ function piece(
   partial: Pick<Garment, "id" | "name" | "category" | "subtype"> &
     Partial<Garment>,
 ): Garment {
-  return {
+  const g: Garment = {
     colors: ["olive"],
     material: "cotton",
     brand: "",
@@ -34,12 +34,20 @@ function piece(
     createdAt: "2026-01-01T12:00:00.000Z",
     ...partial,
   };
+  /* Every rule is pass or fail now: a rack of one colour and one cloth would fail its own colour rules
+     (COL-11), so an untagged piece takes the colour its name says, else a plain one for its slot. */
+  if (partial.colors == null) {
+    const said = /\b(light blue|navy|white|grey|khaki|indigo|brown|olive|cream|tan|black|charcoal|burgundy|green|pink)\b/.exec(`${g.name} ${g.subtype}`.toLowerCase())?.[1];
+    g.colors = [said ?? ({ top: "white", bottom: "khaki", footwear: "brown", outerwear: "navy" } as Record<string, string>)[g.category] ?? "olive"];
+  }
+  return g;
 }
 
+/* A fall weekday above 72F asks for no jacket, so these jacket-less racks can dress; the season is fall, not the reading's. */
 const opts = {
   occasion: "weekday" as const,
-  moment: "day" as const,
-  weather: { f: 68, label: "Fair", code: 2 },
+  season: "fall" as const,
+  weather: { f: 73, label: "Warm", code: 2, measured: true },
 };
 
 const tue = new Date(2026, 9, 6, 12, 0, 0);
@@ -203,7 +211,7 @@ describe("pickLook", () => {
     }
   });
 
-  it("out prefers trousers and loafers over jeans and sneakers", () => {
+  it("out wears the loafers while loafers are owned; jeans are first-class and may come up", () => {
     const mix = [
       piece({ id: "tee", name: "Striped shirt", category: "top", subtype: "shirt", formality: 3 }),
       piece({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford", formality: 3 }),
@@ -213,17 +221,21 @@ describe("pickLook", () => {
       piece({ id: "lf", name: "Brown loafers", category: "footwear", subtype: "loafer", formality: 3 }),
     ];
     const prev = ["tee", "jeans", "sn"];
+    let jeans = 0;
     for (let i = 0; i < 12; i++) {
       const ids = pickLook(mix, {
         occasion: "out",
-        moment: "day",
         weather: opts.weather,
         previousIds: prev,
+        salt: i + 1,
       });
-      assert.ok(ids.includes("tr"), `bottom should be trousers: ${ids.join(",")}`);
+      assert.ok(ids.length >= 3, `out found nothing: ${ids.join(",")}`);
       assert.ok(ids.includes("lf"), `shoes should be loafers: ${ids.join(",")}`);
-      assert.ok(!ids.includes("jeans"), `out kept jeans: ${ids.join(",")}`);
+      assert.ok(!ids.includes("sn"), `out wore sneakers beside loafers: ${ids.join(",")}`);
+      if (ids.includes("jeans")) jeans += 1;
     }
+    /* No rule bans jeans from Out; the draw is not "trousers win". */
+    assert.ok(jeans >= 1, "jeans never drawn on Out in 12 seeds");
   });
 
   it("does not put a loafer on the legs when it is the only 'bottom' tag", () => {
@@ -236,11 +248,10 @@ describe("pickLook", () => {
         subtype: "loafer",
       }),
     ];
-    const ids = pickLook(tiny, opts);
-    assert.ok(ids.includes("t"));
-    assert.ok(ids.includes("fake"));
     assert.equal(slotOf(tiny[1]!), "footwear");
-    assert.equal(ids.length, 2, "no real bottom — omit that slot");
+    /* No real bottom: the rules (one top, one bottom, one pair of shoes) admit no look, and the loafers are never the legs. */
+    const ids = pickLook(tiny, opts);
+    assert.deepEqual(ids, []);
   });
 
   it("does not mix a 90s hoodie with pleated trousers and loafers", () => {
@@ -288,19 +299,15 @@ describe("pickLook", () => {
         formality: 1,
       }),
     ];
-    const clash = houseMixPenalty([
-      mix[0]!,
-      mix[2]!,
-      mix[4]!,
-    ]);
-    assert.ok(clash < -8, `penalty ${clash}`);
+    /* A hoodie over pleated trousers is a rule (XC-TEX-4), not a penalty: the rule check refuses it. */
+    assert.equal(clashes([mix[0]!, mix[2]!, mix[4]!]) || !pickLook([mix[0]!, mix[2]!, mix[4]!], { occasion: "weekend", weather: opts.weather, salt: 3 }).includes("pleat"), true);
     const cool = {
-      occasion: "weekday" as const,
-      moment: "day" as const,
-      weather: { f: 50, label: "Cool", code: 3 },
+      occasion: "weekend" as const,
+      season: "fall" as const,
+      weather: { f: 60, label: "Mild", code: 3, measured: true },
     };
     for (let i = 0; i < 16; i++) {
-      const ids = pickLook(mix, cool);
+      const ids = pickLook(mix, { ...cool, salt: i + 1 });
       const hasHood = ids.includes("hood");
       const hasPleat = ids.includes("pleat");
       const hasLf = ids.includes("lf");
@@ -320,16 +327,19 @@ describe("pickLook", () => {
         subtype: "camp shirt",
         warmth: 1,
       }),
-      piece({ id: "knit", name: "Grey merino", category: "top", subtype: "knit", warmth: 3 }),
-      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
-      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" }),
+      piece({ id: "knit", name: "Grey merino", category: "top", subtype: "knit", warmth: 3, colors: ["grey"], seasons: ["fall", "winter"] }),
+      piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino", colors: ["khaki"], seasons: ["fall", "winter"] }),
+      piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer", colors: ["navy"], seasons: ["fall", "winter"] }),
+      piece({ id: "coat", name: "Camel wool overcoat", category: "outerwear", subtype: "overcoat", warmth: 5, colors: ["camel"], material: "wool", seasons: ["fall", "winter"] }),
     ];
     for (let i = 0; i < 16; i++) {
       const ids = pickLook(closet, {
         occasion: "weekday",
-        moment: "day",
-        weather: { f: 40, label: "Cold", code: 3 },
+        season: "winter",
+        weather: { f: 40, label: "Cold", code: 3, measured: true },
+        salt: i + 1,
       });
+      assert.ok(ids.length >= 3, `nothing at 40F: ${ids.join(",")}`);
       assert.ok(ids.includes("knit") || !ids.includes("camp"), `camp without knit: ${ids.join(",")}`);
       if (ids.includes("camp") && !ids.includes("knit")) {
         assert.fail("linen camp as the only top");
@@ -348,7 +358,6 @@ describe("pickLook", () => {
     ];
     const dinner = pickLook(closet, {
       occasion: "out",
-      moment: "day",
       weather: opts.weather,
       lockedIds: ["lf"],
     });
@@ -356,7 +365,6 @@ describe("pickLook", () => {
     assert.ok(!dinner.includes("hood"));
     const week = pickLook(closet, {
       occasion: "weekday",
-      moment: "day",
       weather: opts.weather,
       lockedIds: ["lf"],
       previousIds: dinner,
@@ -378,7 +386,6 @@ describe("pickLook", () => {
     for (let i = 0; i < 12; i++) {
       const ids = pickLook(closet, {
         occasion: "weekday",
-        moment: "day",
         weather: opts.weather,
         repeatPairs: repeats,
       });
@@ -467,7 +474,6 @@ describe("pickLook", () => {
     for (let i = 0; i < 8; i++) {
       const ids = pickLook(closet, {
         occasion: "weekend",
-        moment: "day",
         weather: opts.weather,
         lockedIds: ["hood"],
       });

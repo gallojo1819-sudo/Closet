@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { garmentTrips, hardBlock, phraseHits, rankWays } from "./detect.ts";
+import { garmentTrips, hardBlock, phraseHits } from "./detect.ts";
+import { visibleDetectors } from "./cells.ts";
 import type { Garment } from "../types.ts";
 
 function g(
@@ -26,6 +27,9 @@ function g(
   };
 }
 
+/* The ways a closet shows (cells.ts): the ranked list is gone, every open cell is drawn in a seeded order. */
+const titles = (ways: { title: string }[]) => ways.map((way) => way.title);
+
 describe("detect", () => {
   it("a plural trips the word, and a longer word does not", () => {
     assert.equal(phraseHits("brown loafers", "loafer"), true);
@@ -49,8 +53,8 @@ describe("detect", () => {
       g({ id: "jean", name: "straight jean", category: "bottom", subtype: "jean", brand: "AMI" }),
       g({ id: "shoe", name: "leather sneaker", category: "footwear", subtype: "sneaker", brand: "AMI" }),
     ];
-    const ways = rankWays(rack, { season: "fall" });
-    assert.equal(ways.some((way) => way.id === "flannel_cashmere"), false);
+    const ways = visibleDetectors(rack, { season: "fall" });
+    assert.equal(titles(ways).includes("Flannel, cashmere, dark suede"), false);
     assert.ok(ways.length > 0 && ways.length <= 4);
     for (const way of ways) assert.equal(/\b(Polo|Purple|RRL|ALD|Faloni|545)\b/.test(way.title), false);
   });
@@ -61,9 +65,9 @@ describe("detect", () => {
       g({ id: "bottom", name: "linen gurkha", category: "bottom", subtype: "gurkha", material: "linen" }),
       g({ id: "shoe", name: "suede loafer", category: "footwear", subtype: "loafer", material: "suede" }),
     ];
-    const ways = rankWays(rack, { season: "summer", occasion: "weekend" });
-    assert.equal(ways.some((way) => way.id === "shrunken_suit"), false);
-    assert.equal(ways.some((way) => way.id === "linen_soft"), false);
+    const ways = visibleDetectors(rack, { season: "summer", occasion: "weekend" });
+    assert.equal(titles(ways).includes("Shrunken grey suit"), false);
+    assert.equal(ways.some((way) => way.title === "Linen and a soft jacket" && !way.usual), false);
     assert.equal(ways[0]?.usual, true);
   });
 
@@ -74,8 +78,8 @@ describe("detect", () => {
       g({ id: "s", name: "chunky sneaker", category: "footwear", subtype: "sneaker" }),
     ];
     assert.match(hardBlock(pieces) ?? "", /chunky sneaker/);
-    const ways = rankWays(pieces, { season: "fall" });
-    assert.equal(ways.some((way) => way.id === "shrunken_suit"), false);
+    const ways = visibleDetectors(pieces, { season: "fall" });
+    assert.equal(titles(ways).includes("Shrunken grey suit"), false);
   });
 
   it("Porto Richezze and a gurkha trip linen", () => {
@@ -119,11 +123,11 @@ describe("detect", () => {
 
   it("a closet with no complete outfit returns Your usual", () => {
     const scarf = g({ id: "s", name: "wool scarf", category: "accessory", subtype: "scarf" });
-    const ways = rankWays([scarf], { season: "winter" });
+    const ways = visibleDetectors([scarf], { season: "winter" });
     assert.ok(ways.length > 0);
     assert.equal(ways[0]?.title, "Your usual");
-    assert.match(ways[0]?.reasons[0] ?? "", /top, a bottom, and a shoe/);
-    assert.equal((ways[0]?.reasons[0] ?? "").includes("68"), false);
+    assert.match(ways[0]?.reason ?? "", /top, a bottom, and a shoe/);
+    assert.equal((ways[0]?.reason ?? "").includes("68"), false);
   });
 
   it("your usual uses a jacket he owns instead of the first six tops", () => {
@@ -131,13 +135,13 @@ describe("detect", () => {
       g({ id: `t${i}`, name: `hoodie ${i}`, category: "top", subtype: "hoodie" }),
     );
     const oxford = g({ id: "ox", name: "navy oxford", category: "top", subtype: "oxford" });
-    const chino = g({ id: "ch", name: "tan chinos", category: "bottom", subtype: "chino" });
-    const loafer = g({ id: "lf", name: "brown loafers", category: "footwear", subtype: "loafer" });
+    const chino = g({ id: "ch", name: "tan chinos", category: "bottom", subtype: "chino", colors: ["tan"] });
+    const loafer = g({ id: "lf", name: "brown loafers", category: "footwear", subtype: "loafer", colors: ["brown"] });
     const jacket = g({ id: "jk", name: "camel blazer", category: "outerwear", subtype: "blazer", colors: ["camel"] });
-    const ways = rankWays([...tops, oxford, chino, loafer, jacket], { season: "fall", occasion: "weekday" });
+    const ways = visibleDetectors([...tops, oxford, chino, loafer, jacket], { season: "fall", occasion: "weekday" });
     const usual = ways.find((way) => way.usual) ?? ways[0];
     assert.ok(usual);
-    const dressed = usual!.outfits.some((outfit) => outfit.pieces.some((piece) => piece.id === "jk"));
+    const dressed = Object.values(usual!.looks).some((looks) => (looks ?? []).some((look) => look.some((piece) => piece.id === "jk")));
     assert.equal(dressed, true);
     assert.equal(JSON.stringify(usual).includes("68"), false);
   });

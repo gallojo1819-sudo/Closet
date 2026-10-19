@@ -1,4 +1,10 @@
-import { harmony } from "./color.ts";
+/**
+ * Piece classifiers, the hard clashes, the occasion and season checks, and the pick. Since the
+ * probability round (Oct 15 2026) nothing here scores: pickLook draws at random among the looks
+ * that pass the rules (passesRules in stylist/legal.ts), with rotation weights (draw.ts) and a
+ * seed the caller hands in, so the same seed and closet give the same look.
+ */
+import { drawOrder, JEANS_BLAZER_ODDS, lookWeight, pieceWeight, rngFromSalt, type Rng, type WeightCtx } from "./draw.ts";
 import {
   mapOccasion,
   type DailyDrop,
@@ -8,49 +14,23 @@ import {
   type WearEntry,
   type WeatherSnap,
 } from "./types.ts";
-import { lastDays, todayISO } from "./utils.ts";
+import { lastDays, todayISO, todayNY } from "./utils.ts";
 import { garmentMemo, piecesMemo } from "./garment-memo.ts";
-import { isLinenCampPiece, isOvercoatPiece, seasonFromWeather } from "./season.ts";
-import { jacketHits, slotPieces, wearSlot } from "./stylist/jackets.ts";
+import { isLinenCampPiece, isOvercoatPiece, lookFitsSeason, pieceFitsSeason, seasonFromWeather, seasonWarmth, type Season } from "./season.ts";
+import { jacketInfo, jeansWithBlazer, slotPieces, wearSlot } from "./stylist/jackets.ts";
+import { JACKET_COVER_IDS, needsJacketOnly, pieceRuleFails, relaxTiers, ruleFails, type RuleCtx } from "./stylist/legal.ts";
 import { livePool } from "./rack.ts";
 import { onlyTopIsUntucked, resolveTuck } from "./tuck.ts";
-import {
-  pairingBlocked,
-  pieceVetoIds,
-  techniqueWeight,
-  tuckHabitIds,
-  type TasteMemory,
-} from "./taste.ts";
+import { pieceVetoIds, tuckHabitIds, type TasteMemory } from "./taste.ts";
 import {
   HOUSE_CHIPS,
   HOUSE_LABEL,
   housesOf,
   leadHouse,
   lookHouses,
-  housePieceBanned,
   lookPrint,
-  shoeFamily,
   type House,
 } from "./houses.ts";
-import {
-  climateDelta,
-  dropsMidlayerInHeat,
-  outerForce,
-  outerScoreDelta,
-  skipsShirtTrouserBonus,
-  wantsButtonDownQuota,
-} from "./detectors/behavior.ts";
-import {
-  isButtonDown,
-  isCreamCable,
-  pickRecipe,
-  recipeAxesDiffer,
-  recipeById,
-  scaledButtonDownQuota,
-  type ChapterTrack,
-  type Recipe,
-  type RecipeId,
-} from "./recipes.ts";
 
 export type { Moment, Occasion, House };
 export { HOUSE_CHIPS, HOUSE_LABEL, housesOf, leadHouse, lookHouses };
@@ -92,19 +72,6 @@ export function lastWornDays(g: Garment, today = todayISO()): number | null {
   const ms = Date.parse(today) - Date.parse(last);
   if (!Number.isFinite(ms)) return null;
   return Math.max(0, Math.round(ms / 86_400_000));
-}
-
-
-
-function houseClimateScore(g: Garment, f: number, occasion: Occasion): number {
-  return climateDelta(housesOf(g), f, occasion);
-}
-
-function formalityTarget(occasion: Occasion, moment: Moment): number {
-  if (occasion === "out") return 4;
-  if (occasion === "weekend" || occasion === "travel" || occasion === "comfy") return 2;
-  void moment;
-  return 3;
 }
 
 function blobOf(g: Garment): string {
@@ -291,17 +258,6 @@ function isTrailSneaker(g: Garment): boolean {
   return /trail|hiker|runner|running/.test(blobOf(g));
 }
 
-function isOversizedOxford(g: Garment): boolean {
-  const b = blobOf(g);
-  return /oxford/.test(b) && /oversized|\bald\b/.test(b);
-}
-
-function isItalianKnitPolo(g: Garment): boolean {
-  const b = blobOf(g);
-  if (!/polo/.test(b)) return false;
-  return /linen|silk|italian|knit polo/.test(b);
-}
-
 const LOUD =
   /\b(plaid|checks?|gingham|stripes?|striped|floral|print|printed|houndstooth|paisley|camo|leopard|argyle|fair\s*isle)\b/i;
 
@@ -331,14 +287,26 @@ export function checkScale(g: Garment): string | null {
   return "check";
 }
 
-/** Two checks of one scale. Not a reject when it is the only legal combo. */
+/** Two checks of one scale (PATTERN-SCALE): a fail the relax ladder may waive when nothing else passes. */
 export function sameScaleChecks(pieces: Garment[]): boolean {
   const scales = pieces.map(checkScale).filter((s): s is string => Boolean(s));
   return new Set(scales).size < scales.length;
 }
 
+/** A linen piece, by its name, subtype, notes or material. */
+export function isLinenPiece(g: Garment): boolean {
+  return /linen/.test(`${blobOf(g)} ${(g.material ?? "").toLowerCase()}`);
+}
+
+/** A flannel piece, by its name, subtype, notes or material. */
+export function isFlannelPiece(g: Garment): boolean {
+  return /flannel/.test(`${blobOf(g)} ${(g.material ?? "").toLowerCase()}`);
+}
+
 /**
- * Hard invalid looks. Do not soften. Rugby + loafer is legal; rugby + blazer is not.
+ * Hard invalid looks. Do not soften. Rugby + loafer is legal; rugby + blazer is not. Linen and
+ * flannel never share a look (any linen piece with any flannel piece). A hoodie or a graphic
+ * may wear loafers: no rule bans loafers from that look family (Joe, Oct 15 2026).
  */
 export function clashes(pieces: Garment[]): boolean {
   return piecesMemo(pieces, "style.clashes", clashTest);
@@ -360,7 +328,8 @@ function clashTest(pieces: Garment[]): boolean {
   const mule = pieces.some(isMulePiece);
   const overcoat = pieces.some(isOvercoatPiece);
   const nb990 = pieces.some(is990Shoe);
-  const flannel = pieces.some((g) => /flannel/.test(blobOf(g)));
+  const flannel = pieces.some(isFlannelPiece);
+  const linen = pieces.some(isLinenPiece);
   const linenBottom = bottoms.some((g) => /linen/.test(blobOf(g)));
   const linenShort = bottoms.some((g) => isShortsPiece(g) && /linen/.test(blobOf(g)));
   const westernN = pieces.filter(isWesternPiece).length;
@@ -378,12 +347,12 @@ function clashTest(pieces: Garment[]): boolean {
   if (heavyCable && (blazer || mule || linenShort)) return true;
   if (mule && (rugby || fairIsle || pieces.some(isTrailSneaker))) return true;
   if (overcoat && (linenBottom || camp || mule)) return true;
+  if (linen && flannel) return true;
   const linenOnly =
     tops.length > 0 &&
     tops.every((g) => isLinenCampPiece(g) || /linen/.test(blobOf(g)));
-  if (linenOnly && (overcoat || fairIsle || flannel)) return true;
+  if (linenOnly && (overcoat || fairIsle)) return true;
   if (hoodie && blazer) return true;
-  if (hoodie && pieces.some((g) => slotOf(g) === "footwear" && /loafer/.test(blobOf(g)))) return true;
   if (hoodie && pieces.some((g) => slotOf(g) === "bottom" && /pleat/.test(blobOf(g)))) return true;
   const trueOuters = pieces.filter(isTrueOuter);
   const extraMid = pieces.filter((g) => isMidlayer(g) && !isHeavyCable(g) && !isHoodiePiece(g));
@@ -402,7 +371,6 @@ function clashTest(pieces: Garment[]): boolean {
   if (graphic) {
     const rest = pieces.filter((g) => g.id !== pieces.find(isGraphic)!.id);
     if (rest.some(isMulePiece)) return true;
-    if (rest.some((g) => /loafer/.test(blobOf(g)))) return true;
     if (rest.some((g) => /pleat|trouser/.test(blobOf(g)) && !/\b(chinos?|jeans?)\b/.test(blobOf(g)))) {
       return true;
     }
@@ -421,52 +389,89 @@ function clashTest(pieces: Garment[]): boolean {
   return false;
 }
 
-/** Occasion briefs: mixed houses, not costume. Penalties beat idle. */
-function occasionScore(g: Garment, occasion: Occasion): number {
-  const b = blobOf(g);
-  const sneaker = /sneaker|trainer/.test(b);
-  const gym = /gym|runner|running|athletic/.test(b);
-  const tee = /\btee\b|t-shirt|hoodie/.test(b);
-  const jean = /\bjeans?\b|denim/.test(b);
-  const cargo = /cargo/.test(b);
-  const oxford = /oxford/.test(b);
-  const polo = /polo/.test(b);
-  const loafer = /loafer/.test(b);
-  const trouser = /trouser/.test(b);
-  const knit = /knit|sweater|merino/.test(b);
-  const overshirt = /overshirt/.test(b);
-  const distressed = /distress|ripped|destroyed/.test(b);
-  const blazer = /blazer|sport\s*coats?/.test(b);
-  let s = 0;
-  if (occasion === "out") {
-    if (gym) s -= 4;
-    if (trouser || loafer || oxford || knit || blazer) s += 3;
-    if (jean) s += 0.4;
-    if (sneaker && !gym) s += 0.3;
-    if (/\bhoodies?\b|90s/.test(b)) s -= 4;
-  } else if (occasion === "weekday") {
-    if (oxford || polo || /cable/.test(b)) s += 1;
-    if (/chino/.test(b) || trouser || (jean && !distressed)) s += 1;
-    if (blazer) s += 1.2;
-    if (/\bhoodies?\b|90s|graphic/.test(b)) s -= 6;
-  } else if (occasion === "weekend") {
-    if (jean || sneaker || polo) s += 1.5;
-    if (/\bhoodies?\b/.test(b)) s += 1;
-  } else if (occasion === "travel") {
-    if (knit || overshirt || sneaker || loafer) s += 1.5;
-  } else if (occasion === "comfy") {
-    /* Light patch until the occasion system lands: knits, sweats, jeans and sneakers lead;
-       a collared woven shirt over tailored trousers does not. */
-    if (knit || /fleece|half[- ]?zip|quarter[- ]?zip|cardigan|crewneck|sweatshirt|hoodie/.test(b)) s += 3;
-    if (tee) s += 1.5;
-    if (jean || /cord|sweatpant|jogger|track pant/.test(b)) s += 2.5;
-    if (sneaker || /mule|slipper/.test(b)) s += 2;
-    if (isWovenCollarShirt(b)) s -= 4;
-    if (trouser && !jean) s -= 3;
-    if (oxford) s -= 1;
-    if (blazer) s -= 6;
+/**
+ * The occasion checks Today's pick once scored, as named fails. Out: no gym shoe, no hoodie,
+ * no untucked camp shirt on a cool night. Weekday: no hoodie or graphic. Comfy: no collared
+ * woven shirt, no tailored trouser, no oxford, no blazer, and not a shirt over tailoring.
+ */
+export function occasionFails(pieces: Garment[], occasion: Occasion, f?: number): string[] {
+  const ids: string[] = [];
+  const push = (id: string) => {
+    if (!ids.includes(id)) ids.push(id);
+  };
+  const top = pieces.find(isLayerTop);
+  for (const g of pieces) {
+    const b = blobOf(g);
+    const gym = /gym|runner|running|athletic/.test(b) && slotOf(g) === "footwear";
+    const jean = /\bjeans?\b|denim/.test(b);
+    const oxford = /oxford/.test(b);
+    const trouser = /trouser/.test(b);
+    const blazer = /blazer|sport\s*coats?/.test(b);
+    if (occasion === "out") {
+      if (gym) push("OCC-OUT-GYM");
+      if (/\bhoodies?\b|90s/.test(b)) push("OCC-OUT-HOODIE");
+    } else if (occasion === "weekday") {
+      if (/\bhoodies?\b|90s|graphic/.test(b)) push("OCC-WEEKDAY-GRAPHIC");
+    } else if (occasion === "comfy") {
+      if (slotOf(g) === "top" && isWovenCollarShirt(b)) push("OCC-COMFY-SHIRT");
+      if (slotOf(g) === "bottom" && trouser && !jean) push("OCC-COMFY-TROUSER");
+      if (oxford && isLayerTop(g)) push("OCC-COMFY-OXFORD");
+      if (blazer) push("OCC-COMFY-BLAZER");
+    }
   }
-  return s;
+  if (occasion === "comfy" && comfyCostume(pieces)) push("OCC-COMFY-COSTUME");
+  if (occasion === "out" && top && (f ?? 68) < 75 && onlyTopIsUntucked(pieces) && /camp/.test(`${top.subtype} ${top.name}`)) {
+    push("OCC-OUT-CAMP-UNTUCKED");
+  }
+  return ids;
+}
+
+/**
+ * The season and weather checks Today's pick once scored, as named fails. Summer: no warmth-4
+ * piece, no overcoat. Winter: no linen or camp piece. Any season: the season's hard fits
+ * (lookFitsSeason: a summer shirt in the cold, shorts in winter, a linen top in winter, a
+ * solstice mix), a piece whose own seasons leave this one out, an outermost upper layer (the
+ * jacket, else the mid, else the top) two steps from the season's weight (WARMTH-FIT: a
+ * warmth-2 layer alone in winter, a warmth-4 layer in summer), and a linen camp top as the
+ * only top below 55°F while the closet owns a knit. The old per-piece "warmth 2 in winter"
+ * nudge is not a rule: the jacket rules (XC-SEA-2, JKT-COV-2) judge the upper body's warmth.
+ */
+export function seasonFails(pieces: Garment[], season: Season, f?: number, pool?: readonly Garment[]): string[] {
+  const ids: string[] = [];
+  const push = (id: string) => {
+    if (!ids.includes(id)) ids.push(id);
+  };
+  const target = seasonWarmth(season);
+  for (const g of pieces) {
+    if (slotOf(g) === "accessory") continue;
+    if (season === "summer" && (g.warmth >= 4 || isOvercoatPiece(g))) push("SEA-SUMMER-WARM");
+    if (season === "winter" && isLinenCampPiece(g)) push("SEA-WINTER-LINEN");
+    if (!pieceFitsSeason(g, season)) push("SEA-PIECE");
+  }
+  const slots = slotPieces(pieces);
+  const outermost = (slots.outer ?? slots.mid ?? slots.top) as Garment | undefined;
+  if (outermost && Math.abs(outermost.warmth - target) >= 2) push("WARMTH-FIT");
+  if (pieces.length >= 2 && !lookFitsSeason(pieces, season)) push("SEA-FIT");
+  const top = pieces.find(isLayerTop);
+  if (f !== undefined && f < 55 && top && isLinenCampPiece(top)) {
+    const hasKnit = (pool ?? []).some((g) => {
+      if (isHoodiePiece(g) || isLinenCampPiece(g)) return false;
+      const sl = slotOf(g);
+      if (sl !== "top" && sl !== "dress") return false;
+      return /knit|sweater|merino|cable/.test(`${g.subtype} ${g.name}`.toLowerCase());
+    });
+    if (hasKnit) push("WEATHER-LINEN-COLD");
+  }
+  return ids;
+}
+
+/** The one preference that was a reject in all but name: a blazer over two casual pieces. */
+export function trendFails(pieces: Garment[]): string[] {
+  const blazer = pieces.some(isBlazerPiece);
+  const casual = pieces.filter(
+    (g) => isHoodiePiece(g) || isCampCollar(g) || /\b(tee|t-shirt|jeans?|sneaker)\b/.test(blobOf(g)),
+  );
+  return blazer && casual.length >= 2 ? ["TREND-BLAZER-CASUAL"] : [];
 }
 
 /** A collared woven shirt: oxford, button-down, poplin, flannel, chambray, or a plain "shirt" that is not a knit, polo, tee or sweat. */
@@ -481,10 +486,7 @@ function isTailoredTrouser(blob: string): boolean {
   return /\b(trousers?|pleat(ed)?|slacks|dress pants?|wool pants?|flannel pants?)\b/.test(blob);
 }
 
-/**
- * Comfy's one hard rule: not a collared woven shirt over tailored trousers. Everything else
- * the scores decide. The Lookbook's Comfy gate (lookFitsOccasion) is stricter and unchanged.
- */
+/** Comfy's one hard rule: not a collared woven shirt over tailored trousers. */
 export function comfyCostume(pieces: Garment[]): boolean {
   const shirt = pieces.some((g) => slotOf(g) === "top" && isWovenCollarShirt(blobOf(g)));
   const trouser = pieces.some((g) => slotOf(g) === "bottom" && isTailoredTrouser(blobOf(g)));
@@ -515,78 +517,6 @@ export function isBrownSuedeOuter(g: Garment): boolean {
   const b = blobOf(g);
   const outerish = isTrueOuter(g) || JACKET_WORD.test(b);
   return outerish && /suede|shearling/.test(b) && /brown|tan|camel|chocolate/.test(b);
-}
-
-/**
- * Sep 26 preferences. Scores only — they do not reject a look.
- * T17 is −40 on a second brown-suede outer when another outer exists.
- */
-export function trendScore(
-  pieces: Garment[],
-  opts?: { f?: number; house?: House | null; usedBrownSuede?: boolean; pool?: Garment[] },
-): number {
-  let s = 0;
-  const f = opts?.f ?? 68;
-  const blazer = pieces.some(isBlazerPiece);
-  const casual = pieces.filter(
-    (g) =>
-      isHoodiePiece(g) ||
-      isCampCollar(g) ||
-      /\b(tee|t-shirt|jeans?|sneaker)\b/.test(blobOf(g)),
-  );
-  if (blazer && casual.length === 1) s += 4;
-  if (blazer && casual.length >= 2) s -= 6;
-  const greyTrouser = pieces.some(
-    (g) => slotOf(g) === "bottom" && /grey|gray/.test(blobOf(g)) && /trouser|chino|pleat/.test(blobOf(g)),
-  );
-  const brownSuede = pieces.some((g) => /suede/.test(blobOf(g)) && /brown|tan/.test(blobOf(g)));
-  if (greyTrouser && brownSuede) s += 6;
-  const brownOuter = pieces.some((g) => isTrueOuter(g) && /brown|tan|camel/.test(blobOf(g)));
-  const navyBase = pieces.some(
-    (g) => slotOf(g) === "top" && /navy|grey|gray|denim/.test(blobOf(g)),
-  );
-  if (brownOuter && navyBase) s += 5;
-  const others = (opts?.pool ?? []).filter((g) => isTrueOuter(g) && !isBrownSuedeOuter(g));
-  if (opts?.usedBrownSuede && pieces.some(isBrownSuedeOuter) && others.length > 0) s -= 40;
-  const darkTop = pieces.some(
-    (g) => slotOf(g) === "top" && /navy|grey|gray|charcoal|black|brown|olive|burgundy/.test(blobOf(g)),
-  );
-  const lightTrouser = pieces.some(
-    (g) => slotOf(g) === "bottom" && /white|ivory|cream|light|stone|beige/.test(blobOf(g)),
-  );
-  if (darkTop && lightTrouser) {
-    const season = seasonFromWeather(f);
-    const inSeason = pieces
-      .filter((g) => {
-        const sl = slotOf(g);
-        return sl === "top" || sl === "dress" || sl === "bottom";
-      })
-      .every((g) => !g.seasons?.length || g.seasons.includes(season));
-    s += inSeason ? 5 : -10;
-  }
-  const shirtOrKnitPolo = pieces.some(
-    (g) =>
-      /oxford|button[- ]?down|knit polo|pique/.test(blobOf(g)) &&
-      !isCampCollar(g) &&
-      !/chambray/.test(blobOf(g)),
-  );
-  const trousers = pieces.some((g) => slotOf(g) === "bottom" && /trouser|chino|pleat/.test(blobOf(g)));
-  if (
-    shirtOrKnitPolo &&
-    trousers &&
-    !skipsShirtTrouserBonus(opts?.house) &&
-    !pieces.some(isCampCollar) &&
-    !pieces.some((g) => /chambray/.test(blobOf(g)))
-  ) {
-    s += 3;
-  }
-  if (
-    dropsMidlayerInHeat(opts?.house, f) &&
-    pieces.some((g) => isMidlayer(g) && !isHoodiePiece(g))
-  ) {
-    s -= 12;
-  }
-  return s;
 }
 
 export function slotOf(g: Garment): Slot | null {
@@ -634,29 +564,6 @@ function slotTest(g: Garment): Slot | null {
   }
   return null;
 }
-
-/**
- * Graphic / 90s hoodie with pleated trousers and loafers is costume.
- * ALD hoodie only with jean/chino and sneaker. Hoodie is never a coat.
- */
-export function houseMixPenalty(pieces: Garment[]): number {
-  const graphic = pieces.find(isGraphic);
-  if (!graphic) return 0;
-  const rest = pieces.filter((g) => g.id !== graphic.id);
-  const blob = rest.map((g) => `${g.subtype} ${g.name}`).join(" ").toLowerCase();
-  let p = 0;
-  if (rest.some(isCampCollar) || rest.some(isFairIsle)) p -= 16;
-  if (/loafer|mule|pleat/.test(blob)) p -= 16;
-  if (/\boxfords?\b/.test(blob)) p -= 12;
-  if (/trouser/.test(blob) && !/\b(chinos?|jeans?)\b/.test(blob)) p -= 16;
-  const jean = /\bjeans?\b|denim/.test(blob);
-  const chino = /chino/.test(blob);
-  const sneaker = /sneaker|trainer|\b990\b/.test(blob);
-  if ((jean || chino) && sneaker) p += 2;
-  return p;
-}
-
-
 
 export function pairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
@@ -714,25 +621,6 @@ export function avoidedUniformLine(
   return `Same ${cur.bottom.name} + ${cur.shoe.name} as last wear.`;
 }
 
-function rngFromSalt(salt: number): () => number {
-  let a = salt >>> 0 || 1;
-  return () => {
-    a = (Math.imul(a, 1664525) + 1013904223) >>> 0;
-    return a / 4294967296;
-  };
-}
-
-function shuffle<T>(list: T[], rng: () => number): T[] {
-  const a = [...list];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    const t = a[i]!;
-    a[i] = a[j]!;
-    a[j] = t;
-  }
-  return a;
-}
-
 export function coreSlotIds(
   ids: string[],
   garments: Garment[],
@@ -770,107 +658,10 @@ export function silhouetteKey(ids: string[], garments: Garment[], occasion?: Occ
   return `${p.top_type}|${p.bottom_type}|${p.shoe_family}`;
 }
 
-function daysSinceCreated(g: Garment, today = todayISO()): number {
-  const d = Date.parse((g.createdAt ?? "").slice(0, 10));
-  const t = Date.parse(today);
-  if (!Number.isFinite(d) || !Number.isFinite(t)) return 99;
-  return Math.max(0, Math.round((t - d) / 86_400_000));
-}
-
-function outerRequired(
-  occasion: Occasion,
-  f: number,
-  recipe: Recipe | undefined,
-  house?: House | "all" | null,
-): boolean {
-  if (recipe?.outerRequired) return true;
-  if (recipe?.outer === "none") return false;
-  const forced = outerForce(house, f);
-  if (forced != null) return forced;
-  const cool = f < 62;
-  const season = seasonFromWeather(f);
-  const fallWinter = season === "fall" || season === "winter";
-  if (fallWinter && cool && (occasion === "weekday" || occasion === "out" || occasion === "travel")) {
-    return true;
-  }
-  return false;
-}
-
-function scoreOuterForRecipe(
-  g: Garment,
-  recipe: Recipe | undefined,
-  house: House | "all" | null | undefined,
-  occasion: Occasion,
-): number {
-  const k = outerKind(g);
-  const b = blobOf(g);
-  let s = 0;
-  if (/camel/.test(b) && /overcoat|topcoat/.test(b)) s -= 24;
-  if (recipe?.outer === "blazer" && k === "blazer") s += 8;
-  if (recipe?.outer === "optional_blazer" && k === "blazer") s += 6;
-  if (recipe?.outer === "chore" && (k === "chore" || k === "field" || k === "denim")) s += 8;
-  if (recipe?.outer === "field" && k === "field") s += 8;
-  if (recipe?.outer === "denim" && k === "denim") s += 8;
-  if (recipe?.outer === "suede" && k === "suede") s += 8;
-  if (recipe?.outer === "soft" && (k === "blazer" || k === "chore" || k === "field")) s += 6;
-  if (recipe?.outer === "cold" && (k === "suede" || k === "blazer" || isOvercoatPiece(g))) s += 8;
-  s += outerScoreDelta(house, k, b, occasion);
-  if (occasion === "weekend" && isWeekendSoftJacket(g)) s += 4;
-  if (occasion === "weekend" && k === "blazer" && /navy/.test(b)) s -= 6;
-  return s;
-}
-
-export function pickTrueOuter(
-  outers: Garment[],
-  core: Garment[],
-  recipe: Recipe | undefined,
-  opts: {
-    occasion: Occasion;
-    house?: House | "all" | null;
-    f: number;
-    /** Measured temperature only. Omitted when the service did not answer. */
-    tempF?: number;
-    legalCombo?: (pieces: Garment[]) => boolean;
-    usedOuters?: Set<string>;
-    /** Weight above 0 prefers the jacket that completes the technique. */
-    taste?: TasteMemory;
-  },
-): Garment | undefined {
-  const tech = (g: Garment) =>
-    opts.taste ? techniqueWeight(opts.taste, [...core, g]) * 8 : 0;
-  const ranked = [...outers]
-    .filter(isTrueOuter)
-    .filter((g) => !core.some((c) => c.id === g.id))
-    .sort(
-      (a, b) =>
-        scoreOuterForRecipe(b, recipe, opts.house, opts.occasion) +
-        tech(b) -
-        (scoreOuterForRecipe(a, recipe, opts.house, opts.occasion) + tech(a)),
-    );
-  const unused = ranked.filter((g) => !opts.usedOuters?.has(g.id));
-  const list = unused.length ? unused : ranked;
-  for (const o of list) {
-    const next = [...core, o];
-    if (clashes(next)) continue;
-    if (isBlazerPiece(o)) {
-      const shoe = core.find((g) => slotOf(g) === "footwear");
-      if (shoe && /mule|sneaker|trainer|\b990\b/.test(blobOf(shoe))) continue;
-      if (core.some(isRugbyPiece) || core.some(isHoodiePiece) || core.some(isHeavyCable)) continue;
-    }
-    if (opts.legalCombo && !opts.legalCombo(next)) continue;
-    const season = seasonFromWeather(opts.f);
-    const jacketHard = jacketHits(slotPieces(next), {
-      occasion: opts.occasion,
-      season,
-      house: opts.house && opts.house !== "all" ? opts.house : undefined,
-      tempF: opts.tempF,
-    }).some((h) => h.severity === "hard");
-    if (jacketHard) continue;
-    if (opts.f > 78 && (o.warmth >= 5 || isOvercoatPiece(o))) continue;
-    if (scoreOuterForRecipe(o, recipe, opts.house, opts.occasion) < -8) continue;
-    return o;
-  }
-  return undefined;
+/** A piece that may sit as the outer layer: a true outer, or a top the jacket table lets be worn open over another top. */
+export function isOuterCandidate(g: Garment): boolean {
+  if (jacketInfo(g).outerEligible) return true;
+  return slotOf(g) === "outerwear" && isTrueOuter(g);
 }
 
 /** A never-tuck habit keeps the shirt and wears it out. The garment record is not rewritten. */
@@ -884,471 +675,358 @@ export function lookTuck(
   return resolveTuck(g, occasion, pieces);
 }
 
-export function pickLook(
-  garments: Garment[],
-  opts: {
-    weather?: WeatherSnap;
-    occasion: Occasion;
-    moment: Moment;
-    avoid?: Record<string, number>;
-    recentWorn?: string[];
-    /** Last drop's ids — one reroll only, scored −8. Avoid still caps separately. */
-    previousIds?: string[];
-    /** These ids stay in their slots. Reroll only the rest. */
-    lockedIds?: string[];
-    /** Pair keys (bottom|shoe, top|bottom) worn this week — score −12 unless locked. */
-    repeatPairs?: Set<string> | string[];
-    /** Scarce-first: 1/(1+lookCount). Dress-this-piece partners. */
-    usedCount?: Map<string, number>;
-    /** House HARD filter. Empty rather than PoloDefault. */
-    legalCombo?: (pieces: Garment[]) => boolean;
-    house?: House | "all" | null;
-    recipeId?: RecipeId;
-    chapter?: ChapterTrack;
-    /** Shuffle pool before scoring. Today / Skip pass Date.now() or skip count. */
-    salt?: number;
-    /** combo keys (sorted ids) already on screen or recently worn/skipped. */
-    excludeKeys?: Iterable<string>;
-    /** Consecutive Skip: ≥2 of top/bottom/shoe ids must change. */
-    minSlotChange?: number;
-    /** Consecutive Skip: same silhouette + recolor is illegal. */
-    requireSilhouetteChange?: boolean;
-    /** Atlas. A piece veto leaves the pool unless that piece is locked. */
-    taste?: TasteMemory;
-    /**
-     * A jacket day. The winner is the first ranked combo a legal outer finishes, and it wears
-     * that outer. A combo no outer can finish is dropped. None: no core. Today and Check.
-     */
-    requireOuter?: boolean;
-  },
-): string[] {
+export type OuterDrawOpts = {
+  /** The rule context the finished look must pass. */
+  ctx: RuleCtx;
+  /** The seeded stream; a fresh one from the salt when absent. */
+  rng?: Rng;
+  /** The rotation weights' inputs; without them every outer weighs the same. */
+  weights?: WeightCtx;
+  /** The caller's extra gate. */
+  legalCombo?: (pieces: Garment[]) => boolean;
+  /** Outers already on other cards: tried after the rest. */
+  usedOuters?: Set<string>;
+  /** The cheap filter before the rules: a mid or a hoodie is never the outer. */
+  salt?: number;
+};
+
+/**
+ * One outer for a core, drawn by rotation weight among the outers whose finished look passes
+ * the rules (passesRules). Outers already on other cards come after the rest. Undefined when
+ * no outer finishes the core.
+ */
+export function pickTrueOuter(outers: Garment[], core: Garment[], opts: OuterDrawOpts): Garment | undefined {
+  const rng = opts.rng ?? rngFromSalt(opts.salt ?? 1);
+  const weight = (g: Garment) => (opts.weights ? pieceWeight(g, opts.weights) : 1);
+  const candidates = outers.filter((g) => isOuterCandidate(g) && !core.some((c) => c.id === g.id));
+  const ordered = drawOrder(candidates, weight, rng);
+  const fresh = ordered.filter((g) => !opts.usedOuters?.has(g.id));
+  const spent = ordered.filter((g) => opts.usedOuters?.has(g.id));
+  for (const o of [...fresh, ...spent]) {
+    const next = [...core, o];
+    if (opts.legalCombo && !opts.legalCombo(next)) continue;
+    if (ruleFails(next, opts.ctx).length) continue;
+    return o;
+  }
+  return undefined;
+}
+
+export type PickOpts = {
+  weather?: WeatherSnap;
+  occasion: Occasion;
+  /** The season bucket; from the weather (or the calendar) when absent. */
+  season?: Season;
+  /** Last drop's ids: a Skip changes at least minSlotChange slots from them when it can. */
+  previousIds?: string[];
+  /** These ids stay in their slots. Draw only the rest. */
+  lockedIds?: string[];
+  /** Pair keys (bottom|shoe, top|bottom) worn this week: half the weight unless locked. */
+  repeatPairs?: Set<string> | string[];
+  /** Pieces already on cards: weight 1/(1+n). */
+  usedCount?: Map<string, number>;
+  /** The caller's own hard gate (a house, a theme). */
+  legalCombo?: (pieces: Garment[]) => boolean;
+  house?: House | "all" | null;
+  /** The seed of this surface's draw (drawSeed). */
+  salt?: number;
+  /** combo keys (sorted ids) already on screen or recently worn/skipped. */
+  excludeKeys?: Iterable<string>;
+  /** Pieces left out of the draw altogether (an exclusion, never a weight); a locked piece stays. */
+  excludeIds?: Iterable<string>;
+  /** Consecutive Skip: ≥2 of top/bottom/shoe ids must change. */
+  minSlotChange?: number;
+  /** Consecutive Skip: same silhouette + recolor is illegal. */
+  requireSilhouetteChange?: boolean;
+  /** A piece veto leaves the pool unless that piece is locked; a pairing veto is a rule. */
+  taste?: TasteMemory;
+  /** A jacket day. The winner is a core a rule-passing outer finishes, and it wears that outer. */
+  requireOuter?: boolean;
+  /** Rule checks the whole draw may spend before giving up (the hero-looks surface caps its search); unbounded by default, so the daily pick is exhaustive. */
+  maxTries?: number;
+  /** The rotation weights' inputs; today defaults to the clock's day. */
+  today?: string;
+  journal?: WeightCtx["journal"];
+  suggested?: ReadonlyMap<string, string>;
+};
+
+export type PickResultDetail = {
+  ids: string[];
+  /** Rule ids waived to find a look; empty when the look passes every rule. */
+  relaxed: string[];
+  /** Rule checks spent. */
+  tried: number;
+  /** The hero the look was built around. */
+  hero: string | null;
+};
+
+/** Heroes a draw may try before giving up. */
+const HERO_TRIES = 12;
+/** Rule checks one hero may spend on its partners and outers under the strict rules. */
+const HERO_BUDGET = 320;
+/** Rule checks one hero may spend per relax tier after the strict pass failed. */
+const TIER_BUDGET = 96;
+/** Partner pairs one hero may try. */
+const PAIR_TRIES = 144;
+/** The wide pass's multiplier on every budget, when the bounded pass found nothing. */
+const WIDE_SCALE = 8;
+/** Heroes at the head of the draw that get the wide search at once when the bounded one fails: the pieces whose turn it is are not passed over. */
+const WIDE_HEROES = 3;
+/** On a day the jacket is optional, the odds the look goes bare rather than drawing an outer. */
+const BARE_ODDS = 0.5;
+
+function isTopSlot(g: Garment): boolean {
+  const s = slotOf(g);
+  return s === "top" || s === "dress";
+}
+
+/**
+ * The pick: a seeded draw among rule-passing looks. A hero is drawn by rotation weight from the
+ * core slots, its partners in each other slot by the same weights (Efraimidis–Spirakis order),
+ * and the first core the rules pass (passesRules) wins; a jacket day draws an outer the same
+ * way among those that finish the core. A hero no strict look can hold is tried again under
+ * the relax ladder (RELAX_TIERS: colour, then texture, then proportion rules waived, in that
+ * order; never a hard rule, season, weather, occasion or the clashes), so the piece whose turn
+ * it is still gets dressed, and `relaxed` says which rules were waived; a hero that trips a
+ * per-piece rule (a hoodie on a weekday) is passed over at once. Empty ids mean nothing legal.
+ */
+export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDetail {
   const pool = livePool(garments);
   const rng = rngFromSalt(opts.salt ?? 1);
-  const salted = opts.salt != null;
   const lockedSet = new Set(opts.lockedIds ?? []);
   const taste = opts.taste;
   const vetoed = taste ? pieceVetoIds(taste) : new Set<string>();
-  const by = (slot: Slot) => {
-    const raw = pool.filter((g) => slotOf(g) === slot);
-    const required = slot !== "outerwear" && slot !== "accessory";
-    let list = raw;
-    if (vetoed.size) {
-      const kept = raw.filter((g) => !vetoed.has(g.id) || lockedSet.has(g.id));
-      list = kept.length ? kept : required ? raw : [];
-    }
-    return salted ? shuffle(list, rng) : list;
-  };
-  const measuredF = opts.weather?.measured ? opts.weather.f : undefined;
-  const f = opts.weather?.f ?? 68;
-  const cool = f < 62;
-  const warm = f > 78;
-  const target = formalityTarget(opts.occasion, opts.moment);
-  const house = opts.house && opts.house !== "all" ? opts.house : undefined;
-  const chapter = opts.chapter;
-  const recipe =
-    recipeById(opts.recipeId) ??
-    pickRecipe(opts.occasion, pool, { house: opts.house, track: chapter });
-  const realOuters = pool.filter(isTrueOuter);
-  const bdWant =
-    opts.occasion === "weekday" && wantsButtonDownQuota(opts.house) ? scaledButtonDownQuota(pool, 3) : 0;
-
-  const avoid = opts.avoid ?? {};
-  const recent = new Set(opts.recentWorn ?? []);
-  const previous = new Set(opts.previousIds ?? []);
-  const lockedGs = [...lockedSet]
-    .map((id) => pool.find((g) => g.id === id))
-    .filter((g): g is Garment => Boolean(g));
-  const pin = new Map<Slot, Garment>();
-  for (const g of lockedGs) {
-    const s = slotOf(g);
-    if (!s) continue;
-    if (s === "dress") pin.set("top", g);
-    else if (!pin.has(s)) pin.set(s, g);
-  }
+  const today = opts.today ?? todayNY();
+  const wctx: WeightCtx = { today, journal: opts.journal, suggested: opts.suggested };
   const repeats = opts.repeatPairs
     ? opts.repeatPairs instanceof Set
       ? opts.repeatPairs
       : new Set(opts.repeatPairs)
     : new Set<string>();
-  const score = (g: Garment) => {
-    let s = 0;
-    s += 4 - Math.abs(g.formality - target);
-    if (cool) s += g.warmth;
-    if (warm) s += 6 - g.warmth;
-    if (g.wornOn.at(-1) === todayISO()) s -= 6;
-    if (recent.has(g.id) && slotOf(g) !== "accessory") s -= 2.5;
-    s -= Math.min(avoid[g.id] ?? 0, 4) * 1.6;
-    if (previous.has(g.id)) s -= 8;
-    const wornAgo = lastWornDays(g);
-    s += wornAgo == null ? 9 : Math.min(wornAgo, 90) / 10;
-    s += occasionScore(g, opts.occasion);
-    s += houseClimateScore(g, f, opts.occasion);
-    const season = seasonFromWeather(f);
-    if (season === "summer" && (g.warmth >= 4 || isOvercoatPiece(g))) s -= 4;
-    if (season === "winter" && isLinenCampPiece(g)) s -= 6;
-    if (season === "winter" && g.warmth <= 2) s -= 2;
-    if (opts.usedCount) {
-      const n = opts.usedCount.get(g.id) ?? 0;
-      s += 8 / (1 + n);
-      if (n === 0) s += 8;
-    }
-    if (daysSinceCreated(g) <= 14) s += 8;
-    if (chapter) {
-      const sl = slotOf(g);
-      if (sl === "top" || sl === "dress") {
-        if (chapter.usedTops.has(g.id)) s -= 18;
-        if (isCreamCable(g) && chapter.creamCableUsed) s -= 20;
+  const f = opts.weather?.f ?? 68;
+  const measuredF = opts.weather?.measured ? opts.weather.f : undefined;
+  const season = opts.season ?? seasonFromWeather(opts.weather?.f);
+  const house = opts.house && opts.house !== "all" ? opts.house : undefined;
+  const baseCtx: RuleCtx = {
+    occasion: opts.occasion,
+    season,
+    house: house ?? null,
+    ...(measuredF !== undefined ? { weatherF: measuredF } : {}),
+    pool,
+    taste,
+    lockedIds: lockedSet,
+  };
+  const weight = (g: Garment) => {
+    if (lockedSet.has(g.id)) return 1;
+    let w = pieceWeight(g, wctx);
+    if (opts.usedCount) w /= 1 + (opts.usedCount.get(g.id) ?? 0);
+    return w;
+  };
+  const excluded = new Set(opts.excludeIds ?? []);
+  const dressable = excluded.size ? pool.filter((g) => !excluded.has(g.id) || lockedSet.has(g.id)) : pool;
+  const by = (test: (g: Garment) => boolean, required = true) => {
+    const raw = dressable.filter(test);
+    const kept = raw.filter((g) => !vetoed.has(g.id) || lockedSet.has(g.id));
+    return kept.length || !required ? kept : raw;
+  };
+  const pin = new Map<"top" | "bottom" | "footwear" | "outerwear", Garment>();
+  for (const id of lockedSet) {
+    const g = pool.find((x) => x.id === id);
+    if (!g) continue;
+    const s = slotOf(g);
+    if (!s || s === "accessory") continue;
+    const key = s === "dress" ? "top" : s;
+    if (!pin.has(key)) pin.set(key, g);
+  }
+  const tops = pin.get("top") ? [pin.get("top")!] : by(isTopSlot);
+  const bottoms = pin.get("bottom") ? [pin.get("bottom")!] : by((g) => slotOf(g) === "bottom");
+  const shoes = pin.get("footwear") ? [pin.get("footwear")!] : by((g) => slotOf(g) === "footwear");
+  const outers = pin.get("outerwear") ? [pin.get("outerwear")!] : by(isOuterCandidate, false);
+  const banned = new Set(opts.excludeKeys ?? []);
+  const previous = opts.previousIds ?? [];
+  const wantOuter = Boolean(opts.requireOuter) || Boolean(pin.get("outerwear")) || f < 62;
+  let tried = 0;
+  /* The whole draw's cap on rule checks (maxTries); never reached by default. */
+  const spent = () => opts.maxTries !== undefined && tried >= opts.maxTries;
+
+  const coreOk = (core: Garment[], strict: boolean): boolean => {
+    if (new Set(core.map((g) => g.id)).size !== core.length) return false;
+    if (banned.size && banned.has(coreComboKey(core.map((g) => g.id), pool))) return false;
+    if (strict && previous.length >= 3) {
+      const ids = core.map((g) => g.id);
+      if (opts.minSlotChange && slotsChanged(previous, ids, pool) < opts.minSlotChange) return false;
+      if (opts.requireSilhouetteChange && silhouetteKey(ids, pool, opts.occasion) === silhouetteKey(previous, pool, opts.occasion)) {
+        return false;
       }
-      if (sl === "bottom" && chapter.usedBottoms.has(g.id)) s -= 8;
-      if (sl === "footwear" && chapter.usedShoes.has(g.id)) s -= 16;
-      if (sl === "outerwear" && chapter.usedOuters.has(g.id)) s -= 10;
-      if (sl === "outerwear" && chapter.usedOuters.size && realOuters.length >= 4) {
-        const kind = outerKind(g);
-        const repeatKind = [...chapter.usedOuters].some((id) => {
-          const prev = pool.find((x) => x.id === id);
-          return Boolean(prev && outerKind(prev) === kind && kind !== "other");
-        });
-        if (repeatKind) s -= 6;
-      }
-      if (bdWant > 0 && chapter.buttonDowns < bdWant && isButtonDown(g)) s += 5;
     }
-    if (recipe.top(g) && (slotOf(g) === "top" || slotOf(g) === "dress")) s += 4;
-    if (recipe.bottom(g) && slotOf(g) === "bottom") s += 3;
-    if (recipe.shoe(g) && slotOf(g) === "footwear") s += 3;
-    return s + rng() * (salted ? 2.5 : 0.25);
+    return true;
+  };
+  const pairPenalty = (core: Garment[]): number => {
+    const top = core.find(isTopSlot);
+    const bottom = core.find((g) => slotOf(g) === "bottom");
+    const shoe = core.find((g) => slotOf(g) === "footwear");
+    let w = 1;
+    if (bottom && shoe && repeats.has(pairKey(bottom.id, shoe.id)) && !lockedSet.has(bottom.id) && !lockedSet.has(shoe.id)) w *= 0.5;
+    if (top && bottom && repeats.has(pairKey(top.id, bottom.id)) && !lockedSet.has(top.id) && !lockedSet.has(bottom.id)) w *= 0.5;
+    return w;
   };
 
-  const rank = (slot: Slot) => [...by(slot)].sort((a, b) => score(b) - score(a));
+  type Found = { ids: string[]; hero: string; relaxed: string[] };
+  const tiers = relaxTiers();
+  const relaxable = new Set(tiers[tiers.length - 1]);
+  /* Whether, in the strict pass of a hero, some look failed on waivable rules alone: only then can a tier help. */
+  let softSeen = false;
+  const noteFailed = (failed: readonly string[]) => {
+    if (!softSeen && failed.every((id) => relaxable.has(id) || JACKET_COVER_IDS.includes(id))) softSeen = true;
+  };
 
-  const pinnedTop = pin.get("top") ?? pin.get("dress" as Slot);
-  const rankTops = rank("top");
-  const unusedTops = rankTops.filter((g) => !chapter?.usedTops.has(g.id));
-  const recipeTops = (unusedTops.length ? unusedTops : rankTops).filter((g) => recipe.top(g));
-  const exclusiveRecipe = !opts.legalCombo && !house && !salted;
-  let topsSrc = exclusiveRecipe && recipeTops.length ? recipeTops : unusedTops.length ? unusedTops : rankTops;
-  if (chapter?.creamCableUsed) {
-    const withoutCable = topsSrc.filter((g) => !isCreamCable(g));
-    if (withoutCable.length) topsSrc = withoutCable;
-  }
-  const tops = pinnedTop ? [pinnedTop] : topsSrc.slice(0, salted ? 6 : 10);
-  const topList = tops.length ? tops : pinnedTop ? [pinnedTop] : rank("dress").slice(0, 4);
-  const rankBots = rank("bottom");
-  const recipeBots = rankBots.filter((g) => recipe.bottom(g));
-  const bottoms = pin.get("bottom")
-    ? [pin.get("bottom")!]
-    : (exclusiveRecipe && recipeBots.length ? recipeBots : rankBots).slice(0, salted ? 4 : 8);
-  const rankShoes = rank("footwear");
-  let shoesSrc = exclusiveRecipe ? rankShoes.filter((g) => recipe.shoe(g)) : rankShoes;
-  if (!shoesSrc.length) shoesSrc = rankShoes;
-  if (chapter) {
-    const last3ids = new Set(chapter.recentShoeIds);
-    const last3fam = new Set(chapter.recentShoeFamilies);
-    const rotated = shoesSrc.filter(
-      (g) => !last3ids.has(g.id) && !last3fam.has(shoeFamily(g)),
-    );
-    const famChange = shoesSrc.filter((g) => !last3fam.has(shoeFamily(g)));
-    shoesSrc = rotated.length ? rotated : famChange.length ? famChange : shoesSrc.filter((g) => !last3ids.has(g.id));
-    if (!shoesSrc.length) shoesSrc = rankShoes;
-    if (opts.legalCombo && house) {
-      const kept = shoesSrc.filter((g) => !housePieceBanned([g], house, opts.occasion));
-      if (kept.length) shoesSrc = kept;
-      else {
-        const back = rankShoes.filter(
-          (g) => !last3ids.has(g.id) && !housePieceBanned([g], house, opts.occasion),
-        );
-        if (back.length) shoesSrc = back;
+  /** One hero under one tier of the ladder: its partners in draw order, the first passing core (and outer) wins. */
+  const dressHero = (hero: Garment, relax: readonly string[], strict: boolean, budgetStart: number): Found | null => {
+    const ctx: RuleCtx = { ...baseCtx, relax };
+    let budget = budgetStart;
+    const heroSlot = isTopSlot(hero) ? "top" : slotOf(hero) === "bottom" ? "bottom" : "shoe";
+    /* A closet short of a core slot dresses nothing: a look is one top, one bottom and one pair of shoes. */
+    const order = (list: Garment[], own: boolean): (Garment | null)[] =>
+      own ? [hero] : drawOrder(list.filter((g) => g.id !== hero.id), weight, rng);
+    const topList = order(tops, heroSlot === "top");
+    const bottomList = order(bottoms, heroSlot === "bottom");
+    const shoeList = order(shoes, heroSlot === "shoe");
+    /* Pairs of partner ranks by their sum: the two best-drawn partners first, then the next. */
+    const pairs: [number, number, number][] = [];
+    const [aList, bList] = heroSlot === "top" ? [bottomList, shoeList] : heroSlot === "bottom" ? [topList, shoeList] : [topList, bottomList];
+    for (let i = 0; i < aList.length; i += 1) for (let j = 0; j < bList.length; j += 1) pairs.push([i + j, i, j]);
+    pairs.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+    let pairsTried = 0;
+    /* A jeans-and-blazer look the coin passed over: it is still the hero's look when nothing else is found, so the odds halve and never block. */
+    let held: Found | null = null;
+    for (const [, i, j] of pairs) {
+      if (pairsTried >= PAIR_TRIES || budget <= 0 || spent()) break;
+      pairsTried += 1;
+      const a = aList[i];
+      const b = bList[j];
+      const core = (heroSlot === "top" ? [hero, a, b] : heroSlot === "bottom" ? [a, hero, b] : [a, b, hero]).filter(
+        (g): g is Garment => Boolean(g),
+      );
+      if (core.length < 2 || !coreOk(core, strict)) continue;
+      if (opts.legalCombo && !opts.legalCombo(core) && !(opts.requireOuter || wantOuter)) continue;
+      /* A repeated pair halves the look's odds: a coin by the seeded stream. */
+      if (pairPenalty(core) < 1 && rng() >= pairPenalty(core)) continue;
+      budget -= 1;
+      tried += 1;
+      const failed = ruleFails(core, ctx);
+      const bareOk = failed.length === 0 && (!opts.legalCombo || opts.legalCombo(core));
+      const jacketOnly = needsJacketOnly(failed);
+      if (!bareOk && !jacketOnly) {
+        noteFailed(failed);
+        continue;
       }
-    }
-  }
-  const shoeList = pin.get("footwear") ? [pin.get("footwear")!] : shoesSrc.slice(0, salted ? 4 : 8);
-
-  type Combo = { ids: string[]; s: number; h: number; pieces: Garment[]; pairVeto?: boolean };
-  const combos: Combo[] = [];
-  const outerCandidates = pool.filter(
-    (g) => slotOf(g) === "outerwear" && (!vetoed.has(g.id) || lockedSet.has(g.id)),
-  );
-  for (const t of topList) {
-    const bottomsOr = bottoms.length ? bottoms : [undefined];
-    const shoesOr = shoeList.length ? shoeList : [undefined];
-    for (const b of bottomsOr) {
-      for (const sh of shoesOr) {
-        const pieces = [t, b, sh].filter((g): g is Garment => Boolean(g));
-        if (pieces.length < 2) continue;
-        const h = salted ? 0 : harmony(pieces, { occasion: opts.occasion, f });
-        let s =
-          pieces.reduce((n, g) => n + score(g), 0) + h + (salted ? 0 : houseMixPenalty(pieces));
-        const topG = pieces.find((g) => {
-          const sl = slotOf(g);
-          return sl === "top" || sl === "dress";
-        });
-        const botG = pieces.find((g) => slotOf(g) === "bottom");
-        const shoeG = pieces.find((g) => slotOf(g) === "footwear");
-        if (botG && shoeG && repeats.has(pairKey(botG.id, shoeG.id))) {
-          if (!lockedSet.has(botG.id) && !lockedSet.has(shoeG.id)) s -= 12;
-        }
-        if (topG && botG && repeats.has(pairKey(topG.id, botG.id))) {
-          if (!lockedSet.has(topG.id) && !lockedSet.has(botG.id)) s -= 12;
-        }
-        if (
-          opts.occasion === "out" &&
-          f < 75 &&
-          onlyTopIsUntucked(pieces) &&
-          topG &&
-          /camp/.test(`${topG.subtype} ${topG.name}`)
-        ) {
+      /* The jacket is optional: a coin from the stream says bare or an outer, so the jackets take their turns too. */
+      if (bareOk && !wantOuter && rng() < BARE_ODDS) return { ids: core.map((g) => g.id), hero: hero.id, relaxed: waivedBy(core) };
+      const outerOrder = drawOrder(outers.filter((o) => !core.some((c) => c.id === o.id)), weight, rng);
+      for (const o of outerOrder) {
+        if (budget <= 0 || spent()) break;
+        const full = [...core, o];
+        if (opts.legalCombo && !opts.legalCombo(full)) continue;
+        budget -= 1;
+        tried += 1;
+        const fullFailed = ruleFails(full, ctx);
+        if (fullFailed.length) {
+          noteFailed(fullFailed);
           continue;
         }
-        if (f < 55 && topG && isLinenCampPiece(topG) && !lockedSet.has(topG.id)) {
-          const hasKnit = pool.some((g) => {
-            if (isHoodiePiece(g) || isLinenCampPiece(g)) return false;
-            const sl = slotOf(g);
-            if (sl !== "top" && sl !== "dress") return false;
-            return /knit|sweater|merino|cable/.test(`${g.subtype} ${g.name}`.toLowerCase());
-          });
-          if (hasKnit) continue;
+        const found: Found = { ids: full.map((g) => g.id), hero: hero.id, relaxed: waivedBy(full) };
+        /* Jeans under a sport coat pass at half odds (JEANS_BLAZER_ODDS): a coin from the stream, else the next outer; the look is held in case nothing else dresses the hero. */
+        if (jeansWithBlazer(full) && rng() >= JEANS_BLAZER_ODDS) {
+          held ??= found;
+          continue;
         }
-        const tucked = topG ? lookTuck(topG, opts.occasion, pieces, taste) : null;
-        if (
-          (opts.occasion === "weekend" || opts.occasion === "travel") &&
-          tucked === "out"
-        ) {
-          s += 1.2;
-        }
-        if (
-          (opts.occasion === "weekday" || opts.occasion === "out") &&
-          tucked === "in"
-        ) {
-          s += 0.6;
-        }
-        if (taste) {
-          let tech = techniqueWeight(taste, pieces);
-          for (const o of outerCandidates) {
-            if (pieces.some((g) => g.id === o.id)) continue;
-            const n = techniqueWeight(taste, [...pieces, o]);
-            if (n > tech) tech = n;
-          }
-          s += tech * 8;
-        }
-        if (recipe.top(t)) s += 2;
-        if (b && recipe.bottom(b)) s += 1.5;
-        if (sh && recipe.shoe(sh)) s += 1.5;
-        if (chapter && !chapter.usedRecipes.has(recipe.id)) s += 6;
-        const usedBrown = [...(chapter?.usedOuters ?? [])].some((id) => {
-          const prev = pool.find((g) => g.id === id);
-          return Boolean(prev && isBrownSuedeOuter(prev));
-        });
-        s += trendScore(pieces, {
-          f,
-          house,
-          usedBrownSuede: usedBrown,
-          pool,
-        });
-        if (chapter?.lastPrint && topG && botG && shoeG) {
-          const print = lookPrint(pieces, opts.occasion);
-          const last = chapter.lastPrint;
-          if (
-            print.top_type === last.top_type &&
-            print.shoe_family === last.shoe_family &&
-            print.bottom_type === last.bottom_type
-          ) {
-            s -= 10;
-          }
-          if (recipeAxesDiffer(last, print, chapter.lastRecipe, recipe.id) < 3) s -= 14;
-        }
-        if (chapter && topG && chapter.usedTops.has(topG.id)) {
-          const leftover = topList.filter((x) => !chapter.usedTops.has(x.id));
-          if (leftover.length) continue;
-        }
-        const pairVeto =
-          Boolean(taste) &&
-          pairingBlocked(pieces, taste!) &&
-          !pieces.some((g) => lockedSet.has(g.id));
-        combos.push({ ids: pieces.map((g) => g.id), s, h, pieces, pairVeto });
+        return found;
+      }
+      /* A bare core is a look only when no outer is asked for or pinned: a locked jacket is worn, or the core is not the look. */
+      if (bareOk && !opts.requireOuter && !pin.get("outerwear")) return { ids: core.map((g) => g.id), hero: hero.id, relaxed: waivedBy(core) };
+    }
+    return held;
+  };
+  /** The rules the found look needed waived: what it fails under the strict rules (empty when it passes them). */
+  const waivedBy = (look: Garment[]): string[] => ruleFails(look, baseCtx);
+
+  /**
+   * Heroes in draw order; each tried strictly, then under the ladder, before the next hero. The
+   * bounded pass tries HERO_TRIES heroes on the usual budgets; the wide pass (when the bounded
+   * one found nothing: a day when the pieces whose turn it is are hard to dress) tries every
+   * hero with WIDE_SCALE times the budget, so a closet with a passing look always yields one.
+   */
+  /* A locked core piece is the hero: every look holds it, and its partner draw already covers the rest, so no other hero is searched. */
+  const lockedCore = [pin.get("top"), pin.get("bottom"), pin.get("footwear")].filter((g): g is Garment => Boolean(g));
+  const attempt = (strict: boolean, wide = false): Found | null => {
+    const heroPool = lockedCore.length ? lockedCore : [...tops, ...bottoms, ...shoes].filter((g, i, all) => all.findIndex((x) => x.id === g.id) === i);
+    const ordered = drawOrder(heroPool, weight, rng);
+    const heroes = wide ? ordered : ordered.slice(0, HERO_TRIES);
+    const scale = wide ? WIDE_SCALE : 1;
+    const ladder = (hero: Garment, at: number): Found | null => {
+      softSeen = false;
+      for (const [t, relax] of tiers.entries()) {
+        /* A tier is worth a search only when the strict pass saw a look fail on waivable rules alone. */
+        if (t > 0 && !softSeen) break;
+        const found = dressHero(hero, relax, strict, (t === 0 ? HERO_BUDGET : TIER_BUDGET) * at);
+        if (found) return found;
+      }
+      return null;
+    };
+    /* The wide pass sweeps the heroes the bounded pass never reached on the usual budget first: a hero that dresses at once costs little, and the eightfold budget is spent only when every hero has failed it. */
+    if (wide) {
+      for (const hero of ordered.slice(HERO_TRIES)) {
+        if (spent()) return null;
+        if (pieceRuleFails(hero, baseCtx).length) continue;
+        const found = ladder(hero, 1);
+        if (found) return found;
       }
     }
-  }
-  const houseOk = opts.legalCombo
-    ? combos.filter((c) => !clashes(c.pieces) && opts.legalCombo!(c.pieces))
-    : salted
-      ? combos.filter((c) => c.pieces.length >= 3)
-      : combos.filter((c) => houseMixPenalty(c.pieces) >= -8 && !clashes(c.pieces));
-  const legal = houseOk;
-  const ok = (legal.length ? legal : opts.legalCombo ? legal : combos.filter((c) => !clashes(c.pieces))).filter(
-    (c) => c.h >= 0,
-  );
-  const banned = new Set(opts.excludeKeys ?? []);
-  let poolC = (ok.length ? ok : legal).sort((a, b) => b.s - a.s);
-  const scaleOk = poolC.filter((c) => !sameScaleChecks(c.pieces));
-  if (scaleOk.length) poolC = scaleOk;
-  const jacketSeason = seasonFromWeather(f);
-  const dressed = poolC.filter(
-    (c) =>
-      !jacketHits(slotPieces(c.pieces), {
-        occasion: opts.occasion,
-        season: jacketSeason,
-        house,
-        tempF: measuredF,
-      }).some((h) => h.severity === "hard"),
-  );
-  if (dressed.length) poolC = dressed;
-  if (dropsMidlayerInHeat(house, f)) {
-    const noMid = poolC.filter(
-      (c) => !c.pieces.some((g) => isMidlayer(g) && !isHoodiePiece(g)),
-    );
-    if (noMid.length) poolC = noMid;
-  }
-  if (banned.size) {
-    const fresh = poolC.filter((c) => !banned.has(coreComboKey(c.ids, pool)));
-    if (fresh.length) poolC = fresh;
-  }
-  const openPairs = poolC.filter((c) => !c.pairVeto);
-  if (openPairs.length) poolC = openPairs;
-  if (opts.minSlotChange && opts.minSlotChange > 0 && (opts.previousIds?.length ?? 0) >= 3) {
-    const moved = poolC.filter(
-      (c) => slotsChanged(opts.previousIds!, c.ids, pool) >= (opts.minSlotChange ?? 0),
-    );
-    if (moved.length) poolC = moved;
-  }
-  if (opts.requireSilhouetteChange && (opts.previousIds?.length ?? 0) >= 3) {
-    const prevSilh = silhouetteKey(opts.previousIds!, pool, opts.occasion);
-    const changed = poolC.filter((c) => silhouetteKey(c.ids, pool, opts.occasion) !== prevSilh);
-    if (changed.length) poolC = changed;
-  }
-  let win: Combo | undefined = poolC[0];
-  let forcedOuter: Garment | undefined;
-  if (opts.requireOuter && !pin.get("outerwear")) {
-    win = undefined;
-    const outers = by("outerwear");
-    for (const c of poolC) {
-      const outer = pickTrueOuter(outers, c.pieces, recipe, {
-        occasion: opts.occasion,
-        house: opts.house,
-        f,
-        tempF: measuredF,
-        legalCombo: opts.legalCombo,
-        usedOuters: chapter?.usedOuters,
-        taste,
-      });
-      if (!outer) continue;
-      win = c;
-      forcedOuter = outer;
-      break;
+    for (const [i, hero] of heroes.entries()) {
+      if (spent()) return null;
+      if (pieceRuleFails(hero, baseCtx).length) continue;
+      const found = ladder(hero, scale) ?? (!wide && i < WIDE_HEROES ? ladder(hero, WIDE_SCALE) : null);
+      if (found) return found;
     }
+    return null;
+  };
+
+  let found: Found | null = null;
+  /* A Skip's slot-change asks are tried first and given up before a hero is passed over. */
+  const skipAsks = previous.length >= 3 && Boolean(opts.minSlotChange || opts.requireSilhouetteChange);
+  for (const strict of skipAsks ? [true, false] : [false]) {
+    found = attempt(strict);
+    if (found) break;
   }
-  const ids: string[] = win ? [...win.ids] : lockedGs.map((g) => g.id);
-  if (forcedOuter && !ids.includes(forcedOuter.id)) ids.push(forcedOuter.id);
-  const corePieces = ids
-    .map((id) => pool.find((g) => g.id === id))
-    .filter((g): g is Garment => Boolean(g));
-  const hasCore =
-    corePieces.some((g) => {
-      const s = slotOf(g);
-      return s === "top" || s === "dress";
-    }) &&
-    corePieces.some((g) => slotOf(g) === "bottom") &&
-    corePieces.some((g) => slotOf(g) === "footwear");
-  if (pin.get("outerwear")) {
-    const o = pin.get("outerwear")!;
-    if (hasCore && !ids.includes(o.id) && isTrueOuter(o) && !clashes([...corePieces, o])) ids.push(o.id);
-  } else if (hasCore && !forcedOuter) {
-    const want =
-      outerRequired(opts.occasion, f, recipe, house) ||
-      (cool && !warm && recipe.outer !== "none") ||
-      recipe.outer === "blazer" ||
-      recipe.outer === "optional_blazer" ||
-      recipe.outer === "cold";
-    if (want) {
-      const outer = pickTrueOuter(by("outerwear"), corePieces, recipe, {
-        occasion: opts.occasion,
-        house: opts.house,
-        f,
-        tempF: measuredF,
-        legalCombo: opts.legalCombo,
-        usedOuters: chapter?.usedOuters,
-        taste,
-      });
-      if (outer && !ids.includes(outer.id)) ids.push(outer.id);
-    }
+  if (!found) found = attempt(false, true);
+  if (!found) {
+    const locked = [...lockedSet].filter((id) => pool.some((g) => g.id === id));
+    return { ids: locked, relaxed: [], tried, hero: null };
   }
-  const acc = by("accessory");
+  const relaxed = found.relaxed;
+  const ids = [...found.ids];
+  const acc = by((g) => slotOf(g) === "accessory");
   const belt = acc.find((a) => a.subtype === "belt");
-  const shoes = win?.pieces.find((g) => slotOf(g) === "footwear");
-  if (
-    belt &&
-    shoes &&
-    /loafer/.test(`${shoes.subtype} ${shoes.name}`.toLowerCase())
-  ) {
-    ids.push(belt.id);
+  const shoe = pool.find((g) => ids.includes(g.id) && slotOf(g) === "footwear");
+  if (belt && shoe && /loafer/.test(`${shoe.subtype} ${shoe.name}`.toLowerCase()) && !ids.includes(belt.id)) ids.push(belt.id);
+  for (const id of lockedSet) {
+    const g = pool.find((x) => x.id === id);
+    if (!g) continue;
+    if (!ids.includes(g.id)) ids.push(g.id);
   }
-
-  const used = new Set(ids);
-  const idle =
-    salted || (opts.previousIds?.length ?? 0) > 0
-      ? []
-      : [...pool]
-        .filter((g) => !used.has(g.id) && !previous.has(g.id) && daysIdle(g) >= 21)
-        .filter((g) => !vetoed.has(g.id) || lockedSet.has(g.id))
-        .sort((a, b) => daysIdle(b) - daysIdle(a));
-  const candidate = idle[0];
-  if (candidate) {
-    const candSlot = slotOf(candidate);
-    const slot = ids.findIndex((id) => {
-      const g = pool.find((x) => x.id === id);
-      return g && slotOf(g) === candSlot;
-    });
-    if (slot >= 0) {
-      const occupant = pool.find((x) => x.id === ids[slot]);
-      if (occupant && lockedSet.has(occupant.id)) {
-        // locked slot stays
-      } else {
-        // Don't swap an Out trouser for idle jeans. Out stays brief-driven.
-        const formal = opts.occasion === "out";
-        if (occupant && daysIdle(occupant) < 21 && !formal) {
-          const nextIds = ids.map((id, i) => (i === slot ? candidate.id : id));
-          const nextPieces = nextIds
-            .map((id) => pool.find((x) => x.id === id))
-            .filter((g): g is Garment => Boolean(g));
-          if (houseMixPenalty(nextPieces) < -8) {
-            // keep the occupant — don't drop a 90s hoodie onto pleats + loafer
-          } else {
-            const hNow = harmony(
-              ids.map((id) => pool.find((x) => x.id === id)).filter((g): g is Garment => Boolean(g)),
-              { occasion: opts.occasion, f },
-            );
-            const hNext = harmony(nextPieces, { occasion: opts.occasion, f });
-            if (hNext >= 0 || hNext >= hNow) ids[slot] = candidate.id;
-          }
-        }
-      }
-    } else if (candSlot === "accessory") {
-      ids.push(candidate.id);
-    } else if (candSlot === "outerwear" && !isHoodiePiece(candidate)) {
-      const sport = /blazer|sport\s*coats?/.test(
-        `${candidate.subtype} ${candidate.name}`.toLowerCase(),
-      );
-      if (sport) {
-        // Lookbook / Today: never complete a look with a random sport coat.
-      } else if (!(f >= 75 && (candidate.warmth >= 4 || isOvercoatPiece(candidate)))) {
-        ids.push(candidate.id);
-      }
-    }
-  }
-
-  for (const g of lockedGs) {
-    const s = slotOf(g);
-    if (!s) {
-      if (!ids.includes(g.id)) ids.push(g.id);
-      continue;
-    }
-    const idx = ids.findIndex((id) => {
-      const x = pool.find((p) => p.id === id);
-      return x && slotOf(x) === s;
-    });
-    if (idx >= 0) ids[idx] = g.id;
-    else if (!ids.includes(g.id)) ids.push(g.id);
-  }
-
-  return ids;
+  return { ids, relaxed, tried, hero: found.hero };
 }
 
+/** The ids of pickLookWith. */
+export function pickLook(garments: Garment[], opts: PickOpts): string[] {
+  return pickLookWith(garments, opts).ids;
+}
 
+/** The look's weight under the rotation (draw.ts), for callers that draw among finished looks. */
+export function lookRotationWeight(pieces: readonly Garment[], ctx: WeightCtx): number {
+  return lookWeight(pieces.filter((g) => slotOf(g) !== "accessory"), ctx);
+}
+
+/** The slotted plates of a look (top, bottom, shoe, outer, mid), as the rules read them. */
+export function lookSlots(pieces: Garment[]) {
+  return slotPieces(pieces);
+}

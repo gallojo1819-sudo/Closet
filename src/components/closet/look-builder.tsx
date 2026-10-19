@@ -3,7 +3,7 @@ import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMeButton } from "@/components/closet/on-me";
 import { lookbookPool } from "@/lib/lookbook";
-import { lookOpinion, suggestLine } from "@/lib/look-opinion";
+import { lookOpinion, PASSES_LINE, suggestLine } from "@/lib/look-opinion";
 import { nameLook } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { slotOf, todayOccasion } from "@/lib/style";
@@ -80,7 +80,7 @@ export function LookBuilder({
   const hoverOpinion = hoverPieces ? lookOpinion(hoverPieces, pool, opinionOpts) : null;
   const shown = hoverOpinion ?? opinion;
   const line = shown ? suggestLine(shown, pool) : null;
-  const matched = shown?.headline === "This matches.";
+  const passes = shown?.headline === PASSES_LINE;
   const ids = pieces.map((g) => g.id);
   const ready = Boolean(picked.top && picked.bottom && picked.footwear);
   const lookName = nameLook(pieces);
@@ -136,7 +136,7 @@ export function LookBuilder({
         {SLOTS.map((s) => {
           const g = byId.get(picked[s.id] ?? "");
           const edge =
-            g && opinion ? (matched ? "border-green-800" : "border-red-800") : openSlot === s.id ? "border-ink" : "border-hairline";
+            g && opinion ? (passes ? "border-green-800" : "border-red-800") : openSlot === s.id ? "border-ink" : "border-hairline";
           return (
             <button
               key={s.id}
@@ -246,13 +246,14 @@ export function LookBuilder({
       {line && opinion?.swaps[0] && pool.some((g) => g.id === opinion.swaps[0]?.id) ? (
         <button
           type="button"
+          data-look-verdict
           onClick={() => fill(opinion.swaps[0]!.slot, opinion.swaps[0]!.id)}
           className="text-left text-sm text-ink underline"
         >
           {line}
         </button>
       ) : line ? (
-        <p className="text-sm text-ink">{line}</p>
+        <p data-look-verdict className="text-sm text-ink">{line}</p>
       ) : null}
 
       {pieces.length > 0 && <FlatLay pieces={pieces} className="max-w-xs" />}

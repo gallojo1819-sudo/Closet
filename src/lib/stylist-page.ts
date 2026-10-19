@@ -1,10 +1,12 @@
+import { liveIdsKey } from "./daily-pick.ts";
+import { drawOrder, drawSeed, pieceWeight, rngFromSalt, type WeightCtx } from "./draw.ts";
 import { displayName } from "./piece-label.ts";
-import { clashes, daysIdle, slotOf, todayOccasion } from "./style.ts";
-import { scoreLook } from "./stylist/legal.ts";
+import { clashes, slotOf, todayOccasion } from "./style.ts";
+import { passesRules, type RuleCtx } from "./stylist/legal.ts";
 import { OCCASIONS, SEASONS, type DailyDrop, type Garment, type Occasion, type Season } from "./types.ts";
 import { composeAtlasLook, emptyTaste, type TasteMemory } from "./taste.ts";
 import { todayLookPieces, type TodayLookState } from "./today-look.ts";
-import { todayISO } from "./utils.ts";
+import { todayNY } from "./utils.ts";
 
 /** The page he is on. Replaced wholesale so a previous page cannot leak. */
 export type StylistRoute = "today" | "closet" | "lookbook" | "add" | "stylist";
@@ -460,7 +462,7 @@ export function looksLikeAtlasBlock(text: string): boolean {
  */
 export async function stylistPayload(
   res: unknown,
-): Promise<{ ok?: boolean; text?: string; error?: string; garmentIds?: string[]; occasion?: string; technique?: string | null }> {
+): Promise<{ ok?: boolean; text?: string; error?: string; garmentIds?: string[]; occasion?: string; source?: "live" | "closet" }> {
   if (!res || typeof res !== "object") return { ok: false, error: NOT_IN_CLOSET };
   const row = res as {
     ok?: boolean;
@@ -468,7 +470,7 @@ export async function stylistPayload(
     error?: unknown;
     garmentIds?: unknown;
     occasion?: unknown;
-    technique?: unknown;
+    source?: unknown;
     json?: unknown;
   };
   if (typeof row.text === "string" || typeof row.error === "string" || Array.isArray(row.garmentIds)) {
@@ -478,7 +480,7 @@ export async function stylistPayload(
       ...(typeof row.error === "string" ? { error: row.error } : {}),
       ...(Array.isArray(row.garmentIds) ? { garmentIds: row.garmentIds.filter((id): id is string => typeof id === "string") } : {}),
       ...(typeof row.occasion === "string" ? { occasion: row.occasion } : {}),
-      ...(typeof row.technique === "string" || row.technique === null ? { technique: row.technique as string | null } : {}),
+      ...(row.source === "live" || row.source === "closet" ? { source: row.source } : {}),
     };
   }
   if (typeof row.json === "function") {
@@ -641,14 +643,13 @@ export function answerTodayAsk(input: {
   /** The wear journal and the memory-only week row: with the drop, what the Today page shows. */
   journal?: TodayLookState["journal"];
   thisWeek?: TodayLookState["thisWeek"];
-  /** The daily pick's other inputs and the day's bucket, as the page hands them (today-look.ts). */
-  avoid?: TodayLookState["avoid"];
+  /** The day's bucket, as the page hands it (today-look.ts). */
   season?: TodayLookState["season"];
   today?: string;
   taste?: TasteMemory;
   weatherF?: number;
 }): TodayAnswer {
-  const today = input.today ?? todayISO();
+  const today = input.today ?? todayNY();
   const owned = input.garments.filter((g) => !g.archived);
   const occasion = todayOccasion(input.drop, today);
   /* The look on the Today page (today-look.ts), not a fresh roll. */
@@ -658,7 +659,6 @@ export function answerTodayAsk(input: {
       journal: input.journal,
       thisWeek: input.thisWeek,
       garments: owned,
-      avoid: input.avoid,
       taste: input.taste,
       season: input.season,
     },
@@ -723,7 +723,7 @@ export function swapBaseIds(input: {
   const owned = new Set(input.garments.filter((g) => !g.archived).map((g) => g.id));
   const keep = (ids: readonly string[] | null | undefined) => (ids ?? []).filter((id) => owned.has(id));
   const page = input.page ?? readStylistPage();
-  const today = input.today ?? todayISO();
+  const today = input.today ?? todayNY();
   const todays = input.todayIds?.length ? input.todayIds : input.drop?.date === today ? input.drop.garmentIds : [];
   const rest: (readonly string[] | null | undefined)[] = [
     input.previousIds,
@@ -822,74 +822,66 @@ function chipSentence(page: StylistPageContext): string | null {
   return `${list} ${bits.length === 1 ? "is" : "are"} on. Nothing is on screen.`;
 }
 
-function safeScore(pieces: Garment[], page: StylistPageContext): number {
+function pageRules(page: StylistPageContext): RuleCtx {
+  return {
+    house: null,
+    occasion: (page.occasion as Occasion) || "weekday",
+    season: (page.season as Season) || "fall",
+    color: page.color ?? null,
+  };
+}
+
+function safePasses(pieces: Garment[], page: StylistPageContext): boolean {
   try {
-    const occasion = (page.occasion as Occasion) || "weekday";
-    const season = (page.season as Season) || "fall";
-    return scoreLook(pieces, {
-      house: null,
-      occasion,
-      season,
-      color: page.color ?? null,
-    });
+    return passesRules(pieces, pageRules(page)).pass;
   } catch {
-    return Number.NEGATIVE_INFINITY;
+    return false;
   }
 }
 
+/** The first look on the page, in screen order, that passes the rules; -1 when none does. */
 function rankIndex(
   rows: { pieces: Garment[] }[],
   page: StylistPageContext,
 ): number {
-  let best = -1;
-  let bestScore = Number.NEGATIVE_INFINITY;
-  rows.forEach((row, index) => {
-    if (!clause(row.pieces) || clashes(row.pieces)) return;
-    const score = safeScore(row.pieces, page);
-    if (!Number.isFinite(score) || score === Number.NEGATIVE_INFINITY) return;
-    if (score > bestScore) {
-      bestScore = score;
-      best = index;
-    }
+  return rows.findIndex((row) => Boolean(clause(row.pieces)) && !clashes(row.pieces) && safePasses(row.pieces, page));
+}
+
+function bySlot(pool: readonly Garment[], slot: "top" | "bottom" | "footwear" | "outerwear"): Garment[] {
+  return pool.filter((g) => {
+    const s = slotOf(g);
+    if (slot === "top") return s === "top" || s === "dress";
+    return s === slot;
   });
-  return best;
 }
 
-function byIdle(pool: readonly Garment[], slot: "top" | "bottom" | "footwear" | "outerwear"): Garment[] {
-  return pool
-    .filter((g) => {
-      const s = slotOf(g);
-      if (slot === "top") return s === "top" || s === "dress";
-      return s === slot;
-    })
-    .sort((a, b) => daysIdle(b) - daysIdle(a) || a.id.localeCompare(b.id));
+/** A seeded draw order by rotation weight (draw.ts) for a piece's mates: the day, the piece, the closet. */
+function drawnBySlot(pool: readonly Garment[], slot: "top" | "bottom" | "footwear" | "outerwear", seedKey: string, today = todayNY()): Garment[] {
+  const ctx: WeightCtx = { today };
+  const rng = rngFromSalt(drawSeed(today, `stylist:mates:${seedKey}:${slot}`, liveIdsKey([...pool])));
+  return drawOrder(bySlot(pool, slot), (g) => Math.max(pieceWeight(g, ctx), Number.MIN_VALUE), rng);
 }
 
+/** The mates of an open piece: the first rule-passing core among partners drawn by rotation weight. */
 function matesFor(open: Garment, pool: readonly Garment[], page: StylistPageContext): Garment[] {
   const rest = pool.filter((g) => g.id !== open.id);
   const openSlot = slotOf(open);
-  const tops = openSlot === "top" || openSlot === "dress" ? [open] : byIdle(rest, "top").slice(0, 4);
-  const bottoms = openSlot === "bottom" ? [open] : byIdle(rest, "bottom").slice(0, 4);
-  const shoes = openSlot === "footwear" ? [open] : byIdle(rest, "footwear").slice(0, 4);
-  let best: Garment[] | null = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
+  const tops = openSlot === "top" || openSlot === "dress" ? [open] : drawnBySlot(rest, "top", open.id).slice(0, 6);
+  const bottoms = openSlot === "bottom" ? [open] : drawnBySlot(rest, "bottom", open.id).slice(0, 6);
+  const shoes = openSlot === "footwear" ? [open] : drawnBySlot(rest, "footwear", open.id).slice(0, 6);
   let tries = 0;
   for (const top of tops) {
     for (const bottom of bottoms) {
       for (const shoe of shoes) {
-        if (++tries > 48) break;
+        if (++tries > 96) return [];
         const pieces = [top, bottom, shoe].filter((g, i, all) => all.findIndex((x) => x.id === g.id) === i);
         if (pieces.length < 3 || clashes(pieces)) continue;
-        const score = safeScore(pieces, page);
-        if (!Number.isFinite(score) || score === Number.NEGATIVE_INFINITY) continue;
-        if (score > bestScore) {
-          bestScore = score;
-          best = pieces.filter((g) => g.id !== open.id);
-        }
+        if (!safePasses(pieces, page)) continue;
+        return pieces.filter((g) => g.id !== open.id);
       }
     }
   }
-  return best ?? [];
+  return [];
 }
 
 function betterThan(open: Garment, chosen: Garment, pool: readonly Garment[]): Garment | null {
@@ -901,7 +893,7 @@ function betterThan(open: Garment, chosen: Garment, pool: readonly Garment[]): G
         ? slot
         : null;
   if (!want) return null;
-  for (const cand of byIdle(pool, want)) {
+  for (const cand of drawnBySlot(pool, want, `${open.id}:${chosen.id}`)) {
     if (cand.id === chosen.id || cand.id === open.id) continue;
     if (clashes([open, cand])) continue;
     return cand;
@@ -980,7 +972,7 @@ export type PageAnswer =
   | { kind: "reject" }
   | { kind: "answer"; text: string; garmentIds: string[] };
 
-/** Rank only the looks on the page. An unowned garment is refused. */
+/** Answer from the looks on the page only: the first that passes the rules. An unowned garment is refused. */
 export function answerAsked(input: {
   prompt: string;
   page?: StylistPageContext;
@@ -1057,7 +1049,7 @@ export function pageNotes(page: StylistPageContext | undefined): string {
   if (page.openGarmentId) lines.push(`Open piece: ${page.openGarmentId}`);
   if (page.onScreenLookIds.length) lines.push(`On screen: ${page.onScreenLookIds.join(",")}`);
   lines.push(
-    "Rank only the looks listed as On screen. Do not answer about a look that is not listed. Do not invent a piece. Do not name a house or a brand. Do not tell him to buy. Do not say anything goes. If no temperature is listed, do not invent one.",
+    "Answer only from the looks listed as On screen. Do not answer about a look that is not listed. Do not invent a piece. Do not name a house or a brand. Do not tell him to buy. Do not say anything goes. If no temperature is listed, do not invent one.",
   );
   return lines.join("\n");
 }

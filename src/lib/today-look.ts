@@ -15,15 +15,14 @@ import { weekStripDays } from "./lookbook.ts";
 import { seasonFromWeather, type Season } from "./season.ts";
 import type { TasteMemory } from "./taste.ts";
 import type { DailyDrop, Garment, Look } from "./types.ts";
-import { lastDays, todayISO } from "./utils.ts";
+import { lastDays, todayNY } from "./utils.ts";
 
 export type TodayLookState = {
   drop: DailyDrop | { date: string; garmentIds: readonly string[] } | null | undefined;
   journal?: readonly { date: string; garmentIds: readonly string[]; verdict: string }[];
   thisWeek?: readonly Look[];
   garments: readonly Garment[];
-  /** The daily pick's inputs beside the closet and the journal (the store's); absent means an empty avoid list and no taste. */
-  avoid?: Record<string, number>;
+  /** The user's vetoes (the store's taste); absent means none. */
   taste?: TasteMemory;
   /** The day's season bucket (today-season.ts); the drop's reading, else the calendar, when absent. */
   season?: Season;
@@ -37,7 +36,7 @@ function isDrop(drop: TodayLookState["drop"]): drop is DailyDrop {
  * The daily pick's ids for this state (drop-pick.ts), or [] when the closet cannot dress. The
  * same inputs the Today effect hands rerollDrop: the day, the live closet, the bucket's weather.
  */
-export function dailyPickIds(state: TodayLookState, today = todayISO()): string[] {
+export function dailyPickIds(state: TodayLookState, today = todayNY()): string[] {
   const drop = isDrop(state.drop) ? state.drop : null;
   const season =
     state.season ?? seasonFromWeather(drop?.weather?.f !== undefined ? drop.weather.f : undefined);
@@ -45,13 +44,13 @@ export function dailyPickIds(state: TodayLookState, today = todayISO()): string[
   if (!owned.length) return [];
   const journal = (state.journal ?? []).map((j) => ({ id: `j-${j.date}`, date: j.date, garmentIds: [...j.garmentIds], verdict: j.verdict as "worn" | "skipped" }));
   return pickDropIds(
-    { garments: [...state.garments], journal, drop, avoid: state.avoid, taste: state.taste },
+    { garments: [...state.garments], journal, drop, taste: state.taste },
     { daily: { season }, today },
   ).ids;
 }
 
 /** The pieces on Today, in the page's order. Empty only when the closet cannot dress at all. */
-export function todayLookPieces(state: TodayLookState, today = todayISO()): Garment[] {
+export function todayLookPieces(state: TodayLookState, today = todayNY()): Garment[] {
   const garments = [...state.garments];
   const cells = weekStripDays({
     days: lastDays(7, today),
@@ -71,6 +70,6 @@ export function todayLookPieces(state: TodayLookState, today = todayISO()): Garm
 }
 
 /** The ids of todayLookPieces. */
-export function todayLookIds(state: TodayLookState, today = todayISO()): string[] {
+export function todayLookIds(state: TodayLookState, today = todayNY()): string[] {
   return todayLookPieces(state, today).map((g) => g.id);
 }

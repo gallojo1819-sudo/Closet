@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { FINDING_LOOKS, lookbookCountLine, screenLookCount, weekShowsEmptyReason, weekShowsSkeletons } from "./lookbook-status.ts";
+import { FINDING_LOOKS, lookbookCountLine, pageResolved, screenLookCount, weekShowsEmptyReason, weekShowsSkeletons } from "./lookbook-status.ts";
 
 describe("Lookbook loading state", () => {
   it("never says 0 looks before the row resolves", () => {
@@ -25,5 +25,22 @@ describe("Lookbook loading state", () => {
     assert.equal(weekShowsSkeletons({ resolved: true, shown: 0 }), false);
     assert.equal(weekShowsEmptyReason({ resolved: false, shown: 0 }), false);
     assert.equal(weekShowsEmptyReason({ resolved: true, shown: 0 }), true);
+  });
+});
+
+describe("Lookbook page resolution", () => {
+  it("the page is resolved only when the week row and the idea rows are both in", () => {
+    assert.equal(pageResolved({ week: false, ways: false }), false);
+    assert.equal(pageResolved({ week: true, ways: false }), false);
+    assert.equal(pageResolved({ week: false, ways: true }), false);
+    assert.equal(pageResolved({ week: true, ways: true }), true);
+  });
+  it("the count line, the skeletons and the empty reason read the same resolution: no number, no reason, before both rows", () => {
+    for (const rows of [{ week: true, ways: false }, { week: false, ways: true }]) {
+      const resolved = pageResolved(rows);
+      assert.equal(lookbookCountLine({ resolved, count: 8, chapter: "Weekday", season: "Fall" }), FINDING_LOOKS);
+      assert.equal(weekShowsSkeletons({ resolved, shown: 0 }), true);
+      assert.equal(weekShowsEmptyReason({ resolved, shown: 0 }), false);
+    }
   });
 });

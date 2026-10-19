@@ -4,7 +4,7 @@
  * Shearling g_wwy9b2pusds3 is outside the brown-suede cap.
  * Cuts marked confirm are guesses until Joe says otherwise.
  */
-import { codeOf, fwCodes, jacketDefaults, profileKey, supersededHit, zipKnitExempt } from "../detectors/behavior.ts";
+import { codeOf, fwCodes, jacketDefaults, profileKey, supersededHit } from "../detectors/behavior.ts";
 import { approvedProfile, HOUSE_BY_CODE } from "../house-profiles/load.ts";
 import {
   blob,
@@ -107,6 +107,15 @@ const SUEDE = new Set<string>(SUEDE_FAMILY);
 /** Not in the brown-suede cap. */
 export const SHEARLING_BOMBER = "g_wwy9b2pusds3";
 const OVERSHIRT = "g_v7uvadckh79p";
+/** The dark brown button-up shirt: worn open over another top it is the jacket (Joe, Oct 15 2026). */
+export const BROWN_BUTTON_UP = "g_ap5v0s67pg9d";
+/**
+ * Dual pieces: a top on its own, the outer layer when another top is under it. slotPieces
+ * seats one as `outer` when a top is present, and in that role it counts as the jacket the
+ * day asks for (JKT-COV-1).
+ */
+export const OUTER_ELIGIBLE: readonly string[] = [OVERSHIRT, BROWN_BUTTON_UP];
+const OUTER_ELIGIBLE_SET = new Set<string>(OUTER_ELIGIBLE);
 
 /** Code overlays from the detector. Not written into the approved profiles. */
 export const JACKET_DEFAULTS: Record<string, { id: string; seasons?: string[] }[]> = jacketDefaults();
@@ -184,6 +193,30 @@ function jsig(g: Plate | undefined, id: string, worn: string): boolean {
   return val;
 }
 
+/**
+ * Ecru or mid-wash clean jeans: a denim bottom that is not white, striped, distressed or a
+ * lounge pant, in the ecru (0) or mid (2) wash. With a sport coat these are JKT-LAY-3's soft
+ * case (Joe, 2026-10-18: jeans can go with a blazer sometimes if it works): they pass the rules
+ * and draw at JEANS_BLAZER_ODDS (draw.ts).
+ */
+export function ecruOrMidJeans(g: Plate): boolean {
+  if (!jsig(g, "denim_bottom", "bottom")) return false;
+  if (whiteOrStriped(g) || jsig(g, "distressed_or_frayed", "bottom") || jsig(g, "knit_lounge_pant", "bottom")) return false;
+  const w = wash(g);
+  return w === 0 || w === 2;
+}
+
+/** A look whose outer is a sport coat or blazer over ecru or mid-wash clean jeans. */
+export function jeansWithBlazer(pieces: Plate[]): boolean {
+  const ps = slotPieces(pieces);
+  const outer = ps.outer;
+  const bottom = ps.bottom;
+  if (!outer || !bottom) return false;
+  const cls = jacketInfo(outer).class;
+  if (cls !== "sport_coat_soft" && cls !== "sport_coat_structured") return false;
+  return ecruOrMidJeans(bottom);
+}
+
 function whiteOrStriped(g: Plate): boolean {
   if (!jsig(g, "denim_bottom", "bottom")) return false;
   if (hasText(blob(g), ["stripe", "striped", "white"])) return true;
@@ -218,10 +251,24 @@ function fromRow(row: ClassPlate): JacketInfo {
     overChunky: String(row.over_chunky_knit_ok ?? "").startsWith("yes"),
     suedeFamily: Boolean(row.brown_suede_family),
     confirm: CONFIRM.has(row.id),
-    outerEligible: row.id === OVERSHIRT,
+    outerEligible: OUTER_ELIGIBLE_SET.has(row.id),
     countsAsJacket: cls !== "mid" && row.counts_as_jacket !== false,
   };
 }
+
+/** A dual piece with no classification row: a light casual layer that counts as the jacket when it sits as the outer. */
+const DUAL_LAYER: JacketInfo = {
+  class: "casual",
+  cut: "close_light",
+  weight: "light",
+  seasons: ["spring", "summer", "fall", "winter"],
+  formality: 2,
+  overChunky: false,
+  suedeFamily: false,
+  confirm: false,
+  outerEligible: true,
+  countsAsJacket: true,
+};
 
 function heuristicFormality(g: Plate, cls: JacketClass): number {
   if (cls === "sport_coat_structured") return 5;
@@ -241,6 +288,7 @@ function heuristicWeight(g: Plate, cls: JacketClass): JacketWeight {
 }
 
 function fromHeuristic(g: Plate): JacketInfo {
+  if (OUTER_ELIGIBLE_SET.has(g.id)) return DUAL_LAYER;
   const tailored = jsig(g, "tailored", "outer");
   const coat = jsig(g, "outer_coat", "outer");
   const mid = jsig(g, "mid_layer", "any") && (g.category === "outerwear" || slotOfPlate(g) === "mid" || slotOfPlate(g) === "outer");
@@ -271,7 +319,7 @@ function fromHeuristic(g: Plate): JacketInfo {
     overChunky: cut === "roomy",
     suedeFamily: SUEDE.has(g.id),
     confirm: CONFIRM.has(g.id),
-    outerEligible: g.id === OVERSHIRT,
+    outerEligible: OUTER_ELIGIBLE_SET.has(g.id),
     countsAsJacket: cls !== "mid" && cls !== null,
   };
 }
@@ -552,51 +600,30 @@ export function coatSharesLookWithGraphic(pieces: Plate[]): boolean {
   return coats.some((coat) => marks.some((mark) => mark.id !== coat.id));
 }
 
+/**
+ * JKT-LAY-2, as Joe set it on Oct 15 2026: a sport coat takes a shirt or a fine knit, never a
+ * chunky cable. Pass for a woven shirt, a polo, a fine knit, a tee, a zip knit, a cardigan or a
+ * resort shirt; fail only for a chunky or cable knit and the graphic or collegiate cases. The
+ * dated rule document's soft cases (a tee under a soft coat, a zip knit, a cardigan, a resort
+ * shirt, an unrated top) are superseded: nothing scores, and these are not fails.
+ */
 function underHit(g: Plate, worn: string, outer: Plate, ctx: JacketCtx, hits: JacketHit[]) {
-  const info = jacketInfo(outer);
-  const softCoat = info.class === "sport_coat_soft";
-  const structured = info.class === "sport_coat_structured";
-  const occ = ctx.occasion.toLowerCase();
-  const season = ctx.season.toLowerCase();
-  const push = (severity: "hard" | "soft", delta: number, why: string) => {
-    if (severity === "soft" && delta === 0) return;
-    hits.push({ id: "JKT-LAY-2", severity, delta, why });
+  void outer;
+  void ctx;
+  const push = (why: string) => {
+    hits.push({ id: "JKT-LAY-2", severity: "hard", delta: 0, why });
   };
   if (graphicOrCollegiate(g)) {
-    push("hard", 0, `graphic or collegiate ${g.name} under a sport coat`);
+    push(`graphic or collegiate ${g.name} under a sport coat`);
     return;
   }
   if (jsig(g, "tee_graphic", worn)) {
-    push("hard", 0, `graphic tee ${g.name} under a sport coat`);
+    push(`graphic tee ${g.name} under a sport coat`);
     return;
   }
-  if (jsig(g, "tee_plain", worn) || jsig(g, "henley", worn)) {
-    if (structured) push("hard", 0, `${g.name} under a structured sport coat`);
-    else if (softCoat) {
-      const delta = occ === "weekend" || occ === "travel" ? -5 : -15;
-      push("soft", delta, `${g.name} under a soft sport coat on ${occ}`);
-    } else push("soft", -5, `${g.name} under a sport coat`);
-    return;
+  if (jsig(g, "chunky_knit", worn) || hasText(blob(g), ["cable", "chunky", "aran", "fisherman"])) {
+    push(`chunky or cable knit ${g.name} under a sport coat`);
   }
-  if (jsig(g, "zip_knit", worn)) {
-    const exempt = zipKnitExempt(ctx.house) && (g.fit ?? "regular") === "regular" && !hasText(blob(g), ["fleece"]);
-    if (!exempt) {
-      const delta = occ === "weekend" || occ === "travel" ? -5 : -10;
-      push("soft", delta, `zip knit ${g.name} under a sport coat`);
-    }
-    return;
-  }
-  if (jsig(g, "cardigan", worn)) {
-    push("soft", -10, `cardigan ${g.name} under a sport coat`);
-    return;
-  }
-  if (jsig(g, "resort_shirt", worn)) {
-    if (season !== "spring" && season !== "summer") push("soft", -10, `resort shirt ${g.name} under a sport coat`);
-    else push("soft", -5, `resort shirt ${g.name} under a sport coat`);
-    return;
-  }
-  if (jsig(g, "shirt_ok_under_tailoring", worn) || jsig(g, "polo_any", worn) || jsig(g, "fine_knit", worn)) return;
-  push("soft", -5, `unrated ${g.name} under a sport coat`);
 }
 
 export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): JacketHit[] {

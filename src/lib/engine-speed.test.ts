@@ -44,7 +44,7 @@ function spyStore(answer?: (key: string) => unknown) {
 }
 
 describe("engine speed: same outputs", () => {
-  it("A) matrix, reshuffle rows, week, drop and ways match the 58d7b8c snapshot", (t) => {
+  it("A) matrix, reshuffle rows, week, drop and ways match the recorded snapshot (re-recorded for the probability round, Oct 15 2026)", (t) => {
     setEngineStore(null);
     clearMatrixCache();
     sameAsSnapshot(t, runEngine(), "fresh");

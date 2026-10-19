@@ -19,12 +19,13 @@ import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { livePool } from "@/lib/rack";
 import { avoidedUniformLine, lastWornDays, todayOccasion } from "@/lib/style";
-import { emptyTaste, leftOffLine, techniqueLine } from "@/lib/taste";
+import { emptyTaste, leftOffLine } from "@/lib/taste";
+import { todaySuggestions } from "@/lib/today-suggest";
 import { useCloset } from "@/lib/store";
 import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
 import { useIsClient } from "@/lib/use-client";
 import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
-import { cn, formatLongDate, lastDays, todayISO, weekdayLetter } from "@/lib/utils";
+import { cn, formatLongDate, lastDays, todayNY, weekdayLetter } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({ component: Today });
 
@@ -40,11 +41,11 @@ function Today() {
   const wearToday = useCloset((s) => s.wearToday);
   const skipDrop = useCloset((s) => s.skipDrop);
   const saveLook = useCloset((s) => s.saveLook);
+  const setDrop = useCloset((s) => s.setDrop);
   const outfitWith = useCloset((s) => s.outfitWith);
   const looksAll = useCloset((s) => s.looks);
   const thisWeek = useCloset((s) => s.thisWeek);
   const taste = useCloset((s) => s.taste) ?? emptyTaste();
-  const avoid = useCloset((s) => s.avoid);
   const hydrated = useCloset((s) => s.hydrated);
   const account = useAccount();
   const [view, setView] = useState<"paper" | "me">("paper");
@@ -102,7 +103,7 @@ function Today() {
     [journal, drop, garments],
   );
   const atlasLine = useMemo(() => {
-    if (!drop) return { left: null as string | null, technique: null as string | null };
+    if (!drop) return { left: null as string | null };
     const skip = journal.find((j) => j.verdict === "skipped");
     const skipped = (skip?.garmentIds ?? [])
       .map((id) => garments.find((g) => g.id === id))
@@ -110,12 +111,9 @@ function Today() {
     const next = drop.garmentIds
       .map((id) => garments.find((g) => g.id === id))
       .filter((g): g is Garment => Boolean(g));
-    return {
-      left: leftOffLine({ skipped, next, taste }),
-      technique: techniqueLine(taste, next),
-    };
+    return { left: leftOffLine({ skipped, next, taste }) };
   }, [journal, drop, garments, taste]);
-  const today = todayISO();
+  const today = todayNY();
   const weekCells = useMemo(
     () =>
       weekStripDays({
@@ -133,8 +131,8 @@ function Today() {
      effect writes when it lands. */
   const todaySeason = todaySeasonBucket(weather?.f, today);
   const shown = useMemo(
-    () => todayLookPieces({ drop, journal, thisWeek, garments, avoid, taste, season: todaySeason }, today),
-    [drop, journal, thisWeek, garments, avoid, taste, todaySeason, today],
+    () => todayLookPieces({ drop, journal, thisWeek, garments, taste, season: todaySeason }, today),
+    [drop, journal, thisWeek, garments, taste, todaySeason, today],
   );
   const lookName =
     shown.length === 0
@@ -149,6 +147,15 @@ function Today() {
   const occasion = todayOccasion(drop);
   const note = dropNote(shown, weather, occasion, drop?.moment, undefined, dropSeason);
   const done = drop?.worn || drop?.verdict === "worn";
+  /* Suggest: up to three drawn alternates (today-suggest.ts), built only while the block is open. */
+  const shownKey = shown.map((g) => g.id).join(",");
+  const suggest = useMemo(() => {
+    if (!play) return null;
+    return todaySuggestions(
+      { garments, journal, drop, taste },
+      { todayIds: shownKey ? shownKey.split(",") : [], occasion, season: todaySeason, today },
+    );
+  }, [play, garments, journal, drop, taste, shownKey, occasion, todaySeason, today]);
   const picked = shown.find((g) => g.id === pick) ?? null;
   const swapBlocked = (g: Garment) =>
     !alternatives(garments, g, shown.map((p) => p.id)).length ||
@@ -373,9 +380,6 @@ function Today() {
             {atlasLine.left && (
               <p className="mt-2 text-sm text-ink-soft">{atlasLine.left}</p>
             )}
-            {atlasLine.technique && (
-              <p className="mt-2 text-sm text-ink-soft">{atlasLine.technique}</p>
-            )}
             {avoided && (
               <p className="mt-2 text-sm text-ink-soft">{avoided}</p>
             )}
@@ -498,11 +502,68 @@ function Today() {
           </div>
           <button
             type="button"
+            data-today-suggest-toggle
             onClick={() => setPlay((v) => !v)}
             className="micro text-ink-soft hover:text-ink"
           >
             {play ? "Close builder" : "Suggest"}
           </button>
+          {play && suggest && (
+            <div data-today-suggest className="border border-hairline bg-card p-4 space-y-3">
+              <p className="micro text-ink-soft">Other looks that pass the rules today</p>
+              {suggest.alternates.length === 0 ? (
+                <p data-today-suggest-reason className="text-sm text-ink-soft">{suggest.reason}</p>
+              ) : (
+                <ol className="space-y-3">
+                  {suggest.alternates.map((alt, i) => (
+                    <li key={alt.ids.join(",")} data-today-alternate={i} className="flex items-center gap-3">
+                      <div className="flex shrink-0 gap-1">
+                        {alt.pieces.slice(0, 4).map((g) => (
+                          <GarmentImg key={g.id} garment={g} alt="" nudge={false} className="size-10 object-contain bg-paper-deep" />
+                        ))}
+                      </div>
+                      <p className="min-w-0 flex-1 text-sm leading-snug">{alt.pieces.map((g) => pieceLabel(g, garments)).join(" · ")}</p>
+                      <button
+                        type="button"
+                        disabled={done}
+                        onClick={() => {
+                          /* The builder's own path: today's drop becomes this look (setDrop). */
+                          setDrop({
+                            date: today,
+                            garmentIds: alt.ids,
+                            worn: false,
+                            verdict: "pending",
+                            weather,
+                            occasion,
+                            moment: drop?.moment,
+                          });
+                          setPlay(false);
+                        }}
+                        className="micro text-ink-soft hover:text-ink disabled:opacity-30"
+                      >
+                        Use
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          saveLook({
+                            name: alt.pieces.length >= 2 ? `${pieceLabel(alt.pieces[0]!, garments)} · ${pieceLabel(alt.pieces[1]!, garments)}` : pieceLabel(alt.pieces[0]!, garments),
+                            occasion,
+                            garmentIds: alt.ids,
+                            source: "manual",
+                            lookbook: true,
+                          })
+                        }
+                        className="micro text-ink-soft hover:text-ink"
+                      >
+                        Save
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
           {play && <LookBuilder onClose={() => setPlay(false)} />}
           {resting && !done && (
             <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">

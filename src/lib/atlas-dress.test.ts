@@ -7,8 +7,6 @@ import {
   emptyTaste,
   learnFromAsk,
   leftOffLine,
-  techniqueLine,
-  techniqueWeight,
   type TasteMemory,
   type TasteVeto,
 } from "./taste.ts";
@@ -51,22 +49,23 @@ function tasteWith(weight: number, vetoes: TasteVeto[] = []): TasteMemory {
 
 const day = {
   occasion: "weekday" as const,
-  moment: "day" as const,
   weather: { f: 55, label: "Cool", code: 3 },
   previousIds: ["none"],
   legalCombo: () => true,
 };
 
 describe("Atlas dresses Today and Lookbook", () => {
-  const oxford = piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" });
-  const chino = piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino" });
-  const loafer = piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer" });
+  /* Colours as named: every rule is pass or fail, and navy cotton on navy cotton fails its own colour rule. */
+  const oxford = piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford", colors: ["white"] });
+  const chino = piece({ id: "ch", name: "Khaki chinos", category: "bottom", subtype: "chino", colors: ["khaki"] });
+  const loafer = piece({ id: "lf", name: "Navy loafers", category: "footwear", subtype: "loafer", colors: ["navy"], material: "leather" });
   const field = piece({
     id: "field",
     name: "field jacket",
     category: "outerwear",
     subtype: "field jacket",
     formality: 2,
+    colors: ["olive"],
   });
   const blazer = piece({
     id: "navy",
@@ -93,12 +92,19 @@ describe("Atlas dresses Today and Lookbook", () => {
     const rack = [oxford, chino, loafer, field];
     const open = pickLook(rack, day);
     assert.ok(open.includes("field"), `unlocked pick dropped the jacket: ${open.join(",")}`);
+    /* A cool weekday is a jacket day: with the only jacket vetoed, no look passes (never a bare one). */
     const vetoed = pickLook(rack, {
       ...day,
       taste: tasteWith(0, [{ kind: "piece", id: "field" }]),
     });
-    assert.ok(!vetoed.includes("field"), `veto kept the jacket: ${vetoed.join(",")}`);
-    assert.ok(vetoed.includes("ox") && vetoed.includes("ch") && vetoed.includes("lf"));
+    assert.deepEqual(vetoed, [], `veto kept the jacket or dressed bare: ${vetoed.join(",")}`);
+    const chore = piece({ id: "chore", name: "Olive chore coat", category: "outerwear", subtype: "chore coat", colors: ["olive"], formality: 2 });
+    const other = pickLook([...rack, chore], {
+      ...day,
+      taste: tasteWith(0, [{ kind: "piece", id: "field" }]),
+    });
+    assert.ok(!other.includes("field"), `veto kept the jacket: ${other.join(",")}`);
+    assert.ok(other.includes("chore") && other.includes("ox") && other.includes("ch") && other.includes("lf"), other.join(","));
   });
 
   it("a pairing veto is not returned when another top and shoe exist", () => {
@@ -126,7 +132,6 @@ describe("Atlas dresses Today and Lookbook", () => {
     const rack = [hoodie, oxford, jeans, chino, loafer, sneaker];
     const weekend = {
       occasion: "weekend" as const,
-      moment: "day" as const,
       weather: { f: 64, label: "Fair", code: 2 },
       previousIds: ["none"],
       legalCombo: () => true,
@@ -148,7 +153,7 @@ describe("Atlas dresses Today and Lookbook", () => {
 
   it("never-tuck keeps the shirt and does not tuck it", () => {
     const shirt = piece({ id: "ox", name: "White oxford", category: "top", subtype: "oxford" });
-    const rack = [shirt, chino, loafer];
+    const rack = [shirt, chino, loafer, field];
     const taste = tasteWith(0, [{ kind: "habit", id: "ox", habit: "never tuck" }]);
     const ids = pickLook(rack, { ...day, taste });
     assert.ok(ids.includes("ox"), `shirt was dropped: ${ids.join(",")}`);
@@ -160,13 +165,15 @@ describe("Atlas dresses Today and Lookbook", () => {
     assert.equal(/Tuck THIS shirt/.test(line), false);
   });
 
-  it("weight 3 on workwear stack beats an equal look that is not that stack", () => {
+  it("a stored technique weight changes nothing: the same draw at weight 0 and at weight 3", () => {
     const flannel = piece({
       id: "fl",
       name: "Grey flannel shirt",
       category: "top",
       subtype: "flannel",
       formality: 3,
+      colors: ["grey"],
+      material: "flannel",
     });
     const jeans = piece({
       id: "jn",
@@ -174,6 +181,8 @@ describe("Atlas dresses Today and Lookbook", () => {
       category: "bottom",
       subtype: "jean",
       formality: 3,
+      colors: ["indigo"],
+      material: "denim",
     });
     const boots = piece({
       id: "bt",
@@ -181,6 +190,8 @@ describe("Atlas dresses Today and Lookbook", () => {
       category: "footwear",
       subtype: "boot",
       formality: 3,
+      colors: ["brown"],
+      material: "leather",
     });
     const bomber = piece({
       id: "bm",
@@ -188,25 +199,16 @@ describe("Atlas dresses Today and Lookbook", () => {
       category: "outerwear",
       subtype: "bomber",
       formality: 3,
+      colors: ["black"],
     });
     const rack = [flannel, oxford, jeans, chino, boots, loafer, field, bomber];
-    const quiet = pickLook(rack, { ...day, taste: tasteWith(0) });
-    const loud = pickLook(rack, { ...day, taste: tasteWith(3) });
-    const stack = (ids: string[]) => ids.includes("field") && ids.includes("jn") && ids.includes("bt");
-    assert.equal(stack(quiet), false, `weight 0 forced the stack: ${quiet.join(",")}`);
-    assert.ok(quiet.includes("ch") && quiet.includes("lf"), `weight 0 lost the equal look: ${quiet.join(",")}`);
-    assert.equal(stack(loud), true, `weight 3 lost: ${loud.join(",")}`);
-    assert.ok(!loud.includes("lf"), `weight 3 kept the loafer: ${loud.join(",")}`);
-    const pieces = [field, flannel, jeans, boots];
-    assert.equal(techniqueWeight(tasteWith(0), pieces), 0);
-    assert.ok(techniqueWeight(tasteWith(3), pieces) > techniqueWeight(tasteWith(0), pieces));
+    for (const salt of [1, 2, 3, 7, 11]) {
+      const quiet = pickLook(rack, { ...day, salt, taste: tasteWith(0) });
+      const loud = pickLook(rack, { ...day, salt, taste: tasteWith(3) });
+      assert.deepEqual(loud, quiet, `salt ${salt}: a technique weight moved the draw`);
+    }
     const only = pickLook([flannel, jeans, boots, field], { ...day, taste: tasteWith(0) });
     assert.ok(only.includes("fl") && only.includes("jn") && only.includes("bt") && only.includes("field"), `weight 0 banned the stack: ${only.join(",")}`);
-    assert.equal(techniqueLine(tasteWith(0), pieces), null);
-    assert.equal(
-      techniqueLine(tasteWith(3), pieces),
-      "Workwear stack. field jacket, Grey flannel shirt, Indigo jeans, Brown boots.",
-    );
   });
 
   it("a locked piece stays even if it is vetoed", () => {

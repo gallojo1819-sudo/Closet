@@ -9,12 +9,12 @@ import {
   COMPOSE_TEMPERATURE,
   parseCompose,
 } from "./compose";
-import { livePool } from "./rack";
 import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
-import { acceptStylistReply, answerAsked, pageNotes, type StylistPageContext } from "./stylist-page";
-import { notesBlock, relevantNotes } from "./stylist-notes/rank";
-import { buildStylistSystem, composeAtlasLook, normalizeTaste, occasionFromPrompt, type TasteMemory } from "./taste";
-import type { Category, Garment, Occasion } from "./types";
+import type { StylistPageContext } from "./stylist-page";
+import { askStylistCore, phasesLine, type ChatFn, type StylistAskResult } from "./stylist-ask";
+import type { TasteMemory } from "./taste";
+import type { Category, Garment } from "./types";
+import { SERVER_DEADLINE_MS } from "./ai-budget";
 
 export type TagResult = {
   ok: true;
@@ -56,12 +56,11 @@ function xaiErrorMessage(json: unknown, text: string, status: number): string {
   return `xAI request failed (${status})`;
 }
 
-/** How long one model call may take before it is given up as a failed call (the caller falls back). */
+/** How long one model call may take before it is given up as a failed call (the caller falls back). The stylist ask has its own, shorter budget (ai-budget.ts). */
 export const XAI_TIMEOUT_MS = 20000;
-/** How long the stylist waits for the account's notes before answering without them. */
-export const NOTES_TIMEOUT_MS = 3000;
+export { NOTES_TIMEOUT_MS, SERVER_DEADLINE_MS } from "./ai-budget";
 
-async function xaiFetch(url: string, body: unknown, timeoutMs = XAI_TIMEOUT_MS): Promise<XaiResult> {
+async function xaiFetch(url: string, body: unknown, timeoutMs = XAI_TIMEOUT_MS, signal?: AbortSignal): Promise<XaiResult> {
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {
     return { ok: false, status: 0, error: "Set XAI_API_KEY.", json: null };
@@ -76,11 +75,11 @@ async function xaiFetch(url: string, body: unknown, timeoutMs = XAI_TIMEOUT_MS):
       },
       body: JSON.stringify(body),
       /* A call that never returns is a failed call, not a hung request: the caller's fallback answers. */
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: signal ?? AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     const name = e instanceof Error ? e.name : "";
-    return { ok: false, status: 0, error: name === "TimeoutError" ? "xAI request timed out" : "xAI request failed", json: null };
+    return { ok: false, status: 0, error: name === "TimeoutError" || name === "AbortError" ? "xAI request timed out" : "xAI request failed", json: null };
   }
   const text = await res.text();
   let json: unknown = null;
@@ -470,30 +469,12 @@ export function parseLookLine(text: string, valid: Set<string>): string[] {
     .filter((id) => id && valid.has(id));
 }
 
-function finiteTemp(n: unknown): number | undefined {
-  return typeof n === "number" && Number.isFinite(n) ? n : undefined;
-}
-
-function resolveStylistLook(
-  garments: Garment[],
-  prompt: string,
-  f: number | undefined,
-  grokText?: string,
-  taste?: TasteMemory,
-  lockedIds?: string[],
-): { text: string; garmentIds: string[]; occasion: Occasion; technique: string | null } {
-  return composeAtlasLook({
-    garments,
-    prompt,
-    ...(f !== undefined ? { weatherF: f } : {}),
-    occasion: occasionFromPrompt(prompt),
-    taste: normalizeTaste(taste),
-    modelText: grokText,
-    lockedIds,
-  });
-}
-
-const CHAT_MODELS = ["grok-4.5", "grok-4.3", "grok-4"] as const;
+/** One chat call for the stylist ask, aborted by the ask's own deadline. */
+const stylistChat: ChatFn = async ({ model, messages, signal }) => {
+  const r = await xaiFetch("https://api.x.ai/v1/chat/completions", { model, max_tokens: 400, temperature: 0.4, messages }, SERVER_DEADLINE_MS, signal);
+  const body = r.json as { choices?: { message?: { content?: string } }[] } | null;
+  return { ok: r.ok, text: body?.choices?.[0]?.message?.content ?? "", error: r.error };
+};
 
 /** The stylist composes the chapter. grok-4.5, no images, no second model. */
 export const composeChapter = createServerFn({ method: "POST" })
@@ -595,108 +576,28 @@ export const askStylist = createServerFn({ method: "POST" })
       onScreenLooks?: { id: string; garmentIds: string[] }[];
     }) => input,
   )
-  .handler(
-    async ({
-      data,
-      context,
-    }): Promise<
-      | { ok: true; text: string; garmentIds: string[]; occasion: Occasion; technique: string | null }
-      | { ok: false; error: string }
-    > => {
+  .handler(async ({ data, context }): Promise<StylistAskResult> => {
+    const t0 = Date.now();
     const gate = await callerGate(context, "askStylist");
-    if (!gate.ok) return { ok: false, error: gate.error };
-    const rack = livePool(data.garments ?? []);
-    const page = data.page;
-    const f = finiteTemp(page?.weatherF) ?? finiteTemp(data.weatherF);
-    const taste = normalizeTaste(data.taste);
-    const onScreen = (data.onScreenLooks ?? []).filter((look) =>
-      page?.onScreenLookIds?.includes(look.id),
-    );
-    if (page && (page.onScreenLookIds.length > 0 || page.openGarmentId)) {
-      const local = answerAsked({
-        prompt: data.prompt,
-        page,
-        garments: rack,
-        looks: onScreen,
-      });
-      if (local.kind === "reject") {
-        return { ok: false, error: "That piece is not in this closet." };
-      }
-      if (local.kind === "answer") {
-        const occasion = (page.occasion as Occasion) || occasionFromPrompt(data.prompt);
-        return {
-          ok: true,
-          text: local.text,
-          garmentIds: local.garmentIds,
-          occasion,
-          technique: null,
-        };
-      }
-    }
-    const fallback = () =>
-      rack.length
-        ? { ok: true as const, ...resolveStylistLook(rack, data.prompt, f, undefined, taste, data.lockedIds) }
-        : { ok: false as const, error: "The stylist has nothing to dress." };
-
-    if (!process.env.XAI_API_KEY) return fallback();
-
-    const system = buildStylistSystem({
-      garments: rack,
-      taste,
-      ...(f !== undefined ? { weatherF: f } : {}),
-      occasion: (page?.occasion as Occasion) || occasionFromPrompt(data.prompt),
-      lockedIds: data.lockedIds,
-    });
-    const noteBody = [data.context, pageNotes(page)].filter(Boolean).join("\n");
-    const notes = noteBody ? `\n\nNOTES\n${noteBody}` : "";
+    const gateMs = Date.now() - t0;
+    if (!gate.ok) return { ok: false, error: gate.error, phases: [{ phase: "gate", ms: gateMs }] };
     /* What he told the stylist, as the caller under RLS: the top eight by topic match, then recency.
-       A notes read that hangs or throws costs the answer nothing: the ask goes on without them. */
-    const { loadActiveNotes } = await import("./stylist-notes/notes.server");
-    const active = await Promise.race([
-      loadActiveNotes(context.callerId, context.sbToken).catch(() => []),
-      new Promise<never[]>((resolve) => setTimeout(() => resolve([]), NOTES_TIMEOUT_MS)),
-    ]);
-    const remembered = notesBlock(
-      relevantNotes(active, { prompt: data.prompt, garments: rack, lockedIds: data.lockedIds }),
-      rack,
-    );
-    const prior = (data.thread ?? [])
-      .slice(-8)
-      .filter((m) => m.text.trim())
-      .map((m) => ({
-        role: m.role === "user" ? "user" : "assistant",
-        content: m.text.slice(0, 1200),
-      }));
-    const messages = [
-      { role: "system", content: `${system}${notes}${remembered}` },
-      ...prior,
-      { role: "user", content: data.prompt.slice(0, 1200) },
-    ];
-
-    for (const model of CHAT_MODELS) {
-      const r = await xaiFetch("https://api.x.ai/v1/chat/completions", {
-        model,
-        max_tokens: 400,
-        temperature: 0.4,
-        messages,
-      });
-      if (r.ok) {
-        const body = r.json as { choices?: { message?: { content?: string } }[] };
-        const text = body.choices?.[0]?.message?.content ?? "";
-        if (text.trim() && rack.length) {
-          if (!acceptStylistReply(text, rack)) {
-            return { ok: false, error: "That piece is not in this closet." };
-          }
-          const resolved = resolveStylistLook(rack, data.prompt, f, text, taste, data.lockedIds);
-          if (!acceptStylistReply(resolved.text, rack)) {
-            return { ok: false, error: "That piece is not in this closet." };
-          }
-          return { ok: true, ...resolved };
-        }
-      }
-      if (rack.length) return fallback();
+       The read starts beside the prompt build (stylist-ask.ts) and is capped; a read that hangs or
+       throws costs the answer nothing. */
+    const loadNotes = async () => {
+      const { loadActiveNotes } = await import("./stylist-notes/notes.server");
+      return loadActiveNotes(context.callerId, context.sbToken);
+    };
+    const result = await askStylistCore(data, {
+      chat: process.env.XAI_API_KEY ? stylistChat : null,
+      loadNotes,
+      deadlineMs: Math.max(0, SERVER_DEADLINE_MS - gateMs),
+    });
+    const phases = [{ phase: "gate", ms: gateMs }, ...result.phases];
+    if (process.env.NODE_ENV !== "production") {
+      console.debug(`[closet] askStylist ${result.ok ? result.source : "error"}: ${phasesLine(phases)}`);
     }
-    return fallback();
+    return { ...result, phases };
   });
 
 /** One sentence about layering. Off the ask path. A missing key skips it. */

@@ -34,6 +34,7 @@ import { lookFitsSeason } from "./season.ts";
 import { isBrownSuedeOuter } from "./style.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
+import { NEXT_PLAIN_ROW, roomLeft, roomLine } from "./__fixtures__/page-room.ts";
 import { LIVE_SNAPSHOT_COUNT, liveSnapshot } from "./__fixtures__/snapshot.ts";
 
 const CLOSET: Garment[] = liveSnapshot;
@@ -75,6 +76,8 @@ type Tap = {
   twins: Set<string>;
   /** Allowed look-alike keys so far: eligible minus what is known unpairable after this tap. */
   allowedTwins: Set<string>;
+  /** What was listed unpairable when the tap was built. */
+  stuck: Set<string>;
   /** Pieces the tap before did not show. */
   fresh: number;
   /** Look-alike keys never shown before this tap. */
@@ -135,6 +138,7 @@ function simulate(occasion: Occasion, taps = TAPS): Run {
       pieces,
       twins,
       allowedTwins,
+      stuck: new Set(stuck),
       fresh: [...pieces].filter((id) => !prev.has(id)).length,
       newTwins,
       reset,
@@ -181,14 +185,23 @@ describe("the live closet", () => {
   });
 });
 
+/** The exhaustive proof that a row has no card left (page-room.ts), as an assertion message; null when it is full. */
+function proof(run: Run, tap: Tap, rowId: string): string | null {
+  return roomLine(
+    roomLeft({ closet: CLOSET, occasion: run.occasion, season: SEASON, today: TODAY, week: tap.week, rows: tap.rows, stuck: tap.stuck, eligible: new Set(run.eligible) }, rowId),
+  );
+}
+
 describe("six Re-dresses on the live closet, every chapter", () => {
-  it("every tap shows a full week row and exactly four idea rows, none dropped", () => {
+  it("every tap shows a full week row and idea rows as full as the rules allow: a short row or a missing row has no card left", () => {
     for (const run of RUNS) {
       for (const tap of run.taps) {
         expect(tap.week.length, `${run.occasion} tap ${tap.n} week row`).toBeGreaterThanOrEqual(ROW_MIN);
-        expect(tap.rows.length, `${run.occasion} tap ${tap.n} rows: ${tap.rows.map((r) => r.id).join(",")}`).toBe(STORY_ROWS);
+        expect(tap.rows.length, `${run.occasion} tap ${tap.n} rows: ${tap.rows.map((r) => r.id).join(",")}`).toBeLessThanOrEqual(STORY_ROWS);
+        if (tap.rows.length < STORY_ROWS) expect(proof(run, tap, NEXT_PLAIN_ROW), `${run.occasion} tap ${tap.n}: ${tap.rows.length} rows, yet another plain row`).toBeNull();
         for (const row of tap.rows) {
-          expect(row.looks.length, `${run.occasion} tap ${tap.n} / ${row.title}`).toBeGreaterThanOrEqual(row.relaxed ? 1 : ROW_MIN);
+          expect(row.looks.length, `${run.occasion} tap ${tap.n} / ${row.title}: empty`).toBeGreaterThan(0);
+          if (row.looks.length < ROW_MIN) expect(proof(run, tap, row.id), `${run.occasion} tap ${tap.n} / ${row.title}: ${row.looks.length} cards`).toBeNull();
           expect(row.title.length).toBeGreaterThan(0);
         }
         expect(new Set(tap.rows.map((row) => row.title)).size).toBe(tap.rows.length);

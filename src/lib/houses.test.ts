@@ -52,6 +52,8 @@ const FIX = [
   g({ id: "mule", name: "Tan driving mule", category: "footwear", subtype: "mule", colors: ["tan"] }),
   g({ id: "court", name: "White court sneakers", category: "footwear", subtype: "sneaker", colors: ["white"] }),
   g({ id: "boot", name: "Brown boots", category: "footwear", subtype: "boot", colors: ["brown"] }),
+  /* A fall weekday is a jacket day: an outer the knits may sit under. */
+  g({ id: "chore", name: "Olive chore coat", category: "outerwear", subtype: "chore coat", colors: ["olive"] }),
 ];
 
 function combo(ids: string[]): Garment[] {
@@ -61,7 +63,6 @@ function combo(ids: string[]): Garment[] {
 function pick(house: House, occasion: "weekday" | "weekend" | "out") {
   return pickLook(FIX, {
     occasion,
-    moment: "day",
     weather: { f: 68, label: "Fair", code: 2 },
     house,
     legalCombo: (p) => houseLegalCombo(p, house, occasion, undefined, FIX),

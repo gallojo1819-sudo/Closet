@@ -93,6 +93,14 @@ function rack(): Garment[] {
       subtype: "mule",
       colors: ["white"],
     }),
+    /* A fall weekday is a jacket day: the rack needs an outer a cable knit may sit under. */
+    piece({
+      id: "chore",
+      name: "Navy chore coat",
+      category: "outerwear",
+      subtype: "chore coat",
+      colors: ["navy"],
+    }),
   ];
 }
 

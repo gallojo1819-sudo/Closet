@@ -8,7 +8,7 @@ import { FlatLay } from "@/components/closet/flat-lay";
 import { LookSheet } from "@/components/closet/look-sheet";
 import { OutlineJacket } from "@/components/closet/outline";
 import { GarmentTile } from "@/components/closet/tile";
-import { looksForHero } from "@/lib/lookbook";
+import { looksForHero, looksWithLabel } from "@/lib/lookbook";
 import {
   blobToDataUrl,
   getImage,
@@ -147,6 +147,27 @@ function ClosetPage() {
     return garments.filter((g) => derivedCategory(g) === filter);
   }, [garments, waiting, filter]);
   const open = garments.find((g) => g.id === openId) ?? null;
+  /* The open piece's looks (looksForHero, a seeded draw per hero occasion), found after the sheet
+     paints: the button appears with the real count, and is not there while the count is unknown. */
+  const [openLooks, setOpenLooks] = useState<Look[]>([]);
+  useEffect(() => {
+    setOpenLooks([]);
+    if (!open) return;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      const looks = looksForHero(open, garments);
+      if (!cancelled) setOpenLooks(looks);
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [open, garments]);
+  /* The cards the sheet draws: a look with three or more resolvable pieces. The heading counts these. */
+  const heroCards = useMemo(
+    () => heroLooks.filter((look) => look.garmentIds.filter((id) => garments.some((g) => g.id === id)).length >= 3),
+    [heroLooks, garments],
+  );
   const showingDemo = garments.some((g) => g.demo);
   const selectedCount = selected.size;
 
@@ -420,16 +441,18 @@ function ClosetPage() {
             setHeroLooks([]);
             setHeroOpen(null);
           }}
+          looksCount={openLooks.length}
           onLooks={() => {
-            setHeroLooks(looksForHero(open, garments));
+            setHeroLooks(openLooks);
             setHeroOpen(null);
           }}
           onOutfit={() => {
             const look = outfitWith([open.id]);
-            if (!look) return;
+            if (!look) return false;
             setOpenPiece(null);
             setHeroLooks([]);
             setHeroOpen(look);
+            return true;
           }}
         />
       )}
@@ -444,11 +467,11 @@ function ClosetPage() {
           />
           <div className="relative z-10 w-full max-h-[92dvh] overflow-auto bg-paper border border-hairline p-4 md:max-w-lg">
             <p className="micro text-ink-soft">With this</p>
-            <p className="mt-1 font-editorial text-2xl tracking-tight">
-              5 looks with {open?.name ?? "this"}
+            <p className="mt-1 font-editorial text-2xl tracking-tight" data-hero-heading>
+              {looksWithLabel(heroCards.length, open?.name ?? "this")}
             </p>
             <ul className="mt-4 grid grid-cols-2 gap-3">
-              {heroLooks.map((look) => {
+              {heroCards.map((look) => {
                 const pieces = look.garmentIds
                   .map((id) => garments.find((g) => g.id === id))
                   .filter((g): g is Garment => Boolean(g));

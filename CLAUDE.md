@@ -265,4 +265,86 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   holds. leftOffLine did not fit (it needs a skipped look and its replacement); the rotation is
   an optional `ctx.rotation` the caller may hand in.
 
+- probability-v2 (Oct 19 2026, claude/probability-v2 on a7016b8): the rating system is gone. No
+  numeric score ranks or gates a look anywhere; `passesRules(pieces, ctx) → {pass, failed}` in
+  `stylist/legal.ts` is the one verdict (isLegal's hard core plus every rule that was a soft
+  delta, each a fail with its id; `ruleHits` tags hard/soft; `RELAX_TIERS` is the ladder: colour,
+  then texture/formality, then proportion; season, weather, occasion (`OCC-GATE`, the Lookbook
+  gate now in `occasion-gate.ts`, so Today obeys it), slots and clashes are never waived; every
+  surface that waives reports `relaxed`). The pass-list `PREFERENCE_IDS` (soft hits that pass):
+  JKT-COV-1 soft (fall weekend/travel "jacket preferred", "waived above 72F"; Joe 2026-10-19) and
+  JKT-LAY-3 soft (ecru or mid-wash clean jeans with a sport coat; Joe 2026-10-18/19: passes at
+  half odds). Deleted in rules.ts rather than failed: XC-SEA-3's cold-weather mule in fall and
+  XC-TEX-4's tassel-loafer half (Joe 2026-10-15, confirmed 2026-10-19); JKT-LAY-2's soft cases
+  pass in `underHit` (fails only chunky/cable, graphic or collegiate). Every chooser draws
+  (`src/lib/draw.ts`: `drawSeed` = `todayNY()` (utils.ts, America/New_York) + surface id + sorted
+  live ids + a Skip/Reshuffle/Re-dress counter; `pieceWeight` from rotation alone: worn today 0,
+  last 14 days 0.1→1, idle gain after, never-worn or 21 days unsuggested ×2, squared;
+  `lookWeight` = the product × `JEANS_BLAZER_ODDS` (0.5) when `jeansWithBlazer` (jackets.ts: a
+  sport coat over `ecruOrMidJeans`), the one non-rotation multiplier, applied in `pickLookWith`
+  as a coin on the found look and in every finished-look draw; Efraimidis–Spirakis keys).
+  Surfaces: `today`, `today:skip`, `today:reshuffle`, `today-suggest`, `week-strip`,
+  `lookbook:<occasion>:week`, `lookbook:<occasion>:<rowId>`, `stylist:*`, `check:*`, `dress:*`,
+  `more-like:*`, `hero:<id>:<occasion>`. `pickLookWith` (style.ts) is hero-first with a per-hero
+  ladder: a locked core piece is the only hero (its partner draw covers the rest), the wide pass
+  sweeps every unreached hero on the usual budget before the eightfold one, `excludeIds` leaves
+  pieces out (composeAtlasLook's `avoid` is that exclusion set, the numbers mean nothing; R1's
+  `closet_build_look` retry is unchanged). `pickDropIds`, `dressThisPiece` (now returns
+  `relaxed`), the Lookbook rows (`ideas.ts`, per-look ladder in the wide retry, `Way.waived`,
+  pairability cache with tier and cost so a page draws the same warm or cold), `cells.ts`
+  (eligibility ≥3 looks, order a seeded draw), `moreLikeThis`, `chapterVisible`
+  (lookFitsSeason only), `matrix.ts` (no score sorts; a house the backtracking budget left out is
+  filled from the committed state), `finishStyled`/`buildReshuffleRow`, `stylist-page`
+  (`rankIndex` first rule-passing on screen, `matesFor` drawn), `checkSwaps` and `lookOpinion`
+  (strict rule-passing swaps drawn by weight, "Better: …" kept), `leadHouse` (first passing house,
+  Polo last; `scorePlates`/`rankBonus` deleted). Rule copy: `stylist/rule-copy.ts` (id →
+  sentence; Check, the builder's "Passes the rules." / "Fails: …", Suggest's reason line).
+  Taste: `learnFromLock`, `logWear`, `learnFromSave`, `techniqueLine/Weight/Used` and the
+  technique text in `atlasText`/`askStylist` are gone; vetoes stay; `taste.techniques[].weight`
+  is stored but never read or written (the Lookbook's taste key reads the vetoes only). Today
+  Suggest (`today-suggest.ts`, `data-today-suggest`) draws up to three alternates with Use
+  (setDrop) and Save (saveLook), else one reason line. Stylist: `stylist-ask.ts`
+  (`askStylistCore`: notes read beside the prompt build capped at 1.5 s, one model with the
+  budget left, a second only if 2 s remain, closet fallback, `source: "live"|"closet"`,
+  per-phase dev log; `ai-budget.ts`: server 6.5 s, client `ASK_DEADLINE_MS` 9 s), the dock marks
+  closet answers like the local fallback, three starter chips on first open (`STARTER_CHIPS`;
+  "Something different today" and "Dress my least-worn piece" answer locally), "Thinking…" while
+  busy; live latency UNVERIFIED (no key). Lookbook header: `pageResolved({week, ways})`
+  (lookbook-status.ts) gates the count line, the skeletons and the empty reason. Outfit with
+  this: `dressAcrossOccasions` (dress.ts; the asked occasion, then `heroOccasionsFor`, the five
+  hero occasions less those whose per-piece rules refuse the piece) behind `outfitWith`; null
+  shows `NO_OUTFIT_NOTE` in the detail sheet and under the Lookbook's "Not in a look yet" chips.
+  "N looks with this": `looksWithLabel(n)` in the sheet's button (hidden at 0; the count is
+  found after the sheet paints), the Closet heading and the Lookbook heading count the cards
+  drawn; `looksForHero` fills toward `HERO_LOOKS` from the piece's hero occasions (an occasion
+  whose first draw is empty is dropped), never pads. Brown button-up `g_ap5v0s67pg9d` is
+  `OUTER_ELIGIBLE` with the overshirt (jackets.ts; it is the jacket when worn over a top).
+  Findings on the snapshot: weekday/fall pages are bounded by the jackets (one lead each) and
+  out/fall by its shoe groups, so plain rows run short by design (`__fixtures__/page-room.ts`
+  proves no card is left); the navy blazer over ecru/mid jeans passes on a weekend, but on a
+  weekday or out every such look trips JKT-FORM-1's formality spread (soft at a7016b8, a fail
+  now, not on the pass-list), so weekday jeans-and-blazer looks wear the soft sport coats (taupe,
+  corduroy) and the navy blazer reaches Today only through the ladder; on the 09-30 plates
+  fixture the matrix's ALD, Purple, RRL and Italian Summer summer-weekend cells are thin
+  (`THIN` in matrix.test.ts: one or two distinct tops among the passing cores, or two open shoes
+  after the other houses' REP-1 caps; `assignTop3` now fills a house its node budget left out
+  from the committed state instead of leaving it empty beside a pool of passing cores). Bench: row 15
+  ("Better shoes for this?", polo + linen cream trousers + white sneakers on out) flipped: the
+  look fails COL-10 and XC-SEA-3 (the trousers are linen, a season rule no swap or tier waives),
+  so no one-shoe swap passes and the tool answers "nothing fixes this with one swap"; not added
+  to known gaps, reported for Joe. `probability.test.ts` (vitest) is the acceptance file (120-day
+  Today runs per chapter and season with simulated wear, determinism, odds incl. the jeans-blazer
+  0.5, rules on every surface, the scorer grep, no rating UI, the owner's rules on real ids,
+  Outfit with this over every piece, N looks, looksForHero timing: base 228 ms mean / 489 ms max,
+  now 60 ms mean / 455 ms max over the 153 dressable pieces, with `HERO_PICK_TRIES` (1500 rule
+  checks, pickLook's `maxTries`, the hero surface only) so a piece no look holds cannot freeze
+  the sheet; 142 pieces get five looks, the two shearling jackets none (JKT-COV-3 in fall) beside
+  nine tops the slots refuse); `stylist-timing.test.ts` pins the server deadline under the
+  client's. Two draw fixes found by the acceptance file: a pinned outer never returns a bare
+  core (the dresser used to add the locked jacket back unchecked), and `dressThisPiece` returns
+  null rather than re-adding a locked piece the draw could not seat. `WIDE_ROW_TRIES` is 32000
+  (at 16000 the out/fall week row of Oct 9 2026's seed closed one card short of its six shoe
+  groups with the mules still pairable). `engine-snapshot.json` re-recorded from this tree
+  (`__fixtures__/record-engine-snapshot.ts`).
+
 Follow-ups (logged, not fixed): season.ts / outfit-check XC-SEA-3 shows "A summer piece in fall." for a summer piece checked in winter (bench row 16, mules in winter); in winter it should read "A summer piece in winter."

@@ -38,8 +38,14 @@ import { todaySeasonBucket } from "@/lib/today-season";
 import {
   ASK_DEADLINE_MS,
   askWithDeadline,
+  differentTodayReply,
+  isDifferentTodayAsk,
+  isLeastWornAsk,
+  leastWornReply,
   localStylistReply,
+  markClosetReply,
   sessionThread,
+  STARTER_CHIPS,
   thisLookMessage,
 } from "@/lib/stylist-session";
 import { StylistThread, replyLines } from "./stylist-thread";
@@ -53,12 +59,9 @@ import {
   composeAtlasLook,
   emptyTaste,
   learnFromAsk,
-  learnFromSave,
-  logWear,
   pieceVetoIds,
   swapDraft,
   swapSlot,
-  techniqueUsed,
   trendDue,
 } from "@/lib/taste";
 import { OCCASIONS, type Garment, type Occasion, type StylistMessage } from "@/lib/types";
@@ -100,7 +103,6 @@ export function StylistDock() {
   const owned = garments;
   const forStylist = garments;
   const messages = useCloset((s) => s.messages);
-  const avoid = useCloset((s) => s.avoid);
   const tasteNow = useCloset((s) => s.taste);
   const pushStore = useCloset((s) => s.pushMessage);
   /* The dock's own copy of what it pushed this session: the thread renders it even if the store's
@@ -128,12 +130,14 @@ export function StylistDock() {
      under today's frozen bucket), read the instant the panel opens, on every page. */
   const todaySeason = todaySeasonBucket(drop?.weather?.f);
   const todayPieces = useMemo(
-    () => todayLookPieces({ drop, journal, thisWeek, garments: owned, avoid, taste: tasteNow ?? undefined, season: todaySeason }),
-    [drop, journal, thisWeek, owned, avoid, tasteNow, todaySeason],
+    () => todayLookPieces({ drop, journal, thisWeek, garments: owned, taste: tasteNow ?? undefined, season: todaySeason }),
+    [drop, journal, thisWeek, owned, tasteNow, todaySeason],
   );
   const todayLine = todayPieces.length >= 2 ? lookReply(todayPieces) : null;
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  /* "Something different today": each ask draws again, a turn further along the Skip surface. */
+  const differentTurn = useRef(0);
   const explicitWrite = useRef(false);
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false);
@@ -237,7 +241,6 @@ export function StylistDock() {
         journal,
         thisWeek,
         garments: owned,
-        avoid,
         season: todaySeason,
         taste,
         ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
@@ -252,6 +255,32 @@ export function StylistDock() {
           ? { garmentIds: pieces.map((g) => g.id), draftName: nameLook(pieces), draftOccasion: today.occasion }
           : {}),
       });
+      return;
+    }
+    /* The starter chips' other two asks answer from the closet: another draw for today, and the piece idle longest, dressed. */
+    const pushLocal = (reply: { text: string; garmentIds: string[]; occasion: Occasion } | null, none: string) => {
+      if (!reply) {
+        pushMessage({ role: "stylist", text: none });
+        return;
+      }
+      const pieces = reply.garmentIds.map((id) => owned.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g));
+      pushMessage({
+        role: "stylist",
+        text: reply.text,
+        ...(pieces.length >= 2 ? { garmentIds: pieces.map((g) => g.id), draftName: nameLook(pieces), draftOccasion: reply.occasion } : {}),
+      });
+    };
+    if (isDifferentTodayAsk(q)) {
+      differentTurn.current += 1;
+      const occasion = todayOccasion(drop);
+      pushLocal(
+        differentTodayReply({ garments: owned, journal, drop, taste }, { occasion, previousIds: todayIds, turn: differentTurn.current }),
+        "No other look passes the rules today.",
+      );
+      return;
+    }
+    if (isLeastWornAsk(q)) {
+      pushLocal(leastWornReply({ garments: owned, occasion: todayOccasion(drop), journal, taste }), "Nothing in your closet is waiting to be worn.");
       return;
     }
     /* A swap edits Today's look when the ask says "today" or "this look"; else this session's
@@ -293,7 +322,6 @@ export function StylistDock() {
       const pieces = garmentIds
         .map((id) => owned.find((g) => g.id === id))
         .filter((g): g is Garment => Boolean(g));
-      const technique = edited.technique ?? techniqueUsed(taste, pieces);
       /* One sentence for the look, never the raw block. */
       pushMessage({
         role: "stylist",
@@ -301,7 +329,6 @@ export function StylistDock() {
         garmentIds,
         draftName: nameLook(pieces),
         draftOccasion: occasion,
-        technique: technique ?? undefined,
       });
       return;
     }
@@ -361,7 +388,6 @@ export function StylistDock() {
         garmentIds: rolled.garmentIds,
         draftName: nameLook(pieces),
         draftOccasion: brief,
-        ...(rolled.technique ? { technique: rolled.technique } : {}),
       });
       return;
     }
@@ -389,7 +415,6 @@ export function StylistDock() {
       });
       if (dressed) {
         const pieces = dressed.pieces.filter((g) => !vetoed.has(g.id) || named.some((n) => n.id === g.id));
-        const technique = techniqueUsed(taste, pieces);
         /* One sentence for the look, never the raw block. The pieces are owned. */
         pushMessage({
           role: "stylist",
@@ -397,7 +422,6 @@ export function StylistDock() {
           garmentIds: pieces.map((g) => g.id),
           draftName: nameLook(pieces),
           draftOccasion: dressed.occasion,
-          technique: technique ?? undefined,
         });
       } else {
         pushMessage({ role: "stylist", text: WHICH_PIECE });
@@ -471,7 +495,6 @@ export function StylistDock() {
         garmentIds: local.garmentIds,
         draftName: nameLook(pieces),
         draftOccasion: local.occasion,
-        technique: local.technique ?? undefined,
       });
       return;
     }
@@ -480,17 +503,18 @@ export function StylistDock() {
     const pieces = painted.garmentIds
       .map((id) => owned.find((g) => g.id === id))
       .filter((g): g is Garment => Boolean(g));
-    /* Real prose stays as written. A raw block with resolvable pieces becomes one sentence. */
+    /* Real prose stays as written. A raw block with resolvable pieces becomes one sentence. A
+       server answer composed from the closet (source "closet") is marked as the local fallback is. */
     const sentence = pieces.length && looksLikeAtlasBlock(painted.text) ? lookReply(pieces) : null;
+    const spoken = sentence ?? painted.text;
     pushMessage({
       role: "stylist",
-      ...(sentence ? { text: sentence } : { text: painted.text }),
+      text: payload.ok && payload.source === "closet" ? markClosetReply(spoken) : spoken,
       ...(pieces.length
         ? {
             garmentIds: pieces.map((g) => g.id),
             draftName: nameLook(pieces),
             draftOccasion: pageOccasion(here.occasion, (payload.occasion ?? defaultOccasion()) as Occasion),
-            technique: payload.technique ?? undefined,
           }
         : {}),
     });
@@ -508,6 +532,7 @@ export function StylistDock() {
     const draft = message ? draftFromMessage(message) : null;
     if (!draft) return;
     explicitWrite.current = true;
+    /* Wear sets the drop. It writes nothing to taste. */
     setDrop({
       date: todayISO(),
       garmentIds: draft.garmentIds,
@@ -517,8 +542,6 @@ export function StylistDock() {
       occasion: draft.occasion,
       moment: drop?.moment ?? momentOfDay(),
     });
-    const state = useCloset.getState();
-    setTaste(logWear(state.taste ?? emptyTaste(), state.garments, draft.garmentIds, Date.now()));
   };
 
   const saveDraft = (messageId: string) => {
@@ -526,8 +549,7 @@ export function StylistDock() {
     const draft = message ? draftFromMessage(message) : null;
     if (!draft || message?.lookId) return;
     explicitWrite.current = true;
-    const state = useCloset.getState();
-    setTaste(learnFromSave(state.taste ?? emptyTaste(), draft.garmentIds, state.garments, Date.now()));
+    /* Save is the one write. It writes nothing to taste. */
     const id = saveLook(stylistLookToSave(draft));
     stampMessage(messageId, { lookId: id });
   };
@@ -621,9 +643,6 @@ export function StylistDock() {
                       </p>
                     ))}
                   </div>
-                  {look.technique && (
-                    <p className="mt-2 text-xs text-ink-soft">{look.technique}</p>
-                  )}
                   {(draftFromMessage(look) || look.lookId) && (
                     <div className="mt-3 flex flex-wrap gap-3">
                       {draftFromMessage(look) && (
@@ -663,8 +682,28 @@ export function StylistDock() {
               ) : (
                 <p className="mt-1 text-sm text-ink-soft">Nothing yet.</p>
               )}
+              {thread.length === 0 && !busy && owned.length > 0 ? (
+                <div data-stylist-chips className="mt-3 flex flex-wrap gap-2">
+                  {STARTER_CHIPS.map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      data-stylist-chip
+                      onClick={() => void send(chip)}
+                      className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong hover:text-ink"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <StylistThread messages={thread} />
+            {busy ? (
+              <p data-stylist-thinking className="mt-2 flex items-center gap-2 px-4 text-sm text-ink-soft">
+                <Loader2 className="size-4 animate-spin" /> Thinking…
+              </p>
+            ) : null}
             <div className="mt-3 border-t border-hairline px-4 pt-3 pb-4">
               {form}
               {error ? (

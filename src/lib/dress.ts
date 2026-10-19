@@ -1,14 +1,10 @@
-import { lookCountMap } from "./lookbook.ts";
+import { liveIdsKey } from "./daily-pick.ts";
+import { drawSeed } from "./draw.ts";
+import { heroOccasionsFor, lookCountMap } from "./lookbook.ts";
 import type { TasteMemory } from "./taste.ts";
 import { livePool } from "./rack.ts";
 import { houseLegalCombo, type House } from "./houses.ts";
-import {
-  momentOfDay,
-  pairKey,
-  pickLook,
-  slotOf,
-  weekUniformKeys,
-} from "./style.ts";
+import { pairKey, pickLookWith, slotOf, weekUniformKeys } from "./style.ts";
 import {
   mapOccasion,
   type Garment,
@@ -17,6 +13,7 @@ import {
   type WearEntry,
   type WeatherSnap,
 } from "./types.ts";
+import { todayNY } from "./utils.ts";
 
 export const WHICH_PIECE = "Which piece? Tap it on Closet.";
 
@@ -62,7 +59,7 @@ function wordIn(words: readonly string[], w: string): boolean {
   return words.some((bw) => bw === w || stemWord(bw) === s);
 }
 
-/** Whole words only, plural-tolerant. A phrase scores only as a whole-word sequence in the blob. */
+/** Whole words only, plural-tolerant. A phrase matches only as a whole-word sequence in the blob; the count is how much of the query the name holds, not a style rank. */
 export function scoreNameMatch(query: string, g: Garment): number {
   const blob = pieceSearchBlob(g);
   const q = query.toLowerCase().trim();
@@ -134,6 +131,8 @@ export type DressResult = {
   occasion: Occasion;
   pieces: Garment[];
   lockedIds: string[];
+  /** Rule ids the draw had to waive (the relax ladder) to dress the piece; empty when the look passes every rule. */
+  relaxed: string[];
 };
 
 export function bottomShoePair(pieces: Garment[]): string | null {
@@ -143,6 +142,7 @@ export function bottomShoePair(pieces: Garment[]): string | null {
   return pairKey(b.id, s.id);
 }
 
+/** Dress one or more locked pieces: a draw among the rule-passing looks that hold them, seeded by the day, the pieces and the closet. */
 export function dressThisPiece(opts: {
   lockedIds: string[];
   garments: Garment[];
@@ -154,6 +154,9 @@ export function dressThisPiece(opts: {
   repeatPairs?: Set<string>;
   house?: House | "all" | null;
   taste?: TasteMemory;
+  /** A counter mixed into the seed (another turn for the same piece). */
+  turn?: number;
+  today?: string;
 }): DressResult | null {
   const pool = livePool(opts.garments);
   const lockedIds = [...new Set(opts.lockedIds)].filter((id) =>
@@ -165,9 +168,9 @@ export function dressThisPiece(opts: {
   const usedCount = lookCountMap(opts.looks ?? []);
   const repeats =
     opts.repeatPairs ?? weekUniformKeys(opts.journal ?? [], pool);
-  const ids = pickLook(pool, {
+  const today = opts.today ?? todayNY();
+  const picked = pickLookWith(pool, {
     occasion,
-    moment: momentOfDay(),
     weather: opts.weather ?? { f: 68, label: "Fair", code: 2 },
     lockedIds,
     previousIds: opts.previousIds,
@@ -175,20 +178,47 @@ export function dressThisPiece(opts: {
     usedCount,
     house,
     taste: opts.taste,
+    salt: drawSeed(today, `dress:${occasion}:${[...lockedIds].sort().join(",")}`, liveIdsKey(pool), opts.turn ?? 0),
+    today,
+    journal: opts.journal,
     legalCombo: house
       ? (p) => houseLegalCombo(p, house, occasion, undefined, pool)
       : undefined,
   });
-  const ordered = [...lockedIds.filter((id) => !ids.includes(id)), ...ids];
+  const ids = picked.ids;
+  /* The draw checked the whole look: a locked piece it could not seat is not added back unchecked; there is no look. */
+  if (lockedIds.length && !lockedIds.every((id) => ids.includes(id))) return null;
+  const ordered = [...lockedIds, ...ids.filter((id) => !lockedIds.includes(id))];
   const pieces = ordered
     .map((id) => pool.find((g) => g.id === id))
     .filter((g): g is Garment => Boolean(g));
-  if (lockedIds.length && !lockedIds.every((id) => pieces.some((g) => g.id === id))) {
-    return null;
-  }
   if (pieces.length < 2) return null;
   if (house && !houseLegalCombo(pieces, house, occasion)) return null;
-  return { garmentIds: pieces.map((g) => g.id), occasion, pieces, lockedIds };
+  return { garmentIds: pieces.map((g) => g.id), occasion, pieces, lockedIds, relaxed: picked.relaxed };
+}
+
+/** The detail sheet's line when no occasion holds a rule-passing look around the piece. */
+export const NO_OUTFIT_NOTE = "No look in your closet works with this piece yet.";
+
+/**
+ * "Outfit with this": dressThisPiece for the asked occasion, then each hero occasion the piece
+ * can be dressed for (heroOccasionsFor, in its fixed order), so a piece the asked occasion
+ * cannot hold still gets a look where one passes. Season, weather, occasion and the clashes
+ * are never relaxed. Null when no occasion holds a rule-passing look.
+ */
+export function dressAcrossOccasions(opts: Parameters<typeof dressThisPiece>[0]): DressResult | null {
+  const first = dressThisPiece(opts);
+  if (first) return first;
+  const pool = livePool(opts.garments);
+  const hero = pool.find((g) => g.id === opts.lockedIds[0]);
+  if (!hero) return null;
+  const asked = mapOccasion(opts.occasion ?? "out");
+  for (const occasion of heroOccasionsFor(hero, pool)) {
+    if (occasion === asked) continue;
+    const next = dressThisPiece({ ...opts, occasion });
+    if (next) return next;
+  }
+  return null;
 }
 
 export function moreOutfitsForLook(opts: {
@@ -228,6 +258,7 @@ export function moreOutfitsForLook(opts: {
       previousIds: [...banned],
       repeatPairs: usedPairs,
       house: opts.house,
+      turn: i + 1,
     });
     if (!dressed) break;
     const key = [...dressed.garmentIds].sort().join("|");

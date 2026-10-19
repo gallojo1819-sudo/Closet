@@ -17,7 +17,6 @@ const {
   emptyTaste,
   embedTasteAvoid,
   learnFromAsk,
-  logWear,
   normalizeTaste,
   peelTasteAvoid,
   swapDraft,
@@ -31,6 +30,7 @@ const { rowToCloud } = await import("./cloud/commit.ts");
 const { recordStylistQuestion } = await import("./stylist-thread.ts");
 const { useCloset, pickDrop } = await import("./store.ts");
 const { explain, isLegal } = await import("./stylist/legal.ts");
+const { OUTER_ELIGIBLE } = await import("./stylist/jackets.ts");
 const { defaultOccasion, isTrueOuter, slotOf, todayOccasion } = await import("./style.ts");
 const { comboKey } = await import("./lookbook.ts");
 const { todayISO } = await import("./utils.ts");
@@ -59,19 +59,20 @@ function g(partial: Pick<Garment, "id" | "name" | "category" | "subtype"> & { br
   };
 }
 
+/* Colours and cloths as named: every rule is pass or fail now, and a rack of navy cotton would fail its own colour rules. */
 function rack(): Garment[] {
   return [
-    g({ id: "g_ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
-    g({ id: "g_tee", name: "White tee", category: "top", subtype: "tee", brand: "" }),
-    g({ id: "g_camp", name: "Olive printed camp", category: "top", subtype: "camp shirt" }),
-    g({ id: "g_knit", name: "Fine merino crew", category: "top", subtype: "merino knit" }),
-    g({ id: "g_chino", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
-    g({ id: "g_jean", name: "Indigo jeans", category: "bottom", subtype: "jean" }),
-    g({ id: "g_loafer", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
-    g({ id: "g_boot", name: "Brown boots", category: "footwear", subtype: "boot" }),
-    g({ id: "g_field", name: "Navy field jacket", category: "outerwear", subtype: "field jacket" }),
-    g({ id: "g_chore", name: "Olive chore coat", category: "outerwear", subtype: "chore coat" }),
-    g({ id: "g_blazer", name: "Navy blazer", category: "outerwear", subtype: "blazer" }),
+    { ...g({ id: "g_ox", name: "Navy oxford", category: "top", subtype: "oxford" }), colors: ["navy"] },
+    { ...g({ id: "g_tee", name: "White tee", category: "top", subtype: "tee", brand: "" }), colors: ["white"] },
+    { ...g({ id: "g_camp", name: "Olive printed camp", category: "top", subtype: "camp shirt" }), colors: ["olive"] },
+    { ...g({ id: "g_knit", name: "Fine merino crew", category: "top", subtype: "merino knit" }), colors: ["grey"], material: "merino" },
+    { ...g({ id: "g_chino", name: "Khaki chinos", category: "bottom", subtype: "chino" }), colors: ["khaki"] },
+    { ...g({ id: "g_jean", name: "Indigo jeans", category: "bottom", subtype: "jean" }), colors: ["indigo"], material: "denim" },
+    { ...g({ id: "g_loafer", name: "Brown loafers", category: "footwear", subtype: "loafer" }), colors: ["brown"], material: "leather" },
+    { ...g({ id: "g_boot", name: "Brown boots", category: "footwear", subtype: "boot" }), colors: ["brown"], material: "leather" },
+    { ...g({ id: "g_field", name: "Navy field jacket", category: "outerwear", subtype: "field jacket" }), colors: ["navy"], material: "canvas" },
+    { ...g({ id: "g_chore", name: "Olive chore coat", category: "outerwear", subtype: "chore coat" }), colors: ["olive"], material: "canvas" },
+    { ...g({ id: "g_blazer", name: "Navy blazer", category: "outerwear", subtype: "blazer" }), colors: ["navy"], material: "wool" },
   ];
 }
 
@@ -160,16 +161,16 @@ describe("taste memory", () => {
     assert.equal(/Never tuck g_camp/.test(prompt), false);
   });
 
-  it("three open-shirt wears raise Open overshirt and do not name Fortela", () => {
+  it("wears teach nothing: no technique weight moves, the prompt lists no techniques, and a brand stays out of the rules", () => {
     const pieces = openStack();
-    let taste = emptyTaste();
-    taste = logWear(taste, pieces, pieces.map((item) => item.id), NOW);
-    taste = logWear(taste, pieces, pieces.map((item) => item.id), NOW + DAY);
-    const before = taste.techniques.find((t) => t.id === "open-overshirt");
-    assert.equal(before?.weight, 0);
-    taste = logWear(taste, pieces, pieces.map((item) => item.id), NOW + 2 * DAY);
-    const after = taste.techniques.find((t) => t.id === "open-overshirt");
-    assert.equal(after?.weight, 1);
+    const taste = emptyTaste();
+    /* The rating system is gone: no code path writes taste.techniques[].weight. */
+    const src = readFileSync(new URL("./taste.ts", import.meta.url), "utf8");
+    assert.equal(src.includes("logWear"), false);
+    assert.equal(src.includes("learnFromLock"), false);
+    assert.equal(src.includes("learnFromSave"), false);
+    assert.equal(/techniques\[[^\]]*\]\.weight\s*=|weight:\s*[a-z.]*weight\s*\+/.test(src), false);
+    assert.deepEqual(normalizeTaste(taste).techniques.map((t) => t.weight), taste.techniques.map((t) => t.weight));
     const prompt = buildStylistSystem({
       garments: pieces,
       taste,
@@ -177,9 +178,8 @@ describe("taste memory", () => {
       occasion: "weekend",
       now: NOW + 2 * DAY,
     });
-    const active = prompt.split("DORMANT")[0] ?? prompt;
-    assert.match(active, /Open overshirt/);
-    assert.match(active, /Camp or print worn open over a tee/);
+    assert.equal(prompt.includes("DORMANT"), false);
+    assert.equal(prompt.includes("TECHNIQUES"), false);
     assert.equal(prompt.includes("Fortela"), false);
     assert.equal(prompt.includes("Ralph"), false);
     assert.equal(prompt.includes("ALD"), false);
@@ -293,13 +293,15 @@ describe("taste memory", () => {
 
   it("every top-and-shoe pairing vetoed still dresses a full look, and a shoe swap moves the shoe", (t) => {
     const small = [
-      g({ id: "g_s1", name: "Navy oxford shirt", category: "top", subtype: "shirt" }),
-      g({ id: "g_s2", name: "White poplin shirt", category: "top", subtype: "shirt" }),
-      g({ id: "g_k1", name: "Grey merino knit", category: "top", subtype: "knit" }),
-      g({ id: "g_ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
-      g({ id: "g_lo", name: "Brown loafers", category: "footwear", subtype: "loafer" }),
-      g({ id: "g_sn", name: "White sneakers", category: "footwear", subtype: "sneaker" }),
-      g({ id: "g_bt", name: "Brown boots", category: "footwear", subtype: "boot" }),
+      { ...g({ id: "g_s1", name: "Navy oxford shirt", category: "top", subtype: "shirt" }), colors: ["navy"] },
+      { ...g({ id: "g_s2", name: "White poplin shirt", category: "top", subtype: "shirt" }), colors: ["white"] },
+      { ...g({ id: "g_k1", name: "Grey merino knit", category: "top", subtype: "knit" }), colors: ["grey"], material: "merino" },
+      { ...g({ id: "g_ch", name: "Khaki chinos", category: "bottom", subtype: "chino" }), colors: ["khaki"] },
+      { ...g({ id: "g_lo", name: "Brown loafers", category: "footwear", subtype: "loafer" }), colors: ["brown"], material: "leather" },
+      { ...g({ id: "g_sn", name: "White sneakers", category: "footwear", subtype: "sneaker" }), colors: ["white"], material: "leather" },
+      { ...g({ id: "g_bt", name: "Brown boots", category: "footwear", subtype: "boot" }), colors: ["brown"], material: "leather" },
+      /* Out in fall is a jacket day. */
+      { ...g({ id: "g_jk", name: "Olive chore coat", category: "outerwear", subtype: "chore coat" }), colors: ["olive"], material: "canvas" },
     ];
     const ask = (a: string, b: string) => ({ kind: "pairing" as const, a, b, source: "ask" as const });
     const taste = {
@@ -504,7 +506,7 @@ describe("today skip", () => {
     }
   }
   const pick = (weather: WeatherSnap | undefined, occasion: Occasion, rack: Garment[] = RACK) =>
-    pickDrop(rack, weather, occasion, undefined, undefined, undefined, undefined, undefined, { salt: 1 }, OCT);
+    pickDrop(rack, weather, occasion, { salt: 1 }, OCT);
   const mild: WeatherSnap = { f: 62, label: "Mild", code: 2, measured: true };
   const warm: WeatherSnap = { f: 73, label: "Warm", code: 1, measured: true };
   const cold: WeatherSnap = { f: 40, label: "Cold", code: 3, measured: true };
@@ -713,8 +715,8 @@ describe("today skip", () => {
   });
 
   it("a pick that finds nothing keeps today's look with a note and logs no skip", () => {
-    /* No outerwear on a fall weekday: no core at all, never an empty list written. */
-    const bare = RACK.filter((g) => slotOf(g) !== "outerwear" && !isTrueOuter(g));
+    /* No outerwear on a fall weekday (nor a shirt that counts as a jacket, jackets.ts OUTER_ELIGIBLE): no core at all, never an empty list written. */
+    const bare = RACK.filter((g) => slotOf(g) !== "outerwear" && !isTrueOuter(g) && !OUTER_ELIGIBLE.includes(g.id));
     const none = pick(mild, "weekday", bare);
     assert.equal(hasCore(none), false, names(none));
     /* Three pieces and a cold reading: winter in any month, a jacket required, none to find. */

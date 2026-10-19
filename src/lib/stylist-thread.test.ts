@@ -85,7 +85,7 @@ describe("stylist ask", () => {
 
   it("outfitWith does not change Today or the lookbook rev until Save", () => {
     const garment = (
-      partial: Pick<Garment, "id" | "name" | "category" | "subtype">,
+      partial: Pick<Garment, "id" | "name" | "category" | "subtype"> & Partial<Garment>,
     ): Garment => ({
       colors: ["navy"],
       material: "cotton",
@@ -114,8 +114,10 @@ describe("stylist ask", () => {
     useCloset.setState({
       garments: [
         garment({ id: "ox", name: "Navy oxford", category: "top", subtype: "oxford" }),
-        garment({ id: "chino", name: "Khaki chinos", category: "bottom", subtype: "chino" }),
-        garment({ id: "loafer", name: "Brown penny loafers", category: "footwear", subtype: "loafer" }),
+        garment({ id: "chino", name: "Khaki chinos", category: "bottom", subtype: "chino", colors: ["khaki"] }),
+        garment({ id: "loafer", name: "Brown penny loafers", category: "footwear", subtype: "loafer", colors: ["brown"], material: "leather" }),
+        /* A fall weekday is a jacket day under the rules. */
+        garment({ id: "chore", name: "Olive chore coat", category: "outerwear", subtype: "chore coat", colors: ["olive"] }),
       ],
       looks: [olive()],
       drop,

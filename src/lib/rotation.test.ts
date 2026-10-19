@@ -189,8 +189,9 @@ describe("repeated Re-dress on the fixture closet", () => {
       const shown = new Set([...run.shownBy.get(REDRESSES)!].map((id) => KEY.get(id)!));
       const missing = pairable.filter((id) => !shown.has(KEY.get(id)!));
       expect(missing.map((id) => BY_ID.get(id)?.name), `${run.occasion}: never shown`).toEqual([]);
-      /* Out in fall asks for a jacket and refuses sneakers while loafers are owned: just under half of this fixture pairs there. */
-      expect(pairable.length, `${run.occasion}: pairable pieces`).toBeGreaterThanOrEqual(Math.ceil(0.48 * run.eligible.length));
+      /* No share floor (probability round): every eligible piece is shown or listed unpairable, and
+         probability.test.ts names the rules that refuse each listed piece. */
+      expect(pairable.length, `${run.occasion}: pairable pieces`).toBeGreaterThan(0);
       for (const id of run.unpairable) expect(run.eligible, `${run.occasion}: unpairable ${id} is eligible`).toContain(id);
     }
   });

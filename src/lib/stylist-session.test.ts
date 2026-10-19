@@ -20,8 +20,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { StylistThread } from "@/components/shell/stylist-thread";
 import { persistGate, useCloset } from "./store.ts";
 import { answerTodayAsk } from "./stylist-page.ts";
+import { SERVER_DEADLINE_MS } from "./ai-budget.ts";
 import {
   ASK_DEADLINE_MS,
+  ASK_MARGIN_MS,
   askWithDeadline,
   LOCAL_REPLY_NOTE,
   localStylistReply,
@@ -72,16 +74,16 @@ afterAll(() => {
   vi.useRealTimers();
 });
 
-/** What the dock reads on open (stylist-dock.tsx): the store's drop, journal, week row, closet, avoid, taste. */
+/** What the dock reads on open (stylist-dock.tsx): the store's drop, journal, week row, closet, taste. */
 function dockToday(): string[] {
   const s = useCloset.getState();
-  return todayLookPieces({ drop: s.drop, journal: s.journal, thisWeek: s.thisWeek, garments: s.garments, avoid: s.avoid, taste: s.taste, season: "fall" }, TODAY).map((g) => g.id);
+  return todayLookPieces({ drop: s.drop, journal: s.journal, thisWeek: s.thisWeek, garments: s.garments, taste: s.taste, season: "fall" }, TODAY).map((g) => g.id);
 }
 
 /** What the Today page's `shown` memo reads: the same selector from the same store state. */
 function pageToday(): string[] {
   const s = useCloset.getState();
-  return todayLookPieces({ drop: s.drop, journal: s.journal, thisWeek: s.thisWeek, garments: s.garments, avoid: s.avoid, taste: s.taste, season: "fall" }, TODAY).map((g) => g.id);
+  return todayLookPieces({ drop: s.drop, journal: s.journal, thisWeek: s.thisWeek, garments: s.garments, taste: s.taste, season: "fall" }, TODAY).map((g) => g.id);
 }
 
 describe("(1) This look is Today's look on open", () => {
@@ -109,9 +111,9 @@ describe("(1) This look is Today's look on open", () => {
     expect(dockToday()).toEqual(dock);
     expect(pageToday()).toEqual(dock);
     const s = useCloset.getState();
-    expect(new Set(dailyPickIds({ drop: drop(YESTERDAY, OLD_LOOK), journal: [], garments: CLOSET, avoid: s.avoid, taste: s.taste, season: "fall" }, TODAY))).toEqual(new Set(dock));
+    expect(new Set(dailyPickIds({ drop: drop(YESTERDAY, OLD_LOOK), journal: [], garments: CLOSET, taste: s.taste, season: "fall" }, TODAY))).toEqual(new Set(dock));
     /* The today ask answers with the same pieces. */
-    expect(answerTodayAsk({ drop: s.drop, journal: s.journal, thisWeek: s.thisWeek, garments: s.garments, avoid: s.avoid, taste: s.taste, season: "fall", today: TODAY }).garmentIds).toEqual(dock);
+    expect(answerTodayAsk({ drop: s.drop, journal: s.journal, thisWeek: s.thisWeek, garments: s.garments, taste: s.taste, season: "fall", today: TODAY }).garmentIds).toEqual(dock);
   });
 
   it("a stylist answer pushed today in this session is this look; one pushed yesterday is not", () => {
@@ -162,7 +164,10 @@ describe("(3) a hanging or failing request still answers, within the deadline", 
     expect(await hang).toBeNull();
     expect(await askWithDeadline(Promise.reject(new Error("network")), ASK_DEADLINE_MS)).toBeNull();
     expect(await askWithDeadline(Promise.resolve({ ok: true }), ASK_DEADLINE_MS)).toEqual({ ok: true });
-    expect(ASK_DEADLINE_MS).toBeLessThanOrEqual(8000);
+    /* The client waits the server's deadline plus a margin, and never past ten seconds. */
+    expect(ASK_DEADLINE_MS).toBe(SERVER_DEADLINE_MS + ASK_MARGIN_MS);
+    expect(ASK_DEADLINE_MS).toBeGreaterThan(SERVER_DEADLINE_MS);
+    expect(ASK_DEADLINE_MS).toBeLessThanOrEqual(10000);
     const local = localStylistReply({ prompt: "something for the office", garments: CLOSET, occasion: "weekday", taste: emptyTaste() });
     expect(local).not.toBeNull();
     expect(local!.garmentIds.length).toBeGreaterThanOrEqual(3);
@@ -180,7 +185,9 @@ describe("(3) a hanging or failing request still answers, within the deadline", 
     expect(dock).toContain("SESSION_IDS");
     expect(dock).toMatch(/thisLookMessage\(thread\)/);
     const ai = readFileSync(new URL("./ai.ts", import.meta.url), "utf8");
-    expect(ai).toMatch(/signal: AbortSignal\.timeout\(timeoutMs\)/);
+    /* Every model call carries a signal: the ask's own (stylist-ask.ts), else a timeout. */
+    expect(ai).toMatch(/signal: signal \?\? AbortSignal\.timeout\(timeoutMs\)/);
     expect(ai).toMatch(/NOTES_TIMEOUT_MS/);
+    expect(ai).toMatch(/SERVER_DEADLINE_MS/);
   });
 });

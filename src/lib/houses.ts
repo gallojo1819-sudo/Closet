@@ -8,7 +8,6 @@ import {
   assignSlots,
   evaluatePlates,
   pieceBanned,
-  scorePlates,
   sig,
   slotOfPlate,
   type Plate,
@@ -452,8 +451,9 @@ export function appendHouseGap(
 }
 
 /**
- * Highest-scoring house whose approved profile passes. Polo is last. Null when none pass.
- * Partial is for two plates in the builder: an empty slot is not a missing core.
+ * The first house, in HOUSES order with Polo last, whose approved profile passes the look. A
+ * label for the look, not a ranking: nothing scores. Null when none pass. Partial is for two
+ * plates in the builder: an empty slot is not a missing core.
  */
 export function leadHouse(
   pieces: Garment[],
@@ -461,22 +461,13 @@ export function leadHouse(
   season?: Season,
   partial = false,
 ): House | null {
-  let best: House | null = null;
-  let bestN = Number.NEGATIVE_INFINITY;
-  for (const h of HOUSES) {
-    const scored = scorePlates(
-      profile(h) as never,
-      assignSlots(pieces.map(asPlate)),
-      { ...ctxOf(occasion, season), partial },
-    );
-    if (!scored.eval.passed) continue;
-    const n = h === "polo" ? scored.score - 0.01 : scored.score;
-    if (n > bestN) {
-      best = h;
-      bestN = n;
-    }
+  const ps = assignSlots(pieces.map(asPlate));
+  const ctx = { ...ctxOf(occasion, season), partial };
+  const order = [...HOUSES.filter((h) => h !== "polo"), ...HOUSES.filter((h) => h === "polo")];
+  for (const h of order) {
+    if (evaluatePlates(profile(h) as never, ps, ctx).passed) return h;
   }
-  return best;
+  return null;
 }
 
 export function housesOf(g: Garment): House[] {

@@ -52,7 +52,7 @@ describe("Comfy chip (light patch)", () => {
       piece("Brown loafers", "footwear", "loafer"),
       piece("White sneakers", "footwear", "sneaker"),
     ];
-    const ids = pickLook(pool, { occasion: "comfy", moment: "day", salt: 1 });
+    const ids = pickLook(pool, { occasion: "comfy", salt: 1 });
     const names = ids.map((id) => pool.find((g) => g.id === id)?.name);
     assert.ok(names.includes("Cream knit"), names.join(", "));
     assert.ok(names.includes("Navy jeans"), names.join(", "));

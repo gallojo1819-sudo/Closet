@@ -4,6 +4,15 @@
  */
 export const FINDING_LOOKS = "Finding your looks…";
 
+/**
+ * The page is resolved when both the week row (the ranked row for the filters) and the idea
+ * rows (rowWays) are in. The count line, the week skeletons and the empty reason all read this,
+ * so the header never shows a partial number (the week row alone once read "8 looks").
+ */
+export function pageResolved(rows: { week: boolean; ways: boolean }): boolean {
+  return rows.week && rows.ways;
+}
+
 export function lookbookCountLine(opts: {
   resolved: boolean;
   count: number;

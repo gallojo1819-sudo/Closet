@@ -33,6 +33,8 @@ import {
   putThumb,
 } from "@/lib/images";
 import { costPerWear, money } from "@/lib/look";
+import { NO_OUTFIT_NOTE } from "@/lib/dress";
+import { looksWithLabel } from "@/lib/lookbook";
 import { displayName } from "@/lib/piece-label";
 import { PALETTE, nameWithColor } from "@/lib/color";
 import { derivedCategory } from "@/lib/garment-category";
@@ -130,14 +132,20 @@ export function GarmentDetail({
   onClose,
   getTile,
   onLooks,
+  looksCount,
   onOutfit,
 }: {
   garment: Garment;
   onClose: () => void;
   getTile?: () => HTMLElement | null;
+  /** Opens the "N looks with this" sheet; shown only when looksCount is above zero. */
   onLooks?: () => void;
-  onOutfit?: () => void;
+  /** The real count of looks the piece leads (looksForHero), for the button's label. */
+  looksCount?: number;
+  /** Dresses the piece; false when no occasion holds a look, and the sheet says so. */
+  onOutfit?: () => boolean;
 }) {
+  const [noOutfit, setNoOutfit] = useState(false);
   const wearToday = useCloset((s) => s.wearToday);
   const removeGarment = useCloset((s) => s.removeGarment);
   const updateGarment = useCloset((s) => s.updateGarment);
@@ -754,13 +762,24 @@ export function GarmentDetail({
               </p>
             )}
           </div>
+          {noOutfit && (
+            <p data-outfit-note className="mt-4 text-sm text-ink-soft">
+              {NO_OUTFIT_NOTE}
+            </p>
+          )}
           <div className="mt-auto flex flex-wrap gap-2 pt-4">
             {onOutfit && (
-              <Button onClick={onOutfit}>Outfit with this</Button>
+              <Button
+                onClick={() => {
+                  if (!onOutfit()) setNoOutfit(true);
+                }}
+              >
+                Outfit with this
+              </Button>
             )}
-            {onLooks && (
+            {onLooks && (looksCount ?? 0) > 0 && (
               <Button variant="ghost" onClick={onLooks}>
-                5 looks with this
+                {looksWithLabel(looksCount ?? 0)}
               </Button>
             )}
             <Button onClick={() => wearToday([garment.id])} disabled={worn}>

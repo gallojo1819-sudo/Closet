@@ -6,28 +6,32 @@
  * suggestion names a garment the user does not own.
  */
 import type { Garment, Occasion, Season } from "./types.ts";
+import { liveIdsKey } from "./daily-pick.ts";
+import { drawOrder, drawSeed, lookWeight, rngFromSalt, type WeightCtx } from "./draw.ts";
 import { livePool, isFakeName } from "./rack.ts";
 import {
   clashes,
   coreComboKey,
   isShortsPiece,
   isTrueOuter,
-  momentOfDay,
   pickLook,
   pickTrueOuter,
   slotOf,
 } from "./style.ts";
-import { isOvercoatPiece, isSummerShirt, lookFitsSeason, weatherForSeason } from "./season.ts";
+import { isOvercoatPiece, isSummerShirt, lookFitsSeason } from "./season.ts";
 import { clashSentence } from "./detectors.ts";
 import {
   DELETED_SNEAKERS,
-  explain,
-  isLegal,
+  JACKET_COVER_IDS,
   legalWithJacket,
-  rankLook,
+  needsJacketOnly,
+  ruleFails,
   type LegalCtx,
+  type RuleCtx,
 } from "./stylist/legal.ts";
+import { RULE_SENTENCES } from "./stylist/rule-copy.ts";
 import { coatSharesLookWithGraphic, jacketInfo, jacketRequired, wearSlot } from "./stylist/jackets.ts";
+import { todayNY } from "./utils.ts";
 import {
   chipLabel,
   looksLikeFace,
@@ -38,7 +42,7 @@ import {
   type ScanSlot,
   type WornBox,
 } from "./scan.ts";
-import { emptyTaste, pairingBlocked, pieceVetoIds, techniqueWeight, type TasteMemory } from "./taste.ts";
+import { emptyTaste, pairingBlocked, pieceVetoIds, type TasteMemory } from "./taste.ts";
 
 export type CheckCtx = {
   occasion: Occasion;
@@ -123,6 +127,11 @@ export function legalCtx(ctx: CheckCtx): LegalCtx {
     season: ctx.season,
     ...(ctx.weatherF !== undefined && Number.isFinite(ctx.weatherF) ? { weatherF: ctx.weatherF } : {}),
   };
+}
+
+/** The rule context Check judges with: the legal context, the closet and the user's vetoes. */
+function ruleCtx(ctx: CheckCtx, pool: Garment[], taste?: TasteMemory): RuleCtx {
+  return { ...legalCtx(ctx), pool: livePool(pool), taste };
 }
 
 export function isPhotoGarment(g: Pick<Garment, "id">): boolean {
@@ -345,56 +354,17 @@ export function pieceName(g: Garment, pool: Garment[]): string {
 
 /* ----------------------------- reasons ----------------------------- */
 
-export const REASON_BY_RULE: Record<string, string> = {
-  "JKT-FORM-1": "Too dressy and too casual at once for this occasion.",
-  "JKT-FORM-2": "A workwear jacket over dress trousers.",
-  "XC-TEX-3": "Dress trousers with a sporty sneaker.",
-  "XC-TEX-8": "Too light on top for a cold night out.",
-  "JKT-COV-1": JACKET_REASON,
-  "JKT-COV-2": "That jacket is too light for winter on its own.",
-  "JKT-COV-3": "That coat is wrong for the weather.",
-  "XC-SEA-1": "Too warm a piece for summer.",
-  "XC-SEA-2": "A summer piece in winter.",
-  "XC-SEA-3": "A summer piece in fall.",
-  "XC-SEA-4": "Cold-weather and hot-weather pieces together.",
-  "XC-SEA-5": "Linen with flannel.",
-  "XC-TEX-1": "Sweatpants with a collared shirt, blazer or loafer.",
-  "XC-TEX-2": "A sport coat doesn't go with a hoodie, track pants or sneakers.",
-  "XC-TEX-4": "A sweatshirt with dress trousers or tassel loafers.",
-  "XC-TEX-5": "A work flannel with dress trousers.",
-  "XC-TEX-6": "Pinstripe trousers need a jacket.",
-  "XC-TEX-7": "A resort shirt with a dress loafer.",
-  "XC-TEX-9": "A work jacket over mules.",
-  "XC-PROP-1": "Boots don't sit right under these trousers.",
-  "XC-PROP-2": "Too much volume top and bottom.",
-  "XC-PAT-1": "Two patterns at the same scale.",
-  "XC-DEN-1": "Two denims too close in wash.",
-  "XC-DEN-2": "Three denim pieces.",
-  "COL-7": "Black with brown shoes.",
-  "COL-8": "Navy right next to black.",
-  "COL-9": "Two loud colours fight.",
-  "COL-10": "All light, nothing to anchor it.",
-  "COL-11": "Same colour and same cloth top and bottom.",
-  "COL-12": "Light shoes under dark trousers cut the leg.",
-  "COL-13": "Two muddy mid tones together.",
-  "JKT-LAY-1": "A sport coat over a chunky knit.",
-  "JKT-LAY-2": "That top doesn't sit under a sport coat.",
-  "JKT-LAY-3": "Those trousers don't go with a sport coat.",
-  "JKT-LAY-4": "Those shoes don't go with a sport coat.",
-  "JKT-LAY-5": "Only a roomy jacket goes over a chunky knit.",
-  "JKT-LAY-6": "That knit is a layer, not a jacket.",
-  "JKT-LAY-7": "Jacket and trousers in the same cloth and colour read as an odd suit.",
-  "JKT-LAY-8": "A graphic piece with a sport coat.",
-  GRAPHIC_COAT: "A graphic piece with a sport coat.",
-  SLOTS: SLOTS_REASON,
-};
+/** The plain sentence per rule id (stylist/rule-copy.ts). */
+export const REASON_BY_RULE: Record<string, string> = RULE_SENTENCES;
 
 const OCCASION_IDS = ["JKT-FORM-1", "JKT-FORM-2", "XC-TEX-3", "XC-TEX-8"];
 const WEATHER_IDS = ["SEASON", "JKT-COV-2", "JKT-COV-3", "XC-SEA-1", "XC-SEA-2", "XC-SEA-3", "XC-SEA-4"];
 
 function reasonRank(id: string): number {
-  if (OCCASION_IDS.includes(id)) return 0;
-  if (WEATHER_IDS.includes(id)) return 1;
+  /* The chapter gate's sentence is the vaguest: the specific rules speak first, the missing jacket last. */
+  if (id === "OCC-GATE") return 3;
+  if (OCCASION_IDS.includes(id) || id.startsWith("OCC-")) return 0;
+  if (WEATHER_IDS.includes(id) || id.startsWith("SEA-") || id === "WARMTH-FIT" || id === "WEATHER-LINEN-COLD") return 1;
   if (id === "CLASH") return 2;
   if (id === "JKT-COV-1") return 4;
   return 3;
@@ -420,7 +390,8 @@ function seasonReason(look: Garment[], season: Season): string {
 }
 
 function reasonLine(id: string, look: Garment[], season: Season): string | null {
-  if (id === "SEASON") return seasonReason(look, season);
+  /* The season rules (SEA-PIECE: a piece out of season; SEA-FIT: the look's cloth) read as the specific sentence when one fits. */
+  if (id === "SEASON" || id === "SEA-PIECE" || id === "SEA-FIT") return seasonReason(look, season);
   if (id === "CLASH") return clashSentence(look);
   return REASON_BY_RULE[id] ?? clashSentence(look) ?? FALLBACK_REASON;
 }
@@ -488,29 +459,30 @@ function finishingJacket(
   ctx: CheckCtx,
   pool: Garment[],
   taste: TasteMemory,
+  today = todayNY(),
 ): Garment | undefined {
-  const lc = legalCtx(ctx);
-  const fits = (p: Garment[]) => isLegal(p, lc) && lookFitsSeason(p, ctx.season) && !pairingBlocked(p, taste);
-  const outer = pickTrueOuter(ownedOuters(pool, taste), look, undefined, {
-    occasion: ctx.occasion,
-    f: ctx.weatherF ?? weatherForSeason(ctx.season).f,
-    ...(ctx.weatherF !== undefined ? { tempF: ctx.weatherF } : {}),
+  const rc = ruleCtx(ctx, pool, taste);
+  const fits = (p: Garment[]) => lookFitsSeason(p, ctx.season) && !pairingBlocked(p, taste);
+  const outer = pickTrueOuter(ownedOuters(pool, taste), look, {
+    ctx: rc,
+    salt: drawSeed(today, `check:jacket:${look.map((g) => g.id).sort().join(",")}`, liveIdsKey(livePool(pool))),
+    weights: { today },
     legalCombo: fits,
-    taste,
   });
   if (!outer || isPhotoGarment(outer)) return undefined;
-  return fits([...look, outer]) ? outer : undefined;
+  return fits([...look, outer]) && !ruleFails([...look, outer], rc).length ? outer : undefined;
 }
 
 /* ----------------------------- the verdict ----------------------------- */
 
+/** The rules' verdict: works when every rule passes; works with a jacket when the jacket rules alone fail; doesn't otherwise, with the failing rules' sentences. */
 export function checkVerdict(
   look: Garment[],
   ctx: CheckCtx,
   pool: Garment[],
   taste: TasteMemory = emptyTaste(),
 ): CheckVerdict {
-  const lc = legalCtx(ctx);
+  const rc = ruleCtx(ctx, pool, taste);
   const cantTell = (reason: string): CheckVerdict => ({ state: "cant_tell", reason, reasons: [reason], ruleIds: [] });
 
   if (look.some((g) => slotOf(g) === "dress" || g.category === "dress")) {
@@ -529,29 +501,29 @@ export function checkVerdict(
     return { state: "doesnt", reason: SLOTS_REASON, reasons: [SLOTS_REASON], ruleIds: ["SLOTS"] };
   }
 
-  const legal = isLegal(look, lc);
+  const failed = ruleFails(look, rc);
   const inSeason = lookFitsSeason(look, ctx.season);
-  if (legal && inSeason) {
+  if (!failed.length && inSeason) {
     const reason = colourReason(look, pool, ctx.weatherF);
     return { state: "works", reason, reasons: [reason], ruleIds: [] };
   }
 
-  if (!hasOuter(look) && inSeason && !legal && legalWithJacket(look, lc)) {
+  if (!hasOuter(look) && inSeason && needsJacketOnly(failed)) {
     const jacket = finishingJacket(look, ctx, pool, taste);
     if (jacket) {
       const name = pieceName(jacket, pool);
       const line = safeText(`Cold enough for a jacket. Add your ${name}.`, pool) ?? JACKET_REASON;
       return { state: "works_with_jacket", reason: line, reasons: [line], jacket: name, jacketId: jacket.id, ruleIds: ["JKT-COV-1"] };
     }
-    return { state: "doesnt", reason: NO_JACKET_REASON, reasons: [NO_JACKET_REASON], ruleIds: ["JKT-COV-1"] };
+    if (failed.every((id) => id === "JKT-COV-1" || id === "XC-TEX-8")) {
+      return { state: "doesnt", reason: NO_JACKET_REASON, reasons: [NO_JACKET_REASON], ruleIds: ["JKT-COV-1"] };
+    }
   }
 
-  const ids: string[] = explain(look, lc)
-    .hits.filter((h) => h.severity === "hard")
-    .map((h) => h.id);
+  const ids: string[] = failed.map((id) => (id === "GRAPHIC-COAT" ? "GRAPHIC_COAT" : id)).filter((id) => !JACKET_COVER_IDS.includes(id) || failed.length === 1);
   if (!inSeason) ids.push("SEASON");
-  if (clashes(look)) ids.push("CLASH");
-  if (coatSharesLookWithGraphic(look)) ids.push("GRAPHIC_COAT");
+  if (clashes(look) && !ids.includes("CLASH")) ids.push("CLASH");
+  if (coatSharesLookWithGraphic(look) && !ids.includes("GRAPHIC_COAT")) ids.push("GRAPHIC_COAT");
   const ordered = orderReasons(ids);
   const lines: string[] = [];
   for (const id of ordered) {
@@ -569,17 +541,21 @@ export function checkVerdict(
 
 const SWAP_ORDER: CheckSwap["slot"][] = ["footwear", "top", "bottom", "outerwear"];
 
+/**
+ * Up to two swaps, one slot each: among the owned pieces whose swap makes the look pass the
+ * rules, one is drawn by rotation weight (draw.ts), seeded by the day and the look.
+ */
 export function checkSwaps(
   look: Garment[],
   pool: Garment[],
   ctx: CheckCtx,
   taste: TasteMemory = emptyTaste(),
   n = 2,
+  today = todayNY(),
 ): CheckSwap[] {
   const limit = Math.max(0, Math.min(2, Math.floor(n)));
   if (!limit) return [];
   if (checkVerdict(look, ctx, pool, taste).state !== "doesnt") return [];
-  const lc = legalCtx(ctx);
   const live = livePool(pool);
   const vetoed = pieceVetoIds(taste);
   const deleted = new Set<string>(DELETED_SNEAKERS);
@@ -597,9 +573,11 @@ export function checkSwaps(
     .sort((a, b) => SWAP_ORDER.indexOf(a.slot) - SWAP_ORDER.indexOf(b.slot));
   const out: CheckSwap[] = [];
   const usedSlots = new Set<CheckSwap["slot"]>();
+  const wctx: WeightCtx = { today };
+  const rng = rngFromSalt(drawSeed(today, `check:swap:${look.map((g) => g.id).sort().join(",")}`, liveIdsKey(live)));
   for (const { g: outPiece, slot } of [...photoFirst, ...rest]) {
     if (out.length >= limit || usedSlots.has(slot)) continue;
-    let best: { swap: CheckSwap; score: number } | null = null;
+    const passing: { swap: CheckSwap; pieces: Garment[] }[] = [];
     for (const cand of live) {
       if (cand.id === outPiece.id || inLook.has(cand.id) || isPhotoGarment(cand)) continue;
       if (vetoed.has(cand.id) || deleted.has(cand.id)) continue;
@@ -613,30 +591,27 @@ export function checkSwaps(
       const full = jacket ? [...next, jacket] : next;
       const ids = full.map((g) => g.id);
       if (!allOwned(ids, pool)) continue;
-      const score = rankLook(full, lc) + techniqueWeight(taste, next) * 8;
-      if (!Number.isFinite(score)) continue;
       const outName = pieceName(outPiece, pool);
       const inName = pieceName(cand, pool);
       let line = `Swap the ${outName} for your ${inName}.`;
       if (jacket && v.jacket) line += ` Add your ${v.jacket}.`;
       if (!safeText(line, pool)) continue;
-      if (!best || score > best.score) {
-        best = {
-          score,
-          swap: {
-            slot,
-            outId: outPiece.id,
-            inId: cand.id,
-            line,
-            ids,
-            state: v.state,
-            ...(jacket && v.jacket ? { jacket: v.jacket } : {}),
-          },
-        };
-      }
+      passing.push({
+        pieces: full,
+        swap: {
+          slot,
+          outId: outPiece.id,
+          inId: cand.id,
+          line,
+          ids,
+          state: v.state,
+          ...(jacket && v.jacket ? { jacket: v.jacket } : {}),
+        },
+      });
     }
-    if (best) {
-      out.push(best.swap);
+    const drawn = drawOrder(passing, (row) => Math.max(lookWeight(row.pieces, wctx), Number.MIN_VALUE), rng)[0];
+    if (drawn) {
+      out.push(drawn.swap);
       usedSlots.add(slot);
     }
   }
@@ -664,25 +639,27 @@ export function checkAlternative(
   const locks: string[][] = [];
   for (const id of [owned(top), owned(bottom), owned(shoe)]) if (id) locks.push([id]);
   locks.push([]);
-  for (const lockedIds of locks) {
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  for (const [i, lockedIds] of locks.entries()) {
     const ids = pickLook(live, {
       occasion: ctx.occasion,
-      moment: momentOfDay(now),
+      season: ctx.season,
       ...(ctx.weatherF !== undefined
         ? { weather: { f: ctx.weatherF, label: "", code: 0, measured: true } }
         : {}),
       lockedIds,
       legalCombo: (p) => lookFitsSeason(p, ctx.season) && legalWithJacket(p, lc),
       requireOuter: needOuter,
-      salt: 1,
+      salt: drawSeed(today, `check:alternative:${photoCore}`, liveIdsKey(live), i),
       excludeKeys: [photoCore],
       taste,
+      today,
     });
     if (!ids.length) continue;
     if (!ids.every((id) => liveIds.has(id) && !deleted.has(id))) continue;
     const pieces = ids.map((id) => live.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g));
     if (pieces.length !== ids.length) continue;
-    if (!isLegal(pieces, lc) || !lookFitsSeason(pieces, ctx.season)) continue;
+    if (ruleFails(pieces, ruleCtx(ctx, pool, taste)).length || !lookFitsSeason(pieces, ctx.season)) continue;
     if (needOuter && !hasOuter(pieces)) continue;
     if (pairingBlocked(pieces, taste)) continue;
     if (ids.some((id) => vetoed.has(id) && !lockedIds.includes(id))) continue;
