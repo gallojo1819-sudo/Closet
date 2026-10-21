@@ -495,7 +495,7 @@ describe("switch", () => {
 });
 
 describe("dock router", () => {
-  const LOCAL: LocalReply = { text: "from the closet", garmentIds: [CORDS], occasion: "weekday", technique: null };
+  const LOCAL: LocalReply = { text: "from the closet", garmentIds: [CORDS], occasion: "weekday" };
   const hang = <T,>() => new Promise<T>(() => {});
   type A = { ok: true; text: string } | { ok: false; error: string; reason: string };
   type S = { ok: true; text: string } | { ok: false; error: string };
