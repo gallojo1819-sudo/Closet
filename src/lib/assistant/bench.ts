@@ -62,7 +62,7 @@ export const IDS = {
   sneakers: "g_01xaga54r12h",
   navySneakers: "g_9q0j6ksxlgcv",
   polo: "g_939onlwfrg9j",
-  creamTrousers: "g_0re8nrx2mpdy",
+  creamTrousers: "g_80sz9s08xpw1",
   creamSweatshirt: "g_6qz38nwsrupx",
 } as const;
 

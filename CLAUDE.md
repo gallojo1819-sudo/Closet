@@ -373,4 +373,11 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   passes; switching the row to the cotton trousers waits on Joe. Bench: row 15 is the one
   failing row (`closet-bench scripted: 22/23 passed, 0 known engine gaps, 7 skipped`).
 
+- bench-row15-cotton (Oct 21 2026, claude/probability-v2 on the prob-v2-review commit, Joe OK'd
+  2026-10-21): `IDS.creamTrousers` in `src/lib/assistant/bench.ts` is now the cream cotton
+  trousers g_80sz9s08xpw1 instead of the linen g_0re8nrx2mpdy. Only row 15 (SNEAKER_OUT, "Better
+  shoes for this?") uses it; with linen, XC-SEA-3 (resort in fall, never waived) failed the look
+  on out/fall so no shoe swap could pass. Coverage stays on the 90-day window. Bench:
+  `closet-bench scripted: 23/23 passed, 0 known engine gaps, 7 skipped`.
+
 Follow-ups (logged, not fixed): season.ts / outfit-check XC-SEA-3 shows "A summer piece in fall." for a summer piece checked in winter (bench row 16, mules in winter); in winter it should read "A summer piece in winter."
