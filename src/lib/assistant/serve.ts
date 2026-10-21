@@ -23,7 +23,7 @@ import { todayISO } from "../utils.ts";
 import { runAssistant, type ModelMessage, type StopReason } from "./loop.ts";
 import type { AssistantCtx } from "./registry.ts";
 import { buildAssistantSystem } from "./system.ts";
-import { AssistantModelError, AssistantQuotaError, AssistantTimeoutError, xaiModel, type XaiPost } from "./xai-adapter.ts";
+import { AssistantQuotaError, AssistantTimeoutError, xaiModel, type XaiPost } from "./xai-adapter.ts";
 
 /** The same list, in the same order, as CHAT_MODELS in the stylist's ask module: the assistant falls back the way the stylist does. */
 export const ASSISTANT_MODELS = ["grok-4.5", "grok-4.3", "grok-4"] as const;
@@ -151,9 +151,13 @@ export async function askAssistantCore(input: AssistantAskInput, deps: Assistant
     ...(input.looks ? { looks: input.looks } : {}),
   };
 
-  const controller = new AbortController();
+  /* The deadline counts from the ask's start, not from the end of the notes read: the timer gets
+     only what is left, so a POST in flight is aborted at ASSISTANT_SERVER_MS after the ask began. */
   const deadlineAt = startedAt + ASSISTANT_SERVER_MS;
-  const timer = setTimeout(() => controller.abort(), ASSISTANT_SERVER_MS);
+  const remaining = Math.max(0, deadlineAt - now());
+  if (remaining === 0) return { ok: false, error: TIMEOUT_ERROR, reason: "timeout" };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), remaining);
   const gateSeen: { last: GateResult } = { last: firstGate };
   let modelCalls = 0;
   const beforeCall = async () => {
@@ -184,8 +188,8 @@ export async function askAssistantCore(input: AssistantAskInput, deps: Assistant
     if (err instanceof AssistantTimeoutError || controller.signal.aborted) {
       return { ok: false, error: TIMEOUT_ERROR, reason: "timeout" };
     }
-    const message = err instanceof AssistantModelError ? err.message : "";
-    return { ok: false, error: message && message !== "model" ? message : MODEL_ERROR, reason: "model" };
+    /* The upstream error line stays on the server: the client only ever sees the generic message. */
+    return { ok: false, error: MODEL_ERROR, reason: "model" };
   } finally {
     clearTimeout(timer);
   }

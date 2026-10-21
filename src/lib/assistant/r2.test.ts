@@ -24,6 +24,8 @@ import { ASSISTANT_SHARE_MS, askThroughSwitch } from "./route.ts";
 import {
   ASSISTANT_MODELS,
   ASSISTANT_SERVER_MS,
+  MODEL_ERROR,
+  TIMEOUT_ERROR,
   askAssistantCore,
   historyMessages,
   type AssistantAskInput,
@@ -290,7 +292,7 @@ describe("server core", () => {
     const { post, bodies } = scriptedPost(() => ({ fail: "down" }));
     const { deps } = depsOf(post);
     const res = await askAssistantCore(inputOf(), deps);
-    expect(res).toEqual({ ok: false, error: "down", reason: "model" });
+    expect(res).toEqual({ ok: false, error: MODEL_ERROR, reason: "model" });
     expect(bodies.length).toBe(ASSISTANT_MODELS.length);
     let clock = 1_000_000;
     const slow = scriptedPost(() => {
@@ -384,6 +386,46 @@ describe("server core", () => {
     expect(recalled.data.notes.items.map((n: { text: string }) => n.text)).toContain("lean to brown shoes");
     expect(JSON.stringify(backend.all())).toBe(before);
     expect((await listActive(backend)).length).toBe(2);
+  });
+
+  it("aborts the run 6000 ms after the ask began, not 6000 ms after a slow notes read", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    try {
+      const start = Date.now();
+      let abortedAt: number | undefined;
+      const bodies: unknown[] = [];
+      const post: XaiPost = (body, signal) => {
+        bodies.push(body);
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener("abort", () => {
+            abortedAt = Date.now() - start;
+            reject(new Error("aborted"));
+          });
+        });
+      };
+      const loadNotes = () => new Promise<never[]>((resolve) => setTimeout(() => resolve([]), 2900));
+      const pending = askAssistantCore(inputOf(), depsOf(post, { loadNotes, now: () => Date.now() }).deps);
+      await vi.advanceTimersByTimeAsync(2900);
+      expect(bodies.length).toBe(1);
+      await vi.advanceTimersByTimeAsync(ASSISTANT_SERVER_MS - 2900 - 1);
+      expect(abortedAt).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      const res = await pending;
+      expect(abortedAt).toBe(ASSISTANT_SERVER_MS);
+      expect(res).toEqual({ ok: false, error: TIMEOUT_ERROR, reason: "timeout" });
+      expect(bodies.length).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("never hands the client the upstream error: a failed post gives the generic model error", async () => {
+    const { post, bodies } = scriptedPost(() => ({ fail: "Incorrect API key provided: xa***yz" }));
+    const res = await askAssistantCore(inputOf(), depsOf(post).deps);
+    expect(res).toEqual({ ok: false, error: MODEL_ERROR, reason: "model" });
+    expect(bodies.length).toBe(ASSISTANT_MODELS.length);
+    expect(JSON.stringify(res)).not.toMatch(/API key/);
+    expect(JSON.stringify(res)).not.toMatch(/xa\*\*\*yz/);
   });
 
   it("goes on without notes when the loader hangs past its race", async () => {
