@@ -107,12 +107,27 @@ async function notesWithin(load: () => Promise<StylistNote[]>, ms: number): Prom
   }
 }
 
+/** A refused gate as the core's answer: signed out, or over the limit. */
+function gateRefusal(gate: GateResult): AssistantAskResult {
+  const error = gate.ok ? SIGNED_OUT : gate.error;
+  return { ok: false, error, reason: error === SIGNED_OUT ? "signed_out" : "quota" };
+}
+
 export async function askAssistantCore(input: AssistantAskInput, deps: AssistantDeps): Promise<AssistantAskResult> {
+  /* No key touches no data, so it may answer before the gate. */
   if (!deps.hasKey) return { ok: false, error: NO_KEY_ERROR, reason: "no_key" };
-  const pool = livePool(input.garments ?? []);
-  if (!pool.length) return { ok: false, error: EMPTY_ERROR, reason: "empty" };
   const now = deps.now ?? Date.now;
   const startedAt = now();
+
+  /* Identity first: the caller gate (sign-in, then the chat bucket) runs before anything reads
+     the caller's data, the garments and the notes included, as askStylist gates before its pool.
+     This first take is the first model call's unit; beforeCall reuses it, so the count stays
+     one unit per model call. */
+  const firstGate = await deps.gate();
+  if (!firstGate.ok) return gateRefusal(firstGate);
+
+  const pool = livePool(input.garments ?? []);
+  if (!pool.length) return { ok: false, error: EMPTY_ERROR, reason: "empty" };
   const occasion = askOccasion(input.page, input.prompt);
   const taste = input.taste ? normalizeTaste(input.taste) : emptyTaste();
   const weatherF = finite(input.page?.weatherF) ?? finite(input.weatherF);
@@ -139,7 +154,7 @@ export async function askAssistantCore(input: AssistantAskInput, deps: Assistant
   const controller = new AbortController();
   const deadlineAt = startedAt + ASSISTANT_SERVER_MS;
   const timer = setTimeout(() => controller.abort(), ASSISTANT_SERVER_MS);
-  const gateSeen: { last: GateResult } = { last: { ok: true } };
+  const gateSeen: { last: GateResult } = { last: firstGate };
   let modelCalls = 0;
   const beforeCall = async () => {
     if (now() >= deadlineAt) {
@@ -147,6 +162,7 @@ export async function askAssistantCore(input: AssistantAskInput, deps: Assistant
       throw new AssistantTimeoutError();
     }
     modelCalls += 1;
+    if (modelCalls === 1) return true; /* the unit taken before any data was read */
     gateSeen.last = await deps.gate();
     return gateSeen.last.ok;
   };
@@ -164,11 +180,7 @@ export async function askAssistantCore(input: AssistantAskInput, deps: Assistant
     const isLook = run.text !== NOT_IN_CLOSET && ids.length >= MIN_LOOK_IDS;
     return { ok: true, text: run.text, garmentIds: isLook ? ids : [], occasion, stopReason: run.stopReason, modelCalls };
   } catch (err) {
-    if (err instanceof AssistantQuotaError) {
-      const last = gateSeen.last;
-      const error = last.ok ? SIGNED_OUT : last.error;
-      return { ok: false, error, reason: error === SIGNED_OUT ? "signed_out" : "quota" };
-    }
+    if (err instanceof AssistantQuotaError) return gateRefusal(gateSeen.last);
     if (err instanceof AssistantTimeoutError || controller.signal.aborted) {
       return { ok: false, error: TIMEOUT_ERROR, reason: "timeout" };
     }

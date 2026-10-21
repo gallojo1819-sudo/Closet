@@ -266,7 +266,24 @@ describe("server core", () => {
     const keyed = depsOf(post);
     const empty = await askAssistantCore(inputOf({ garments: POOL.map((g) => ({ ...g, archived: true })) }), keyed.deps);
     expect(empty).toMatchObject({ ok: false, reason: "empty" });
-    expect(keyed.gate).toHaveBeenCalledTimes(0);
+    expect(keyed.gate).toHaveBeenCalledTimes(1);
+    expect(keyed.loadNotes).toHaveBeenCalledTimes(0);
+  });
+
+  it("refuses a signed-out caller before any data is read: no garments, no notes, no post", async () => {
+    const { post, bodies } = scriptedPost(() => ({ text: "x" }));
+    const gate = vi.fn(async () => ({ ok: false as const, error: SIGNED_OUT }));
+    const loadNotes = vi.fn(async () => []);
+    const readGarments = vi.fn(() => POOL);
+    const input = inputOf();
+    delete input.garments;
+    Object.defineProperty(input, "garments", { get: readGarments, enumerable: true });
+    const res = await askAssistantCore(input, depsOf(post, { gate, loadNotes }).deps);
+    expect(res).toEqual({ ok: false, error: SIGNED_OUT, reason: "signed_out" });
+    expect(gate).toHaveBeenCalledTimes(1);
+    expect(loadNotes).toHaveBeenCalledTimes(0);
+    expect(readGarments).toHaveBeenCalledTimes(0);
+    expect(bodies.length).toBe(0);
   });
 
   it("reports model when every model fails a call, and timeout once the deadline has passed", async () => {
