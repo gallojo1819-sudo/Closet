@@ -174,17 +174,18 @@ describe("look opinion", () => {
     assert.equal(opinion?.headline, `${FAILS_PREFIX}${RULE_SENTENCES["VETO-PIECE"]}`);
   });
 
-  it("the builder is labeled Suggest, says Passes the rules, and paints a slot edge", () => {
+  it("the builder is labeled Suggest, says Passes the rules, and paints a neutral slot edge", () => {
     const src = readFileSync(new URL("../components/closet/look-builder.tsx", import.meta.url), "utf8");
     const today = readFileSync(new URL("../routes/index.tsx", import.meta.url), "utf8");
     assert.match(src, /heading = "Suggest"/);
     assert.equal(src.includes("Make a look"), false);
     assert.match(src, /suggestLine\(shown, pool\)/);
-    assert.match(src, /PASSES_LINE/);
     assert.equal(src.includes("This matches."), false);
     assert.equal(src.includes("This doesn't match."), false);
-    assert.match(src, /border-green-800/);
-    assert.match(src, /border-red-800/);
+    /* The slot edge is neutral: ink for a filled or open slot, hairline otherwise. No colour says pass or fail (Oct 21 2026). */
+    assert.match(src, /g \|\| openSlot === s\.id \? "border-ink" : "border-hairline"/);
+    assert.equal(/border-(green|red)-/.test(src), false, "a verdict colour on a slot edge");
+    assert.equal(src.includes("PASSES_LINE"), false, "the builder no longer reads the verdict for its edges");
     assert.match(src, /slot-crossfade/);
     assert.match(src, /draggable/);
     assert.match(src, /onDrop/);

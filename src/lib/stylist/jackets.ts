@@ -602,13 +602,14 @@ export function coatSharesLookWithGraphic(pieces: Plate[]): boolean {
 
 /**
  * JKT-LAY-2, as Joe set it on Oct 15 2026: a sport coat takes a shirt or a fine knit, never a
- * chunky cable. Pass for a woven shirt, a polo, a fine knit, a tee, a zip knit, a cardigan or a
- * resort shirt; fail only for a chunky or cable knit and the graphic or collegiate cases. The
- * dated rule document's soft cases (a tee under a soft coat, a zip knit, a cardigan, a resort
- * shirt, an unrated top) are superseded: nothing scores, and these are not fails.
+ * chunky cable. Pass for a woven shirt, a polo, a fine knit, a zip knit, a cardigan or a resort
+ * shirt; fail for a chunky or cable knit, the graphic or collegiate cases, and a plain tee or
+ * henley under a structured sport coat (the dated rule document's hard case, kept: Oct 21 2026).
+ * A plain tee or henley under a soft sport coat passes. The document's other soft cases (a zip
+ * knit, a cardigan, a resort shirt, an unrated top) are superseded: nothing scores, and these
+ * are not fails.
  */
 function underHit(g: Plate, worn: string, outer: Plate, ctx: JacketCtx, hits: JacketHit[]) {
-  void outer;
   void ctx;
   const push = (why: string) => {
     hits.push({ id: "JKT-LAY-2", severity: "hard", delta: 0, why });
@@ -619,6 +620,10 @@ function underHit(g: Plate, worn: string, outer: Plate, ctx: JacketCtx, hits: Ja
   }
   if (jsig(g, "tee_graphic", worn)) {
     push(`graphic tee ${g.name} under a sport coat`);
+    return;
+  }
+  if (jsig(g, "tee_plain", worn) || jsig(g, "henley", worn)) {
+    if (jacketInfo(outer).class === "sport_coat_structured") push(`${g.name} under a structured sport coat`);
     return;
   }
   if (jsig(g, "chunky_knit", worn) || hasText(blob(g), ["cable", "chunky", "aran", "fisherman"])) {

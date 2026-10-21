@@ -28,6 +28,8 @@ import { lookFitsSeason } from "./season.ts";
 import { clashSentence } from "./detectors.ts";
 import { normalizeTaste, pieceLine } from "./taste.ts";
 import type { Garment, Occasion, Season } from "./types.ts";
+import { liveSnapshot } from "./__fixtures__/snapshot.ts";
+import { passesRules } from "./stylist/legal.ts";
 
 /* The gaps.test.ts list, copied. Case-sensitive, so a garment word like "knit polo" does not trip it. */
 const HOUSE_NAMES = /\b(Polo|Purple Label|RRL|ALD|Faloni|545|Sweet Stable|Italian summer|Italian winter|Ralph)\b/;
@@ -433,5 +435,55 @@ describe("outfit check", () => {
   it("m) pieceLine is exported", () => {
     const line = pieceLine(own("g_21b6d3qcohmu"));
     assert.match(line, /^- .+ \[g_21b6d3qcohmu\] \(.+\)$/);
+  });
+});
+
+describe("outfit check on the live snapshot: a jacket may cure what sits beside the jacket rule", () => {
+  const byLive = new Map(liveSnapshot.map((g) => [g.id, g]));
+  const live = (id: string): Garment => {
+    const g = byLive.get(id);
+    assert.ok(g, `snapshot lost ${id}`);
+    return g;
+  };
+  /* Light blue long-sleeve polo, cream cotton trousers, white leather sneakers: on out in fall at 58F the core fails COL-10 (no dark anchor), JKT-COV-1 and the out gate (sneakers while loafers are owned). A shoe swap alone leaves COL-10 and JKT-COV-1; a jacket cures both. */
+  const CORE = ["g_939onlwfrg9j", "g_80sz9s08xpw1", "g_9q0j6ksxlgcv"];
+  const ctx: CheckCtx = { occasion: "out", season: "fall", weatherF: 58 };
+  const rc = { house: null, occasion: ctx.occasion, season: ctx.season, pool: liveSnapshot } as const;
+
+  it("checkSwaps offers one footwear swap whose full look, jacket included, passes every rule", () => {
+    const look = CORE.map(live);
+    assert.equal(/polo/.test(look[0]!.subtype), true, look[0]!.name);
+    assert.equal(look[1]!.material, "cotton", look[1]!.name);
+    assert.equal(/sneaker/.test(look[2]!.subtype), true, look[2]!.name);
+    const v = checkVerdict(look, ctx, liveSnapshot);
+    assert.equal(v.state, "doesnt", v.reason);
+    assert.ok(v.ruleIds.includes("COL-10"), v.ruleIds.join(","));
+    const swaps = checkSwaps(look, liveSnapshot, ctx);
+    const shoes = swaps.filter((s) => s.slot === "footwear");
+    assert.equal(shoes.length, 1, JSON.stringify(swaps));
+    const swap = shoes[0]!;
+    assert.equal(swap.outId, "g_9q0j6ksxlgcv");
+    assert.equal(swap.state, "works_with_jacket", swap.line);
+    assert.ok(swap.jacket, "the swap names the jacket");
+    assert.match(swap.line, /^Swap the .+ for your .+\. Add your .+\.$/);
+    assert.ok(allOwned(swap.ids, liveSnapshot), swap.ids.join(","));
+    const full = swap.ids.map(live);
+    assert.equal(full.some((g) => slotOf(g) === "outerwear"), true, "the full look carries the jacket");
+    const verdict = passesRules(full, rc);
+    assert.deepEqual(verdict, { pass: true, failed: [] }, `${swap.line}: ${verdict.failed.join(",")}`);
+    assert.equal(lookFitsSeason(full, ctx.season), true);
+  });
+
+  it("the finishing jacket never cures a season fail, so a summer piece in fall has no jacket cure", () => {
+    const linen = liveSnapshot.find((g) => slotOf(g) === "bottom" && /linen/.test(`${g.material} ${g.name}`));
+    assert.ok(linen, "the snapshot has linen trousers");
+    const look = [live("g_939onlwfrg9j"), linen, live("g_9q0j6ksxlgcv")];
+    const v = checkVerdict(look, ctx, liveSnapshot);
+    assert.equal(v.state, "doesnt", v.reason);
+    for (const s of checkSwaps(look, liveSnapshot, ctx)) {
+      const full = s.ids.map(live);
+      assert.equal(passesRules(full, rc).pass, true, s.line);
+      assert.equal(full.some((g) => g.id === linen.id), false, `${s.line}: the linen stays`);
+    }
   });
 });

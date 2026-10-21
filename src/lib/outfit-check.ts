@@ -24,7 +24,6 @@ import {
   DELETED_SNEAKERS,
   JACKET_COVER_IDS,
   legalWithJacket,
-  needsJacketOnly,
   ruleFails,
   type LegalCtx,
   type RuleCtx,
@@ -467,7 +466,7 @@ function finishingJacket(
     ctx: rc,
     salt: drawSeed(today, `check:jacket:${look.map((g) => g.id).sort().join(",")}`, liveIdsKey(livePool(pool))),
     weights: { today },
-    legalCombo: fits,
+    legalCombo: (p) => fits(p) && !ruleFails(p, rc).length,
   });
   if (!outer || isPhotoGarment(outer)) return undefined;
   return fits([...look, outer]) && !ruleFails([...look, outer], rc).length ? outer : undefined;
@@ -475,7 +474,12 @@ function finishingJacket(
 
 /* ----------------------------- the verdict ----------------------------- */
 
-/** The rules' verdict: works when every rule passes; works with a jacket when the jacket rules alone fail; doesn't otherwise, with the failing rules' sentences. */
+/**
+ * The rules' verdict: works when every rule passes; works with a jacket when a jacket rule fails
+ * and an owned jacket finishes a look that passes every rule (a jacket may also cure what sits
+ * beside the jacket rule, such as COL-10's missing dark anchor); doesn't otherwise, with the
+ * failing rules' sentences.
+ */
 export function checkVerdict(
   look: Garment[],
   ctx: CheckCtx,
@@ -508,7 +512,7 @@ export function checkVerdict(
     return { state: "works", reason, reasons: [reason], ruleIds: [] };
   }
 
-  if (!hasOuter(look) && inSeason && needsJacketOnly(failed)) {
+  if (!hasOuter(look) && inSeason && failed.some((id) => JACKET_COVER_IDS.includes(id))) {
     const jacket = finishingJacket(look, ctx, pool, taste);
     if (jacket) {
       const name = pieceName(jacket, pool);

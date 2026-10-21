@@ -477,7 +477,7 @@ describe("6. no rating surface", () => {
     const hits: string[] = [];
     for (const file of UI) {
       const text = readFileSync(file, "utf8");
-      for (const re of [/techniqueLine/, /This matches\./, /This doesn't match\./, /\bstars?\b/i, /\bthumbs?[- ]?(up|down)\b/i, /\brat(e|ing)\b/i, /\bscore\b/i]) {
+      for (const re of [/techniqueLine/, /This matches\./, /This doesn't match\./, /\bstars?\b/i, /\bthumbs?[- ]?(up|down)\b/i, /\brat(e|ing)\b/i, /\bscore\b/i, /border-(green|red)-/]) {
         const m = re.exec(text);
         if (m) hits.push(`${file.slice(file.indexOf("src/"))}: ${m[0]}`);
       }
@@ -666,6 +666,31 @@ describe("9. the owner's style rules and the addendum, on real ids", () => {
     expect(lay2(fine), `${fine.name} under the sport coat`).toEqual([]);
     expect(lay2(cable).some((h) => h.severity === "hard"), `${cable.name} under the sport coat`).toBe(true);
     console.log(`rule 5: woven ${woven.name}; fine ${fine.name}; cable ${cable.name}`);
+  });
+
+  it("rule 5b: a plain tee or henley fails JKT-LAY-2 under a structured sport coat and passes under a soft one (restored Oct 21 2026)", () => {
+    const structured = ["g_5josnvyoi4z9", "g_98p2sivflrxg"].map((id) => BY_ID.get(id)!);
+    const soft = ["g_juk45cokjxxy", "g_whgv0gu6m08l"].map((id) => BY_ID.get(id)!);
+    const tee = BY_ID.get("g_mir3akjyhwnr")!;
+    const henley = BY_ID.get("g_m7bg5j5z10wc")!;
+    expect(tee.name).toMatch(/t-shirt/);
+    expect(henley.name).toMatch(/henley/);
+    for (const g of structured) expect(jacketInfo(g).class, g.name).toBe("sport_coat_structured");
+    for (const g of soft) expect(jacketInfo(g).class, g.name).toBe("sport_coat_soft");
+    const bottom = CLOSET.find((g) => slotOf(g) === "bottom")!;
+    const shoe = CLOSET.find((g) => slotOf(g) === "footwear")!;
+    const lay2 = (top: Garment, coat: Garment) => jacketHits(slotPieces([top, bottom, shoe, coat]), { occasion: "weekday", season: "fall" }).filter((h) => h.id === "JKT-LAY-2");
+    for (const top of [tee, henley]) {
+      for (const coat of structured) {
+        expect(lay2(top, coat).some((h) => h.severity === "hard"), `${top.name} under ${coat.name}`).toBe(true);
+        expect(strict([top, bottom, shoe, coat], "weekday").failed, `${top.name} under ${coat.name}`).toContain("JKT-LAY-2");
+      }
+      for (const coat of soft) {
+        expect(lay2(top, coat), `${top.name} under ${coat.name}`).toEqual([]);
+        expect(strict([top, bottom, shoe, coat], "weekday").failed, `${top.name} under ${coat.name}`).not.toContain("JKT-LAY-2");
+      }
+    }
+    expect(PREFERENCE_IDS.has("JKT-LAY-2")).toBe(false);
   });
 
   describe("addendum A: the brown suede mules on Out and Weekend in fall", () => {

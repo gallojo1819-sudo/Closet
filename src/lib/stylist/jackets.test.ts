@@ -80,11 +80,11 @@ const flat = groups.flatMap((rule) =>
 /*
  * The rule JSON is a law file pinned by hash (profiles.test.ts), so a case the owner's later
  * rule overrides is graded here against the override, not edited there. JKT-LAY-2 (probability
- * round): a woven shirt, a tee or a fine knit under a sport coat passes; only a chunky or cable
- * knit, a graphic or collegiate piece under one fails.
+ * round): a woven shirt, a fine knit, a zip knit or a tee under a soft sport coat passes; a
+ * chunky or cable knit, a graphic or collegiate piece, or a plain tee or henley under a
+ * structured sport coat fails (#1 is graded as the document wrote it).
  */
 const SUPERSEDED: Record<string, string> = {
-  "JKT-LAY-2#1": "pass",
   "JKT-LAY-2#2": "pass",
   "JKT-LAY-2#4": "pass",
 };

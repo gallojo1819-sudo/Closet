@@ -44,7 +44,7 @@ function spyStore(answer?: (key: string) => unknown) {
 }
 
 describe("engine speed: same outputs", () => {
-  it("A) matrix, reshuffle rows, week, drop and ways match the recorded snapshot (re-recorded for the probability round, Oct 15 2026)", (t) => {
+  it("A) matrix, reshuffle rows, week, drop and ways match the recorded snapshot (re-recorded for the probability round, Oct 15 2026, and on Oct 21 2026 when a plain tee or henley under a structured sport coat became a JKT-LAY-2 fail again)", (t) => {
     setEngineStore(null);
     clearMatrixCache();
     sameAsSnapshot(t, runEngine(), "fresh");

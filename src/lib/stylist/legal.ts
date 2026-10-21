@@ -73,9 +73,10 @@ export const JACKET_COVER_IDS: readonly string[] = ["JKT-COV-1", "XC-TEX-8", "XC
  *    and lounge stay hard.
  * Two more Joe-kept passes are not hits at all any more: XC-SEA-3's cold-weather mule in fall
  * and XC-TEX-4's tassel-loafer half were deleted in rules.ts (Joe 2026-10-15, confirmed
- * 2026-10-19), and JKT-LAY-2's soft cases (a tee, zip knit, cardigan, resort shirt or unrated
- * top under a sport coat) pass in underHit (jackets.ts), which fails only a chunky or cable knit
- * and the graphic or collegiate cases.
+ * 2026-10-19), and JKT-LAY-2's soft cases (a tee under a soft sport coat, a zip knit, cardigan,
+ * resort shirt or unrated top under a sport coat) pass in underHit (jackets.ts), which fails a
+ * chunky or cable knit, the graphic or collegiate cases, and a plain tee or henley under a
+ * structured sport coat.
  */
 export const PREFERENCE_IDS: ReadonlySet<string> = new Set(["JKT-COV-1", "JKT-LAY-3"]);
 

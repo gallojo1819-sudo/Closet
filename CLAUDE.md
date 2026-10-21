@@ -347,4 +347,30 @@ Personal wardrobe app (TanStack Start + React 19, Zustand store persisted as `cl
   groups with the mules still pairable). `engine-snapshot.json` re-recorded from this tree
   (`__fixtures__/record-engine-snapshot.ts`).
 
+- prob-v2-review (Oct 21 2026, claude/probability-v2 on 268b84d): four review findings on the
+  probability-v2 commit. (1) `checkVerdict` (outfit-check.ts) tried a finishing jacket only when
+  `needsJacketOnly(failed)`, so a core failing JKT-COV-1 beside a fail a jacket cures (COL-10's
+  missing dark anchor) never got one and `checkSwaps` returned nothing; now it tries the jacket
+  whenever a `JACKET_COVER_IDS` rule failed and the look has no outer and is in season, and the
+  finished look must pass `ruleFails` (`finishingJacket`'s `legalCombo` is season plus the rules;
+  `pickTrueOuter` checked the rules after it already). `outfit-check.test.ts` pins, on the live
+  snapshot, polo g_939onlwfrg9j + cream cotton trousers g_80sz9s08xpw1 + white sneakers
+  g_9q0j6ksxlgcv on out/fall/58F: one footwear swap with a jacket whose full look passes
+  `passesRules`, and a linen bottom in fall gets no jacket cure (season is never waived). (2)
+  `scripts/house-check-out/*.json` (five files) were tracked by mistake; untracked, kept on disk.
+  (3) The look builder's slot borders were the verdict (green/red); filled and open slots are
+  `border-ink`, the rest `border-hairline`, the swap strip hairline/ink; `probability.test.ts`
+  criterion 6 greps `border-(green|red)-` out of components and routes. (4) `underHit`
+  (jackets.ts) had let a plain tee or henley pass under a structured sport coat (hard JKT-LAY-2
+  at a7016b8): hard again under `sport_coat_structured` (navy blazer, ivory double-breasted),
+  still a pass under a soft one (taupe, corduroy); `jackets.test.ts` grades JKT-LAY-2 #1 as the
+  document wrote it (the #1 override is gone) and `probability.test.ts` rule 5b pins the four
+  coats with the light blue t-shirt and henley. The weekend/fall matrix moved the henley from
+  the ivory double-breasted blazer to the taupe one, so `engine-snapshot.json` was re-recorded
+  from this tree (`matrixWeekendFall` is the one key that changed); `look-opinion.test.ts` pins
+  the neutral edge. Not applied: bench row 15 still builds its look
+  on the linen cream trousers (g_0re8nrx2mpdy), so XC-SEA-3 fails on out/fall and no shoe swap
+  passes; switching the row to the cotton trousers waits on Joe. Bench: row 15 is the one
+  failing row (`closet-bench scripted: 22/23 passed, 0 known engine gaps, 7 skipped`).
+
 Follow-ups (logged, not fixed): season.ts / outfit-check XC-SEA-3 shows "A summer piece in fall." for a summer piece checked in winter (bench row 16, mules in winter); in winter it should read "A summer piece in winter."

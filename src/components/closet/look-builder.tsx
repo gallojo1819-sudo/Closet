@@ -3,7 +3,7 @@ import { FlatLay } from "@/components/closet/flat-lay";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMeButton } from "@/components/closet/on-me";
 import { lookbookPool } from "@/lib/lookbook";
-import { lookOpinion, PASSES_LINE, suggestLine } from "@/lib/look-opinion";
+import { lookOpinion, suggestLine } from "@/lib/look-opinion";
 import { nameLook } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { slotOf, todayOccasion } from "@/lib/style";
@@ -80,7 +80,6 @@ export function LookBuilder({
   const hoverOpinion = hoverPieces ? lookOpinion(hoverPieces, pool, opinionOpts) : null;
   const shown = hoverOpinion ?? opinion;
   const line = shown ? suggestLine(shown, pool) : null;
-  const passes = shown?.headline === PASSES_LINE;
   const ids = pieces.map((g) => g.id);
   const ready = Boolean(picked.top && picked.bottom && picked.footwear);
   const lookName = nameLook(pieces);
@@ -136,7 +135,7 @@ export function LookBuilder({
         {SLOTS.map((s) => {
           const g = byId.get(picked[s.id] ?? "");
           const edge =
-            g && opinion ? (passes ? "border-green-800" : "border-red-800") : openSlot === s.id ? "border-ink" : "border-hairline";
+            g || openSlot === s.id ? "border-ink" : "border-hairline";
           return (
             <button
               key={s.id}
@@ -225,14 +224,14 @@ export function LookBuilder({
           {pieces
             .filter((g) => inSlot(g, opinion.swaps[0]!.slot))
             .map((g) => (
-              <div key={g.id} className="w-16 border-2 border-red-800">
+              <div key={g.id} className="w-16 border-2 border-hairline">
                 <GarmentImg garment={g} className="aspect-page w-full object-contain" />
               </div>
             ))}
           {pool
             .filter((g) => g.id === opinion.swaps[0]?.id)
             .map((g) => (
-              <div key={g.id} data-changed="" className="w-16 border-2 border-green-800">
+              <div key={g.id} data-changed="" className="w-16 border-2 border-ink">
                 <GarmentImg
                   key={g.id}
                   garment={g}
