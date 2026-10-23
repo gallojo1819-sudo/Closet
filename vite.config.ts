@@ -188,6 +188,8 @@ export default defineConfig(({ command, isPreview }) => ({
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
+            // On me's image edit may run 55 s server-side (ai-budget.ts); 60 s is the Hobby ceiling.
+            vercel: { functions: { maxDuration: 60 } },
           }),
         ]
       : []),

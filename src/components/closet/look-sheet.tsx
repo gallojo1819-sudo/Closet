@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { LookKit } from "@/components/closet/look-kit";
 import { Overlay } from "@/components/closet/overlay";
-import { ensureLookOnMe } from "@/components/closet/on-me";
+import { ON_ME_BUSY, ensureLookOnMe, onMeErrorText } from "@/components/closet/on-me";
 import { WearButton } from "@/components/closet/wear-button";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
@@ -158,8 +158,8 @@ export function LookSheet({
         const image = await ensureLookOnMe(
           look.id,
           piecesRef.current,
-          45_000,
-          look.occasion as Occasion,
+          65_000,
+          mapOccasion(look.occasion),
         );
         if (n !== gen.current) return;
         if (plan.skipped) setDressError(`${plan.skipped} has no clean cover.`);
@@ -172,7 +172,7 @@ export function LookSheet({
       } catch (e) {
         if (n !== gen.current) return;
         const msg = e instanceof Error ? e.message : "Could not dress you.";
-        setDressError(msg === "timeout" ? "Imagine timed out after 45s." : msg);
+        setDressError(onMeErrorText(msg));
       } finally {
         if (n === gen.current) setDressing(false);
       }
@@ -240,7 +240,7 @@ export function LookSheet({
                     : "border-hairline text-ink-soft hover:border-hairline-strong",
                 )}
               >
-                {dressing ? "On you…" : "On you"}
+                {dressing ? ON_ME_BUSY : "On you"}
               </button>
             ) : (
               <button

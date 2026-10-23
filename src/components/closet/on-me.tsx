@@ -190,7 +190,7 @@ function comboExtra(pieces: Garment[]): string {
 export async function ensureLookOnMe(
   lookId: string,
   pieces: Garment[],
-  ms = 45_000,
+  ms = 65_000,
   occasion?: Occasion,
 ): Promise<string> {
   const extra = comboExtra(pieces);
@@ -214,7 +214,7 @@ export async function ensureLookOnMe(
 export function queueLookOnMe(
   lookId: string,
   pieces: Garment[],
-  ms = 45_000,
+  ms = 65_000,
   occasion?: Occasion,
 ): Promise<string | null> {
   if (!useCloset.getState().refPhoto) return Promise.resolve(null);
@@ -223,6 +223,15 @@ export function queueLookOnMe(
   );
   dressQueue = job.then(() => undefined);
   return job;
+}
+
+/** Shown while an On me edit runs: a five-image edit can take most of a minute. */
+export const ON_ME_BUSY = "Dressing you… this can take up to a minute";
+/** The client cap ("timeout") and the server's xAI abort read the same. */
+export const ON_ME_SLOW = "The image service was slow — tap to try again.";
+
+export function onMeErrorText(msg: string): string {
+  return msg === "timeout" || msg === "xAI request timed out" ? ON_ME_SLOW : msg;
 }
 
 const NO_REF = "No reference photo yet. Tap Fit · 5′8 reg up top to add one.";
@@ -249,7 +258,7 @@ function useOnMe(pieces: Garment[], occasion?: Occasion) {
       setImage(image);
       if (plan.skipped) setError(`${plan.skipped} has no clean cover.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Preview failed.");
+      setError(e instanceof Error ? onMeErrorText(e.message) : "Preview failed.");
     } finally {
       setBusy(false);
     }
@@ -367,7 +376,7 @@ export function OnMePanel({
           >
             {preview.busy && <Loader2 className="size-3 animate-spin" />}
             {preview.busy
-              ? "Dressing you…"
+              ? ON_ME_BUSY
               : preview.refPhoto
                 ? "Generate preview"
                 : "Set reference photo"}
