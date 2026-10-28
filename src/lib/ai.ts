@@ -14,7 +14,7 @@ import type { StylistPageContext } from "./stylist-page";
 import { askStylistCore, phasesLine, type ChatFn, type StylistAskResult } from "./stylist-ask";
 import type { TasteMemory } from "./taste";
 import type { Category, Garment } from "./types";
-import { SERVER_DEADLINE_MS } from "./ai-budget";
+import { ONME_TIMEOUT_MS, SERVER_DEADLINE_MS, onMeRetryMs } from "./ai-budget";
 
 export type TagResult = {
   ok: true;
@@ -426,6 +426,7 @@ export const onMePreview = createServerFn({ method: "POST" })
   .middleware([closetCaller])
   .validator((input: { refImage: string; cutouts: string[]; pieces: string; tuck?: string }) => input)
   .handler(async ({ data, context }): Promise<EditResult> => {
+    const start = Date.now();
     const gate = await callerGate(context, "onMePreview");
     if (!gate.ok) return { ok: false, error: gate.error };
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Preview needs XAI_API_KEY on the server." };
@@ -442,22 +443,39 @@ ${data.pieces}
 ${data.tuck ?? ""}`;
     const urls = [data.refImage, ...data.cutouts.slice(0, 4)].filter(Boolean);
     const images = urls.map(imageUrlPart);
-    let r = await xaiFetch("https://api.x.ai/v1/images/edits", {
-      model: "grok-imagine-image-2.0",
-      prompt,
-      images,
-    });
-    if (!r.ok && r.status === 422) {
-      r = await xaiFetch("https://api.x.ai/v1/images/edits", {
+    let r = await xaiFetch(
+      "https://api.x.ai/v1/images/edits",
+      {
         model: "grok-imagine-image-2.0",
         prompt,
-        images: urls,
-      });
+        images,
+      },
+      ONME_TIMEOUT_MS,
+    );
+    let retried = false;
+    /* The 422 retry gets only what is left of the server budget, and none when too little is. */
+    const retryMs = !r.ok && r.status === 422 ? onMeRetryMs(Date.now() - start) : null;
+    if (retryMs !== null) {
+      retried = true;
+      r = await xaiFetch(
+        "https://api.x.ai/v1/images/edits",
+        {
+          model: "grok-imagine-image-2.0",
+          prompt,
+          images: urls,
+        },
+        retryMs,
+      );
     }
-    if (!r.ok) return { ok: false, error: r.error };
+    /* One line per call: counts and timing only, never the images, prompt or key. */
+    const done = (res: EditResult): EditResult => {
+      console.info("onMePreview", { images: urls.length, ms: Date.now() - start, status: r.status, retried });
+      return res;
+    };
+    if (!r.ok) return done({ ok: false, error: r.error });
     const got = await imageFromEditJson(r.json);
-    if (!got.ok) return { ok: false, error: r.error || got.error };
-    return got;
+    if (!got.ok) return done({ ok: false, error: r.error || got.error });
+    return done(got);
   });
 
 export function parseLookLine(text: string, valid: Set<string>): string[] {
