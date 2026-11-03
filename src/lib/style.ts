@@ -779,6 +779,14 @@ function isTopSlot(g: Garment): boolean {
   return s === "top" || s === "dress";
 }
 
+/** Same words as the jacket rule: material or name says suede. Leather does not. */
+function suedeShoe(g: Garment): boolean {
+  if (slotOf(g) !== "footwear") return false;
+  const material = (g.material ?? "").toLowerCase();
+  const name = (g.name ?? "").toLowerCase();
+  return material.includes("suede") || name.includes("suede");
+}
+
 /**
  * The pick: a seeded draw among rule-passing looks. A hero is drawn by rotation weight from the
  * core slots, its partners in each other slot by the same weights (Efraimidis–Spirakis order),
@@ -855,7 +863,10 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
   }
   const tops = pin.get("top") ? [pin.get("top")!] : by(isTopSlot);
   const bottoms = pin.get("bottom") ? [pin.get("bottom")!] : by((g) => slotOf(g) === "bottom");
-  const shoes = pin.get("footwear") ? [pin.get("footwear")!] : by((g) => slotOf(g) === "footwear");
+  const shoePool = pin.get("footwear") ? [pin.get("footwear")!] : by((g) => slotOf(g) === "footwear");
+  /* Wet day: dress without suede shoes first. They return only when that draw finds nothing. */
+  const wetDay = conditions?.wet === true;
+  let shoes = wetDay ? shoePool.filter((g) => lockedSet.has(g.id) || !suedeShoe(g)) : shoePool;
   const outers = pin.get("outerwear") ? [pin.get("outerwear")!] : by(isOuterCandidate, false);
   const banned = new Set(opts.excludeKeys ?? []);
   const previous = opts.previousIds ?? [];
@@ -1006,14 +1017,22 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
     return null;
   };
 
-  let found: Found | null = null;
   /* A Skip's slot-change asks are tried first and given up before a hero is passed over. */
   const skipAsks = previous.length >= 3 && Boolean(opts.minSlotChange || opts.requireSilhouetteChange);
-  for (const strict of skipAsks ? [true, false] : [false]) {
-    found = attempt(strict);
-    if (found) break;
+  const search = (): Found | null => {
+    let hit: Found | null = null;
+    for (const strict of skipAsks ? [true, false] : [false]) {
+      hit = attempt(strict);
+      if (hit) break;
+    }
+    if (!hit) hit = attempt(false, true);
+    return hit;
+  };
+  let found = search();
+  if (!found && wetDay && shoes.length !== shoePool.length) {
+    shoes = shoePool;
+    found = search();
   }
-  if (!found) found = attempt(false, true);
   if (!found) {
     const locked = [...lockedSet].filter((id) => pool.some((g) => g.id === id));
     return { ids: locked, relaxed: [], tried, hero: null };

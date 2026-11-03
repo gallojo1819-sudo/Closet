@@ -443,9 +443,9 @@ function countsAsOuter(g: Plate | undefined): boolean {
   return Boolean(info.countsAsJacket && info.class && info.class !== "mid");
 }
 
-/** One season colder, for the wind gate only. Winter stays winter. */
+/** One season colder, for the wind gate only. Summer stays summer. Winter stays winter. */
 function stepColder(season: string): string {
-  if (season === "summer" || season === "spring") return "fall";
+  if (season === "spring") return "fall";
   if (season === "fall") return "winter";
   return season;
 }
@@ -864,7 +864,7 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
       typeof ctx.highF === "number" &&
       ctx.highF >= WEATHER_THRESHOLDS.WARM_SHEARLING_F;
     if (warmShearling) {
-      /* Stronger than the ordinary fall heavy mark, so a light outer wins when one is legal. */
+      /* A soft hit fails the look, the same as any other soft hit. Probability v2 does not rank by the delta. */
       hit("JKT-COV-3", "soft", -20, `shearling ${outer.name} on a warm fall day`);
     } else if (heavy && (season === "spring" || season === "summer")) {
       hit("JKT-COV-3", "hard", 0, `heavy ${outer.name} in ${season}`);

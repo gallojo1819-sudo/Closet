@@ -14,7 +14,7 @@ import { persistGate, useCloset } from "./store.ts";
 import { answerTodayAsk, asksAboutToday, swapBaseIds } from "./stylist-page.ts";
 import { recordStylistQuestion, restoreIfAskWrote } from "./stylist-thread.ts";
 import { dailyPickWeather } from "./daily-pick.ts";
-import { pickDropWith } from "./drop-pick.ts";
+import { pickDropIds, pickDropWith, rerollWeather } from "./drop-pick.ts";
 import { isTrueOuter, slotOf } from "./style.ts";
 import { DELETED_SNEAKERS } from "./stylist/deleted.ts";
 import { todayLookIds, todayLookPieces } from "./today-look.ts";
@@ -166,13 +166,29 @@ describe("Today's weather", () => {
   const knitLayer = (g: Garment) => /\bknit\b|fleece|cardigan/i.test(`${g.material} ${g.subtype}`);
   const owned = (ids: readonly string[]) =>
     ids.map((id) => CLOSET.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g));
+  const suedeShoe = (g: Garment) => slotOf(g) === "footwear" && /suede/i.test(`${g.material} ${g.name}`);
+  const noSuedeShoes = CLOSET.filter((g) => !suedeShoe(g));
+
+  /** A suede shoe is legal only when the same draw, with those shoes removed, finds nothing. */
+  function assertSuedeOnlyAsLastResort(
+    picked: { ids: readonly string[]; relaxed: readonly string[] },
+    occasion: Occasion,
+    weather: ReturnType<typeof dailyPickWeather>,
+    salt: number,
+    today: string,
+  ) {
+    if (!owned(picked.ids).some(suedeShoe)) return;
+    expect(picked.relaxed, `${occasion} ${today} salt ${salt}`).toContain("JKT-WET-2");
+    const again = pickDropWith(noSuedeShoes, weather, occasion, { salt, season: "fall", today });
+    expect(again.ids.length, `${occasion} ${today} salt ${salt} without suede shoes`).toBeLessThan(3);
+  }
 
   function assertDressed(ids: readonly string[], occasion: string) {
     expect(ids.length, occasion).toBeGreaterThanOrEqual(3);
     expect(ids.every((id) => CLOSET.some((g) => g.id === id)), occasion).toBe(true);
     for (const id of DELETED_SNEAKERS) expect(ids, occasion).not.toContain(id);
     const look = owned(ids);
-    const outers = look.filter((g) => slotOf(g) === "outerwear");
+    const outers = look.filter((g) => slotOf(g) === "outerwear" || isTrueOuter(g));
     expect(outers.some((g) => isTrueOuter(g) && !nap(g) && !knitLayer(g)), occasion).toBe(true);
     expect(outers.some(nap), occasion).toBe(false);
     expect(outers.some(knitLayer), occasion).toBe(false);
@@ -198,8 +214,8 @@ describe("Today's weather", () => {
   it("a wet fall weekend and its Suggest looks wear a true outer, never suede", () => {
     const weather = dailyPickWeather("fall", { wet: true, highF: 60 });
     const picked = pickDropWith(CLOSET, weather, "weekend", { salt: SALT, season: "fall", today: TODAY });
-    const suedeShoe = assertDressed(picked.ids, "weekend");
-    if (suedeShoe) expect(picked.relaxed).toContain("JKT-WET-2");
+    assertDressed(picked.ids, "weekend");
+    assertSuedeOnlyAsLastResort(picked, "weekend", weather, SALT, TODAY);
     for (const occasion of ["weekend", "weekday", "travel"] as const satisfies readonly Occasion[]) {
       const sug = todaySuggestions(
         { garments: CLOSET, journal: [], drop: null },
@@ -207,9 +223,84 @@ describe("Today's weather", () => {
       );
       expect(sug.alternates.length, occasion).toBeGreaterThan(0);
       for (const alt of sug.alternates) {
-        const shoe = assertDressed(alt.ids, occasion);
-        if (shoe) expect(alt.relaxed, occasion).toContain("JKT-WET-2");
+        assertDressed(alt.ids, occasion);
+        if (!alt.pieces.some(suedeShoe)) continue;
+        expect(alt.relaxed, occasion).toContain("JKT-WET-2");
+        const bare = todaySuggestions(
+          { garments: noSuedeShoes, journal: [], drop: null },
+          { todayIds: [], occasion, season: "fall", today: TODAY, conditions: { date: TODAY, wet: true, highF: 60 } },
+        );
+        expect(bare.alternates, occasion).toEqual([]);
       }
+    }
+  });
+
+  it("a suede shoe on a wet day is used only when the closet without one cannot dress", () => {
+    const weather = dailyPickWeather("fall", { wet: true, highF: 60 });
+    const occasions = ["weekday", "out", "weekend", "travel", "comfy"] as const satisfies readonly Occasion[];
+    const dates = ["2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07", "2026-11-08", "2026-11-09", "2026-11-10"];
+    const salts = [1, 2, 3, 4];
+    for (const today of dates) {
+      for (const salt of salts) {
+        for (const occasion of occasions) {
+          const picked = pickDropWith(CLOSET, weather, occasion, { salt, season: "fall", today });
+          assertSuedeOnlyAsLastResort(picked, occasion, weather, salt, today);
+        }
+      }
+    }
+  }, 180_000);
+
+  it("a windy summer weekday and out at 86F still return a look", () => {
+    const weather = dailyPickWeather("summer", { windy: true, highF: 86 });
+    for (const occasion of ["weekday", "out"] as const) {
+      const picked = pickDropWith(CLOSET, weather, occasion, { salt: 1, season: "summer", today: "2026-07-15" });
+      expect(picked.ids.length, occasion).toBeGreaterThanOrEqual(3);
+      expect(picked.ids.every((id) => CLOSET.some((g) => g.id === id)), occasion).toBe(true);
+    }
+  });
+
+  it("a Skip with a live wet snap and no frozen key matches the measured reading alone", () => {
+    const live = { f: 60, label: "Rain", code: 61, measured: true, wet: true, windy: true, highF: 48 };
+    const plain = { f: 60, label: "Rain", code: 61, measured: true };
+    expect(rerollWeather(live, TODAY)).toEqual(plain);
+    const previous = CLOSET.slice(0, 3).map((g) => g.id);
+    const state = { garments: CLOSET, journal: [], drop: null, skipCount: 1 };
+    const withLive = pickDropIds(state, { weather: live, previousIds: previous, today: TODAY, occasion: "weekday" });
+    const measured = pickDropIds(state, { weather: plain, previousIds: previous, today: TODAY, occasion: "weekday" });
+    expect(withLive.ids).toEqual(measured.ids);
+    expect(withLive.relaxed).toEqual(measured.relaxed);
+  });
+
+  it("a frozen day replaces the live high, rain and wind on a Skip", () => {
+    const mem = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => mem.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          mem.set(key, value);
+        },
+        removeItem: (key: string) => {
+          mem.delete(key);
+        },
+        clear: () => mem.clear(),
+        key: () => null,
+        length: 0,
+      },
+    });
+    try {
+      mem.set("closet.today-conditions.v1", JSON.stringify({ date: TODAY, highF: 58, wet: true, windy: false }));
+      const live = { f: 70, label: "Clear", code: 0, measured: true, wet: false, windy: true, highF: 80 };
+      expect(rerollWeather(live, TODAY)).toEqual({
+        f: 70,
+        label: "Clear",
+        code: 0,
+        measured: true,
+        highF: 58,
+        wet: true,
+        windy: false,
+      });
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 });

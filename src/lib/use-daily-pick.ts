@@ -98,6 +98,7 @@ export function useDailyPick(): void {
       const season = freezeTodaySeason(weather?.f);
       const conditions = freezeTodayConditions(
         weather ? { highF: weather.highF, wet: weather.wet, windy: weather.windy } : null,
+        todayNY(),
       );
       inMemory(() =>
         useCloset.getState().rerollDrop(weather, todayOccasion(current), undefined, undefined, {

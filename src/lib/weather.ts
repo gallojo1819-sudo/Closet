@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { WeatherSnap } from "./types";
 
-// proposed 2026-11, Joe to confirm
+// Joe confirmed 2026-11-03
 export const WEATHER_THRESHOLDS = {
   WET_PCT: 50,
   WIND_MPH: 15,

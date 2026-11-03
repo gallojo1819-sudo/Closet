@@ -450,7 +450,7 @@ describe("T5 caps on the fixture", () => {
 
 describe("weather jacket gate", () => {
   const OCCASIONS = ["weekday", "out", "weekend", "comfy", "travel"] as const;
-  const SEASONS = ["fall", "winter"] as const;
+  const SEASONS = ["spring", "summer", "fall", "winter"] as const;
   const CONDS = [undefined, { wet: true }, { windy: true }] as const;
   const TEMPS = [60, 73] as const;
   const TOP = "g_pa7kfg14rtzl";
@@ -461,11 +461,18 @@ describe("weather jacket gate", () => {
   const LIGHT = "g_ed0ga2v0q2yo";
   const KNITS = ["g_xc4gr022xmvm", "g_k0mfejxiu5f8", "g_hhbz4ghpjmd1", "g_j2id379jo424"] as const;
 
+  function gateSeason(season: string, windy: boolean): string {
+    if (!windy) return season;
+    if (season === "spring") return "fall";
+    if (season === "fall") return "winter";
+    return season;
+  }
+
   function required(occasion: string, season: string, temp: number, cond?: { wet?: boolean; windy?: boolean }): boolean {
     if (occasion === "comfy") return false;
     const wet = cond?.wet === true;
     const windy = cond?.windy === true;
-    const gate = windy && season === "fall" ? "winter" : season;
+    const gate = gateSeason(season, windy);
     let hard = false;
     if ((occasion === "weekday" || occasion === "out") && (gate === "fall" || gate === "winter")) hard = true;
     if ((occasion === "weekend" || occasion === "travel") && gate === "winter") hard = true;
@@ -476,7 +483,7 @@ describe("weather jacket gate", () => {
     return true;
   }
 
-  it("covers 5 occasions × fall/winter × dry/wet/windy × 60/73, and wind steps summer colder", () => {
+  it("covers 5 occasions × 4 seasons × dry/wet/windy × 60/73; wind leaves summer as summer", () => {
     for (const occasion of OCCASIONS) {
       for (const season of SEASONS) {
         for (const cond of CONDS) {
@@ -493,7 +500,10 @@ describe("weather jacket gate", () => {
     expect(jacketRequired("weekday", "fall", 73, { wet: true })).toBe(true);
     expect(jacketRequired("weekday", "fall", 73, { windy: true })).toBe(true);
     expect(jacketRequired("weekday", "summer", 80)).toBe(false);
-    expect(jacketRequired("weekday", "summer", 80, { windy: true })).toBe(true);
+    expect(jacketRequired("weekday", "summer", 80, { windy: true })).toBe(false);
+    expect(jacketRequired("weekday", "summer", 86, { windy: true })).toBe(false);
+    expect(jacketRequired("out", "summer", 86, { windy: true })).toBe(false);
+    expect(jacketRequired("weekday", "spring", 86, { windy: true })).toBe(true);
     expect(jacketRequired("weekend", "summer", 80, { windy: true })).toBe(false);
     expect(jacketRequired("comfy", "winter", 60, { wet: true, windy: true })).toBe(false);
   });

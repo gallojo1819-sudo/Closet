@@ -8,6 +8,7 @@
  * rotation alone. Relative imports only, no React, no store.
  */
 import { dailyPickWeather, liveIdsKey, type FrozenConditions } from "./daily-pick.ts";
+import { readTodayConditions } from "./today-season.ts";
 import { drawSeed } from "./draw.ts";
 import { comboKey } from "./lookbook.ts";
 import { seasonFromWeather, type Season } from "./season.ts";
@@ -43,6 +44,30 @@ export type PickDropExtra = {
 };
 
 export type PickDropDetail = { ids: string[]; relaxed: string[]; tried: number };
+
+/**
+ * Weather a Skip or an occasion change scores on. The live snap's own high, rain and wind
+ * are dropped. The day's frozen conditions replace them when the key holds some. With nothing
+ * frozen, only `f` and `measured` remain.
+ */
+export function rerollWeather(live: WeatherSnap | undefined, today: string): WeatherSnap | undefined {
+  const frozen = readTodayConditions(today);
+  if (!live) return frozen ? dailyPickWeather(seasonFromWeather(frozen.highF), frozen) : undefined;
+  const snap: WeatherSnap = {
+    f: live.f,
+    label: live.label,
+    code: live.code,
+    ...(live.measured ? { measured: true } : {}),
+  };
+  if (!frozen) return snap;
+  if (typeof frozen.highF === "number" && Number.isFinite(frozen.highF)) {
+    snap.highF = frozen.highF;
+    snap.measured = true;
+  }
+  if (typeof frozen.wet === "boolean") snap.wet = frozen.wet;
+  if (typeof frozen.windy === "boolean") snap.windy = frozen.windy;
+  return snap;
+}
 
 export function pickDropWith(
   garments: Garment[],
@@ -168,7 +193,7 @@ export function pickDropIds(state: PickState, opts: PickOpts = {}): PickResult {
   const shownWeather = opts.weather ?? prev?.weather;
   const picked = pickDropWith(
     state.garments,
-    daily ? dailyPickWeather(daily.season, daily.conditions ?? undefined) : shownWeather,
+    daily ? dailyPickWeather(daily.season, daily.conditions ?? undefined) : rerollWeather(shownWeather, today),
     occ,
     {
       salt,
