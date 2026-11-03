@@ -37,6 +37,8 @@ export type LegalCtx = {
   color?: string | null;
   /** A measured reading. Omitted when the service has no temperature. Never invented. */
   weatherF?: number;
+  /** Frozen daily high, rain and wind. Jacket gates read these; other rules do not. */
+  conditions?: { highF?: number; wet?: boolean; windy?: boolean };
   /** Display fill for a gated house. The gate note stays; the outfits still have to be legal. */
   ignoreGate?: boolean;
 };
@@ -83,13 +85,15 @@ export const PREFERENCE_IDS: ReadonlySet<string> = new Set(["JKT-COV-1", "JKT-LA
 /**
  * The relax ladder: tiers of rule ids a surface with no passing look may waive, in this order.
  * Colour preferences first, then texture and formality, then proportion. Nothing else is ever
- * waived: not season, weather, occasion, the slots or the clashes.
+ * waived: not season, weather, occasion, the slots or the clashes. JKT-WET-2 is the one
+ * weather-cloth preference on the texture tier: suede shoes, waived only when nothing else is legal.
+ * A suede or shearling outer (JKT-WET-1) is hard and is never on this ladder.
  */
 export const RELAX_TIERS: readonly { id: string; rules: readonly string[] }[] = [
   { id: "colour", rules: ["COLOR-HARMONY", "COL-5", "COL-13", "COL-12", "COL-11", "COL-9", "COL-10", "COL-7", "COL-8", "XC-DEN-1"] },
   {
     id: "texture",
-    rules: ["PATTERN-SCALE", "XC-PAT-1", "XC-TEX-7", "XC-TEX-9", "XC-TEX-6", "XC-TEX-5", "XC-TEX-3", "JKT-LAY-7", "JKT-FORM-2", "JKT-LAY-3", "JKT-LAY-4", "JKT-FORM-1", "TREND-BLAZER-CASUAL", "VETO-PAIR"],
+    rules: ["PATTERN-SCALE", "XC-PAT-1", "XC-TEX-7", "XC-TEX-9", "XC-TEX-6", "XC-TEX-5", "XC-TEX-3", "JKT-LAY-7", "JKT-FORM-2", "JKT-LAY-3", "JKT-LAY-4", "JKT-WET-2", "JKT-FORM-1", "TREND-BLAZER-CASUAL", "VETO-PAIR"],
   },
   { id: "proportion", rules: ["XC-PROP-2", "XC-PROP-1"] },
 ];
@@ -115,15 +119,25 @@ function measuredF(ctx: LegalCtx): number | undefined {
   return typeof n === "number" && Number.isFinite(n) ? n : undefined;
 }
 
+function jacketTemp(ctx: LegalCtx): number | undefined {
+  const high = ctx.conditions?.highF;
+  if (typeof high === "number" && Number.isFinite(high)) return high;
+  return measuredF(ctx);
+}
+
 function activeHits(ps: Partial<Record<string, Plate>>, ctx: LegalCtx): StylistHit[] {
   const season = seasonOf(ctx);
   const stylist = stylistHits(ps, ctx.occasion, season, ctx.house ?? undefined).filter((h) => !supersededStylist(h));
-  const weatherF = measuredF(ctx);
+  const weatherF = jacketTemp(ctx);
+  const cond = ctx.conditions;
   const jacket = jacketHits(ps, {
     occasion: String(ctx.occasion),
     season,
     house: ctx.house ?? undefined,
     ...(weatherF !== undefined ? { tempF: weatherF } : {}),
+    ...(cond?.highF !== undefined ? { highF: cond.highF } : {}),
+    ...(cond?.wet !== undefined ? { wet: cond.wet } : {}),
+    ...(cond?.windy !== undefined ? { windy: cond.windy } : {}),
   });
   return [...stylist, ...jacket];
 }
@@ -321,7 +335,7 @@ export function missingJacketOnly(pieces: Garment[], ctx: LegalCtx): boolean {
 export function legalWithJacket(pieces: Garment[], ctx: LegalCtx): boolean {
   if (isLegal(pieces, ctx)) return true;
   return (
-    jacketRequired(String(ctx.occasion), seasonOf(ctx), measuredF(ctx)) &&
+    jacketRequired(String(ctx.occasion), seasonOf(ctx), jacketTemp(ctx), ctx.conditions) &&
     !pieces.some((g) => slotOf(g) === "outerwear") &&
     missingJacketOnly(pieces, ctx)
   );

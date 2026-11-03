@@ -1799,7 +1799,11 @@ describe("lookbook card stack", () => {
     const end = pick.indexOf("}, [hydrated, settled, liveKey]);");
     assert.ok(start >= 0 && end > start, "the Today effect waits for a settled closet and re-runs on the live ids");
     const effect = pick.slice(start, end);
-    assert.match(effect, /rerollDrop\([^;]*\{ season \}/, "the open pick is the daily pick");
+    assert.match(
+      effect,
+      /rerollDrop\([^;]*\{[^;]*season,[^;]*conditions \? \{ conditions \}/,
+      "the open pick is the daily pick, with the day's frozen conditions",
+    );
     const guard = effect.indexOf("current.date === todayNY()");
     assert.ok(guard >= 0 && guard < effect.indexOf("rerollDrop("), "date-today guard before the reroll");
     assert.equal(/rerollDrop\([^;]*garmentIds/.test(effect), false, "open never passes previousIds");

@@ -803,7 +803,22 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
       : new Set(opts.repeatPairs)
     : new Set<string>();
   const f = opts.weather?.f ?? 68;
-  const measuredF = opts.weather?.measured ? opts.weather.f : undefined;
+  const highF = typeof opts.weather?.highF === "number" && Number.isFinite(opts.weather.highF) ? opts.weather.highF : undefined;
+  /*
+   * A frozen high rides on the bucket reading (Mild / Warm / Cold). That `f` is not a live
+   * degree, so it stays out of the linen and colour checks. A live reading keeps its own label
+   * and its measured `f`.
+   */
+  const bucketCarry = highF !== undefined && (opts.weather?.label === "Mild" || opts.weather?.label === "Warm" || opts.weather?.label === "Cold");
+  const measuredF = opts.weather?.measured && !bucketCarry ? opts.weather.f : undefined;
+  const conditions =
+    highF !== undefined || opts.weather?.wet !== undefined || opts.weather?.windy !== undefined
+      ? {
+          ...(highF !== undefined ? { highF } : {}),
+          ...(opts.weather?.wet !== undefined ? { wet: opts.weather.wet } : {}),
+          ...(opts.weather?.windy !== undefined ? { windy: opts.weather.windy } : {}),
+        }
+      : undefined;
   const season = opts.season ?? seasonFromWeather(opts.weather?.f);
   const house = opts.house && opts.house !== "all" ? opts.house : undefined;
   const baseCtx: RuleCtx = {
@@ -811,6 +826,7 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
     season,
     house: house ?? null,
     ...(measuredF !== undefined ? { weatherF: measuredF } : {}),
+    ...(conditions ? { conditions } : {}),
     pool,
     taste,
     lockedIds: lockedSet,

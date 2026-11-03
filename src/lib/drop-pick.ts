@@ -7,7 +7,7 @@
  * seed. The pick is a draw among rule-passing looks (pickLook in style.ts), weighted by
  * rotation alone. Relative imports only, no React, no store.
  */
-import { dailyPickWeather, liveIdsKey } from "./daily-pick.ts";
+import { dailyPickWeather, liveIdsKey, type FrozenConditions } from "./daily-pick.ts";
 import { drawSeed } from "./draw.ts";
 import { comboKey } from "./lookbook.ts";
 import { seasonFromWeather, type Season } from "./season.ts";
@@ -17,8 +17,8 @@ import type { TasteMemory } from "./taste.ts";
 import { mapOccasion, type DailyDrop, type Garment, type Look, type Moment, type Occasion, type WearEntry, type WeatherSnap } from "./types.ts";
 import { todayNY } from "./utils.ts";
 
-/** The daily pick's fixed inputs, from the Today effect: the day's frozen season bucket. */
-export type DailyPick = { season: Season };
+/** The daily pick's fixed inputs, from the Today effect: the day's frozen season bucket and conditions. */
+export type DailyPick = { season: Season; conditions?: FrozenConditions | null };
 
 /** The surface ids of the drop's draws (drawSeed). */
 export const TODAY_SURFACE = "today";
@@ -52,10 +52,15 @@ export function pickDropWith(
   now: Date = new Date(),
 ): PickDropDetail {
   const occ = occasion ?? defaultOccasion(now);
-  /* A measured reading only. A missing reading stays missing; the bucket's reading dresses the day. */
-  const tempF = weather?.measured ? weather.f : undefined;
+  /* A frozen daily high wins. Otherwise a measured reading only. A missing reading stays missing. */
+  const highF = typeof weather?.highF === "number" && Number.isFinite(weather.highF) ? weather.highF : undefined;
+  const tempF = highF ?? (weather?.measured ? weather.f : undefined);
+  const jacketCond =
+    weather?.wet !== undefined || weather?.windy !== undefined
+      ? { wet: weather?.wet, windy: weather?.windy }
+      : undefined;
   const season = extra.season ?? seasonFromWeather(weather?.f, now);
-  const needJacket = jacketRequired(occ, season, tempF);
+  const needJacket = jacketRequired(occ, season, tempF, jacketCond);
   const picked = pickLookWith(garments, {
     weather,
     occasion: occ,
@@ -163,7 +168,7 @@ export function pickDropIds(state: PickState, opts: PickOpts = {}): PickResult {
   const shownWeather = opts.weather ?? prev?.weather;
   const picked = pickDropWith(
     state.garments,
-    daily ? dailyPickWeather(daily.season) : shownWeather,
+    daily ? dailyPickWeather(daily.season, daily.conditions ?? undefined) : shownWeather,
     occ,
     {
       salt,

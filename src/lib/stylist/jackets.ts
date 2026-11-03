@@ -15,6 +15,7 @@ import {
   slotOfPlate,
   type Plate,
 } from "../house-profiles/evaluate.ts";
+import { WEATHER_THRESHOLDS } from "../weather.ts";
 import { dominant, wash } from "./rules.ts";
 import classFile from "./data/2026-09-30-jacket-classification.json" with { type: "json" };
 import jacketRules from "./data/2026-09-30-jacket-rules.json" with { type: "json" };
@@ -46,11 +47,20 @@ export type JacketInfo = {
 
 export type JacketHit = { id: string; severity: "hard" | "soft"; delta: number; why: string };
 
+export type JacketConditions = {
+  wet?: boolean;
+  windy?: boolean;
+};
+
 export type JacketCtx = {
   occasion: string;
   season: string;
   house?: string | null;
   tempF?: number;
+  /** Frozen daily high. The warm-shearling demote reads this, not the live degree. */
+  highF?: number;
+  wet?: boolean;
+  windy?: boolean;
 };
 
 type Spec = {
@@ -106,6 +116,14 @@ const SUEDE = new Set<string>(SUEDE_FAMILY);
 
 /** Not in the brown-suede cap. */
 export const SHEARLING_BOMBER = "g_wwy9b2pusds3";
+/** The other shearling, filed as denim: the name still says shearling. */
+const SHEARLING_PLAID = "g_491tzu2suiv7";
+const SHEARLING_IDS = new Set<string>([SHEARLING_BOMBER, SHEARLING_PLAID]);
+/**
+ * Knits and fleeces filed as outerwear. They are a layer, never the jacket a cold or wet day
+ * asks for. The ids are Joe's misfiles; the words cover anyone else's.
+ */
+const KNIT_LAYER_IDS = new Set<string>(["g_xc4gr022xmvm", "g_k0mfejxiu5f8", "g_hhbz4ghpjmd1", "g_j2id379jo424"]);
 const OVERSHIRT = "g_v7uvadckh79p";
 /** The dark brown button-up shirt: worn open over another top it is the jacket (Joe, Oct 15 2026). */
 export const BROWN_BUTTON_UP = "g_ap5v0s67pg9d";
@@ -387,10 +405,49 @@ export function slotPieces(pieces: Plate[]): Partial<Record<string, Plate>> {
   return ps;
 }
 
+function plateText(g: Plate): string {
+  return `${g.material ?? ""} ${g.subtype ?? ""} ${g.name ?? ""}`.toLowerCase();
+}
+
+/** A knit or fleece, including one filed under outerwear. Not a jacket. */
+function knitOrFleeceLayer(g: Plate): boolean {
+  if (KNIT_LAYER_IDS.has(g.id)) return true;
+  const subtype = (g.subtype ?? "").toLowerCase();
+  const material = (g.material ?? "").toLowerCase();
+  if (/fleece|cardigan/.test(subtype) || /fleece/.test(material)) return true;
+  if (/\bknit\b/.test(material) || /\bknit\b/.test(subtype)) return true;
+  if (/zip(?:-|\s)?sweater/.test(subtype)) return true;
+  return false;
+}
+
+function suedeOrShearling(g: Plate): boolean {
+  if (SUEDE.has(g.id) || SHEARLING_IDS.has(g.id)) return true;
+  return /suede|shearling|sherpa/.test(plateText(g));
+}
+
+function shearlingOuter(g: Plate): boolean {
+  if (SHEARLING_IDS.has(g.id)) return true;
+  return /shearling|sherpa/.test(plateText(g));
+}
+
+/** Suede shoes: the material or the name says suede. Leather does not. */
+function suedeFootwear(g: Plate): boolean {
+  const material = (g.material ?? "").toLowerCase();
+  const name = (g.name ?? "").toLowerCase();
+  return material.includes("suede") || name.includes("suede");
+}
+
 function countsAsOuter(g: Plate | undefined): boolean {
-  if (!g) return false;
+  if (!g || knitOrFleeceLayer(g)) return false;
   const info = jacketInfo(g);
   return Boolean(info.countsAsJacket && info.class && info.class !== "mid");
+}
+
+/** One season colder, for the wind gate only. Winter stays winter. */
+function stepColder(season: string): string {
+  if (season === "summer" || season === "spring") return "fall";
+  if (season === "fall") return "winter";
+  return season;
 }
 
 type IdSeason = { id: string; seasons?: string[] };
@@ -484,15 +541,27 @@ export function fwEligibleJackets(): string[] {
   return out;
 }
 
-export function jacketRequired(occasion: string, season: string, tempF?: number): boolean {
+export function jacketRequired(
+  occasion: string,
+  season: string,
+  tempF?: number,
+  cond?: JacketConditions,
+): boolean {
   const occ = occasion.toLowerCase();
+  if (occ === "comfy") return false;
   const sea = season.toLowerCase();
+  const wet = cond?.wet === true;
+  const windy = cond?.windy === true;
+  /* Wind is one step colder for this gate only. Wet fall also puts a jacket on weekend and travel. */
+  const gate = windy ? stepColder(sea) : sea;
   let hard = false;
-  if ((occ === "weekday" || occ === "out") && (sea === "fall" || sea === "winter")) hard = true;
-  if (occ === "weekend" && sea === "winter") hard = true;
-  if (occ === "travel" && sea === "winter") hard = true;
-  if (hard && tempF != null && tempF >= 72 && (occ === "weekday" || occ === "out")) return false;
-  return hard;
+  if ((occ === "weekday" || occ === "out") && (gate === "fall" || gate === "winter")) hard = true;
+  if ((occ === "weekend" || occ === "travel") && gate === "winter") hard = true;
+  if (wet && sea === "fall" && (occ === "weekend" || occ === "travel")) hard = true;
+  if (!hard) return false;
+  if (wet || windy) return true;
+  if (tempF != null && tempF >= 72 && (occ === "weekday" || occ === "out")) return false;
+  return true;
 }
 
 export function supersededStylist(h: { id: string; severity: string }): boolean {
@@ -750,8 +819,10 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
   }
 
   const covered = countsAsOuter(outer);
-  const hardNeed = jacketRequired(occ, season, ctx.tempF);
-  const hot = ctx.tempF != null && ctx.tempF >= 72 && (occ === "weekday" || occ === "out");
+  const wet = ctx.wet === true;
+  const windy = ctx.windy === true;
+  const hardNeed = jacketRequired(occ, season, ctx.tempF, { wet: ctx.wet, windy: ctx.windy });
+  const hot = ctx.tempF != null && ctx.tempF >= 72 && (occ === "weekday" || occ === "out") && !wet && !windy;
   if (!covered) {
     if (hot && (occ === "weekday" || occ === "out") && (season === "fall" || season === "winter")) {
       hit("JKT-COV-1", "soft", -10, `${occ}/${season} jacket waived above 72F`);
@@ -777,10 +848,29 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
     if (!heavy && sum < 6) hit("JKT-COV-2", "soft", -10, `winter warmth ${sum} < 6`);
   }
 
+  if (outer && covered && wet && suedeOrShearling(outer)) {
+    hit("JKT-WET-1", "hard", 0, `suede or shearling ${outer.name} on a wet day`);
+  }
+  if (shoe && wet && suedeFootwear(shoe)) {
+    hit("JKT-WET-2", "soft", -15, `suede shoes ${shoe.name} on a wet day`);
+  }
+
   if (outer && covered) {
     const heavy = info.weight === "heavy" || hasText(blob(outer), ["shearling", "sherpa"]);
-    if (heavy && (season === "spring" || season === "summer")) hit("JKT-COV-3", "hard", 0, `heavy ${outer.name} in ${season}`);
-    else if (heavy && season === "fall") hit("JKT-COV-3", "soft", -5, `heavy ${outer.name} in fall`);
+    const warmShearling =
+      season === "fall" &&
+      !wet &&
+      shearlingOuter(outer) &&
+      typeof ctx.highF === "number" &&
+      ctx.highF >= WEATHER_THRESHOLDS.WARM_SHEARLING_F;
+    if (warmShearling) {
+      /* Stronger than the ordinary fall heavy mark, so a light outer wins when one is legal. */
+      hit("JKT-COV-3", "soft", -20, `shearling ${outer.name} on a warm fall day`);
+    } else if (heavy && (season === "spring" || season === "summer")) {
+      hit("JKT-COV-3", "hard", 0, `heavy ${outer.name} in ${season}`);
+    } else if (heavy && season === "fall") {
+      hit("JKT-COV-3", "soft", -5, `heavy ${outer.name} in fall`);
+    }
     if (season === "winter" && hasText(`${blob(outer)} ${(outer.colors ?? []).join(" ")}`, ["mint"])) {
       hit("JKT-COV-3", "soft", -10, `pastel outer ${outer.name} in winter`);
     }

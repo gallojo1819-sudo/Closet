@@ -112,8 +112,24 @@ export type WeatherSnap = {
   f: number;
   label: string;
   code: number;
-  /** True only when a weather service returned this temperature. */
+  /**
+   * True when a weather service returned `f`, or when a frozen daily high is set on `highF`.
+   * The season bucket's own reading leaves it unset, so a degree that moves inside the day
+   * cannot move the look. `highF` is that frozen high; `f` stays the bucket reading beside it.
+   */
   measured?: boolean;
+  /** Frozen or forecast daily high, °F. Absent when the service did not send one. */
+  highF?: number;
+  /** Rain, drizzle, showers, thunder or snow, or a daily chance at the wet threshold. */
+  wet?: boolean;
+  /** Daily wind or gusts at the windy threshold. */
+  windy?: boolean;
+  /** Wind speed the reading was judged on, mph. */
+  windMph?: number;
+  /** Gust speed the reading was judged on, mph. */
+  gustMph?: number;
+  /** Daily chance of precipitation, percent. */
+  precipPct?: number;
 };
 
 export const OCCASIONS = [

@@ -447,3 +447,101 @@ describe("T5 caps on the fixture", () => {
     expect(grey.some((hit) => hit.severity === "hard")).toBe(true);
   }, 600_000);
 });
+
+describe("weather jacket gate", () => {
+  const OCCASIONS = ["weekday", "out", "weekend", "comfy", "travel"] as const;
+  const SEASONS = ["fall", "winter"] as const;
+  const CONDS = [undefined, { wet: true }, { windy: true }] as const;
+  const TEMPS = [60, 73] as const;
+  const TOP = "g_pa7kfg14rtzl";
+  const BOTTOM = "g_v3ovns4bv344";
+  const LEATHER = "g_om0dh5nps1ke";
+  const SUEDE_SHOE = "g_8nrtffa2s13s";
+  const CHORE = "g_8qqqzpwxuwti";
+  const LIGHT = "g_ed0ga2v0q2yo";
+  const KNITS = ["g_xc4gr022xmvm", "g_k0mfejxiu5f8", "g_hhbz4ghpjmd1", "g_j2id379jo424"] as const;
+
+  function required(occasion: string, season: string, temp: number, cond?: { wet?: boolean; windy?: boolean }): boolean {
+    if (occasion === "comfy") return false;
+    const wet = cond?.wet === true;
+    const windy = cond?.windy === true;
+    const gate = windy && season === "fall" ? "winter" : season;
+    let hard = false;
+    if ((occasion === "weekday" || occasion === "out") && (gate === "fall" || gate === "winter")) hard = true;
+    if ((occasion === "weekend" || occasion === "travel") && gate === "winter") hard = true;
+    if (wet && season === "fall" && (occasion === "weekend" || occasion === "travel")) hard = true;
+    if (!hard) return false;
+    if (wet || windy) return true;
+    if (temp >= 72 && (occasion === "weekday" || occasion === "out")) return false;
+    return true;
+  }
+
+  it("covers 5 occasions × fall/winter × dry/wet/windy × 60/73, and wind steps summer colder", () => {
+    for (const occasion of OCCASIONS) {
+      for (const season of SEASONS) {
+        for (const cond of CONDS) {
+          for (const temp of TEMPS) {
+            const wet = cond !== undefined && "wet" in cond;
+            const windy = cond !== undefined && "windy" in cond;
+            const name = `${occasion} ${season} ${wet ? "wet" : windy ? "windy" : "dry"} ${temp}`;
+            expect(jacketRequired(occasion, season, temp, cond), name).toBe(required(occasion, season, temp, cond));
+          }
+        }
+      }
+    }
+    expect(jacketRequired("weekday", "fall", 73)).toBe(false);
+    expect(jacketRequired("weekday", "fall", 73, { wet: true })).toBe(true);
+    expect(jacketRequired("weekday", "fall", 73, { windy: true })).toBe(true);
+    expect(jacketRequired("weekday", "summer", 80)).toBe(false);
+    expect(jacketRequired("weekday", "summer", 80, { windy: true })).toBe(true);
+    expect(jacketRequired("weekend", "summer", 80, { windy: true })).toBe(false);
+    expect(jacketRequired("comfy", "winter", 60, { wet: true, windy: true })).toBe(false);
+  });
+
+  it("a wet day hard-fails suede and shearling outers and only demotes suede shoes", () => {
+    const ctx = { occasion: "weekend", season: "fall", wet: true, tempF: 60, highF: 60 };
+    for (const id of [...SUEDE_FAMILY, "g_wwy9b2pusds3", "g_491tzu2suiv7"]) {
+      const hits = jacketHits(pieces({ top: TOP, outer: id, bottom: BOTTOM, shoe: LEATHER }), ctx);
+      expect(hits.some((h) => h.id === "JKT-WET-1" && h.severity === "hard"), id).toBe(true);
+    }
+    const filedDenim = by.get("g_491tzu2suiv7")!;
+    const byName = jacketHits(pieces({ top: TOP, outer: filedDenim.id, bottom: BOTTOM, shoe: LEATHER }), ctx);
+    expect(byName.some((h) => h.id === "JKT-WET-1" && h.severity === "hard")).toBe(true);
+    const leather = jacketHits(pieces({ top: TOP, outer: CHORE, bottom: BOTTOM, shoe: LEATHER }), ctx);
+    expect(leather.some((h) => h.id === "JKT-WET-1" || h.id === "JKT-WET-2")).toBe(false);
+    const suedeShoe = jacketHits(pieces({ top: TOP, outer: CHORE, bottom: BOTTOM, shoe: SUEDE_SHOE }), ctx);
+    expect(suedeShoe.filter((h) => h.id === "JKT-WET-2").map((h) => h.severity)).toEqual(["soft"]);
+    const copy = { ...by.get("g_1pg9y05mlkek")!, id: "g_attr_suede" };
+    const attr = jacketHits({ top: by.get(TOP), outer: copy, bottom: by.get(BOTTOM), shoe: by.get(LEATHER) }, ctx);
+    expect(attr.some((h) => h.id === "JKT-WET-1" && h.severity === "hard")).toBe(true);
+  });
+
+  it("a warm dry fall demotes shearling below a light outer; a cool high does not", () => {
+    const shoe = LEATHER;
+    const cov = (outer: string, highF?: number) =>
+      jacketHits(pieces({ top: TOP, outer, bottom: BOTTOM, shoe }), {
+        occasion: "weekday",
+        season: "fall",
+        ...(highF !== undefined ? { highF, tempF: highF } : {}),
+      }).filter((h) => h.id === "JKT-COV-3");
+    expect(cov("g_wwy9b2pusds3", 65).map((h) => h.delta)).toEqual([-20]);
+    expect(cov("g_491tzu2suiv7", 70).map((h) => h.delta)).toEqual([-20]);
+    expect(cov("g_wwy9b2pusds3", 64).map((h) => h.delta)).toEqual([-5]);
+    expect(cov("g_wwy9b2pusds3").map((h) => h.delta)).toEqual([-5]);
+    expect(cov(LIGHT, 70)).toEqual([]);
+    const warm = cov("g_wwy9b2pusds3", 70)[0]?.delta ?? 0;
+    expect(warm).toBeLessThan(0);
+  });
+
+  it("a knit filed as outerwear never satisfies a required jacket", () => {
+    for (const id of KNITS) {
+      const plate = by.get(id)!;
+      expect(plate.category, id).toBe("outerwear");
+      const hits = jacketHits(
+        { top: by.get(TOP), outer: plate, bottom: by.get(BOTTOM), shoe: by.get(LEATHER) },
+        { occasion: "weekday", season: "fall" },
+      );
+      expect(hits.some((h) => h.id === "JKT-COV-1" && h.severity === "hard"), id).toBe(true);
+    }
+  });
+});

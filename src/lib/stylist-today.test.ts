@@ -13,8 +13,13 @@ import { StylistThread, replyLines, sessionMessages } from "@/components/shell/s
 import { persistGate, useCloset } from "./store.ts";
 import { answerTodayAsk, asksAboutToday, swapBaseIds } from "./stylist-page.ts";
 import { recordStylistQuestion, restoreIfAskWrote } from "./stylist-thread.ts";
+import { dailyPickWeather } from "./daily-pick.ts";
+import { pickDropWith } from "./drop-pick.ts";
+import { isTrueOuter, slotOf } from "./style.ts";
+import { DELETED_SNEAKERS } from "./stylist/deleted.ts";
 import { todayLookIds, todayLookPieces } from "./today-look.ts";
-import type { DailyDrop, Garment, Look, StylistMessage } from "./types.ts";
+import { todaySuggestions } from "./today-suggest.ts";
+import type { DailyDrop, Garment, Look, Occasion, StylistMessage } from "./types.ts";
 import { liveSnapshot } from "./__fixtures__/snapshot.ts";
 
 const CLOSET: Garment[] = liveSnapshot;
@@ -152,5 +157,59 @@ describe("the user's question stays in the thread", () => {
     const now: StylistMessage = { id: "n", role: "user", text: "hello", createdAt: `${TODAY}T10:00:05.000Z` };
     expect(sessionMessages([old, now], `${TODAY}T10:00:00.000Z`)).toEqual([now]);
     expect(sessionMessages([old], `${TODAY}T10:00:00.000Z`)).toEqual([]);
+  });
+});
+
+describe("Today's weather", () => {
+  const SALT = 7;
+  const nap = (g: Garment) => /suede|shearling|sherpa/i.test(`${g.material} ${g.subtype} ${g.name}`);
+  const knitLayer = (g: Garment) => /\bknit\b|fleece|cardigan/i.test(`${g.material} ${g.subtype}`);
+  const owned = (ids: readonly string[]) =>
+    ids.map((id) => CLOSET.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g));
+
+  function assertDressed(ids: readonly string[], occasion: string) {
+    expect(ids.length, occasion).toBeGreaterThanOrEqual(3);
+    expect(ids.every((id) => CLOSET.some((g) => g.id === id)), occasion).toBe(true);
+    for (const id of DELETED_SNEAKERS) expect(ids, occasion).not.toContain(id);
+    const look = owned(ids);
+    const outers = look.filter((g) => slotOf(g) === "outerwear");
+    expect(outers.some((g) => isTrueOuter(g) && !nap(g) && !knitLayer(g)), occasion).toBe(true);
+    expect(outers.some(nap), occasion).toBe(false);
+    expect(outers.some(knitLayer), occasion).toBe(false);
+    const suedeShoe = look.some((g) => slotOf(g) === "footwear" && /suede/i.test(`${g.material} ${g.name}`));
+    return suedeShoe;
+  }
+
+  it("a dry fall day with nothing frozen matches the bucket reading", () => {
+    const bucket = dailyPickWeather("fall");
+    expect(bucket).toEqual({ f: 64, label: "Mild", code: 2 });
+    const plain = pickDropWith(CLOSET, { f: 64, label: "Mild", code: 2 }, "weekday", { salt: SALT, season: "fall", today: TODAY });
+    const dry = pickDropWith(CLOSET, bucket, "weekday", { salt: SALT, season: "fall", today: TODAY });
+    const explicit = pickDropWith(CLOSET, dailyPickWeather("fall", { wet: false, windy: false }), "weekday", {
+      salt: SALT,
+      season: "fall",
+      today: TODAY,
+    });
+    expect(dry.ids).toEqual(plain.ids);
+    expect(explicit.ids).toEqual(plain.ids);
+    expect(dry.relaxed).toEqual(plain.relaxed);
+  });
+
+  it("a wet fall weekend and its Suggest looks wear a true outer, never suede", () => {
+    const weather = dailyPickWeather("fall", { wet: true, highF: 60 });
+    const picked = pickDropWith(CLOSET, weather, "weekend", { salt: SALT, season: "fall", today: TODAY });
+    const suedeShoe = assertDressed(picked.ids, "weekend");
+    if (suedeShoe) expect(picked.relaxed).toContain("JKT-WET-2");
+    for (const occasion of ["weekend", "weekday", "travel"] as const satisfies readonly Occasion[]) {
+      const sug = todaySuggestions(
+        { garments: CLOSET, journal: [], drop: null },
+        { todayIds: picked.ids, occasion, season: "fall", today: TODAY, conditions: { date: TODAY, wet: true, highF: 60 } },
+      );
+      expect(sug.alternates.length, occasion).toBeGreaterThan(0);
+      for (const alt of sug.alternates) {
+        const shoe = assertDressed(alt.ids, occasion);
+        if (shoe) expect(alt.relaxed, occasion).toContain("JKT-WET-2");
+      }
+    }
   });
 });

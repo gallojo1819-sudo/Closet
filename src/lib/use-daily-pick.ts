@@ -15,7 +15,7 @@ import { hasRealPieces, livePool } from "./rack";
 import { useCloset } from "./store";
 import { persistGate } from "./store-persist";
 import { todayOccasion } from "./style";
-import { freezeTodaySeason } from "./today-season";
+import { freezeTodayConditions, freezeTodaySeason } from "./today-season";
 import { todayNY } from "./utils";
 import { getNycWeather } from "./weather";
 
@@ -96,8 +96,14 @@ export function useDailyPick(): void {
          memory: an automatic pick must not carry a setAt stamp, which a gate-open write would
          give it and which mergeDrop lets outrank a Skip the user made on another device. */
       const season = freezeTodaySeason(weather?.f);
+      const conditions = freezeTodayConditions(
+        weather ? { highF: weather.highF, wet: weather.wet, windy: weather.windy } : null,
+      );
       inMemory(() =>
-        useCloset.getState().rerollDrop(weather, todayOccasion(current), undefined, undefined, { season }),
+        useCloset.getState().rerollDrop(weather, todayOccasion(current), undefined, undefined, {
+          season,
+          ...(conditions ? { conditions } : {}),
+        }),
       );
     })();
     return () => {
