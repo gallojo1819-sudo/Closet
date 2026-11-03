@@ -6,7 +6,18 @@
  * the persist gate stays closed, as the Today effect keeps it for an automatic pick.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { DAILY_MOMENT, dailySalt, dailyPickWeather, freezeSeason, liveIdsKey, readFrozenSeason } from "./daily-pick.ts";
+import {
+  DAILY_MOMENT,
+  dailySalt,
+  dailyPickWeather,
+  freezeConditions,
+  freezeSeason,
+  liveIdsKey,
+  readFrozenConditions,
+  readFrozenSeason,
+  TODAY_CONDITIONS_KEY,
+} from "./daily-pick.ts";
+import { freezeTodayConditions, readTodayConditions } from "./today-season.ts";
 import { persistGate, useCloset } from "./store.ts";
 import { emptyTaste } from "./taste.ts";
 import type { Garment, Look, WeatherSnap } from "./types.ts";
@@ -91,6 +102,9 @@ describe("the daily pick's fixed inputs", () => {
       expect(Number.isFinite(w.f)).toBe(true);
     }
     expect(dailyPickWeather("fall")).toEqual(dailyPickWeather("fall"));
+    expect(dailyPickWeather("fall")).toEqual({ f: 64, label: "Mild", code: 2 });
+    expect(dailyPickWeather("fall", {})).toEqual(dailyPickWeather("fall"));
+    expect(dailyPickWeather("fall", null)).toEqual(dailyPickWeather("fall"));
     expect(DAILY_MOMENT).toBe("day");
   });
 
@@ -103,6 +117,30 @@ describe("the daily pick's fixed inputs", () => {
     expect(readFrozenSeason("{bad")).toBeNull();
     expect(readFrozenSeason(JSON.stringify({ date: TODAY, season: "monsoon" }))).toBeNull();
     expect(readFrozenSeason(null)).toBeNull();
+  });
+
+  it("conditions freeze on the first reading of the day and reject anything odd", () => {
+    expect(TODAY_CONDITIONS_KEY).toBe("closet.today-conditions.v1");
+    expect(readFrozenConditions(null)).toBeNull();
+    expect(readFrozenConditions("")).toBeNull();
+    expect(readFrozenConditions("{")).toBeNull();
+    expect(readFrozenConditions("[]")).toBeNull();
+    expect(readFrozenConditions("12")).toBeNull();
+    expect(readFrozenConditions(JSON.stringify({ wet: true }))).toBeNull();
+    expect(readFrozenConditions(JSON.stringify({ date: TODAY, highF: "70" }))).toBeNull();
+    expect(readFrozenConditions(JSON.stringify({ date: TODAY, highF: Number.NaN }))).toBeNull();
+    expect(readFrozenConditions(JSON.stringify({ date: TODAY, wet: "yes" }))).toBeNull();
+    expect(readFrozenConditions(JSON.stringify({ date: TODAY, windy: 1 }))).toBeNull();
+    expect(readFrozenConditions(JSON.stringify({ date: "", wet: true }))).toBeNull();
+    const good = { date: TODAY, highF: 61, wet: true, windy: false };
+    expect(readFrozenConditions(JSON.stringify(good))).toEqual(good);
+    const first = freezeConditions(null, TODAY, { highF: 61, wet: true, windy: false });
+    expect(first).toEqual({ conditions: good, next: good });
+    const again = freezeConditions(first.conditions, TODAY, { highF: 80, wet: false, windy: true });
+    expect(again).toEqual({ conditions: good, next: null });
+    const nextDay = freezeConditions(first.conditions, TOMORROW, { highF: 40, wet: false });
+    expect(nextDay.conditions).toEqual({ date: TOMORROW, highF: 40, wet: false });
+    expect(nextDay.next).toEqual(nextDay.conditions);
   });
 });
 
@@ -154,5 +192,56 @@ describe("ten daily picks on the snapshot closet, one day", () => {
     expect(afterSkip).not.toEqual(daily);
     useCloset.setState({ skipCount: 0 });
     expect(dailyPick(TODAY, CLOCKS[2], READINGS[2]!, [])).toEqual(daily);
+  });
+
+  it("a second reading the same day does not move the frozen pick", () => {
+    const frozen = { date: TODAY, highF: 58, wet: true as const, windy: false as const };
+    const later = freezeConditions(frozen, TODAY, { highF: 74, wet: false, windy: true });
+    expect(later.next).toBeNull();
+    expect(later.conditions).toEqual(frozen);
+    const roll = (reading: WeatherSnap) => {
+      vi.setSystemTime(new Date(`${TODAY}T15:00:00`));
+      useCloset.setState({ drop: null, thisWeek: [], skipCount: 0 });
+      const wrote = useCloset.getState().rerollDrop(reading, "weekend", undefined, undefined, {
+        season: "fall",
+        conditions: later.conditions,
+      });
+      expect(wrote).toBe(true);
+      return [...(useCloset.getState().drop?.garmentIds ?? [])];
+    };
+    const first = roll({ f: 70, label: "Clear", code: 0, measured: true, highF: 70, wet: false, windy: false });
+    const second = roll({ f: 48, label: "Rain", code: 61, measured: true, highF: 48, wet: true, windy: true });
+    expect(first.length).toBeGreaterThanOrEqual(3);
+    expect(second).toEqual(first);
+  });
+});
+
+describe("the conditions key", () => {
+  it("writes today's reading once and leaves closet.v6 alone", () => {
+    const mem = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => mem.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          mem.set(key, value);
+        },
+        removeItem: (key: string) => {
+          mem.delete(key);
+        },
+        clear: () => mem.clear(),
+        key: () => null,
+        length: 0,
+      },
+    });
+    try {
+      const first = freezeTodayConditions({ highF: 61, wet: true, windy: false }, TODAY);
+      const second = freezeTodayConditions({ highF: 80, wet: false, windy: true }, TODAY);
+      expect(second).toEqual(first);
+      expect(readTodayConditions(TODAY)).toEqual({ date: TODAY, highF: 61, wet: true, windy: false });
+      expect([...mem.keys()]).toEqual([TODAY_CONDITIONS_KEY]);
+      expect(mem.has("closet.v6")).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -7,13 +7,16 @@
  * the day's season bucket the caller hands in: the same closet on the same day gives the same
  * look on every page and in the stylist dock, before and after the Today effect writes it. The
  * Today page, the stylist dock and answerTodayAsk read this one selector, so "This look" is the
- * look on the page. Pure: relative imports only, no React, no store.
+ * look on the page. No React and no store. The day's conditions key is read when the caller
+ * does not pass one, the same way the season bucket is frozen, and never closet.v6.
  */
+import type { FrozenConditions } from "./daily-pick.ts";
 import { pickDropIds } from "./drop-pick.ts";
 import { sortLook } from "./look.ts";
 import { weekStripDays } from "./lookbook.ts";
 import { seasonFromWeather, type Season } from "./season.ts";
 import type { TasteMemory } from "./taste.ts";
+import { readTodayConditions } from "./today-season.ts";
 import type { DailyDrop, Garment, Look } from "./types.ts";
 import { lastDays, todayNY } from "./utils.ts";
 
@@ -26,6 +29,11 @@ export type TodayLookState = {
   taste?: TasteMemory;
   /** The day's season bucket (today-season.ts); the drop's reading, else the calendar, when absent. */
   season?: Season;
+  /**
+   * The day's frozen high, rain and wind. Absent: read today's key (nothing, when storage has
+   * none). Null: ignore storage. Not closet.v6.
+   */
+  conditions?: FrozenConditions | null;
 };
 
 function isDrop(drop: TodayLookState["drop"]): drop is DailyDrop {
@@ -40,12 +48,13 @@ export function dailyPickIds(state: TodayLookState, today = todayNY()): string[]
   const drop = isDrop(state.drop) ? state.drop : null;
   const season =
     state.season ?? seasonFromWeather(drop?.weather?.f !== undefined ? drop.weather.f : undefined);
+  const conditions = state.conditions !== undefined ? state.conditions ?? undefined : readTodayConditions(today) ?? undefined;
   const owned = state.garments.filter((g) => !g.archived);
   if (!owned.length) return [];
   const journal = (state.journal ?? []).map((j) => ({ id: `j-${j.date}`, date: j.date, garmentIds: [...j.garmentIds], verdict: j.verdict as "worn" | "skipped" }));
   return pickDropIds(
     { garments: [...state.garments], journal, drop, taste: state.taste },
-    { daily: { season }, today },
+    { daily: { season, ...(conditions ? { conditions } : {}) }, today },
   ).ids;
 }
 

@@ -13,6 +13,8 @@ export const RULE_SENTENCES: Record<string, string> = {
   "JKT-COV-1": "Cold enough for a jacket.",
   "JKT-COV-2": "That jacket is too light for winter on its own.",
   "JKT-COV-3": "That coat is wrong for the weather.",
+  "JKT-WET-1": "Suede and shearling stay inside on a wet day.",
+  "JKT-WET-2": "Suede shoes on a wet day.",
   "XC-SEA-1": "Too warm a piece for summer.",
   "XC-SEA-2": "A summer piece in winter.",
   "XC-SEA-3": "A summer piece in fall.",

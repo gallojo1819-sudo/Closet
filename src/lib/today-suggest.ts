@@ -3,16 +3,17 @@
  * looks (pickDropWith, the surface "today-suggest" with the alternate's index in the seed),
  * none repeating today's core combination or leading with today's lead piece, and none
  * repeating one another. When nothing passes, one plain line says why: the rules a draw would
- * have had to waive. Pure: relative imports only, no React, no store; the Today page wires
- * Wear/Use and Save to the store's existing setDrop and saveLook.
+ * have had to waive. No React and no store. The day's conditions key is read the same way the
+ * season bucket is. The Today page wires Wear/Use and Save to the store's existing setDrop and saveLook.
  */
-import { dailyPickWeather, liveIdsKey } from "./daily-pick.ts";
+import { dailyPickWeather, liveIdsKey, type FrozenConditions } from "./daily-pick.ts";
 import { drawSeed } from "./draw.ts";
 import { pickDropWith, type PickState } from "./drop-pick.ts";
 import { weekLeadPiece } from "./look.ts";
 import type { Season } from "./season.ts";
 import { coreComboKey } from "./style.ts";
 import { ruleSentence } from "./stylist/rule-copy.ts";
+import { readTodayConditions } from "./today-season.ts";
 import type { Garment, Occasion } from "./types.ts";
 import { todayNY } from "./utils.ts";
 
@@ -30,9 +31,18 @@ export type TodaySuggest = {
 
 export function todaySuggestions(
   state: PickState,
-  input: { todayIds: readonly string[]; occasion: Occasion; season: Season; today?: string; count?: number },
+  input: {
+    todayIds: readonly string[];
+    occasion: Occasion;
+    season: Season;
+    today?: string;
+    count?: number;
+    /** Frozen high, rain and wind. Absent: today's key. Null: the bucket alone. */
+    conditions?: FrozenConditions | null;
+  },
 ): TodaySuggest {
   const today = input.today ?? todayNY();
+  const conditions = input.conditions !== undefined ? input.conditions ?? undefined : readTodayConditions(today) ?? undefined;
   const pool = state.garments.filter((g) => !g.archived);
   const byId = new Map(pool.map((g) => [g.id, g]));
   const todayPieces = input.todayIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
@@ -46,7 +56,7 @@ export function todaySuggestions(
   for (let i = 0; i < want * 2 && out.length < want; i += 1) {
     const picked = pickDropWith(
       [...state.garments],
-      dailyPickWeather(input.season),
+      dailyPickWeather(input.season, conditions),
       input.occasion,
       {
         salt: drawSeed(today, SUGGEST_SURFACE, liveIds, i),

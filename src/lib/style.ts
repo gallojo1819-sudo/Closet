@@ -779,6 +779,14 @@ function isTopSlot(g: Garment): boolean {
   return s === "top" || s === "dress";
 }
 
+/** Same words as the jacket rule: material or name says suede. Leather does not. */
+function suedeShoe(g: Garment): boolean {
+  if (slotOf(g) !== "footwear") return false;
+  const material = (g.material ?? "").toLowerCase();
+  const name = (g.name ?? "").toLowerCase();
+  return material.includes("suede") || name.includes("suede");
+}
+
 /**
  * The pick: a seeded draw among rule-passing looks. A hero is drawn by rotation weight from the
  * core slots, its partners in each other slot by the same weights (Efraimidis–Spirakis order),
@@ -803,7 +811,22 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
       : new Set(opts.repeatPairs)
     : new Set<string>();
   const f = opts.weather?.f ?? 68;
-  const measuredF = opts.weather?.measured ? opts.weather.f : undefined;
+  const highF = typeof opts.weather?.highF === "number" && Number.isFinite(opts.weather.highF) ? opts.weather.highF : undefined;
+  /*
+   * A frozen high rides on the bucket reading (Mild / Warm / Cold). That `f` is not a live
+   * degree, so it stays out of the linen and colour checks. A live reading keeps its own label
+   * and its measured `f`.
+   */
+  const bucketCarry = highF !== undefined && (opts.weather?.label === "Mild" || opts.weather?.label === "Warm" || opts.weather?.label === "Cold");
+  const measuredF = opts.weather?.measured && !bucketCarry ? opts.weather.f : undefined;
+  const conditions =
+    highF !== undefined || opts.weather?.wet !== undefined || opts.weather?.windy !== undefined
+      ? {
+          ...(highF !== undefined ? { highF } : {}),
+          ...(opts.weather?.wet !== undefined ? { wet: opts.weather.wet } : {}),
+          ...(opts.weather?.windy !== undefined ? { windy: opts.weather.windy } : {}),
+        }
+      : undefined;
   const season = opts.season ?? seasonFromWeather(opts.weather?.f);
   const house = opts.house && opts.house !== "all" ? opts.house : undefined;
   const baseCtx: RuleCtx = {
@@ -811,6 +834,7 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
     season,
     house: house ?? null,
     ...(measuredF !== undefined ? { weatherF: measuredF } : {}),
+    ...(conditions ? { conditions } : {}),
     pool,
     taste,
     lockedIds: lockedSet,
@@ -839,7 +863,10 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
   }
   const tops = pin.get("top") ? [pin.get("top")!] : by(isTopSlot);
   const bottoms = pin.get("bottom") ? [pin.get("bottom")!] : by((g) => slotOf(g) === "bottom");
-  const shoes = pin.get("footwear") ? [pin.get("footwear")!] : by((g) => slotOf(g) === "footwear");
+  const shoePool = pin.get("footwear") ? [pin.get("footwear")!] : by((g) => slotOf(g) === "footwear");
+  /* Wet day: dress without suede shoes first. They return only when that draw finds nothing. */
+  const wetDay = conditions?.wet === true;
+  let shoes = wetDay ? shoePool.filter((g) => lockedSet.has(g.id) || !suedeShoe(g)) : shoePool;
   const outers = pin.get("outerwear") ? [pin.get("outerwear")!] : by(isOuterCandidate, false);
   const banned = new Set(opts.excludeKeys ?? []);
   const previous = opts.previousIds ?? [];
@@ -990,14 +1017,22 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
     return null;
   };
 
-  let found: Found | null = null;
   /* A Skip's slot-change asks are tried first and given up before a hero is passed over. */
   const skipAsks = previous.length >= 3 && Boolean(opts.minSlotChange || opts.requireSilhouetteChange);
-  for (const strict of skipAsks ? [true, false] : [false]) {
-    found = attempt(strict);
-    if (found) break;
+  const search = (): Found | null => {
+    let hit: Found | null = null;
+    for (const strict of skipAsks ? [true, false] : [false]) {
+      hit = attempt(strict);
+      if (hit) break;
+    }
+    if (!hit) hit = attempt(false, true);
+    return hit;
+  };
+  let found = search();
+  if (!found && wetDay && shoes.length !== shoePool.length) {
+    shoes = shoePool;
+    found = search();
   }
-  if (!found) found = attempt(false, true);
   if (!found) {
     const locked = [...lockedSet].filter((id) => pool.some((g) => g.id === id));
     return { ids: locked, relaxed: [], tried, hero: null };
