@@ -215,18 +215,32 @@ export async function imageFromEditJson(json: unknown, timeoutMs = XAI_TIMEOUT_M
     const signal = AbortSignal.timeout(timeoutMs);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      /* The signal aborts a real download, body read included. The timer ends the wait
-         when that fetch never settles, so a hung result still stops at the deadline. */
-      const img = await new Promise<Response>((resolve, reject) => {
+      /* The signal aborts a real download, body read included. The same deadline
+         rejects when headers arrive and the body never ends. */
+      return await new Promise<EditResult>((resolve, reject) => {
         timer = setTimeout(() => {
           reject(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
         }, timeoutMs);
-        fetch(url, { signal }).then(resolve, reject);
+        fetch(url, { signal }).then(
+          (img) => {
+            if (!img.ok) {
+              resolve({ ok: false, error: "Could not download the edit." });
+              return;
+            }
+            img.arrayBuffer().then(
+              (buf) => {
+                const mime = img.headers.get("content-type") ?? "image/jpeg";
+                resolve({
+                  ok: true,
+                  image: `data:${mime};base64,${Buffer.from(buf).toString("base64")}`,
+                });
+              },
+              reject,
+            );
+          },
+          reject,
+        );
       });
-      if (!img.ok) return { ok: false, error: "Could not download the edit." };
-      const buf = Buffer.from(await img.arrayBuffer());
-      const mime = img.headers.get("content-type") ?? "image/jpeg";
-      return { ok: true, image: `data:${mime};base64,${buf.toString("base64")}` };
     } catch (e) {
       const name = e instanceof Error ? e.name : "";
       if (name === "TimeoutError" || name === "AbortError") {
@@ -240,6 +254,12 @@ export async function imageFromEditJson(json: unknown, timeoutMs = XAI_TIMEOUT_M
   return { ok: false, error: "Edit came back empty." };
 }
 
+/** After the edit call succeeded, the download's own error is the result. The 200 body is not one. */
+export function finishEdit(got: EditResult): EditResult {
+  if (!got.ok) return { ok: false, error: got.error };
+  return got;
+}
+
 async function imagineEdit(prompt: string, url: string): Promise<EditResult> {
   if (!url) return { ok: false, error: "No image to edit." };
   const r = await xaiFetch("https://api.x.ai/v1/images/edits", {
@@ -248,8 +268,8 @@ async function imagineEdit(prompt: string, url: string): Promise<EditResult> {
     image: imageUrlPart(url),
   });
   if (!r.ok) return { ok: false, error: r.error };
-  const got = await imageFromEditJson(r.json);
-  if (!got.ok) return { ok: false, error: r.error || got.error };
+  const got = finishEdit(await imageFromEditJson(r.json));
+  if (!got.ok) return { ok: false, error: got.error };
   return got;
 }
 
@@ -489,8 +509,8 @@ ${data.tuck ?? ""}`;
       return res;
     };
     if (!r.ok) return done({ ok: false, error: r.error });
-    const got = await imageFromEditJson(r.json, onMeDownloadMs(Date.now() - start));
-    if (!got.ok) return done({ ok: false, error: r.error || got.error });
+    const got = finishEdit(await imageFromEditJson(r.json, onMeDownloadMs(Date.now() - start)));
+    if (!got.ok) return done({ ok: false, error: got.error });
     return done(got);
   });
 

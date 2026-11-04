@@ -37,7 +37,6 @@ vi.mock("./plate.ts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./plate.ts")>()),
   hasCleanCover: () => true,
 }));
-
 const { ONME_DOWNLOAD_DEADLINE_MS, ONME_MIN_RETRY_MS, ONME_SERVER_BUDGET_MS, ONME_TIMEOUT_MS, onMeDownloadMs, onMeRetryMs } =
   await import("./ai-budget.ts");
 const {
@@ -118,6 +117,8 @@ describe("On me server budget", () => {
     expect(fn).toMatch(/onMeRetryMs\(Date\.now\(\) - start\)/);
     expect(fn).toMatch(/\},\s*retryMs,\s*\);/);
     expect(fn).toMatch(/imageFromEditJson\(r\.json,\s*onMeDownloadMs\(Date\.now\(\) - start\)\)/);
+    expect(fn).toMatch(/if \(!got\.ok\) return done\(\{ ok: false, error: got\.error \}\)/);
+    expect(src).not.toContain("r.error || got.error");
     expect(src.match(/ONME_TIMEOUT_MS/g)).toHaveLength(2);
     const download = src.slice(
       src.indexOf("export async function imageFromEditJson"),
@@ -128,6 +129,7 @@ describe("On me server budget", () => {
     expect(download).toMatch(/AbortSignal\.timeout\(timeoutMs\)/);
     const imagine = src.slice(src.indexOf("async function imagineEdit"), src.indexOf("const STATUS_TTL"));
     expect(imagine).toMatch(/await imageFromEditJson\(r\.json\)/);
+    expect(imagine).toMatch(/if \(!got\.ok\) return \{ ok: false, error: got\.error \}/);
     expect(imagine).not.toContain("onMeDownloadMs");
   });
 
@@ -300,6 +302,59 @@ describe("edit result download", () => {
     await expect(imageFromEditJson({ data: [{ b64_json: "AAAA" }] })).resolves.toEqual({
       ok: true,
       image: "data:image/png;base64,AAAA",
+    });
+  });
+
+  it("times out when headers arrive and the body never ends", async () => {
+    const { imageFromEditJson } = await realEditJson();
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", () => {
+      const stream = new ReadableStream({
+        start() {
+          /* never enqueues or closes */
+        },
+      });
+      return Promise.resolve(
+        new Response(stream, { status: 200, headers: { "content-type": "image/jpeg" } }),
+      );
+    });
+    let settled = false;
+    const pending = imageFromEditJson(json, 1000).then((value) => {
+      settled = true;
+      return value;
+    });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(pending).resolves.toEqual({ ok: false, error: "xAI request timed out" });
+  });
+
+  it("keeps a hung download's timeout through the post-edit step", async () => {
+    const { finishEdit, imageFromEditJson } = await realEditJson();
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", () => new Promise(() => {}));
+    const raw = JSON.stringify({ data: [{ url: "https://example.invalid/x.png" }] });
+    const deadline = onMeDownloadMs(0);
+    let settled = false;
+    const pending = imageFromEditJson(
+      { data: [{ url: "https://example.invalid/x.png" }] },
+      deadline,
+    ).then((value) => {
+      settled = true;
+      return value;
+    });
+    await vi.advanceTimersByTimeAsync(deadline - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const got = await pending;
+    const finished = finishEdit(got);
+    expect(finished).toEqual({ ok: false, error: "xAI request timed out" });
+    if (finished.ok) throw new Error("expected the download to fail");
+    expect(finished.error).not.toBe(raw);
+    expect(onMeErrorText(finished.error)).toBe(ON_ME_SLOW);
+    expect(finishEdit({ ok: true, image: "data:image/png;base64,AA" })).toEqual({
+      ok: true,
+      image: "data:image/png;base64,AA",
     });
   });
 });
