@@ -28,3 +28,11 @@ export function onMeRetryMs(elapsedMs: number): number | null {
   const left = ONME_SERVER_BUDGET_MS - elapsedMs;
   return left >= ONME_MIN_RETRY_MS ? left : null;
 }
+
+/** The edit-result download must finish by this point: the 55 s budget plus 3 s, inside the 60 s function limit. */
+export const ONME_DOWNLOAD_DEADLINE_MS = 58000;
+
+/** Milliseconds left for the result download: whatever remains before 58 s, never under 1 s. */
+export function onMeDownloadMs(elapsedMs: number): number {
+  return Math.max(1000, ONME_DOWNLOAD_DEADLINE_MS - elapsedMs);
+}
