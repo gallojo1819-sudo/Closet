@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { GarmentImg } from "@/components/closet/gimg";
 import { LookKit } from "@/components/closet/look-kit";
 import { Overlay } from "@/components/closet/overlay";
-import { ON_ME_BUSY, ensureLookOnMe, onMeErrorText } from "@/components/closet/on-me";
+import {
+  ON_ME_BUSY_HINT,
+  ON_ME_BUSY_SHORT,
+  ON_ME_CLIENT_MS,
+  ensureLookOnMe,
+  onMeErrorText,
+} from "@/components/closet/on-me";
 import { WearButton } from "@/components/closet/wear-button";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
@@ -158,7 +165,7 @@ export function LookSheet({
         const image = await ensureLookOnMe(
           look.id,
           piecesRef.current,
-          65_000,
+          ON_ME_CLIENT_MS,
           mapOccasion(look.occasion),
         );
         if (n !== gen.current) return;
@@ -234,13 +241,14 @@ export function LookSheet({
                 type="button"
                 onClick={runDress}
                 className={cn(
-                  "micro border px-3 py-2",
+                  "micro inline-flex items-center gap-2 whitespace-nowrap border px-3 py-2",
                   showMe && painted
                     ? "border-ink bg-ink text-paper"
                     : "border-hairline text-ink-soft hover:border-hairline-strong",
                 )}
               >
-                {dressing ? ON_ME_BUSY : "On you"}
+                {dressing && <Loader2 className="size-3 animate-spin" />}
+                {dressing ? ON_ME_BUSY_SHORT : "On you"}
               </button>
             ) : (
               <button
@@ -259,6 +267,7 @@ export function LookSheet({
               Close
             </button>
           </div>
+          {dressing && <p className="micro text-ink-soft">{ON_ME_BUSY_HINT}</p>}
           {dressError && <p className="text-sm text-accent">{dressError}</p>}
           <ul className="flex gap-2 overflow-x-auto">
             {[

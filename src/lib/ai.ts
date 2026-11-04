@@ -14,7 +14,7 @@ import type { StylistPageContext } from "./stylist-page";
 import { askStylistCore, phasesLine, type ChatFn, type StylistAskResult } from "./stylist-ask";
 import type { TasteMemory } from "./taste";
 import type { Category, Garment } from "./types";
-import { ONME_TIMEOUT_MS, SERVER_DEADLINE_MS, onMeRetryMs } from "./ai-budget";
+import { ONME_TIMEOUT_MS, SERVER_DEADLINE_MS, onMeDownloadMs, onMeRetryMs } from "./ai-budget";
 
 export type TagResult = {
   ok: true;
@@ -206,22 +206,58 @@ export const tagGarment = createServerFn({ method: "POST" })
 
 type EditResult = { ok: true; image: string } | { ok: false; error: string };
 
-async function imageFromEditJson(json: unknown): Promise<EditResult> {
+export async function imageFromEditJson(json: unknown, timeoutMs = XAI_TIMEOUT_MS): Promise<EditResult> {
   const body = json as { data?: { b64_json?: string; url?: string }[] };
   const first = body.data?.[0];
   if (first?.b64_json) return { ok: true, image: `data:image/png;base64,${first.b64_json}` };
   if (first?.url) {
+    const url = first.url;
+    const signal = AbortSignal.timeout(timeoutMs);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const img = await fetch(first.url);
-      if (!img.ok) return { ok: false, error: "Could not download the edit." };
-      const buf = Buffer.from(await img.arrayBuffer());
-      const mime = img.headers.get("content-type") ?? "image/jpeg";
-      return { ok: true, image: `data:${mime};base64,${buf.toString("base64")}` };
-    } catch {
+      /* The signal aborts a real download, body read included. The same deadline
+         rejects when headers arrive and the body never ends. */
+      return await new Promise<EditResult>((resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+        }, timeoutMs);
+        fetch(url, { signal }).then(
+          (img) => {
+            if (!img.ok) {
+              resolve({ ok: false, error: "Could not download the edit." });
+              return;
+            }
+            img.arrayBuffer().then(
+              (buf) => {
+                const mime = img.headers.get("content-type") ?? "image/jpeg";
+                resolve({
+                  ok: true,
+                  image: `data:${mime};base64,${Buffer.from(buf).toString("base64")}`,
+                });
+              },
+              reject,
+            );
+          },
+          reject,
+        );
+      });
+    } catch (e) {
+      const name = e instanceof Error ? e.name : "";
+      if (name === "TimeoutError" || name === "AbortError") {
+        return { ok: false, error: "xAI request timed out" };
+      }
       return { ok: false, error: "Could not download the edit." };
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
     }
   }
   return { ok: false, error: "Edit came back empty." };
+}
+
+/** After the edit call succeeded, the download's own error is the result. The 200 body is not one. */
+export function finishEdit(got: EditResult): EditResult {
+  if (!got.ok) return { ok: false, error: got.error };
+  return got;
 }
 
 async function imagineEdit(prompt: string, url: string): Promise<EditResult> {
@@ -232,8 +268,8 @@ async function imagineEdit(prompt: string, url: string): Promise<EditResult> {
     image: imageUrlPart(url),
   });
   if (!r.ok) return { ok: false, error: r.error };
-  const got = await imageFromEditJson(r.json);
-  if (!got.ok) return { ok: false, error: r.error || got.error };
+  const got = finishEdit(await imageFromEditJson(r.json));
+  if (!got.ok) return { ok: false, error: got.error };
   return got;
 }
 
@@ -473,8 +509,8 @@ ${data.tuck ?? ""}`;
       return res;
     };
     if (!r.ok) return done({ ok: false, error: r.error });
-    const got = await imageFromEditJson(r.json);
-    if (!got.ok) return done({ ok: false, error: r.error || got.error });
+    const got = finishEdit(await imageFromEditJson(r.json, onMeDownloadMs(Date.now() - start)));
+    if (!got.ok) return done({ ok: false, error: got.error });
     return done(got);
   });
 

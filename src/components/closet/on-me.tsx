@@ -182,6 +182,9 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 const inflight = new Map<string, Promise<string>>();
 let dressQueue: Promise<unknown> = Promise.resolve();
 
+/** Every On you entry point gives up after this and shows ON_ME_SLOW. */
+export const ON_ME_CLIENT_MS = 65_000;
+
 function comboExtra(pieces: Garment[]): string {
   return [...pieces.map((p) => p.id)].sort().join("|");
 }
@@ -190,7 +193,7 @@ function comboExtra(pieces: Garment[]): string {
 export async function ensureLookOnMe(
   lookId: string,
   pieces: Garment[],
-  ms = 65_000,
+  ms = ON_ME_CLIENT_MS,
   occasion?: Occasion,
 ): Promise<string> {
   const extra = comboExtra(pieces);
@@ -214,7 +217,7 @@ export async function ensureLookOnMe(
 export function queueLookOnMe(
   lookId: string,
   pieces: Garment[],
-  ms = 65_000,
+  ms = ON_ME_CLIENT_MS,
   occasion?: Occasion,
 ): Promise<string | null> {
   if (!useCloset.getState().refPhoto) return Promise.resolve(null);
@@ -225,13 +228,22 @@ export function queueLookOnMe(
   return job;
 }
 
+/** Shown on the busy button. The hint sits under it, so the button stays one line. */
+export const ON_ME_BUSY_SHORT = "Dressing you…";
+export const ON_ME_BUSY_HINT = "This can take up to a minute";
 /** Shown while an On me edit runs: a five-image edit can take most of a minute. */
 export const ON_ME_BUSY = "Dressing you… this can take up to a minute";
-/** The client cap ("timeout") and the server's xAI abort read the same. */
+/** The client cap ("timeout"), a gateway timeout, and the server's xAI abort read the same. */
 export const ON_ME_SLOW = "The image service was slow — tap to try again.";
 
 export function onMeErrorText(msg: string): string {
-  return msg === "timeout" || msg === "xAI request timed out" ? ON_ME_SLOW : msg;
+  const slow =
+    msg === "timeout" ||
+    msg === "xAI request timed out" ||
+    msg.includes("FUNCTION_INVOCATION_TIMEOUT") ||
+    msg.includes(" 504") ||
+    msg.includes("504 ");
+  return slow ? ON_ME_SLOW : msg;
 }
 
 const NO_REF = "No reference photo yet. Tap Fit · 5′8 reg up top to add one.";
@@ -253,7 +265,7 @@ function useOnMe(pieces: Garment[], occasion?: Occasion) {
     setError(null);
     try {
       const plan = cutoutsForOnYou(pieces);
-      const image = await dressLook(pieces, occasion);
+      const image = await withTimeout(dressLook(pieces, occasion), ON_ME_CLIENT_MS);
       if (useCloset.getState().refPhoto !== refPhoto) return;
       setImage(image);
       if (plan.skipped) setError(`${plan.skipped} has no clean cover.`);
@@ -366,21 +378,24 @@ export function OnMePanel({
                 ? "One editorial frame of you in this exact look. Generated on demand — never saved over your photos."
                 : NO_REF)}
           </p>
-          <button
-            type="button"
-            disabled={preview.busy || (Boolean(preview.refPhoto) && !pieces.length)}
-            onClick={() =>
-              preview.refPhoto ? void preview.run() : openRefPhotoDialog()
-            }
-            className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40 inline-flex items-center gap-2"
-          >
-            {preview.busy && <Loader2 className="size-3 animate-spin" />}
-            {preview.busy
-              ? ON_ME_BUSY
-              : preview.refPhoto
-                ? "Generate preview"
-                : "Set reference photo"}
-          </button>
+          <div className="flex w-full flex-col items-center gap-2">
+            <button
+              type="button"
+              disabled={preview.busy || (Boolean(preview.refPhoto) && !pieces.length)}
+              onClick={() =>
+                preview.refPhoto ? void preview.run() : openRefPhotoDialog()
+              }
+              className="micro whitespace-nowrap border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-40 inline-flex items-center gap-2"
+            >
+              {preview.busy && <Loader2 className="size-3 animate-spin" />}
+              {preview.busy
+                ? ON_ME_BUSY_SHORT
+                : preview.refPhoto
+                  ? "Generate preview"
+                  : "Set reference photo"}
+            </button>
+            {preview.busy && <p className="micro text-ink-soft">{ON_ME_BUSY_HINT}</p>}
+          </div>
         </div>
       )}
       <p className="micro px-3 py-2 text-ink-soft border-t border-hairline">
