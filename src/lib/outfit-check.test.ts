@@ -26,7 +26,7 @@ import { jacketRequired } from "./stylist/jackets.ts";
 import { isTrueOuter, slotOf, coreComboKey } from "./style.ts";
 import { lookFitsSeason } from "./season.ts";
 import { clashSentence } from "./detectors.ts";
-import { normalizeTaste, pieceLine } from "./taste.ts";
+import { emptyTaste, normalizeTaste, pieceLine } from "./taste.ts";
 import type { Garment, Occasion, Season } from "./types.ts";
 import { liveSnapshot } from "./__fixtures__/snapshot.ts";
 import { passesRules } from "./stylist/legal.ts";
@@ -136,6 +136,7 @@ const HOODIE_PIECES: PhotoPiece[] = [
 const HOODIE = lookFromPieces(HOODIE_PIECES, RACK);
 const HOODIE_CTX: CheckCtx = { occasion: "weekday", season: "fall", weatherF: 62 };
 const OCT = new Date(2026, 9, 8, 9);
+const TODAY = "2026-10-08"; // America/New_York calendar day for drawSeed / todayNY pins
 
 describe("outfit check", () => {
   it("a) fall weekday trio with no jacket is works_with_jacket, naming an owned outer", (t) => {
@@ -212,7 +213,7 @@ describe("outfit check", () => {
     assert.ok(v.ruleIds.includes("XC-TEX-4"), v.ruleIds.join(","));
     assert.ok(v.ruleIds.includes("CLASH"), v.ruleIds.join(","));
     assert.equal(allOwned(HOODIE.map((g) => g.id), RACK), false);
-    const swaps = checkSwaps(HOODIE, RACK, HOODIE_CTX);
+    const swaps = checkSwaps(HOODIE, RACK, HOODIE_CTX, emptyTaste(), 2, TODAY);
     for (const s of swaps) {
       assert.ok(BY.has(s.inId) && !s.inId.startsWith("photo_"), s.inId);
       for (const id of s.ids) assert.ok(BY.has(id) && !id.startsWith("photo_"), id);
@@ -231,7 +232,7 @@ describe("outfit check", () => {
       ["hoodie", HOODIE, HOODIE_CTX],
       ["prints", PRINTS, { occasion: "weekend", season: "fall" } as CheckCtx],
     ] as const) {
-      const swaps = checkSwaps(look, RACK, ctx);
+      const swaps = checkSwaps(look, RACK, ctx, emptyTaste(), 2, TODAY);
       assert.ok(swaps.length <= 2, label);
       assert.equal(new Set(swaps.map((s) => s.slot)).size, swaps.length, `${label}: slots repeat`);
       for (const s of swaps) {
@@ -240,11 +241,11 @@ describe("outfit check", () => {
         assert.match(s.line, /^Swap the .+ for your .+\.$/);
       }
     }
-    const first = checkSwaps(HOODIE, RACK, HOODIE_CTX);
+    const first = checkSwaps(HOODIE, RACK, HOODIE_CTX, emptyTaste(), 2, TODAY);
     assert.ok(first.length >= 1, "the hoodie look has a swap");
     const best = first[0]!;
     const vetoed = normalizeTaste({ vetoes: [{ kind: "piece", id: best.inId, source: "ask" }] });
-    const again = checkSwaps(HOODIE, RACK, HOODIE_CTX, vetoed);
+    const again = checkSwaps(HOODIE, RACK, HOODIE_CTX, vetoed, 2, TODAY);
     for (const s of again) {
       assert.notEqual(s.inId, best.inId);
       assert.equal(s.ids.includes(best.inId), false);
@@ -254,7 +255,7 @@ describe("outfit check", () => {
     /* A pairing veto is one word a side, stemmed. The last word of each name is that piece's kind. */
     const word = (g: Garment) => g.name.trim().split(/\s+/).pop() ?? g.name;
     const pairVeto = normalizeTaste({ vetoes: [{ kind: "pairing", a: word(inPiece), b: word(other), source: "ask" }] });
-    const third = checkSwaps(HOODIE, RACK, HOODIE_CTX, pairVeto);
+    const third = checkSwaps(HOODIE, RACK, HOODIE_CTX, pairVeto, 2, TODAY);
     assert.equal(third.some((s) => s.inId === best.inId), false, "pairing veto removes the best swap");
   });
 
@@ -356,7 +357,7 @@ describe("outfit check", () => {
     assert.ok(failing.length >= 1, "no failing look to suggest for");
     for (const { look, ctx } of failing) {
       const at = `${names(look.map((g) => g.id))} @ ${ctx.occasion} ${ctx.season}`;
-      for (const s of checkSwaps(look, RACK, ctx)) {
+      for (const s of checkSwaps(look, RACK, ctx, emptyTaste(), 2, TODAY)) {
         assertClean(s.line, at);
         if (s.jacket) assertClean(s.jacket, at);
         assertOwnedLegal(s.ids, ctx, at);
@@ -458,7 +459,7 @@ describe("outfit check on the live snapshot: a jacket may cure what sits beside 
     const v = checkVerdict(look, ctx, liveSnapshot);
     assert.equal(v.state, "doesnt", v.reason);
     assert.ok(v.ruleIds.includes("COL-10"), v.ruleIds.join(","));
-    const swaps = checkSwaps(look, liveSnapshot, ctx);
+    const swaps = checkSwaps(look, liveSnapshot, ctx, emptyTaste(), 2, TODAY);
     const shoes = swaps.filter((s) => s.slot === "footwear");
     assert.equal(shoes.length, 1, JSON.stringify(swaps));
     const swap = shoes[0]!;
@@ -480,7 +481,7 @@ describe("outfit check on the live snapshot: a jacket may cure what sits beside 
     const look = [live("g_939onlwfrg9j"), linen, live("g_9q0j6ksxlgcv")];
     const v = checkVerdict(look, ctx, liveSnapshot);
     assert.equal(v.state, "doesnt", v.reason);
-    for (const s of checkSwaps(look, liveSnapshot, ctx)) {
+    for (const s of checkSwaps(look, liveSnapshot, ctx, emptyTaste(), 2, TODAY)) {
       const full = s.ids.map(live);
       assert.equal(passesRules(full, rc).pass, true, s.line);
       assert.equal(full.some((g) => g.id === linen.id), false, `${s.line}: the linen stays`);
