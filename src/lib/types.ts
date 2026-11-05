@@ -45,6 +45,11 @@ export type Garment = {
   material: string;
   brand: string;
   notes: string;
+  /**
+   * The camera tag failed twice and the name is still "New piece". The sheet asks for a
+   * category. Absent once a tag or an edit names the piece.
+   */
+  needsCategory?: boolean;
   formality: 1 | 2 | 3 | 4 | 5;
   warmth: 1 | 2 | 3 | 4 | 5;
   seasons: string[];

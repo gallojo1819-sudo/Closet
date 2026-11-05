@@ -23,6 +23,8 @@ import {
   outerKind,
   pickLook,
   pickTrueOuter,
+  anchorLookOk,
+  isUnslottedLock,
   slotOf,
   type House,
 } from "./style.ts";
@@ -1122,6 +1124,7 @@ function starLook(
   previousIds: string[],
   turn = 0,
 ): Look | null {
+  if (isUnslottedLock(g)) return null;
   const pool = lookbookPool(garments);
   const byId = new Map(pool.map((x) => [x.id, x]));
   const today = todayNY();
@@ -1142,6 +1145,7 @@ function starLook(
   const pieces = ordered.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
   if (pieces.length < 3) return null;
   if (lookClashes(pieces)) return null;
+  if (!anchorLookOk(g, pieces)) return null;
   return {
     id: `hero_${g.id}_${occasion}_${key.slice(0, 10)}`,
     name: nameOf(pieces),
@@ -1476,6 +1480,7 @@ export function coverUnused(garments: Garment[], looks: Look[]): Look[] {
   for (const g of pool) {
     if (used.has(g.id)) continue;
     const slot = slotOf(g);
+    if (isUnslottedLock(g)) continue;
     if (slot === "accessory" || g.category === "accessory" || !slot) {
       const idx = extra.findIndex((l) => {
         const pieces = l.garmentIds
@@ -1505,7 +1510,7 @@ export function coverUnused(garments: Garment[], looks: Look[]): Look[] {
     const ordered = ids.includes(g.id) ? ids : [g.id, ...ids.filter((id) => id !== g.id)];
     if (ordered.length < 3 || !ordered.includes(g.id)) continue;
     const pieces = ordered.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
-    if (pieces.length < 3 || lookClashes(pieces)) continue;
+    if (pieces.length < 3 || lookClashes(pieces) || !anchorLookOk(g, pieces)) continue;
     const key = comboKey(ordered);
     if (keys.has(key)) continue;
     keys.add(key);

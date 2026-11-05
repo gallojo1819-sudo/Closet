@@ -9,7 +9,7 @@ export const CAMERA_TAG_MS = 12_000;
  * rename a camera shot.
  */
 export const CAMERA_TAG_RULES =
-  "A jacket, blazer, coat, chore coat, field jacket, bomber, trucker, overshirt, or trench is outerwear, never a top. A hoodie or sweatshirt stays a top. A shirt, polo, tee, or knit is a top. Trousers are a bottom. Shoes are footwear. Name the garment in the photo, not the room. One clear jacket is that jacket, outerwear, person false, count 1. If a person is wearing the clothes, set person true and count to the garments you can see. Do not name the person. Do not invent a garment that is not in the photo. If several garments are visible, set count to how many and do not save the frame as one top. If the inside label is readable, set brand to the word printed on it. If it is not readable, brand is empty. Do not invent a brand.";
+  "A jacket, blazer, coat, chore coat, field jacket, bomber, trucker, overshirt, or trench is outerwear, never a top. A hoodie or sweatshirt stays a top. A shirt, polo, tee, or knit is a top. Trousers are a bottom. Shoes are footwear. A pair of shoes is ONE item, count 1. Name the garment in the photo, not the room. One clear jacket is that jacket, outerwear, person false, count 1. If a person is wearing the clothes, set person true and count to the garments you can see. Do not name the person. Do not invent a garment that is not in the photo. If several garments are visible, set count to how many and do not save the frame as one top. If the inside label is readable, set brand to the word printed on it. If it is not readable, brand is empty. Do not invent a brand.";
 
 const OUTER_WORDS = ["jacket", "blazer", "coat", "bomber", "chore", "field", "trucker", "trench", "overshirt"];
 
@@ -163,22 +163,29 @@ function patchFrom(tag: {
   };
 }
 
+function patchIsFootwear(patch: CameraPatch): boolean {
+  if (patch.category === "footwear") return true;
+  return wordsCategory(`${patch.name} ${patch.subtype}`) === "footwear";
+}
+
 /**
  * After the shrunk tile is already saved as New piece.
  * Timeout, failure, or an empty name keeps that piece.
  * count > 1 is the worn picker, not one top.
+ * A pair of shoes is one piece: footwear stays an update even when count is 2.
  */
 export function decideCameraTag(tag: CameraTag): CameraTagDecision {
   if (!tag || tag.ok !== true) return { action: "keep" };
   const name = (tag.name ?? "").trim();
   if (!name || isFakeName(name)) return { action: "keep" };
   const patch = patchFrom({ ...tag, name });
-  const count = typeof tag.count === "number" && tag.count > 1 ? tag.count : 1;
-  const oneJacket = count === 1 && textSaysOuter(patch.name, patch.subtype);
-  if (count > 1 || (tag.person === true && !oneJacket)) {
+  const footwear = patchIsFootwear(patch);
+  const count = footwear ? 1 : typeof tag.count === "number" && tag.count > 1 ? tag.count : 1;
+  const oneJacket = !footwear && count === 1 && textSaysOuter(patch.name, patch.subtype);
+  if (count > 1 || (tag.person === true && !oneJacket && !footwear)) {
     return {
       action: "worn",
-      fallback: textSaysOuter(patch.name, patch.subtype) ? patch : null,
+      fallback: textSaysOuter(patch.name, patch.subtype) || footwear ? patch : null,
     };
   }
   return { action: "update", patch };

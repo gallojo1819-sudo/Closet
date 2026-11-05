@@ -1,14 +1,16 @@
-import { printGarment, tagGarment } from "./ai.ts";
-import { CAMERA_TAG_MS, decideCameraTag } from "./camera-tag.ts";
+import { printGarment, tagGarment, type TagResult } from "./ai.ts";
+import { CAMERA_TAG_MS, decideCameraTag, type CameraPatch, type CameraTag, type CameraTagDecision } from "./camera-tag.ts";
 import { getAccount } from "./cloud/account.ts";
 import { getSupabase } from "./cloud/client.ts";
 import { garmentV2Fields, garmentWriter, mirrorGarmentFields } from "./data/mirror.ts";
 import { dataUrlToBlob, imageKey, putImage, putThumb } from "./images.ts";
-import { withTimeout } from "./ingest.ts";
+import { NEW_PIECE_NAME, withTimeout } from "./ingest.ts";
+import { isFakeName } from "./rack.ts";
 import { judgeHeldPlate } from "./packshot-search.ts";
 import { cropHeldPhoto, guardedPlatePatch, noteGarmentCoverBytes } from "./plate-pass.ts";
 import { hasCleanCover, keptPlateKey } from "./plate.ts";
-import { holderCheckerText, placeHeldGarment } from "./scan.ts";
+import { holderCheckerText, looksLikeFace, placeHeldGarment } from "./scan.ts";
+import type { Category, Garment } from "./types.ts";
 import { singleGarmentNoun } from "./single-garment.ts";
 import { useCloset } from "./store.ts";
 import { guessTuck } from "./tuck.ts";
@@ -55,45 +57,121 @@ async function shrinkForAi(src: string): Promise<string> {
   }
 }
 
-/** Tag after the garment is already in the closet. 12s timeout keeps "New piece". */
-export function enqueueTag(id: string, cover: string): void {
-  tagChain = tagChain.then(async () => {
+/** A single classifyScan box: name and category only. No invented subtype. */
+export type TagHint = { name: string; category: Category };
+
+export function singleBoxHint(
+  scan: {
+    ok: boolean;
+    kind?: string;
+    boxes?: { name: string; category: Category; box: { x: number; y: number; w: number; h: number } | null }[];
+  } | null,
+): TagHint | null {
+  if (!scan?.ok || scan.kind !== "garment" || !scan.boxes) return null;
+  const boxes = scan.boxes.filter((b) => b.name && !looksLikeFace(b.name, b.category, b.box));
+  if (boxes.length !== 1) return null;
+  const name = boxes[0]!.name.trim().slice(0, 48);
+  if (!name || isFakeName(name)) return null;
+  return { name, category: boxes[0]!.category };
+}
+
+type TagFn = (image: string) => Promise<CameraTag>;
+
+function chosenPatch(decision: CameraTagDecision): CameraPatch | null {
+  if (decision.action === "update") return decision.patch;
+  if (decision.action === "worn" && decision.fallback) return decision.fallback;
+  return null;
+}
+
+async function readTag(tag: TagFn, image: string, ms: number): Promise<CameraTag> {
+  try {
+    return await withTimeout(tag(image), ms);
+  } catch {
+    return null;
+  }
+}
+
+function tagExtras(tag: CameraTag, patch: CameraPatch): Partial<Garment> {
+  if (!tag || tag.ok !== true || !("formality" in tag)) return {};
+  const full = tag as Extract<TagResult, { ok: true }>;
+  return {
+    fit: full.fit,
+    formality: full.formality,
+    warmth: full.warmth,
+    tuck: full.tuck ?? guessTuck({ name: patch.name, subtype: patch.subtype, notes: "" }),
+  };
+}
+
+function applyTag(id: string, patch: CameraPatch, tag: CameraTag) {
+  useCloset.getState().updateGarment(id, {
+    name: patch.name,
+    category: patch.category,
+    subtype: patch.subtype,
+    colors: patch.colors,
+    material: patch.material,
+    needsCategory: false,
+    ...(patch.brand ? { brand: patch.brand } : {}),
+    ...tagExtras(tag, patch),
+  });
+  void mirrorGarmentFields(
+    garmentWriter(getSupabase()),
+    getAccount().user?.id ?? null,
+    garmentV2Fields({ id, ...patch, subtype: patch.subtype }),
+  ).catch(() => false);
+}
+
+function applyHint(id: string, hint: TagHint | null | undefined) {
+  if (!hint) return;
+  const g = useCloset.getState().garments.find((item) => item.id === id);
+  if (!g || g.name !== NEW_PIECE_NAME) return;
+  useCloset.getState().updateGarment(id, { name: hint.name, category: hint.category });
+}
+
+function markUnnamed(id: string) {
+  const g = useCloset.getState().garments.find((item) => item.id === id);
+  if (!g || g.name !== NEW_PIECE_NAME) return;
+  useCloset.getState().updateGarment(id, { needsCategory: true });
+}
+
+/**
+ * Tag after the garment is already in the closet. One retry on a timeout or a failure.
+ * A worn decision that carries a fallback (a jacket, a pair of shoes) is applied.
+ * Both failures leave "New piece" and the needs-category flag. Tests inject `tag`.
+ */
+export function enqueueTag(
+  id: string,
+  cover: string,
+  opts?: { tag?: TagFn; hint?: TagHint | null; timeoutMs?: number },
+): Promise<void> {
+  const run = tagChain.then(async () => {
     if (!useCloset.getState().garments.some((g) => g.id === id)) return;
+    const tagFn = opts?.tag ?? ((image: string) => tagGarment({ data: { image } }));
+    const ms = opts?.timeoutMs ?? CAMERA_TAG_MS;
     try {
-      const tag = await withTimeout(
-        tagGarment({ data: { image: await shrinkForAi(cover) } }),
-        CAMERA_TAG_MS,
-      );
+      const image = await shrinkForAi(cover);
+      let reply = await readTag(tagFn, image, ms);
+      let patch = chosenPatch(decideCameraTag(reply));
+      if (!patch) {
+        applyHint(id, opts?.hint);
+        if (!useCloset.getState().garments.some((g) => g.id === id)) return;
+        reply = await readTag(tagFn, image, ms);
+        patch = chosenPatch(decideCameraTag(reply));
+        if (!patch) {
+          markUnnamed(id);
+          return;
+        }
+      }
       if (!useCloset.getState().garments.some((g) => g.id === id)) return;
-      const decision = decideCameraTag(tag);
-      if (decision.action !== "update") return;
-      const patch = decision.patch;
-      const tagged = tag && tag.ok ? tag : null;
-      useCloset.getState().updateGarment(id, {
-        name: patch.name,
-        category: patch.category,
-        subtype: patch.subtype,
-        colors: patch.colors,
-        material: patch.material,
-        ...(patch.brand ? { brand: patch.brand } : {}),
-        ...(tagged
-          ? {
-              fit: tagged.fit,
-              formality: tagged.formality,
-              warmth: tagged.warmth,
-              tuck: tagged.tuck ?? guessTuck({ name: patch.name, subtype: patch.subtype, notes: "" }),
-            }
-          : {}),
-      });
-      void mirrorGarmentFields(
-        garmentWriter(getSupabase()),
-        getAccount().user?.id ?? null,
-        garmentV2Fields({ id, ...patch, subtype: patch.subtype }),
-      ).catch(() => false);
+      applyTag(id, patch, reply);
     } catch {
-      /* keep guess / New piece */
+      markUnnamed(id);
     }
   });
+  tagChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 export function enqueuePrint(id: string, original: string): void {

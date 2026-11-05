@@ -4,7 +4,7 @@ import { heroOccasionsFor, lookCountMap } from "./lookbook.ts";
 import type { TasteMemory } from "./taste.ts";
 import { livePool } from "./rack.ts";
 import { houseLegalCombo, type House } from "./houses.ts";
-import { pairKey, pickLookWith, slotOf, weekUniformKeys } from "./style.ts";
+import { anchorLookOk, isUnslottedLock, pairKey, pickLookWith, slotOf, weekUniformKeys } from "./style.ts";
 import {
   mapOccasion,
   type Garment,
@@ -162,6 +162,14 @@ export function dressThisPiece(opts: {
   const lockedIds = [...new Set(opts.lockedIds)].filter((id) =>
     pool.some((g) => g.id === id),
   );
+  if (
+    lockedIds.some((id) => {
+      const g = pool.find((x) => x.id === id);
+      return g ? isUnslottedLock(g) : false;
+    })
+  ) {
+    return null;
+  }
   const house = opts.house && opts.house !== "all" ? opts.house : undefined;
   if (!lockedIds.length && !house) return null;
   const occasion = mapOccasion(opts.occasion ?? "out");
@@ -193,12 +201,24 @@ export function dressThisPiece(opts: {
     .map((id) => pool.find((g) => g.id === id))
     .filter((g): g is Garment => Boolean(g));
   if (pieces.length < 2) return null;
+  if (lockedIds.some((id) => {
+    const anchor = pieces.find((g) => g.id === id);
+    return !anchor || !anchorLookOk(anchor, pieces);
+  })) {
+    return null;
+  }
   if (house && !houseLegalCombo(pieces, house, occasion)) return null;
   return { garmentIds: pieces.map((g) => g.id), occasion, pieces, lockedIds, relaxed: picked.relaxed };
 }
 
 /** The detail sheet's line when no occasion holds a rule-passing look around the piece. */
 export const NO_OUTFIT_NOTE = "No look in your closet works with this piece yet.";
+
+/** Under that note, when the piece has no wear slot. */
+export const PICK_CATEGORY_NUDGE = "Pick a category.";
+
+/** The sheet's line when the camera tag never named the piece. */
+export const NOT_NAMED_YET = "Not named yet: pick a category";
 
 /**
  * "Outfit with this": dressThisPiece for the asked occasion, then each hero occasion the piece

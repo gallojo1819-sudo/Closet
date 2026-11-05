@@ -28,7 +28,7 @@ import {
   withTimeout,
 } from "@/lib/ingest";
 import { imageBorderIsCleanStudio, matteToPaper, readAsImageSrc } from "@/lib/matte";
-import { enqueuePrint, enqueueTag } from "@/lib/print-queue";
+import { enqueuePrint, enqueueTag, singleBoxHint } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
 import { classifyScan, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
 import { judgeHeldPlate } from "@/lib/packshot-search";
@@ -259,6 +259,7 @@ export function Studio() {
       kind: string;
       hash: string;
       notes: string;
+      hint?: { name: string; category: Category } | null;
     }): Promise<Saved> => {
       const source: ImageSource =
         opts.kind === "studio" ? "official" : opts.kind === "phone" ? "photo" : "segmented";
@@ -291,7 +292,7 @@ export function Studio() {
         },
         { quiet: true },
       );
-      enqueueTag(opts.id, opts.cover);
+      enqueueTag(opts.id, opts.cover, { hint: opts.hint ?? null });
       mirrorAdded(opts.id);
       enqueuePrint(opts.id, opts.original);
       return {
@@ -628,6 +629,7 @@ export function Studio() {
           kind: matte.kind,
           hash,
           notes: matte.reason,
+          hint: singleBoxHint(classRes && "ok" in classRes && classRes.ok ? classRes : null),
         });
         saved = true;
         onPiece(piece);

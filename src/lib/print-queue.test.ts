@@ -1,0 +1,136 @@
+import { register } from "node:module";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+
+register(new URL("../../scripts/ts-ext.mjs", import.meta.url), {
+  parentURL: import.meta.url,
+});
+
+const { getSupabase } = await import("./cloud/client.ts");
+const { NEW_PIECE_NAME } = await import("./ingest.ts");
+const { enqueueTag, singleBoxHint } = await import("./print-queue.ts");
+const { persistGate } = await import("./store-persist.ts");
+const { useCloset } = await import("./store.ts");
+import type { Garment } from "./types.ts";
+
+function unnamed(): Garment {
+  return {
+    id: "g_tag_test",
+    name: NEW_PIECE_NAME,
+    category: "other",
+    subtype: "",
+    colors: [],
+    material: "",
+    brand: "",
+    notes: "",
+    formality: 3,
+    warmth: 3,
+    seasons: [],
+    imageSrc: "",
+    cutoutSrc: "",
+    imageSource: "photo",
+    matteQuality: "ok",
+    demo: false,
+    archived: false,
+    wornOn: [],
+    createdAt: "2026-10-23T16:40:00.000Z",
+  };
+}
+
+describe("enqueueTag", () => {
+  it("a timeout then a good retry updates the row; two failures keep New piece", async () => {
+    assert.equal(getSupabase(), null);
+    assert.equal(persistGate.open, false);
+    const prev = useCloset.getState().garments;
+    const row = unnamed();
+    useCloset.setState({ garments: [row] });
+    try {
+      let calls = 0;
+      await enqueueTag(row.id, "data:image/jpeg;base64,aa", {
+        timeoutMs: 20,
+        tag: () => {
+          calls += 1;
+          if (calls === 1) {
+            return new Promise((resolve) => {
+              setTimeout(() => resolve(null), 40);
+            });
+          }
+          return Promise.resolve({
+            ok: true,
+            name: "Brown suede horsebit loafers",
+            category: "footwear",
+            subtype: "loafers",
+            colors: ["brown"],
+            count: 2,
+          });
+        },
+      });
+      const saved = useCloset.getState().garments.find((g) => g.id === row.id);
+      assert.equal(saved?.name, "Brown suede horsebit loafers");
+      assert.equal(saved?.category, "footwear");
+      assert.equal(saved?.subtype, "loafers");
+      assert.equal(saved?.needsCategory, false);
+      assert.equal(calls, 2);
+
+      useCloset.setState({ garments: [unnamed()] });
+      await enqueueTag(row.id, "data:image/jpeg;base64,aa", {
+        timeoutMs: 20,
+        tag: () => Promise.reject(new Error("tag down")),
+      });
+      const failed = useCloset.getState().garments.find((g) => g.id === row.id);
+      assert.equal(failed?.name, NEW_PIECE_NAME);
+      assert.equal(failed?.category, "other");
+      assert.equal(failed?.needsCategory, true);
+      assert.equal(getSupabase(), null);
+      assert.equal(persistGate.open, false);
+    } finally {
+      useCloset.setState({ garments: prev });
+    }
+  });
+
+  it("applies a single-box scan name before the retry", async () => {
+    const prev = useCloset.getState().garments;
+    const row = unnamed();
+    useCloset.setState({ garments: [row] });
+    const hint = singleBoxHint({
+      ok: true,
+      kind: "garment",
+      boxes: [
+        {
+          name: "Navy oxford",
+          category: "top",
+          box: { x: 0.1, y: 0.1, w: 0.4, h: 0.5 },
+        },
+      ],
+    });
+    assert.deepEqual(hint, { name: "Navy oxford", category: "top" });
+    try {
+      let seen = "";
+      let calls = 0;
+      await enqueueTag(row.id, "data:image/jpeg;base64,aa", {
+        timeoutMs: 20,
+        hint,
+        tag: () => {
+          calls += 1;
+          if (calls === 1) return Promise.reject(new Error("timeout"));
+          seen = useCloset.getState().garments.find((g) => g.id === row.id)?.name ?? "";
+          return Promise.resolve({
+            ok: true,
+            name: "Navy oxford shirt",
+            category: "top",
+            subtype: "oxford",
+            colors: ["navy"],
+          });
+        },
+      });
+      assert.equal(seen, "Navy oxford");
+      const saved = useCloset.getState().garments.find((g) => g.id === row.id);
+      assert.equal(saved?.name, "Navy oxford shirt");
+      assert.equal(saved?.subtype, "oxford");
+      assert.equal(saved?.needsCategory, false);
+      assert.equal(persistGate.open, false);
+    } finally {
+      useCloset.setState({ garments: prev });
+    }
+  });
+});

@@ -19,6 +19,7 @@ import { garmentMemo, piecesMemo } from "./garment-memo.ts";
 import { isLinenCampPiece, isOvercoatPiece, lookFitsSeason, pieceFitsSeason, seasonFromWeather, seasonWarmth, type Season } from "./season.ts";
 import { jacketInfo, jeansWithBlazer, slotPieces, wearSlot } from "./stylist/jackets.ts";
 import { JACKET_COVER_IDS, needsJacketOnly, pieceRuleFails, relaxTiers, ruleFails, type RuleCtx } from "./stylist/legal.ts";
+import { wordsCategory } from "./camera-tag.ts";
 import { livePool } from "./rack.ts";
 import { onlyTopIsUntucked, resolveTuck } from "./tuck.ts";
 import { pieceVetoIds, tuckHabitIds, type TasteMemory } from "./taste.ts";
@@ -523,6 +524,33 @@ export function slotOf(g: Garment): Slot | null {
   return garmentMemo(g, "style.slotOf", slotTest);
 }
 
+/**
+ * A locked piece with no wear slot. Accessories (a belt, sunglasses, a cap) are not this:
+ * they still ride along on a look. Anything else must not be drawn around or bolted on.
+ */
+export function isUnslottedLock(g: Garment): boolean {
+  if (slotOf(g) !== null) return false;
+  if (g.category === "accessory") return false;
+  if (wordsCategory(`${g.name} ${g.subtype ?? ""} ${g.notes ?? ""}`) === "accessory") return false;
+  return true;
+}
+
+/**
+ * The look wears the anchor. A core-slot anchor is the only piece in its slot
+ * (a shoe anchor is the only footwear; a top anchor is the only top, and an outer may sit with it).
+ */
+export function anchorLookOk(anchor: Garment, pieces: readonly Garment[]): boolean {
+  if (!pieces.some((p) => p.id === anchor.id)) return false;
+  const slot = slotOf(anchor);
+  if (slot !== "top" && slot !== "dress" && slot !== "bottom" && slot !== "footwear") return true;
+  const same = pieces.filter((p) => {
+    const s = slotOf(p);
+    if (slot === "top" || slot === "dress") return s === "top" || s === "dress";
+    return s === slot;
+  });
+  return same.length === 1 && same[0]!.id === anchor.id;
+}
+
 function slotTest(g: Garment): Slot | null {
   const worn = wearSlot(g);
   if (worn === "outer") return "outerwear";
@@ -801,6 +829,10 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
   const pool = livePool(garments);
   const rng = rngFromSalt(opts.salt ?? 1);
   const lockedSet = new Set(opts.lockedIds ?? []);
+  for (const id of lockedSet) {
+    const locked = pool.find((x) => x.id === id);
+    if (locked && isUnslottedLock(locked)) return { ids: [], relaxed: [], tried: 0, hero: null };
+  }
   const taste = opts.taste;
   const vetoed = taste ? pieceVetoIds(taste) : new Set<string>();
   const today = opts.today ?? todayNY();
@@ -1034,7 +1066,10 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
     found = search();
   }
   if (!found) {
-    const locked = [...lockedSet].filter((id) => pool.some((g) => g.id === id));
+    const locked = [...lockedSet].filter((id) => {
+      const g = pool.find((x) => x.id === id);
+      return g !== undefined && !isUnslottedLock(g);
+    });
     return { ids: locked, relaxed: [], tried, hero: null };
   }
   const relaxed = found.relaxed;
@@ -1045,7 +1080,7 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
   if (belt && shoe && /loafer/.test(`${shoe.subtype} ${shoe.name}`.toLowerCase()) && !ids.includes(belt.id)) ids.push(belt.id);
   for (const id of lockedSet) {
     const g = pool.find((x) => x.id === id);
-    if (!g) continue;
+    if (!g || isUnslottedLock(g)) continue;
     if (!ids.includes(g.id)) ids.push(g.id);
   }
   return { ids, relaxed, tried, hero: found.hero };
