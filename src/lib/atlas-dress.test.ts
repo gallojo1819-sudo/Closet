@@ -1,12 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildReshuffleRow } from "./lookbook.ts";
-import { lookTuck, pickLook, slotOf } from "./style.ts";
+import { lookTuckDecision } from "./look.ts";
+import { pickLook, slotOf } from "./style.ts";
 import {
   applyAtlas,
   emptyTaste,
   learnFromAsk,
   leftOffLine,
+  tuckHabitIds,
   type TasteMemory,
   type TasteVeto,
 } from "./taste.ts";
@@ -158,7 +160,7 @@ describe("Atlas dresses Today and Lookbook", () => {
     const ids = pickLook(rack, { ...day, taste });
     assert.ok(ids.includes("ox"), `shirt was dropped: ${ids.join(",")}`);
     const pieces = ids.map((id) => rack.find((g) => g.id === id)!);
-    assert.equal(lookTuck(shirt, "weekday", pieces, taste), "out");
+    assert.equal(lookTuckDecision(pieces, "weekday", tuckHabitIds(taste)), "out");
     assert.equal(shirt.tuck, undefined);
     const line = tuckDressingLines(pieces, "weekday", ["ox"]);
     assert.match(line, /UNTUCKED/);

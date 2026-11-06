@@ -13,6 +13,7 @@ import type { House } from "./houses.ts";
 import { displayName, pieceLabel } from "./piece-label.ts";
 import { hasCleanCover } from "./plate.ts";
 import { wearSlot } from "./stylist/jackets.ts";
+import { isKnitTop, isShirtLike, resolveTuck } from "./tuck.ts";
 
 const ORDER: Garment["category"][] = [
   "top",
@@ -272,4 +273,26 @@ export function alternatives(
         !used.has(g.id),
     )
     .sort((a, b) => daysIdle(b) - daysIdle(a));
+}
+
+/**
+ * The top whose hem is outermost: a knit over a shirt, else the shirt.
+ * Lives here because slotOf is in style.ts, and style.ts imports tuck.ts.
+ */
+export function leadTop(pieces: readonly Garment[]): Garment | null {
+  const tops = pieces.filter((g) => slotOf(g) === "top" && wearSlot(g) !== "outer");
+  return tops.find((g) => isKnitTop(g)) ?? tops.find((g) => isShirtLike(g)) ?? null;
+}
+
+/** One tuck answer for the plate and the label. "none" when there is nothing to tuck. */
+export function lookTuckDecision(
+  pieces: readonly Garment[],
+  occasion?: string,
+  neverTuck: readonly string[] = [],
+): "in" | "out" | "none" {
+  const lead = leadTop(pieces);
+  if (!lead) return "none";
+  if (!pieces.some((g) => slotOf(g) === "bottom")) return "none";
+  if (neverTuck.includes(lead.id)) return "out";
+  return resolveTuck(lead, occasion as Occasion | undefined, [...pieces]);
 }

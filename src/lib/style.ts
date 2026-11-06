@@ -21,8 +21,8 @@ import { jacketInfo, jeansWithBlazer, slotPieces, wearSlot } from "./stylist/jac
 import { JACKET_COVER_IDS, needsJacketOnly, pieceRuleFails, relaxTiers, ruleFails, type RuleCtx } from "./stylist/legal.ts";
 import { wordsCategory } from "./camera-tag.ts";
 import { livePool } from "./rack.ts";
-import { onlyTopIsUntucked, resolveTuck } from "./tuck.ts";
-import { pieceVetoIds, tuckHabitIds, type TasteMemory } from "./taste.ts";
+import { onlyTopIsUntucked } from "./tuck.ts";
+import { pieceVetoIds, type TasteMemory } from "./taste.ts";
 import {
   HOUSE_CHIPS,
   HOUSE_LABEL,
@@ -754,17 +754,6 @@ export function silhouetteKey(ids: string[], garments: Garment[], occasion?: Occ
 export function isOuterCandidate(g: Garment): boolean {
   if (jacketInfo(g).outerEligible) return true;
   return slotOf(g) === "outerwear" && isTrueOuter(g);
-}
-
-/** A never-tuck habit keeps the shirt and wears it out. The garment record is not rewritten. */
-export function lookTuck(
-  g: Garment,
-  occasion: Occasion | undefined,
-  pieces: Garment[],
-  taste?: TasteMemory,
-): "in" | "out" {
-  if (taste && tuckHabitIds(taste).includes(g.id)) return "out";
-  return resolveTuck(g, occasion, pieces);
 }
 
 export type OuterDrawOpts = {

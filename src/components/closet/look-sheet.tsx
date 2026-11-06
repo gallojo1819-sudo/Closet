@@ -14,7 +14,9 @@ import { WearButton } from "@/components/closet/wear-button";
 import { dataUrlToBlob, getImage, lookOnMeKey } from "@/lib/images";
 import { openRefPhotoDialog } from "@/components/shell/top-bar";
 import { colorLine } from "@/lib/color";
-import { cutoutsForOnYou, nameLook, spreadTitle } from "@/lib/look";
+import { cutoutsForOnYou, leadTop, lookTuckDecision, nameLook, spreadTitle } from "@/lib/look";
+import { tuckMark } from "@/lib/tuck";
+import { useTuckHabits } from "@/lib/use-tuck-habits";
 import { pieceLabel } from "@/lib/piece-label";
 import { moreOutfitsForLook } from "@/lib/dress";
 import type { House } from "@/lib/houses";
@@ -83,6 +85,7 @@ export function LookSheet({
   const piecesRef = useRef(activePieces);
   piecesRef.current = activePieces;
   const saveLook = useCloset((s) => s.saveLook);
+  const habits = useTuckHabits();
   const looks = useCloset((s) => s.looks);
   const refPhoto = useCloset((s) => s.refPhoto);
   const painted = frame || cachedSrc;
@@ -186,6 +189,10 @@ export function LookSheet({
     })();
   };
 
+  const tuckText = tuckMark(
+    lookTuckDecision(activePieces, look.occasion, habits),
+    leadTop(activePieces),
+  );
   const byId = new Map(closet.map((g) => [g.id, g]));
   const altPieces = (l: Look) =>
     l.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
@@ -211,6 +218,7 @@ export function LookSheet({
                 .filter((g) => !look.name.toLowerCase().includes(g.name.toLowerCase()))
                 .map((g) => pieceLabel(g, closet))
                 .join(" · ") || colorLine(activePieces).replace(/\.$/, "") || look.occasion}
+              {tuckText ? ` · ${tuckText}` : ""}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

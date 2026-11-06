@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { guessTuck, resolveTuck, tuckOf } from "./tuck.ts";
+import { leadTop, lookTuckDecision } from "./look.ts";
+import { guessTuck, isKnitTop, isShirtLike, resolveTuck, tuckMark, tuckOf } from "./tuck.ts";
 import type { Garment } from "./types.ts";
 
 function g(
@@ -80,5 +81,75 @@ describe("guessTuck", () => {
     assert.equal(resolveTuck({ ...ox, tuck: "in" }, "weekend"), "in");
     const camp = g({ id: "c", name: "Linen camp collar", subtype: "camp shirt" });
     assert.equal(resolveTuck(camp, "weekend"), "out");
+  });
+});
+
+function pants(): Garment {
+  return g({ id: "pants", name: "Charcoal trousers", subtype: "trousers", category: "bottom" });
+}
+
+describe("lookTuckDecision", () => {
+  it("a shirt set to either follows the occasion", () => {
+    const shirt = g({ id: "s", name: "Blue striped shirt", subtype: "shirt", tuck: "either" });
+    const pieces = [shirt, pants()];
+    assert.equal(lookTuckDecision(pieces, "weekend"), "out");
+    assert.equal(lookTuckDecision(pieces, "weekday"), "in");
+    assert.equal(tuckMark("out", shirt), "untucked");
+    assert.equal(tuckMark("in", shirt), "tucked");
+  });
+
+  it("a saved tuck wins over the occasion", () => {
+    const inn = g({ id: "s", name: "White oxford", subtype: "oxford", tuck: "in" });
+    const out = g({ id: "s", name: "White oxford", subtype: "oxford", tuck: "out" });
+    assert.equal(lookTuckDecision([inn, pants()], "weekend"), "in");
+    assert.equal(lookTuckDecision([out, pants()], "weekday"), "out");
+  });
+
+  it("a never-tuck habit wears the lead out", () => {
+    const shirt = g({ id: "s", name: "White oxford", subtype: "oxford", tuck: "either" });
+    assert.equal(lookTuckDecision([shirt, pants()], "weekday", ["s"]), "out");
+  });
+
+  it("a knit sweater either is out on the weekend, and a saved out stays out", () => {
+    const either = g({ id: "k", name: "Grey knit sweater", subtype: "sweater", tuck: "either" });
+    const saved = g({
+      id: "k",
+      name: "Brown speckled knit sweater",
+      subtype: "sweater",
+      tuck: "out",
+    });
+    assert.equal(isKnitTop(either), true);
+    assert.equal(lookTuckDecision([either, pants()], "weekend"), "out");
+    assert.equal(lookTuckDecision([saved, pants()], "weekday"), "out");
+  });
+
+  it("a knit worn in has no tuck label", () => {
+    const knit = g({
+      id: "k",
+      name: "Cream ribbed half-zip sweater",
+      subtype: "half-zip sweater",
+      tuck: "either",
+    });
+    assert.equal(lookTuckDecision([knit, pants()], "weekday"), "in");
+    assert.equal(tuckMark("in", knit), null);
+    assert.equal(tuckMark("out", knit), "untucked");
+    assert.equal(tuckMark("in", g({ id: "s", name: "White oxford", subtype: "oxford" })), "tucked");
+  });
+
+  it("a knit over a shirt is the lead", () => {
+    const shirt = g({ id: "s", name: "White oxford", subtype: "oxford shirt" });
+    const knit = g({ id: "k", name: "Grey knit sweater", subtype: "sweater" });
+    assert.equal(leadTop([shirt, knit, pants()])?.id, "k");
+    assert.equal(isShirtLike(g({ id: "p", name: "Knit polo", subtype: "polo" })), true);
+    assert.equal(isKnitTop(g({ id: "p", name: "Knit polo", subtype: "polo" })), false);
+    assert.equal(isKnitTop(g({ id: "w", name: "Grey crew sweatshirt", subtype: "sweatshirt" })), false);
+  });
+
+  it("a hoodie alone, or a top with no bottom, is none", () => {
+    const hoodie = g({ id: "h", name: "Grey hoodie", subtype: "hoodie" });
+    const shirt = g({ id: "s", name: "White oxford", subtype: "oxford" });
+    assert.equal(lookTuckDecision([hoodie, pants()], "weekend"), "none");
+    assert.equal(lookTuckDecision([shirt], "weekend"), "none");
+    assert.equal(tuckMark("none", shirt), null);
   });
 });

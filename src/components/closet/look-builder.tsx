@@ -4,11 +4,12 @@ import { GarmentImg } from "@/components/closet/gimg";
 import { OnMeButton } from "@/components/closet/on-me";
 import { lookbookPool } from "@/lib/lookbook";
 import { lookOpinion, suggestLine } from "@/lib/look-opinion";
-import { nameLook } from "@/lib/look";
+import { leadTop, lookTuckDecision, nameLook } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { slotOf, todayOccasion } from "@/lib/style";
 import { useCloset } from "@/lib/store";
 import { emptyTaste } from "@/lib/taste";
+import { useTuckHabits } from "@/lib/use-tuck-habits";
 import type { Garment, Occasion, Season } from "@/lib/types";
 import type { House } from "@/lib/houses";
 import { cn, todayISO } from "@/lib/utils";
@@ -52,6 +53,7 @@ export function LookBuilder({
   const [hover, setHover] = useState<{ slot: SlotId; id: string } | null>(null);
   const [changedSlot, setChangedSlot] = useState<SlotId | null>(null);
   const dragId = useRef<string | null>(null);
+  const habits = useTuckHabits();
 
   const pool = useMemo(
     () => lookbookPool(garmentsAll.filter((g) => !g.archived)),
@@ -255,7 +257,14 @@ export function LookBuilder({
         <p data-look-verdict className="text-sm text-ink">{line}</p>
       ) : null}
 
-      {pieces.length > 0 && <FlatLay pieces={pieces} className="max-w-xs" />}
+      {pieces.length > 0 && (
+        <FlatLay
+          pieces={pieces}
+          className="max-w-xs"
+          tuck={occasion ? lookTuckDecision(pieces, occasion, habits) : undefined}
+          leadId={occasion ? leadTop(pieces)?.id : undefined}
+        />
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button

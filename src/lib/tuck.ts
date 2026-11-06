@@ -23,9 +23,44 @@ export function tuckOf(g: Garment): Tuck {
   return g.tuck ?? guessTuck(g);
 }
 
-function isShirtLike(g: Garment): boolean {
+export function isShirtLike(g: Garment): boolean {
   const b = `${g.subtype} ${g.name}`.toLowerCase();
   return /shirt|oxford|polo|rugby|camp|overshirt|collar|henley/.test(b);
+}
+
+/**
+ * Sweaters, half-zips, quarter-zips, cardigans, and knit or fleece pullovers.
+ * A knit polo or knit shirt stays a shirt. A hoodie, and a plain sweatshirt
+ * with none of these words, is not a knit.
+ */
+export function isKnitTop(g: Garment): boolean {
+  if (isShirtLike(g)) return false;
+  const blob = `${g.subtype} ${g.name}`.toLowerCase();
+  if (/hoodie/.test(blob)) return false;
+  return /sweater|knit|cardigan|half-?zip|quarter-?zip|pullover|fleece/.test(blob);
+}
+
+/**
+ * The word on the plate's label. A knit worn in draws tucked and says nothing:
+ * the word "tucked" is never shown on a sweater or knit.
+ */
+export function tuckMark(
+  d: "in" | "out" | "none",
+  lead: Garment | null,
+): "untucked" | "tucked" | null {
+  switch (d) {
+    case "out":
+      return "untucked";
+    case "in":
+      if (lead && isKnitTop(lead)) return null;
+      return "tucked";
+    case "none":
+      return null;
+    default: {
+      const never: never = d;
+      return never;
+    }
+  }
 }
 
 /** How this shirt is worn for this occasion. User chip in/out still wins. */

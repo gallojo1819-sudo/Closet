@@ -56,7 +56,7 @@ import {
 import { CATEGORIES, SEASONS, type Category, type Garment } from "@/lib/types";
 import { seasonsOf } from "@/lib/season";
 import { findThisHref } from "@/lib/scan";
-import { guessTuck, tuckOf } from "@/lib/tuck";
+import { guessTuck } from "@/lib/tuck";
 import { fetchCloudBlob } from "@/lib/cloud/blobs";
 import { useCloset } from "@/lib/store";
 import { bindClosetPiece } from "@/lib/stylist-page";
@@ -738,21 +738,28 @@ export function GarmentDetailSheet({
                       ["out", "Untucked"],
                       ["either", "Either"],
                     ] as const
-                  ).map(([id, label]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => write({ tuck: id })}
-                      className={cn(
-                        "micro border px-2 py-1",
-                        tuckOf(garment) === id
-                          ? "border-ink bg-ink text-paper"
-                          : "border-hairline text-ink-soft",
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  ).map(([id, label]) => {
+                    const saved = garment.tuck === id;
+                    const guess = garment.tuck == null && guessTuck(garment) === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => write({ tuck: id })}
+                        className={cn(
+                          "micro border px-2 py-1",
+                          saved
+                            ? "border-ink bg-ink text-paper"
+                            : guess
+                              ? "border-ink text-ink"
+                              : "border-hairline text-ink-soft",
+                        )}
+                      >
+                        {label}
+                        {guess ? " (guess)" : ""}
+                      </button>
+                    );
+                  })}
                 </div>
                 <p className="text-sm text-ink-soft">
                   An oxford tucks in. A camp collar stays out.

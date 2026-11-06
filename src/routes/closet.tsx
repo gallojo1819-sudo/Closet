@@ -4,7 +4,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { BodyPortal } from "@/components/closet/body-portal";
 import { GarmentDetail } from "@/components/closet/detail";
 import { IdleMount } from "@/components/closet/idle-mount";
-import { FlatLay } from "@/components/closet/flat-lay";
+import { HeroLookCard } from "@/components/closet/hero-look-card";
 import { LookSheet } from "@/components/closet/look-sheet";
 import { OutlineJacket } from "@/components/closet/outline";
 import { GarmentTile } from "@/components/closet/tile";
@@ -27,6 +27,7 @@ import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
 import { closetFirstRows } from "@/lib/cloud/open-plan";
 import { WRONG_ACCOUNT } from "@/lib/cloud/home";
 import { useCloset } from "@/lib/store";
+import { useTuckHabits } from "@/lib/use-tuck-habits";
 import { CATEGORIES, type Category, type Garment, type Look } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,7 @@ function ClosetPage() {
   const [busy, setBusy] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const habits = useTuckHabits();
   const importRef = useRef<HTMLInputElement>(null);
   const tileEls = useRef(new Map<string, HTMLElement>());
 
@@ -482,9 +484,12 @@ function ClosetPage() {
                       onClick={() => setHeroOpen(look)}
                       className="block w-full text-left"
                     >
-                      <FlatLay pieces={pieces} className="pointer-events-none" passive />
-                      <p className="mt-2 text-sm">{look.name}</p>
-                      <p className="micro text-ink-soft">{look.occasion}</p>
+                      <HeroLookCard
+                        pieces={pieces}
+                        name={look.name}
+                        occasion={look.occasion}
+                        habits={habits}
+                      />
                     </button>
                   </li>
                 );
