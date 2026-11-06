@@ -9,7 +9,7 @@ import { CHECK_DEADLINE_MS, CHECK_SERVER_MS } from "../ai-budget.ts";
 import { AI_LIMITS, SIGNED_OUT, limitMessage, takeLocal, type AiLimit } from "../auth/ai-quota.ts";
 import { testCloset } from "../__fixtures__/snapshot.ts";
 import { HOUSE_WORDS, RULE_ID } from "../outfit-check.ts";
-import { CHECK_TIMEOUT_TEXT, CHECK_UNCLEAR_TEXT } from "../outfit-check-copy.ts";
+import { CHECK_NO_KEY_TEXT, CHECK_OVERSIZE_TEXT, CHECK_TIMEOUT_TEXT, CHECK_TYPE_TEXT, CHECK_UNCLEAR_TEXT } from "../outfit-check-copy.ts";
 import { submitOutfitCheck } from "../outfit-check-client.ts";
 import { livePool } from "../rack.ts";
 import { oversizedOf } from "../stylist/oversized.ts";
@@ -278,16 +278,69 @@ for (const date of DATES) {
   });
 }
 
+/** A signed-in gate that counts units, and a post that fails the test if it is called. */
+async function rejectedSpend(image: string, over: Partial<CheckOutfitDeps> = {}) {
+  let posts = 0;
+  let takes = 0;
+  const post: XaiPost = async () => {
+    posts += 1;
+    return { ok: false, json: null, error: "no" };
+  };
+  const res = await checkOutfitCore(
+    inputOf({ image }),
+    depsOf(post, {
+      gate: async () => {
+        takes += 1;
+        return { ok: true };
+      },
+      ...over,
+    }),
+  );
+  return { res, posts, takes };
+}
+
 describe("check outfit gates, log, and shape", () => {
   it("a signed-out caller gets SIGNED_OUT and no POST", async () => {
     let posts = 0;
+    let takes = 0;
     const post: XaiPost = async () => {
       posts += 1;
       return { ok: false, json: null, error: "no" };
     };
-    const res = await checkOutfitCore(inputOf(), depsOf(post, { gate: async () => ({ ok: false, error: SIGNED_OUT }) }));
+    const res = await checkOutfitCore(
+      inputOf({ image: "data:image/gif;base64,R0lGODlh" }),
+      depsOf(post, {
+        identify: async () => ({ ok: false, error: SIGNED_OUT }),
+        gate: async () => {
+          takes += 1;
+          return { ok: true };
+        },
+      }),
+    );
     expect(posts).toBe(0);
+    expect(takes).toBe(0);
     expect(res).toEqual({ ok: false, error: SIGNED_OUT, reason: "signed_out" });
+  });
+
+  it("a bad image type spends no quota unit", async () => {
+    const spent = await rejectedSpend("data:image/gif;base64,R0lGODlh");
+    expect(spent.posts).toBe(0);
+    expect(spent.takes).toBe(0);
+    expect(spent.res).toEqual({ ok: false, error: CHECK_TYPE_TEXT, reason: "image" });
+  });
+
+  it("an oversized image spends no quota unit", async () => {
+    const spent = await rejectedSpend(`data:image/jpeg;base64,${"A".repeat(2_200_000)}`);
+    expect(spent.posts).toBe(0);
+    expect(spent.takes).toBe(0);
+    expect(spent.res).toEqual({ ok: false, error: CHECK_OVERSIZE_TEXT, reason: "image" });
+  });
+
+  it("a missing key spends no quota unit", async () => {
+    const spent = await rejectedSpend(IMAGE, { hasKey: false });
+    expect(spent.posts).toBe(0);
+    expect(spent.takes).toBe(0);
+    expect(spent.res).toEqual({ ok: false, error: CHECK_NO_KEY_TEXT, reason: "no_key" });
   });
 
   it("the 21st check in a day is the limit line and no POST", async () => {

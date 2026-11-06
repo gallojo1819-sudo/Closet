@@ -4,6 +4,7 @@
  * image stays in this request: it is not logged, stored, or written into a note.
  */
 import { createServerFn } from "@tanstack/react-start";
+import { SIGNED_OUT } from "./auth/ai-quota";
 import { callerGate, closetCaller } from "./auth/closet-caller";
 import { checkOutfitCore, type CheckOutfitResult } from "./assistant/check-outfit";
 import type { XaiPost } from "./assistant/xai-adapter";
@@ -25,10 +26,12 @@ export const checkOutfit = createServerFn({ method: "POST" })
     }) => input,
   )
   .handler(async ({ data, context }): Promise<CheckOutfitResult> => {
-    /* One outfit_check unit for the whole check, not one unit per model call. */
+    /* Signed out spends nothing. The one outfit_check unit is taken inside the core, after the photo and the key are accepted, and still before any fetch. */
+    const identify = async () => (context.callerId ? { ok: true as const } : { ok: false as const, error: SIGNED_OUT });
     const gate = () => callerGate(context, "checkOutfit");
     return checkOutfitCore(data, {
       post: checkOutfitPost,
+      identify,
       gate,
       hasKey: Boolean(process.env.XAI_API_KEY),
       dev: process.env.NODE_ENV !== "production",

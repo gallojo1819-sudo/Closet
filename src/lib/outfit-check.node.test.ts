@@ -29,8 +29,10 @@ describe("outfit check quota and budget", () => {
     assert.ok(start >= 0);
     const block = src.slice(start);
     assert.match(block, /\.middleware\(\[closetCaller\]\)/);
+    const whoAt = block.indexOf("callerId");
     const gateAt = block.indexOf("callerGate(");
     const fetchAt = block.indexOf("fetch(");
+    assert.ok(whoAt > 0 && whoAt < gateAt, "signed-out check before the quota take");
     assert.ok(gateAt > 0 && fetchAt > gateAt, "callerGate before fetch");
     assert.match(block, /checkOutfit/);
     assert.match(block, /NODE_ENV !== "production"/);

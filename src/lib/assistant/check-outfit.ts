@@ -70,7 +70,10 @@ export type CheckOutfitResult =
 
 export type CheckOutfitDeps = {
   post: XaiPost;
+  /** Spends one outfit_check unit. Called only after the photo and the key are accepted. */
   gate: () => Promise<GateResult>;
+  /** Signed-out check that does not spend a unit. Runs before the photo is judged. */
+  identify?: () => Promise<GateResult>;
   hasKey: boolean;
   now?: () => number;
   date?: string;
@@ -332,10 +335,19 @@ function gateReason(error: string): "signed_out" | "quota" {
 }
 
 /**
- * Run one check. `gate` is awaited once, before any POST. A refusal, a missing key, or a
- * photo the server will not send returns without a model call.
+ * Run one check. A signed-out caller is refused first. A photo of the wrong type, an
+ * oversized photo, or a missing key returns before any quota unit is taken. The one unit
+ * is taken after those checks and before any model POST.
  */
 export async function checkOutfitCore(input: CheckOutfitInput, deps: CheckOutfitDeps): Promise<CheckOutfitResult> {
+  if (deps.identify) {
+    const who = await deps.identify();
+    if (!who.ok) return { ok: false, error: who.error, reason: gateReason(who.error) };
+  }
+  const imageError = imageProblem(input.image);
+  if (imageError) return { ok: false, error: imageError, reason: "image" };
+  if (!deps.hasKey) return { ok: false, error: CHECK_NO_KEY_TEXT, reason: "no_key" };
+
   const gate = await deps.gate();
   if (!gate.ok) return { ok: false, error: gate.error, reason: gateReason(gate.error) };
 
@@ -375,9 +387,6 @@ export async function checkOutfitCore(input: CheckOutfitInput, deps: CheckOutfit
   };
 
   try {
-    if (!deps.hasKey) return log({ ok: false, error: CHECK_NO_KEY_TEXT, reason: "no_key" });
-    const imageError = imageProblem(input.image);
-    if (imageError) return log({ ok: false, error: imageError, reason: "image" });
     if (remaining() === 0) return log({ ok: false, error: CHECK_TIMEOUT_TEXT, reason: "timeout" });
 
     const pool = livePool(input.garments ?? []);
