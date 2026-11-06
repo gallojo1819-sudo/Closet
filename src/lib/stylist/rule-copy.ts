@@ -52,6 +52,8 @@ export const RULE_SENTENCES: Record<string, string> = {
   "JKT-LAY-6": "That knit is a layer, not a jacket.",
   "JKT-LAY-7": "Jacket and trousers in the same cloth and colour read as an odd suit.",
   "JKT-LAY-8": "A graphic piece with a sport coat.",
+  "JKT-LAY-9": "An oversized top only goes under an oversized jacket.",
+  "JKT-LAY-10": "This shirt is worn out, and it would hang below the vest. Try a shirt you tuck or a knit.",
   "GRAPHIC-COAT": "A graphic piece with a sport coat.",
   GRAPHIC_COAT: "A graphic piece with a sport coat.",
   SLOTS: "One top, one bottom and one pair of shoes per look.",

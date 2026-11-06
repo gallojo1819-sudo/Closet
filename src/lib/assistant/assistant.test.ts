@@ -20,6 +20,7 @@ import {
   type ToolDef,
 } from "./registry.ts";
 import { MAX_STEPS_TEXT, REPEAT_TEXT, runAssistant, type ModelMessage } from "./loop.ts";
+import { OVERSIZED_TOP_LABELS } from "../stylist/oversized.ts";
 import { buildAssistantSystem, OVERSIZED_KNITS, RULES_BOTTOM, RULES_TOP } from "./system.ts";
 import { HOUSE_WORDS, RULE_ID } from "../outfit-check.ts";
 import { isLegal } from "../stylist/legal.ts";
@@ -346,12 +347,15 @@ describe("system prompt", () => {
     expect(top.split("\n").length).toBe(bottom.split("\n").length);
   });
 
-  it("states the oversized-knit rule in both blocks: the six knits, only under an oversized jacket or coat, never a regular-fit one", () => {
-    expect(OVERSIZED_KNITS.length).toBe(6);
+  it("states the oversized-top rule from the oversized list, and tucks a shirt under a vest", () => {
+    expect(OVERSIZED_KNITS).toEqual(OVERSIZED_TOP_LABELS);
+    expect(OVERSIZED_KNITS.length).toBeGreaterThan(0);
     for (const block of [top, bottom]) {
       for (const knit of OVERSIZED_KNITS) expect(block).toContain(knit);
       expect(block).toMatch(/only under an oversized jacket or coat/);
       expect(block).toMatch(/never under a regular-fit/);
+      expect(block).toMatch(/Under a vest or cropped layer, a shirt is tucked/);
+      expect(block).toMatch(/an untucked or oversized top does not go under one/);
     }
   });
 

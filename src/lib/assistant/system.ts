@@ -6,27 +6,20 @@
  * no rule ids, no scores. Pure: no React, no store, no network.
  */
 import { pieceLabel } from "../piece-label.ts";
+import { OVERSIZED_TOP_LABELS } from "../stylist/oversized.ts";
 import type { StylistPageContext } from "../stylist-page.ts";
 import type { Garment } from "../types.ts";
 
 export const RULES_TOP = "HARD RULES";
 export const RULES_BOTTOM = "HARD RULES, AGAIN";
 
-/**
- * The oversized knits (Joe, Oct 14): they go only under an oversized jacket or coat. Stated
- * here for the model; the engine does not enforce it yet (that is the Knitwear round), so no
- * tool result may claim it does.
- */
-export const OVERSIZED_KNITS = [
-  "grey long-sleeve polo",
-  "light blue denim overshirt",
-  "blue and ivory diamond sweater",
-  "cream fleece half-zip",
-  "brown knit zip sweater",
-  "cream cable cardigan",
-] as const;
+/** Tops from the oversized list. The engine enforces the same list. */
+export const OVERSIZED_KNITS: readonly string[] = OVERSIZED_TOP_LABELS;
 
-export const OVERSIZED_KNIT_RULE = `The oversized knits (the ${OVERSIZED_KNITS.slice(0, -1).join(", the ")} and the ${OVERSIZED_KNITS.at(-1)}) go only under an oversized jacket or coat, never under a regular-fit one.`;
+export const OVERSIZED_KNIT_RULE = `The oversized tops (the ${OVERSIZED_KNITS.slice(0, -1).join(", the ")} and the ${OVERSIZED_KNITS.at(-1)}) go only under an oversized jacket or coat, never under a regular-fit one.`;
+
+export const VEST_LAYER_RULE =
+  "Under a vest or cropped layer, a shirt is tucked; an untucked or oversized top does not go under one.";
 
 export const HARD_RULES: readonly string[] = [
   "A look is one top, one bottom and one shoe, with a jacket only when the outfit wants one.",
@@ -36,6 +29,7 @@ export const HARD_RULES: readonly string[] = [
   "A hoodie is a top, never a coat.",
   "A camp collar is the only top in its look: nothing over it, nothing under it.",
   OVERSIZED_KNIT_RULE,
+  VEST_LAYER_RULE,
   "Occasion ids are exactly weekday, out, weekend, comfy and travel.",
   "Only pieces the user owns, by the tools' ids and labels. Never shopping, links, prices, brands, house names, rule ids or scores.",
   "Never \"anything goes\": every answer commits to pieces or asks one question.",

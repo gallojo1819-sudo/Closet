@@ -1,4 +1,6 @@
 import { mapOccasion, type Garment, type Occasion } from "./types.ts";
+import { oversizedOf } from "./stylist/oversized.ts";
+import { isShortOuter } from "./stylist/short-outer.ts";
 
 export type Tuck = "in" | "out" | "either";
 
@@ -21,6 +23,19 @@ export function guessTuck(
 
 export function tuckOf(g: Garment): Tuck {
   return g.tuck ?? guessTuck(g);
+}
+
+/**
+ * A shirt that cannot be tucked: the saved out chip, an untuck note, a camp or
+ * straight hem, or an oversized top. A vest does not tuck these.
+ */
+export function shirtLockedOut(g: Garment): boolean {
+  if (g.tuck === "out") return true;
+  const notes = (g.notes ?? "").toLowerCase();
+  if (/untuck|\buntucked\b/.test(notes)) return true;
+  if (guessTuck(g) === "out") return true;
+  if (oversizedOf(g)) return true;
+  return false;
 }
 
 export function isShirtLike(g: Garment): boolean {
@@ -69,12 +84,27 @@ export function tuckMark(
   }
 }
 
-/** How this shirt is worn for this occasion. User chip in/out still wins. */
+/**
+ * How this shirt is worn. An oversized top is always out. A shirt under a vest
+ * or cropped layer is in, unless it is locked out. A learned never-tuck habit
+ * comes after those two. The saved chip still wins for every other look.
+ */
 export function resolveTuck(
   g: Garment,
   occasion?: Occasion,
-  pieces?: Garment[],
+  pieces?: readonly Garment[],
+  neverTuck?: readonly string[],
 ): "in" | "out" {
+  if (oversizedOf(g)) return "out";
+  if (
+    (pieces ?? []).some(isShortOuter) &&
+    isShirtLike(g) &&
+    !isKnitTop(g) &&
+    !shirtLockedOut(g)
+  ) {
+    return "in";
+  }
+  if (neverTuck?.includes(g.id)) return "out";
   if (g.tuck === "in") return "in";
   if (g.tuck === "out") return "out";
   const notes = (g.notes ?? "").toLowerCase();
@@ -110,11 +140,10 @@ export function tuckDressingLines(
   occasion?: Occasion,
   neverTuck?: readonly string[],
 ): string {
-  const habits = new Set(neverTuck ?? []);
   const lines: string[] = [];
   for (const g of pieces) {
     if (!isShirtLike(g)) continue;
-    const how = habits.has(g.id) ? "out" : resolveTuck(g, occasion, pieces);
+    const how = resolveTuck(g, occasion, pieces, neverTuck);
     if (how === "in") {
       lines.push(
         `Tuck THIS shirt (${g.name}). Shirt-tail in, clean belt line. Not a blousy untuck.`,

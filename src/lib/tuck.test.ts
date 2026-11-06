@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { liveSnapshot } from "./__fixtures__/snapshot.ts";
 import { leadTop, lookTuckDecision } from "./look.ts";
 import { slotOf } from "./style.ts";
-import { guessTuck, isKnitTop, isShirtLike, resolveTuck, tuckMark, tuckOf } from "./tuck.ts";
+import { guessTuck, isKnitTop, isShirtLike, resolveTuck, shirtLockedOut, tuckDressingLines, tuckMark, tuckOf } from "./tuck.ts";
 import type { Garment } from "./types.ts";
 
 function g(
@@ -183,5 +183,69 @@ describe("lookTuckDecision", () => {
     assert.ok(sweat);
     const worn = [sweat!, chinos!];
     assert.equal(tuckMark(lookTuckDecision(worn, "weekday"), leadTop(worn)), null);
+  });
+});
+
+const byId = new Map(liveSnapshot.map((g) => [g.id, g]));
+
+function must(id: string): Garment {
+  const piece = byId.get(id);
+  assert.ok(piece, id);
+  return piece!;
+}
+
+describe("oversized tops are always untucked", () => {
+  const trousers = must("g_k75fdfdsnak0");
+  const loafers = must("g_8ukg5mi9r3fc");
+  const control = must("g_kh5r3xy9r1i5");
+
+  for (const id of ["g_d1awqw83gd3c", "g_v7uvadckh79p", "g_gp53xkrmem9b"]) {
+    it(`${id} is out on weekday and out`, () => {
+      const lead = must(id);
+      for (const occasion of ["weekday", "out"] as const) {
+        const pieces = [lead, trousers, loafers];
+        assert.equal(lookTuckDecision(pieces, occasion), "out", occasion);
+        assert.equal(tuckMark("out", lead), "untucked");
+      }
+    });
+  }
+
+  it("a non-oversized shirt stays tucked on a weekday", () => {
+    assert.equal(lookTuckDecision([control, trousers, loafers], "weekday"), "in");
+    assert.equal(shirtLockedOut(control), false);
+  });
+});
+
+describe("a shirt under a vest is tucked", () => {
+  const cords = must("g_cfm8n594jea7");
+  const boots = must("g_b4zsf3dfrhdv");
+  const vest = must("g_ef0u3ljnwa09");
+  const flannel = must("g_2b6fao81vqrs");
+  const light = must("g_j4qu90fgv347");
+  const chore = must("g_8qqqzpwxuwti");
+  const occasions = ["weekday", "weekend", "out", "travel"] as const;
+
+  function neverOut(pieces: Garment[], label: string) {
+    for (const occasion of occasions) {
+      assert.notEqual(lookTuckDecision(pieces, occasion), "out", `${label} ${occasion}`);
+    }
+  }
+
+  it("blue plaid flannel under the vest is tucked, including a learned habit and a chore over it", () => {
+    const pieces = [flannel, vest, cords, boots];
+    assert.equal(lookTuckDecision(pieces, "weekend"), "in");
+    assert.equal(tuckMark("in", leadTop(pieces)), "tucked");
+    assert.match(tuckDressingLines(pieces, "weekend"), /Tuck THIS shirt/);
+    neverOut(pieces, "flannel");
+    neverOut([light, vest, cords, boots], "light flannel");
+    neverOut([flannel, vest, chore, cords, boots], "chore");
+    assert.equal(lookTuckDecision(pieces, "weekend", [flannel.id]), "in");
+  });
+
+  it("an oversized top under the vest stays out", () => {
+    const polo = must("g_reesb6nbrmm4");
+    const knit = must("g_gp53xkrmem9b");
+    assert.equal(lookTuckDecision([polo, vest, cords, boots], "weekend"), "out");
+    assert.equal(lookTuckDecision([knit, vest, cords, boots], "weekend"), "out");
   });
 });

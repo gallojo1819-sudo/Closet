@@ -13,7 +13,7 @@ import { isKnitTop, isShirtLike, tuckDressingLines, tuckMark } from "./tuck.ts";
 import type { Garment, Occasion } from "./types.ts";
 
 const PIN = "2026-11-05";
-const PARITY_HASH = "3bcaa579b38275f6e7d4f2c42805341fd03b0ae890eb91d6a4eb28b7edd73e40";
+const PARITY_HASH = "9f1585b10f3522f775a856cfd72703e2bf8dff1028d44f6ac59993ecd7bb971d";
 
 afterEach(() => {
   vi.useRealTimers();

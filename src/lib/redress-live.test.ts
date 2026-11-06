@@ -238,8 +238,15 @@ describe("six Re-dresses on the live closet, every chapter", () => {
     for (const run of RUNS) {
       for (const tap of run.taps) {
         const counts = twinCounts(tap.page);
-        expect(counts.get(WHITE_SNEAKERS) ?? 0, `${run.occasion} tap ${tap.n}: white sneakers`).toBeLessThanOrEqual(SCREEN_CAP);
-        expect(counts.get(BROWN_SUEDE_JACKET) ?? 0, `${run.occasion} tap ${tap.n}: brown suede jacket`).toBeLessThanOrEqual(SCREEN_CAP);
+        /* A plain row the page still owed may hold one card past the strict cap. The rest of the page stays at two. */
+        const relaxed = tap.rows.some((row) => row.relaxed);
+        const cap = relaxed ? RELAXED_CAP : SCREEN_CAP;
+        expect(counts.get(WHITE_SNEAKERS) ?? 0, `${run.occasion} tap ${tap.n}: white sneakers`).toBeLessThanOrEqual(cap);
+        expect(counts.get(BROWN_SUEDE_JACKET) ?? 0, `${run.occasion} tap ${tap.n}: brown suede jacket`).toBeLessThanOrEqual(cap);
+        const strictPage = [...tap.week, ...tap.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
+        const strictCounts = twinCounts(strictPage);
+        expect(strictCounts.get(WHITE_SNEAKERS) ?? 0, `${run.occasion} tap ${tap.n}: white sneakers outside a relaxed row`).toBeLessThanOrEqual(SCREEN_CAP);
+        expect(strictCounts.get(BROWN_SUEDE_JACKET) ?? 0, `${run.occasion} tap ${tap.n}: brown suede outside a relaxed row`).toBeLessThanOrEqual(SCREEN_CAP);
         sneakers += counts.get(WHITE_SNEAKERS) ?? 0;
         suede += counts.get(BROWN_SUEDE_JACKET) ?? 0;
         for (const row of [{ title: "week", looks: tap.week }, ...tap.rows]) {
