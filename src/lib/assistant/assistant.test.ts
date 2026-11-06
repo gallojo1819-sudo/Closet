@@ -5,7 +5,7 @@
  * source pins that keep src/lib/assistant off the server, the network and the persisted closet.
  */
 import { readdirSync, readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { LIVE_SNAPSHOT_COUNT, testCloset } from "../__fixtures__/snapshot.ts";
 import { assistantRegistry, LIST_CAP, READ_TOOLS, UNMEASURED } from "./tools.ts";
@@ -251,6 +251,14 @@ describe("read tools", () => {
 });
 
 describe("loop", () => {
+  beforeAll(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-18T16:00:00Z"));
+  });
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
   const system = buildAssistantSystem({ pool: POOL });
   const base = { registry: assistantRegistry, ctx: ctxOf(), system };
 
