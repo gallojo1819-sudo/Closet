@@ -172,16 +172,20 @@ function markUnnamed(id: string) {
  * Tag after the garment is already in the closet. One retry on a timeout or a failure.
  * A worn decision that carries a fallback (a jacket, a pair of shoes) is applied.
  * Both failures leave "New piece" and the needs-category flag. Tests inject `tag`.
+ * The edit snapshot is taken when the job is queued, so an edit made while it waits behind other tags is kept.
  */
 export function enqueueTag(
   id: string,
   cover: string,
   opts?: { tag?: TagFn; hint?: TagHint | null; timeoutMs?: number; mirror?: () => void },
 ): Promise<void> {
+  const queued = useCloset.getState().garments.find((g) => g.id === id);
+  const snap0 = queued ? stampOf(queued) : null;
   const run = tagChain.then(async () => {
     const started = useCloset.getState().garments.find((g) => g.id === id);
     if (!started) return;
-    let snap = stampOf(started);
+    let snap = snap0 ?? stampOf(started);
+    if (rowEdited(id, snap)) return;
     const tagFn = opts?.tag ?? ((image: string) => tagGarment({ data: { image } }));
     const ms = opts?.timeoutMs ?? CAMERA_TAG_MS;
     try {
