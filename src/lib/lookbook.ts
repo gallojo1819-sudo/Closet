@@ -1123,11 +1123,11 @@ function starLook(
   seen: Set<string>,
   previousIds: string[],
   turn = 0,
+  today = todayNY(),
 ): Look | null {
   if (isUnslottedLock(g)) return null;
   const pool = lookbookPool(garments);
   const byId = new Map(pool.map((x) => [x.id, x]));
-  const today = todayNY();
   const ids = pickLook(pool, {
     occasion,
     weather: weatherForOcc(occasion),
@@ -1145,7 +1145,10 @@ function starLook(
   const pieces = ordered.map((id) => byId.get(id)).filter((x): x is Garment => Boolean(x));
   if (pieces.length < 3) return null;
   if (lookClashes(pieces)) return null;
-  if (!anchorLookOk(g, pieces)) return null;
+  if (!anchorLookOk(g, pieces)) {
+    seen.add(key);
+    return null;
+  }
   return {
     id: `hero_${g.id}_${occasion}_${key.slice(0, 10)}`,
     name: nameOf(pieces),
@@ -1166,14 +1169,15 @@ function starLook(
 export function looksForHero(
   g: Garment,
   garments: Garment[],
-  opts?: { seen?: string[] },
+  opts?: { seen?: string[]; today?: string },
 ): Look[] {
   const seen = new Set(opts?.seen ?? []);
   const previous: string[] = [];
   const out: Look[] = [];
+  const today = opts?.today ?? todayNY();
   const occasions = heroOccasionsFor(g, lookbookPool(garments));
   const take = (occasion: Occasion, turn: number): boolean => {
-    const look = starLook(g, garments, occasion, seen, previous, turn);
+    const look = starLook(g, garments, occasion, seen, previous, turn, today);
     if (!look) return false;
     const pieces = look.garmentIds
       .map((id) => garments.find((x) => x.id === id))
@@ -1184,10 +1188,12 @@ export function looksForHero(
     previous.push(...look.garmentIds.filter((id) => id !== g.id));
     return true;
   };
-  /* An occasion whose first draw finds nothing is dropped: a later turn only reseeds the same exhaustive search. */
+  /* An occasion whose first draw finds nothing is dropped. A draw the anchor check rejects stays:
+     its combo is in `seen`, and a later turn of the same occasion (below) tries the next one. */
   const live = occasions.filter((occasion) => {
-    const found = take(occasion, 0);
-    return found;
+    const before = seen.size;
+    if (take(occasion, 0)) return true;
+    return seen.size > before;
   });
   if (out.length >= HERO_LOOKS) return out.slice(0, HERO_LOOKS);
   /* Further turns of the occasions that dressed the piece, in order, until the count is reached or the draws run dry. */

@@ -535,20 +535,84 @@ export function isUnslottedLock(g: Garment): boolean {
   return true;
 }
 
+type WornRole = "top" | "mid" | "outer" | "bottom" | "footwear" | "other";
+
 /**
- * The look wears the anchor. A core-slot anchor is the only piece in its slot
- * (a shoe anchor is the only footwear; a top anchor is the only top, and an outer may sit with it).
+ * The role each piece is worn in inside this look. Same split as slotPieces: an outerEligible
+ * layer is the outer when the look already has a top, not a second top. A mid stays a mid.
+ * A second shirt stays a top.
+ */
+function wornRoles(pieces: readonly Garment[]): Map<string, WornRole> {
+  const role = new Map<string, WornRole>();
+  const dual: Garment[] = [];
+  let hasTop = false;
+  let hasOuter = false;
+  let hasMid = false;
+  const set = (id: string, next: WornRole) => {
+    role.set(id, next);
+    if (next === "top") hasTop = true;
+    if (next === "outer") hasOuter = true;
+    if (next === "mid") hasMid = true;
+  };
+  for (const g of pieces) {
+    const slot = slotOf(g);
+    if (slot === "footwear") {
+      set(g.id, "footwear");
+      continue;
+    }
+    if (slot === "bottom") {
+      set(g.id, "bottom");
+      continue;
+    }
+    if (jacketInfo(g).outerEligible) {
+      dual.push(g);
+      continue;
+    }
+    const worn = wearSlot(g);
+    if (worn === "mid") {
+      set(g.id, "mid");
+      continue;
+    }
+    if (worn === "outer") {
+      set(g.id, "outer");
+      continue;
+    }
+    if (slot === "top" || slot === "dress") {
+      set(g.id, "top");
+      continue;
+    }
+    if (slot === "outerwear") {
+      set(g.id, "outer");
+      continue;
+    }
+    set(g.id, "other");
+  }
+  for (const g of dual) {
+    if (hasTop && !hasOuter) set(g.id, "outer");
+    else if (!hasTop) set(g.id, "top");
+    else if (!hasMid) set(g.id, "mid");
+    else set(g.id, "other");
+  }
+  return role;
+}
+
+/** The role this piece is worn in inside this look. */
+export function wornRole(g: Garment, pieces: readonly Garment[]): WornRole {
+  return wornRoles(pieces).get(g.id) ?? "other";
+}
+
+/**
+ * The look wears the anchor in its own role. A shoe is the only footwear, a bottom the only
+ * bottom, a top the only piece worn as a top. A mid layer and an outerEligible outer may sit with it.
  */
 export function anchorLookOk(anchor: Garment, pieces: readonly Garment[]): boolean {
   if (!pieces.some((p) => p.id === anchor.id)) return false;
-  const slot = slotOf(anchor);
-  if (slot !== "top" && slot !== "dress" && slot !== "bottom" && slot !== "footwear") return true;
-  const same = pieces.filter((p) => {
-    const s = slotOf(p);
-    if (slot === "top" || slot === "dress") return s === "top" || s === "dress";
-    return s === slot;
-  });
-  return same.length === 1 && same[0]!.id === anchor.id;
+  const roles = wornRoles(pieces);
+  const role = roles.get(anchor.id) ?? "other";
+  if (role !== "top" && role !== "bottom" && role !== "footwear" && role !== "mid") return true;
+  let n = 0;
+  for (const piece of pieces) if ((roles.get(piece.id) ?? "other") === role) n += 1;
+  return n === 1;
 }
 
 function slotTest(g: Garment): Slot | null {

@@ -298,7 +298,11 @@ export function GarmentDetailSheet({
       /* A renamed colour ("Navy trousers") carries its colour tag along. */
       const colors = colorsForName(next, garment.colors);
       const sameColors = colors.length === garment.colors.length && colors.every((c, i) => c === garment.colors[i]);
-      write({ name: next, ...(sameColors ? {} : { colors }) });
+      write({
+        name: next,
+        ...(sameColors ? {} : { colors }),
+        ...(garment.needsCategory && next !== NEW_PIECE_NAME ? { needsCategory: false } : {}),
+      });
       if (!sameColors) setColor(colors[0] ?? "");
     } else setName(garment.name);
   };
@@ -306,7 +310,10 @@ export function GarmentDetailSheet({
   const commitSubtype = () => {
     const next = subtype.trim();
     if (next !== (garment.subtype ?? "")) {
-      write({ subtype: next });
+      write({
+        subtype: next,
+        ...(garment.needsCategory && garment.name.trim() !== NEW_PIECE_NAME ? { needsCategory: false } : {}),
+      });
     }
   };
 

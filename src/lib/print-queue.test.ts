@@ -133,4 +133,91 @@ describe("enqueueTag", () => {
       useCloset.setState({ garments: prev });
     }
   });
+
+  it("a tag that lands after a rename leaves the edit and does not mirror", async () => {
+    const prev = useCloset.getState().garments;
+    const row = unnamed();
+    useCloset.setState({ garments: [row] });
+    let mirrors = 0;
+    let release: (tag: { ok: true; name: string; category: "top"; subtype: string; colors: string[] }) => void = () => {};
+    const pending = new Promise<{ ok: true; name: string; category: "top"; subtype: string; colors: string[] }>((resolve) => {
+      release = resolve;
+    });
+    let markStarted: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    try {
+      const done = enqueueTag(row.id, "data:image/jpeg;base64,aa", {
+        timeoutMs: 30,
+        mirror: () => {
+          mirrors += 1;
+        },
+        tag: () => {
+          markStarted();
+          return pending;
+        },
+      });
+      await started;
+      useCloset.getState().updateGarment(row.id, {
+        name: "Brown suede horsebit loafers",
+        category: "other",
+        subtype: "",
+      });
+      release({
+        ok: true,
+        name: "Tagged shirt",
+        category: "top",
+        subtype: "shirt",
+        colors: ["brown"],
+      });
+      await done;
+      const saved = useCloset.getState().garments.find((g) => g.id === row.id);
+      assert.equal(saved?.name, "Brown suede horsebit loafers");
+      assert.equal(saved?.category, "other");
+      assert.equal(saved?.subtype, "");
+      assert.equal(mirrors, 0);
+      assert.equal(persistGate.open, false);
+    } finally {
+      useCloset.setState({ garments: prev });
+    }
+  });
+
+  it("a category picked before the retry is not replaced by the hint", async () => {
+    const prev = useCloset.getState().garments;
+    const row = unnamed();
+    useCloset.setState({ garments: [row] });
+    let mirrors = 0;
+    let calls = 0;
+    try {
+      await enqueueTag(row.id, "data:image/jpeg;base64,aa", {
+        timeoutMs: 20,
+        hint: { name: "Navy oxford", category: "top" },
+        mirror: () => {
+          mirrors += 1;
+        },
+        tag: () => {
+          calls += 1;
+          if (calls === 1) {
+            useCloset.getState().updateGarment(row.id, { category: "footwear" });
+            return Promise.reject(new Error("tag down"));
+          }
+          return Promise.resolve({
+            ok: true,
+            name: "Tagged loafers",
+            category: "footwear",
+            subtype: "loafers",
+            colors: ["brown"],
+          });
+        },
+      });
+      const saved = useCloset.getState().garments.find((g) => g.id === row.id);
+      assert.equal(saved?.category, "footwear");
+      assert.equal(saved?.name, NEW_PIECE_NAME);
+      assert.equal(mirrors, 0);
+      assert.equal(calls, 2);
+    } finally {
+      useCloset.setState({ garments: prev });
+    }
+  });
 });

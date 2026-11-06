@@ -102,7 +102,38 @@ function tagExtras(tag: CameraTag, patch: CameraPatch): Partial<Garment> {
   };
 }
 
-function applyTag(id: string, patch: CameraPatch, tag: CameraTag) {
+type RowStamp = {
+  name: string;
+  category: string;
+  subtype: string;
+  colors: string;
+  material: string;
+};
+
+function stampOf(g: { name: string; category: string; subtype?: string; colors?: string[]; material?: string }): RowStamp {
+  return {
+    name: g.name,
+    category: g.category,
+    subtype: g.subtype ?? "",
+    colors: (g.colors ?? []).join("\u0000"),
+    material: g.material ?? "",
+  };
+}
+
+function rowEdited(id: string, snap: RowStamp): boolean {
+  const g = useCloset.getState().garments.find((item) => item.id === id);
+  if (!g) return true;
+  const now = stampOf(g);
+  return (
+    now.name !== snap.name ||
+    now.category !== snap.category ||
+    now.subtype !== snap.subtype ||
+    now.colors !== snap.colors ||
+    now.material !== snap.material
+  );
+}
+
+function applyTag(id: string, patch: CameraPatch, tag: CameraTag, mirror?: () => void) {
   useCloset.getState().updateGarment(id, {
     name: patch.name,
     category: patch.category,
@@ -113,6 +144,10 @@ function applyTag(id: string, patch: CameraPatch, tag: CameraTag) {
     ...(patch.brand ? { brand: patch.brand } : {}),
     ...tagExtras(tag, patch),
   });
+  if (mirror) {
+    mirror();
+    return;
+  }
   void mirrorGarmentFields(
     garmentWriter(getSupabase()),
     getAccount().user?.id ?? null,
@@ -123,7 +158,7 @@ function applyTag(id: string, patch: CameraPatch, tag: CameraTag) {
 function applyHint(id: string, hint: TagHint | null | undefined) {
   if (!hint) return;
   const g = useCloset.getState().garments.find((item) => item.id === id);
-  if (!g || g.name !== NEW_PIECE_NAME) return;
+  if (!g || g.name !== NEW_PIECE_NAME || g.category !== "other") return;
   useCloset.getState().updateGarment(id, { name: hint.name, category: hint.category });
 }
 
@@ -141,10 +176,12 @@ function markUnnamed(id: string) {
 export function enqueueTag(
   id: string,
   cover: string,
-  opts?: { tag?: TagFn; hint?: TagHint | null; timeoutMs?: number },
+  opts?: { tag?: TagFn; hint?: TagHint | null; timeoutMs?: number; mirror?: () => void },
 ): Promise<void> {
   const run = tagChain.then(async () => {
-    if (!useCloset.getState().garments.some((g) => g.id === id)) return;
+    const started = useCloset.getState().garments.find((g) => g.id === id);
+    if (!started) return;
+    let snap = stampOf(started);
     const tagFn = opts?.tag ?? ((image: string) => tagGarment({ data: { image } }));
     const ms = opts?.timeoutMs ?? CAMERA_TAG_MS;
     try {
@@ -152,19 +189,23 @@ export function enqueueTag(
       let reply = await readTag(tagFn, image, ms);
       let patch = chosenPatch(decideCameraTag(reply));
       if (!patch) {
-        applyHint(id, opts?.hint);
+        if (!rowEdited(id, snap)) {
+          applyHint(id, opts?.hint);
+          const hinted = useCloset.getState().garments.find((g) => g.id === id);
+          if (hinted) snap = stampOf(hinted);
+        }
         if (!useCloset.getState().garments.some((g) => g.id === id)) return;
         reply = await readTag(tagFn, image, ms);
         patch = chosenPatch(decideCameraTag(reply));
         if (!patch) {
-          markUnnamed(id);
+          if (!rowEdited(id, snap)) markUnnamed(id);
           return;
         }
       }
-      if (!useCloset.getState().garments.some((g) => g.id === id)) return;
-      applyTag(id, patch, reply);
+      if (rowEdited(id, snap)) return;
+      applyTag(id, patch, reply, opts?.mirror);
     } catch {
-      markUnnamed(id);
+      if (!rowEdited(id, snap)) markUnnamed(id);
     }
   });
   tagChain = run.then(
