@@ -37,6 +37,18 @@ function unnamed(): Garment {
   };
 }
 
+function piece(id: string): Garment {
+  return { ...unnamed(), id };
+}
+
+type GoodTag = {
+  ok: true;
+  name: string;
+  category: "top";
+  subtype: string;
+  colors: string[];
+};
+
 describe("enqueueTag", () => {
   it("a timeout then a good retry updates the row; two failures keep New piece", async () => {
     assert.equal(getSupabase(), null);
@@ -217,6 +229,180 @@ describe("enqueueTag", () => {
       assert.equal(mirrors, 0);
       assert.equal(calls, 2);
     } finally {
+      useCloset.setState({ garments: prev });
+    }
+  });
+
+  it("an edit to a piece still queued behind another tag is kept and not mirrored", async () => {
+    assert.equal(getSupabase(), null);
+    assert.equal(persistGate.open, false);
+    const prev = useCloset.getState().garments;
+    const a = piece("g_tag_queued_a");
+    const b = piece("g_tag_queued_b");
+    useCloset.setState({ garments: [a, b] });
+    let mirrorsA = 0;
+    let mirrorsB = 0;
+    let callsB = 0;
+    let release: (tag: GoodTag) => void = () => {};
+    const pending = new Promise<GoodTag>((resolve) => {
+      release = resolve;
+    });
+    let markStarted: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const taggedA: GoodTag = {
+      ok: true,
+      name: "Tagged A",
+      category: "top",
+      subtype: "shirt",
+      colors: ["navy"],
+    };
+    try {
+      const doneA = enqueueTag(a.id, "data:image/jpeg;base64,aa", {
+        timeoutMs: 30,
+        mirror: () => {
+          mirrorsA += 1;
+        },
+        tag: () => {
+          markStarted();
+          return pending;
+        },
+      });
+      const doneB = enqueueTag(b.id, "data:image/jpeg;base64,bb", {
+        timeoutMs: 30,
+        mirror: () => {
+          mirrorsB += 1;
+        },
+        tag: () => {
+          callsB += 1;
+          return Promise.resolve({
+            ok: true,
+            name: "Tagged B",
+            category: "top",
+            subtype: "shirt",
+            colors: ["blue"],
+          });
+        },
+      });
+      await started;
+      useCloset.getState().updateGarment(b.id, {
+        name: "Joe's blue oxford",
+        category: "top",
+      });
+      release(taggedA);
+      await doneA;
+      await doneB;
+      const savedA = useCloset.getState().garments.find((g) => g.id === a.id);
+      const savedB = useCloset.getState().garments.find((g) => g.id === b.id);
+      assert.deepEqual(
+        {
+          name: savedB?.name,
+          category: savedB?.category,
+          subtype: savedB?.subtype,
+          needsCategory: savedB?.needsCategory === true,
+          mirrorsB,
+          callsB,
+          nameA: savedA?.name,
+          mirrorsA,
+        },
+        {
+          name: "Joe's blue oxford",
+          category: "top",
+          subtype: "",
+          needsCategory: false,
+          mirrorsB: 0,
+          callsB: 0,
+          nameA: "Tagged A",
+          mirrorsA: 1,
+        },
+      );
+      assert.equal(persistGate.open, false);
+      assert.equal(getSupabase(), null);
+    } finally {
+      release(taggedA);
+      useCloset.setState({ garments: prev });
+    }
+  });
+
+  it("a category change while a piece is still queued does not get the hint", async () => {
+    assert.equal(getSupabase(), null);
+    assert.equal(persistGate.open, false);
+    const prev = useCloset.getState().garments;
+    const a = piece("g_tag_hint_a");
+    const b = piece("g_tag_hint_b");
+    useCloset.setState({ garments: [a, b] });
+    let mirrorsB = 0;
+    let callsB = 0;
+    let release: (tag: GoodTag) => void = () => {};
+    const pending = new Promise<GoodTag>((resolve) => {
+      release = resolve;
+    });
+    let markStarted: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const taggedA: GoodTag = {
+      ok: true,
+      name: "Tagged A",
+      category: "top",
+      subtype: "shirt",
+      colors: ["navy"],
+    };
+    const hint = { name: "Navy oxford", category: "top" as const };
+    try {
+      const doneA = enqueueTag(a.id, "data:image/jpeg;base64,aa", {
+        timeoutMs: 30,
+        tag: () => {
+          markStarted();
+          return pending;
+        },
+      });
+      const doneB = enqueueTag(b.id, "data:image/jpeg;base64,bb", {
+        timeoutMs: 30,
+        hint,
+        mirror: () => {
+          mirrorsB += 1;
+        },
+        tag: () => {
+          callsB += 1;
+          return Promise.resolve({
+            ok: true,
+            name: "Tagged shirt",
+            category: "top",
+            subtype: "shirt",
+            colors: ["navy"],
+          });
+        },
+      });
+      await started;
+      useCloset.getState().updateGarment(b.id, { category: "footwear" });
+      release(taggedA);
+      await doneA;
+      await doneB;
+      const savedB = useCloset.getState().garments.find((g) => g.id === b.id);
+      assert.deepEqual(
+        {
+          name: savedB?.name,
+          category: savedB?.category,
+          subtype: savedB?.subtype,
+          needsCategory: savedB?.needsCategory === true,
+          callsB,
+          mirrorsB,
+        },
+        {
+          name: NEW_PIECE_NAME,
+          category: "footwear",
+          subtype: "",
+          needsCategory: false,
+          callsB: 0,
+          mirrorsB: 0,
+        },
+      );
+      assert.equal(persistGate.open, false);
+      assert.equal(getSupabase(), null);
+    } finally {
+      release(taggedA);
       useCloset.setState({ garments: prev });
     }
   });
