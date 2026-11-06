@@ -24,20 +24,21 @@ const STACK: Record<
 };
 
 /**
- * Untucked lay: the lead hem crosses the waistband and the trousers stay wider.
- * Box overlap stays inside 8–25% of the trouser width (see flatLayBox tests).
+ * Untucked lay. The lead hem crosses the waistband; the shoes sit low and to
+ * the left so most of the trouser box stays readable. bottom.top is 36 rather
+ * than 34 so the hem overlap stays within 32% of the trouser width.
  */
 const UNTUCKED = {
-  top: { left: 8, top: 2, w: 60, z: 6 },
-  bottom: { left: 14, top: 44, w: 76, z: 3 },
-  footwear: { left: 18, top: 66, w: 50, z: 8 },
+  top: { left: 6, top: 1, w: 58, z: 6 },
+  bottom: { left: 22, top: 36, w: 72, z: 3 },
+  footwear: { left: 2, top: 72, w: 40, z: 8 },
 } as const;
 
 /**
  * Piece box on the plate. "in", "none", and undefined match the tucked STACK,
- * including the per-piece jitter. "out" moves only the lead top (n = 1), the
- * first bottom, and the first shoe; a later top keeps its shift and sits under
- * the lead.
+ * including the per-piece jitter. "out" moves the lead top (n = 1), the first
+ * bottom, and the first shoe. A top that is not the lead sits on the lead's
+ * box, shifted down-right, and never larger than the lead.
  */
 // The plate and its tests share this. It is not a component.
 // eslint-disable-next-line react-refresh/only-export-components
@@ -76,7 +77,13 @@ export function flatLayBox(
     };
   }
   if (slot === "top" && n > 1) {
-    return { ...placed, z: Math.min(placed.z, UNTUCKED.top.z - 1) };
+    const lead = UNTUCKED.top;
+    return {
+      left: lead.left + 4,
+      top: lead.top + 3,
+      w: lead.w,
+      z: lead.z - 1,
+    };
   }
   return placed;
 }
@@ -137,9 +144,9 @@ export function FlatLay({
         const underLead = tuck === "out" && slot === "top" && !leadHere;
         const box = flatLayBox(
           slot,
-          leadHere ? 1 : n,
+          leadHere ? 1 : underLead ? Math.max(n, 2) : n,
           jit,
-          leadHere || firstHem || (underLead && n > 1) ? "out" : tuck === "out" ? undefined : tuck,
+          leadHere || firstHem || underLead ? "out" : tuck === "out" ? undefined : tuck,
         );
         const img = (
           <GarmentImg

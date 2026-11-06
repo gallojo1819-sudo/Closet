@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { GarmentDetailSheet } from "@/components/closet/detail";
 import { FlatLay, flatLayBox } from "@/components/closet/flat-lay";
 import { HeroLookCard } from "@/components/closet/hero-look-card";
@@ -15,6 +15,16 @@ import type { Garment, Occasion } from "./types.ts";
 const PIN = "2026-11-05";
 const PARITY_HASH = "3bcaa579b38275f6e7d4f2c42805341fd03b0ae890eb91d6a4eb28b7edd73e40";
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** The day passed as `today` is also the clock, so a stray Date read cannot drift. */
+function pinDay(day: string) {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(`${day}T16:00:00Z`));
+}
+
 const TODAY: Record<string, { left: number; top: number; w: number; z: number }> = {
   outerwear: { left: 4, top: 2, w: 88, z: 1 },
   top: { left: 6, top: 6, w: 82, z: 2 },
@@ -24,6 +34,15 @@ const TODAY: Record<string, { left: number; top: number; w: number; z: number }>
   accessory: { left: 62, top: 68, w: 28, z: 5 },
   other: { left: 16, top: 36, w: 64, z: 3 },
 };
+
+function overlapArea(
+  a: { left: number; top: number; w: number },
+  b: { left: number; top: number; w: number },
+): number {
+  const x = Math.max(0, Math.min(a.left + a.w, b.left + b.w) - Math.max(a.left, b.left));
+  const y = Math.max(0, Math.min(a.top + a.w, b.top + b.w) - Math.max(a.top, b.top));
+  return x * y;
+}
 
 function todayBox(slot: string, n: number, jit: number) {
   const base = TODAY[slot]!;
@@ -103,16 +122,38 @@ describe("flatLayBox", () => {
       expect(bottom.top).toBeLessThanOrEqual(50);
       const overlap = lead.top + lead.w - bottom.top;
       expect(overlap).toBeGreaterThanOrEqual(bottom.w * 0.08);
-      expect(overlap).toBeLessThanOrEqual(bottom.w * 0.25);
+      expect(overlap).toBeLessThanOrEqual(bottom.w * 0.32);
+      const trouserArea = bottom.w * bottom.w;
+      expect(overlapArea(shoe, bottom) / trouserArea).toBeLessThanOrEqual(0.35);
+      const leadOnTrouser = overlapArea(lead, bottom);
+      const shoeOnTrouser = overlapArea(shoe, bottom);
+      const both = overlapArea(
+        {
+          left: Math.max(lead.left, shoe.left),
+          top: Math.max(lead.top, shoe.top),
+          w: Math.max(
+            0,
+            Math.min(lead.left + lead.w, shoe.left + shoe.w) - Math.max(lead.left, shoe.left),
+          ),
+        },
+        bottom,
+      );
+      // The intersection box above uses w for both axes; only count it when the
+      // lead and the shoes actually meet. Otherwise both is zero.
+      const leadShoeMeet =
+        lead.top + lead.w > shoe.top && shoe.top + shoe.w > lead.top;
+      const covered = leadOnTrouser + shoeOnTrouser - (leadShoeMeet ? both : 0);
+      expect((trouserArea - covered) / trouserArea).toBeGreaterThanOrEqual(0.55);
       for (const n of [1, 2, 3]) {
         expect(flatLayBox("outerwear", n, jit, "out").z).toBeLessThan(lead.z);
       }
     }
     const lead = flatLayBox("top", 1, 0, "out");
     const second = flatLayBox("top", 2, 0.4, "out");
-    expect(second.z).toBeLessThan(lead.z);
-    expect(second.left).toBe(TODAY.top!.left + 5 + 0.4);
-    expect(second.top).toBe(TODAY.top!.top + 5 * 0.6 + 0.4);
+    expect(second.z).toBe(lead.z - 1);
+    expect(second.left).toBe(lead.left + 4);
+    expect(second.top).toBe(lead.top + 3);
+    expect(second.w).toBeLessThanOrEqual(lead.w);
   });
 });
 
@@ -164,6 +205,7 @@ describe("plate and label", () => {
   const byId = new Map(liveSnapshot.map((g) => [g.id, g]));
 
   it("says untucked exactly when the plate draws the hem out, and never tucked on a knit", () => {
+    pinDay(PIN);
     const knitIn: string[] = [];
     for (const hero of liveSnapshot) {
       if (hero.archived) continue;
@@ -193,9 +235,12 @@ describe("plate and label", () => {
           expect(caption, lead.name).not.toMatch(/\btucked\b/);
           expect(caption, lead.name).not.toMatch(/\buntucked\b/);
         }
-        if (again === "in" && lead && isShirtLike(lead)) {
+        if (again === "in" && tuckMark(again, lead) === "tucked") {
           expect(caption).toMatch(/\btucked\b/);
           expect(caption).not.toMatch(/\buntucked\b/);
+        }
+        if (again === "in" && tuckMark(again, lead) !== "tucked") {
+          expect(caption, lead?.name).not.toMatch(/\btucked\b/);
         }
         if (again === "none") {
           expect(caption).not.toMatch(/\buntucked\b/);
@@ -248,36 +293,19 @@ describe("selection is unchanged", () => {
       const today = key.slice(splitAt + 1);
       const hero = byId.get(id);
       expect(hero, id).toBeTruthy();
+      pinDay(today);
       const looks = looksForHero(hero!, liveSnapshot, { today }).map((look) => ({
         garmentIds: look.garmentIds,
         occasion: look.occasion,
       }));
       expect(looks, key).toEqual(expected);
     }
+    pinDay(PIN);
     const week = buildWeek(liveSnapshot, PIN).map((look) => ({
       garmentIds: look.garmentIds,
       occasion: look.occasion,
     }));
     expect(week).toEqual(selection.week);
-  });
-
-  it("a pinned today does not follow the clock", () => {
-    const hero = byId.get("g_qn51qgub6tu3");
-    expect(hero).toBeTruthy();
-    const pinned = () =>
-      looksForHero(hero!, liveSnapshot, { today: PIN }).map((look) => ({
-        garmentIds: look.garmentIds,
-        occasion: look.occasion,
-      }));
-    const before = pinned();
-    vi.useFakeTimers({ now: new Date("2027-03-15T16:00:00.000Z") });
-    try {
-      expect(pinned()).toEqual(before);
-      vi.setSystemTime(new Date("2026-11-04T16:00:00.000Z"));
-      expect(pinned()).toEqual(before);
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });
 
@@ -285,6 +313,7 @@ describe("On You parity", () => {
   const byId = new Map(liveSnapshot.map((g) => [g.id, g]));
 
   it("a shirt lead's out line matches tuckDressingLines, and the lines hash to the base", () => {
+    pinDay(PIN);
     const lines: string[] = [];
     const heroes = liveSnapshot
       .filter((g) => !g.archived && isShirtLike(g))

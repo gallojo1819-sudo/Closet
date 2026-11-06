@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { liveSnapshot } from "./__fixtures__/snapshot.ts";
 import { leadTop, lookTuckDecision } from "./look.ts";
+import { slotOf } from "./style.ts";
 import { guessTuck, isKnitTop, isShirtLike, resolveTuck, tuckMark, tuckOf } from "./tuck.ts";
 import type { Garment } from "./types.ts";
 
@@ -151,5 +153,35 @@ describe("lookTuckDecision", () => {
     assert.equal(lookTuckDecision([hoodie, pants()], "weekend"), "none");
     assert.equal(lookTuckDecision([shirt], "weekend"), "none");
     assert.equal(tuckMark("none", shirt), null);
+  });
+
+  it("half-zips, quarter-zips and fleece sweatshirts are knits, and a sweatshirt is never labeled tucked", () => {
+    const byId = new Map(liveSnapshot.map((g) => [g.id, g]));
+    for (const id of ["g_1khiworawkt7", "g_j1n1vh1wvbo4", "g_dsqnx6ckt81v", "g_kp1ps7qww1ar"]) {
+      const piece = byId.get(id);
+      assert.ok(piece, id);
+      assert.equal(isKnitTop(piece!), true, piece!.name);
+    }
+    const chinos = byId.get("g_xi3w7tz3aren");
+    assert.ok(chinos);
+    const knitish = /sweat|sweater|knit|zip|fleece|cardigan|pullover/;
+    for (const top of liveSnapshot) {
+      if (top.archived || slotOf(top) !== "top") continue;
+      for (const occasion of ["weekday", "out"] as const) {
+        const pieces = [top, chinos!];
+        const lead = leadTop(pieces);
+        const blob = lead ? `${lead.subtype} ${lead.name}`.toLowerCase() : "";
+        if (!lead || !knitish.test(blob)) continue;
+        assert.notEqual(
+          tuckMark(lookTuckDecision(pieces, occasion), lead),
+          "tucked",
+          `${top.id} ${top.name} ${occasion}`,
+        );
+      }
+    }
+    const sweat = byId.get("g_6qz38nwsrupx");
+    assert.ok(sweat);
+    const worn = [sweat!, chinos!];
+    assert.equal(tuckMark(lookTuckDecision(worn, "weekday"), leadTop(worn)), null);
   });
 });

@@ -29,21 +29,20 @@ export function isShirtLike(g: Garment): boolean {
 }
 
 /**
- * Sweaters, half-zips, quarter-zips, cardigans, and knit or fleece pullovers.
- * A knit polo or knit shirt stays a shirt. A hoodie, and a plain sweatshirt
- * with none of these words, is not a knit.
+ * Sweaters, half-zips, quarter-zips, cardigans, knit or fleece pullovers, and
+ * sweatshirts. A knit polo or knit shirt stays a shirt. A hoodie is not a knit.
+ * isShirtLike is unchanged, so a sweatshirt still matches it for On You; the
+ * plate treats that word as a knit.
  */
 export function isKnitTop(g: Garment): boolean {
-  if (isShirtLike(g)) return false;
   const blob = `${g.subtype} ${g.name}`.toLowerCase();
   if (/hoodie/.test(blob)) return false;
-  return /sweater|knit|cardigan|half-?zip|quarter-?zip|pullover|fleece/.test(blob);
+  const knitWord = /sweater|knit|cardigan|half-?zip|quarter-?zip|pullover|fleece/.test(blob);
+  if (!knitWord) return false;
+  return !isShirtLike(g) || /sweatshirt/.test(blob);
 }
 
-/**
- * The word on the plate's label. A knit worn in draws tucked and says nothing:
- * the word "tucked" is never shown on a sweater or knit.
- */
+/** "tucked" only for a real shirt. A sweatshirt or knit worn in says nothing. */
 export function tuckMark(
   d: "in" | "out" | "none",
   lead: Garment | null,
@@ -51,9 +50,16 @@ export function tuckMark(
   switch (d) {
     case "out":
       return "untucked";
-    case "in":
-      if (lead && isKnitTop(lead)) return null;
-      return "tucked";
+    case "in": {
+      if (!lead) return null;
+      const blob = `${lead.subtype} ${lead.name}`.toLowerCase();
+      // A sweatshirt matches isShirtLike ("shirt"). So does a collared sweater
+      // and a knit shirt. None of those are labeled tucked.
+      if (/sweatshirt/.test(blob)) return null;
+      if (/sweat|sweater|knit|zip|fleece|cardigan|pullover/.test(blob)) return null;
+      if (isShirtLike(lead)) return "tucked";
+      return null;
+    }
     case "none":
       return null;
     default: {
