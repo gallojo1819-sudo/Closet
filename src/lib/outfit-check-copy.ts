@@ -11,6 +11,7 @@ export const CHECK_TYPE_TEXT = "Use a JPEG, PNG or WebP.";
 export const CHECK_READ_TEXT = "Couldn't read that photo. Try a JPEG.";
 export const CHECK_USER_TURN = "Check this outfit";
 export const CHECK_BUTTON_LABEL = "Check this outfit";
+export const CHECK_SIGN_IN_LABEL = "Sign in to check this outfit";
 export const CHECK_LOADING_TEXT = "Checking this outfit…";
 export const CHECK_NO_KEY_TEXT = "The outfit check is not configured.";
 export const CHECK_MODEL_TEXT = "The outfit check could not answer.";

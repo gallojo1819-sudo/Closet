@@ -7,6 +7,7 @@
  * no store, no network, no server runtime, nothing persisted.
  */
 import { z } from "zod";
+import type { AtlasConditions } from "../jacket-weather.ts";
 import type { Garment, Look } from "../types.ts";
 import type { TasteMemory } from "../taste.ts";
 import type { StylistPageContext } from "../stylist-page.ts";
@@ -30,6 +31,11 @@ export type AssistantCtx = {
   page: StylistPageContext;
   /** A measured reading only. Absent means unmeasured; no tool fetches one. */
   weatherF?: number;
+  /**
+   * Measured high, rain and wind from the page. Absent means those fields
+   * were not measured. A numeric weatherF without this stays unmeasured.
+   */
+  conditions?: AtlasConditions;
   notes: NotesBackend;
   today: TodayLookState;
   /** The day as YYYY-MM-DD. Tests pin it; live it is todayISO(). */

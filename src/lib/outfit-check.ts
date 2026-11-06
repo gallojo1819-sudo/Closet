@@ -48,6 +48,8 @@ export type CheckCtx = {
   season: Season;
   /** A measured reading only. Never defaulted. */
   weatherF?: number;
+  /** Frozen high, rain and wind. Absent fields stay absent. */
+  conditions?: { highF?: number; wet?: boolean; windy?: boolean };
 };
 
 export type CheckState = "works" | "works_with_jacket" | "doesnt" | "cant_tell";
@@ -125,6 +127,7 @@ export function legalCtx(ctx: CheckCtx): LegalCtx {
     occasion: ctx.occasion,
     season: ctx.season,
     ...(ctx.weatherF !== undefined && Number.isFinite(ctx.weatherF) ? { weatherF: ctx.weatherF } : {}),
+    ...(ctx.conditions ? { conditions: ctx.conditions } : {}),
   };
 }
 

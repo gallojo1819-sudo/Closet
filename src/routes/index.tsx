@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentImg } from "@/components/closet/gimg";
 import { LookCollage } from "@/components/closet/look-collage";
@@ -11,7 +11,17 @@ import { Button } from "@/components/ui/button";
 import { alternatives, dropNote, kitCells, leadTop, lookTuckDecision, unwornLine } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { isFakeName } from "@/lib/rack";
-import { todayLookPieces } from "@/lib/today-look";
+import { todayLookIds, todayLookPieces } from "@/lib/today-look";
+import { editJacket } from "@/lib/jacket-edit";
+import { countsAsOuter } from "@/lib/stylist/jackets";
+import {
+  draftStamp,
+  jacketDraftVersion,
+  readJacketDraft,
+  rememberJacketDraft,
+  subscribeJacketDrafts,
+} from "@/lib/jacket-draft";
+import { pageJacketWeather } from "@/lib/jacket-weather";
 import { todaySeasonBucket } from "@/lib/today-season";
 import { rackCanDress, weekStripDays } from "@/lib/lookbook";
 import { engineCacheReady } from "@/lib/engine-cache";
@@ -24,7 +34,7 @@ import { emptyTaste, leftOffLine } from "@/lib/taste";
 import { todaySuggestions } from "@/lib/today-suggest";
 import { useCloset } from "@/lib/store";
 import { useTuckHabits } from "@/lib/use-tuck-habits";
-import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
+import { writeStylistPage } from "@/lib/stylist-page";
 import { useIsClient } from "@/lib/use-client";
 import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
 import { cn, formatLongDate, lastDays, todayNY, weekdayLetter } from "@/lib/utils";
@@ -133,10 +143,16 @@ function Today() {
      dated today, else the daily pick itself under today's frozen bucket, the same look the
      effect writes when it lands. */
   const todaySeason = todaySeasonBucket(weather?.f, today);
-  const shown = useMemo(
-    () => todayLookPieces({ drop, journal, thisWeek, garments, taste, season: todaySeason }, today),
+  const draftVersion = useSyncExternalStore(subscribeJacketDrafts, jacketDraftVersion, () => 0);
+  const shown = useMemo(() => {
+    void draftVersion;
+    return todayLookPieces({ drop, journal, thisWeek, garments, taste, season: todaySeason }, today);
+  }, [drop, journal, thisWeek, garments, taste, todaySeason, today, draftVersion]);
+  const baseIds = useMemo(
+    () => todayLookIds({ drop, journal, thisWeek, garments, taste, season: todaySeason }, today),
     [drop, journal, thisWeek, garments, taste, todaySeason, today],
   );
+  const jacketPage = useMemo(() => pageJacketWeather(weather), [weather]);
   const lookName =
     shown.length === 0
       ? "Nothing on the rack"
@@ -148,6 +164,40 @@ function Today() {
     [garments, shown],
   );
   const occasion = todayOccasion(drop);
+  const jacketStamp = draftStamp({ date: today, occasion, season: todaySeason, weather });
+  const jacketDraft = readJacketDraft(baseIds, jacketStamp);
+  const runJacket = (action: "off" | "on" | "next") => {
+    const result = editJacket({
+      ids: shown.map((g) => g.id),
+      closet: garments,
+      action,
+      ctx: {
+        occasion,
+        season: todaySeason,
+        weatherF: jacketPage.weatherF,
+        measured: jacketPage.measured,
+        highF: jacketPage.conditions?.highF,
+        wet: jacketPage.conditions?.wet,
+        windy: jacketPage.conditions?.windy,
+        lockedIds: drop?.lockedIds,
+        taste,
+      },
+      lastJacketId: jacketDraft?.lastJacketId,
+    });
+    rememberJacketDraft({
+      baseIds,
+      ids: result.ids,
+      stamp: jacketStamp,
+      accountId: "",
+      off: result.off,
+      jacketId: result.jacketId,
+      lastJacketId: result.lastJacketId,
+      weatherWarned: result.weatherWarned,
+      warning: result.warning,
+      note: result.note,
+      outdoorsValid: result.outdoorsValid,
+    });
+  };
   const todayTuck = lookTuckDecision(shown, occasion, habits);
   const note = dropNote(shown, weather, occasion, drop?.moment, undefined, dropSeason);
   const done = drop?.worn || drop?.verdict === "worn";
@@ -161,12 +211,20 @@ function Today() {
     );
   }, [play, garments, journal, drop, taste, shownKey, occasion, todaySeason, today]);
   const picked = shown.find((g) => g.id === pick) ?? null;
-  const swapBlocked = (g: Garment) =>
-    !alternatives(garments, g, shown.map((p) => p.id)).length ||
-    done ||
-    (drop?.lockedIds ?? []).includes(g.id) ||
-    !drop?.garmentIds?.includes(g.id);
+  const swapBlocked = (g: Garment) => {
+    if (countsAsOuter(g)) return done || (drop?.lockedIds ?? []).includes(g.id);
+    return (
+      !alternatives(garments, g, shown.map((p) => p.id)).length ||
+      done ||
+      (drop?.lockedIds ?? []).includes(g.id) ||
+      !drop?.garmentIds?.includes(g.id)
+    );
+  };
   const swapOn = (g: Garment) => {
+    if (countsAsOuter(g)) {
+      runJacket("next");
+      return;
+    }
     const i = drop?.garmentIds.indexOf(g.id) ?? -1;
     swapDropPiece(g.id);
     const next = i >= 0 ? useCloset.getState().drop?.garmentIds[i] : undefined;
@@ -174,7 +232,7 @@ function Today() {
   };
   const matched = drop ? weekCells.find((cell) => cell.iso === drop.date) : undefined;
   const onScreenLookIds = matched?.look ? [matched.look.id] : [];
-  const pageWeather = realWeatherF(weather);
+  const pageWeather = jacketPage.weatherF;
   useEffect(() => {
     writeStylistPage({
       route: "today",
@@ -185,8 +243,9 @@ function Today() {
         ? [{ id: matched.look.id, garmentIds: [...matched.look.garmentIds] }]
         : [],
       ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
+      ...(jacketPage.conditions ? { conditions: { ...jacketPage.conditions, measured: jacketPage.measured } } : {}),
     });
-  }, [drop, dropSeason, matched, occasion, onScreenLookIds, pageWeather]);
+  }, [drop, dropSeason, matched, occasion, onScreenLookIds, pageWeather, jacketPage]);
 
   const setOccasion = (occasion: Occasion) => {
     rerollDrop(weather, occasion, drop?.garmentIds);
@@ -379,6 +438,12 @@ function Today() {
             <h2 className="mt-1 font-editorial text-3xl tracking-tight">{lookName}</h2>
             <TuckNote d={todayTuck} lead={leadTop(shown)} className="mt-1" />
             <p className="mt-3 text-sm text-ink-soft leading-relaxed">{note}</p>
+            {jacketDraft?.warning ? (
+              <p className="mt-2 text-sm text-ink" data-weather-warned>
+                {jacketDraft.warning}
+              </p>
+            ) : null}
+            {jacketDraft?.note ? <p className="mt-1 text-sm text-ink-soft">{jacketDraft.note}</p> : null}
             {drop?.lockNote && (
               <p className="mt-2 text-sm text-ink-soft">{drop.lockNote}</p>
             )}
@@ -454,8 +519,14 @@ function Today() {
                   </button>
                   <button
                     type="button"
-                    disabled={done || shown.length <= 2 || !drop?.garmentIds?.includes(g.id)}
-                    onClick={() => removeDropPiece(g.id)}
+                    disabled={done || shown.length <= 2 || (!countsAsOuter(g) && !drop?.garmentIds?.includes(g.id))}
+                    onClick={() => {
+                      if (countsAsOuter(g)) {
+                        runJacket("off");
+                        return;
+                      }
+                      removeDropPiece(g.id);
+                    }}
                     className="micro text-ink-soft hover:text-ink disabled:opacity-30"
                   >
                     Remove
@@ -505,6 +576,24 @@ function Today() {
               Ask the stylist
             </Link>
           </div>
+          <button
+            type="button"
+            data-today-edit
+            onClick={() =>
+              setDressed({
+                id: `today-${today}`,
+                name: lookName,
+                occasion,
+                garmentIds: baseIds,
+                source: "manual",
+                lookbook: false,
+                createdAt: today,
+              })
+            }
+            className="micro mr-3 text-ink-soft hover:text-ink"
+          >
+            Edit look
+          </button>
           <button
             type="button"
             data-today-suggest-toggle
@@ -580,15 +669,27 @@ function Today() {
       {dressed && dressed.garmentIds.length >= 2 && (
         <LookSheet
           look={dressed}
-          pieces={dressed.garmentIds
+          draftBaseIds={dressed.id.startsWith("today-") ? baseIds : dressed.garmentIds}
+          draftStamp={dressed.id.startsWith("today-") ? jacketStamp : undefined}
+          jacketCtx={{
+            occasion,
+            season: todaySeason,
+            weatherF: jacketPage.weatherF,
+            measured: jacketPage.measured,
+            highF: jacketPage.conditions?.highF,
+            wet: jacketPage.conditions?.wet,
+            windy: jacketPage.conditions?.windy,
+          }}
+          pieces={(dressed.id.startsWith("today-") ? shown : dressed.garmentIds
             .map((id) => garments.find((g) => g.id === id))
-            .filter((g): g is Garment => Boolean(g))}
+            .filter((g): g is Garment => Boolean(g)))}
           book={looksAll}
           closet={garments}
           initialLocked={drop?.lockedIds}
           onClose={() => setDressed(null)}
           onWear={() => {
-            wearToday(dressed.garmentIds);
+            const drafted = dressed.id.startsWith("today-") ? readJacketDraft(baseIds, jacketStamp)?.ids : null;
+            wearToday(drafted ?? shown.map((g) => g.id));
             setDressed(null);
           }}
           onOpenLook={(next) => setDressed(next)}

@@ -26,8 +26,9 @@ import { pickDropIds, type PickState } from "./drop-pick.ts";
 import { dressThisPiece } from "./dress.ts";
 import { lookReply } from "./stylist-page.ts";
 import { daysIdle } from "./style.ts";
+import type { AtlasConditions } from "./jacket-weather.ts";
 import { composeAtlasLook, emptyTaste, type TasteMemory } from "./taste.ts";
-import type { Garment, Occasion, StylistMessage } from "./types.ts";
+import type { Garment, Occasion, Season, StylistMessage } from "./types.ts";
 import { todayNY } from "./utils.ts";
 
 /** The margin the client allows past the server's own deadline. */
@@ -119,6 +120,8 @@ export function localStylistReply(input: {
   occasion: Occasion;
   taste?: TasteMemory;
   weatherF?: number;
+  conditions?: AtlasConditions;
+  season?: Season;
 }): LocalReply | null {
   const owned = input.garments.filter((g) => !g.archived);
   if (!owned.length) return null;
@@ -128,6 +131,7 @@ export function localStylistReply(input: {
     occasion: input.occasion,
     taste: input.taste ?? emptyTaste(),
     ...(typeof input.weatherF === "number" && Number.isFinite(input.weatherF) ? { weatherF: input.weatherF } : {}),
+    ...(input.conditions ? { conditions: input.conditions, ...(input.season ? { season: input.season } : {}) } : {}),
   });
   const pieces = rolled.garmentIds
     .map((id) => owned.find((g) => g.id === id))

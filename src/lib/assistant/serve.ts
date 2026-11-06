@@ -145,6 +145,7 @@ export async function askAssistantCore(input: AssistantAskInput, deps: Assistant
     taste,
     page: input.page ?? { route: "today", onScreenLookIds: [] },
     ...(weatherF !== undefined ? { weatherF } : {}),
+    ...(input.page?.conditions ? { conditions: input.page.conditions } : {}),
     notes,
     today: { drop: null, ...(input.today ?? {}), garments: pool, taste },
     date: deps.date ?? todayISO(),
