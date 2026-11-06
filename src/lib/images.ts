@@ -3,6 +3,8 @@
  * Full data URLs never go back into persist once migrated.
  */
 
+import { ImageFormatError, pastedFileLabel } from "./upload-read.ts";
+
 const DB_NAME = "closet-images";
 const STORE = "images";
 const KEY_PREFIX = "idb:";
@@ -165,12 +167,14 @@ export function notifyImage(key: string) {
   imageWatchers.get(key)?.forEach((fn) => fn());
 }
 
-/** name + size + lastModified + first 64KB. Same File → same hash. */
-export async function fileFingerprint(file: File): Promise<string> {
+/**
+ * Size + first 64KB. The clipboard names every paste `image.png` and stamps a
+ * new lastModified, so the name is not part of the hash. Identical bytes are
+ * the same piece.
+ */
+export async function fileFingerprint(file: Blob): Promise<string> {
   const head = await file.slice(0, 64 * 1024).arrayBuffer();
-  const meta = new TextEncoder().encode(
-    `${file.name}\0${file.size}\0${file.lastModified}`,
-  );
+  const meta = new TextEncoder().encode(`${file.size}\0`);
   const bytes = new Uint8Array(meta.byteLength + head.byteLength);
   bytes.set(meta, 0);
   bytes.set(new Uint8Array(head), meta.byteLength);
@@ -178,6 +182,17 @@ export async function fileFingerprint(file: File): Promise<string> {
   return [...new Uint8Array(digest)]
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+/** One content hash per scan batch. A second file with the same bytes is a duplicate. */
+export async function admitScanFile(
+  file: Blob,
+  known: Set<string>,
+): Promise<{ hash: string; duplicate: boolean }> {
+  const hash = await fileFingerprint(file);
+  if (known.has(hash)) return { hash, duplicate: true };
+  known.add(hash);
+  return { hash, duplicate: false };
 }
 
 /** Resolve any stored src (idb key, data URL, or path) to a displayable URL. */
@@ -303,6 +318,92 @@ export async function ensureThumb(id: string, cutoutSrc: string): Promise<void> 
   } catch {
     /* thumb is optional */
   }
+}
+
+const CLIPBOARD_RASTER = /^image\/(webp|avif|svg\+xml)$/i;
+
+/** WebP, AVIF, SVG, and empty clipboard blobs cannot go straight into the scan. */
+export function clipboardWantsJpeg(file: { type: string; size: number }): boolean {
+  if (file.size <= 0) return true;
+  return CLIPBOARD_RASTER.test(file.type);
+}
+
+async function rasterizeToJpeg(file: File): Promise<Blob> {
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") {
+    throw new ImageFormatError();
+  }
+  const bitmap = await createImageBitmap(file);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, bitmap.width);
+    canvas.height = Math.max(1, bitmap.height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new ImageFormatError();
+    ctx.drawImage(bitmap, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92);
+    });
+    if (!blob || blob.size === 0) throw new ImageFormatError();
+    return blob;
+  } finally {
+    bitmap.close();
+  }
+}
+
+/**
+ * Turn a clipboard image into something the scan can decode.
+ * PNG and JPEG keep their bytes and take the pasted name. WebP, AVIF, SVG,
+ * and empty files are drawn to a JPEG via createImageBitmap.
+ */
+export async function clipboardFileToJpeg(
+  file: File,
+  name: string,
+  rasterize: (file: File) => Promise<Blob> = rasterizeToJpeg,
+): Promise<File> {
+  if (!clipboardWantsJpeg(file)) {
+    if (file.name === name && file.size > 0) return file;
+    return new File([file], name, {
+      type: file.type || "image/png",
+      lastModified: file.lastModified,
+    });
+  }
+  let blob: Blob;
+  try {
+    blob = await rasterize(file);
+  } catch (e) {
+    if (e instanceof ImageFormatError) throw e;
+    throw new ImageFormatError();
+  }
+  if (!blob || blob.size === 0) throw new ImageFormatError();
+  return new File([blob], name, { type: "image/jpeg", lastModified: file.lastModified });
+}
+
+export type PreparedPaste = {
+  ready: File[];
+  misses: { name: string; reason: "format" }[];
+};
+
+/** Number generic clipboard names and convert webp/avif before the scan. */
+export async function prepareClipboardFiles(
+  files: File[],
+  rasterize?: (file: File) => Promise<Blob>,
+): Promise<PreparedPaste> {
+  const ready: File[] = [];
+  const misses: { name: string; reason: "format" }[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]!;
+    const name = pastedFileLabel(i, file.name);
+    try {
+      ready.push(
+        rasterize
+          ? await clipboardFileToJpeg(file, name, rasterize)
+          : await clipboardFileToJpeg(file, name),
+      );
+    } catch {
+      misses.push({ name, reason: "format" });
+    }
+  }
+  return { ready, misses };
 }
 
 /** Store a data URL under a key. No-op for non-data URLs; returns the src to keep. */
