@@ -21,6 +21,7 @@ import {
   type CheckCtx,
   type CheckState,
 } from "../outfit-check.ts";
+import { lookTuckDecision } from "../look.ts";
 import { displayName, pieceLabel } from "../piece-label.ts";
 import { livePool } from "../rack.ts";
 import { rotationRank } from "../rotation.ts";
@@ -32,7 +33,7 @@ import {
   type Season,
 } from "../season.ts";
 import { oversizedOf } from "../stylist/oversized.ts";
-import { isShortOuter } from "../stylist/short-outer.ts";
+import { isShortOuter, shortOuterHits } from "../stylist/short-outer.ts";
 import { daysIdle, slotOf } from "../style.ts";
 import { scrubHouseNames } from "../stylist-page.ts";
 import { explain, isLegal } from "../stylist/legal.ts";
@@ -363,7 +364,10 @@ const checkLook: ToolDef<{ ids: string[]; occasion?: Occasion; season?: Season }
     const season = seasonFor(ctx, args.season);
     const report = reportLook(ctx, pieces, occasion, season);
     const note = report.state === "works" || report.state === "works_with_jacket" ? checkVerdict(pieces, checkCtx(ctx, occasion, season), live, ctx.taste).reason : null;
-    return { ...report, ...(note ? { note } : {}) };
+    const tuck = lookTuckDecision(pieces, occasion);
+    const layer = shortOuterHits(pieces).map((id) => plainReason(id)).filter((line) => !report.reasons.includes(line));
+    const reasons = layer.length ? [...layer, ...report.reasons].slice(0, 3) : report.reasons;
+    return { ...report, reasons, ...(note ? { note } : {}), ...(tuck !== "none" ? { tuck } : {}) };
   },
 };
 

@@ -47,10 +47,17 @@ const SPENDERS: Record<AiBucket, string[]> = {
   vision: ["tagGarment", "classifyScan", "judgeHeldPlate", "identifyPiece"],
   image: ["printGarment", "extractGarment", "recolorCover", "onMePreview"],
   search: ["findOfficialCover", "searchOfficial", "fetchListing"],
+  outfit_check: ["checkOutfit"],
 };
 
 describe("xAI caller gate", () => {
-  const limits = { chat: { hour: 3, day: 5 }, vision: { hour: 3, day: 5 }, image: { hour: 3, day: 5 }, search: { hour: 3, day: 5 } };
+  const limits = {
+    chat: { hour: 3, day: 5 },
+    vision: { hour: 3, day: 5 },
+    image: { hour: 3, day: 5 },
+    search: { hour: 3, day: 5 },
+    outfit_check: { hour: 3, day: 5 },
+  };
   const T0 = Date.UTC(2026, 9, 8, 14, 10, 0);
 
   it("takeLocal allows the hour, then denies with a retry, then allows in the next window", () => {
@@ -89,7 +96,7 @@ describe("xAI caller gate", () => {
     assert.equal([...store.keys()].some((key) => key.endsWith(`|${windowStart(T0, HOUR_SECONDS)}`)), false, "old keys pruned");
   });
 
-  it("every spender has a bucket, and the buckets cover exactly the 16 spenders", () => {
+  it("every spender has a bucket, and the buckets cover exactly the 17 spenders", () => {
     const names = Object.keys(AI_FN_BUCKET).sort();
     const expected = Object.values(SPENDERS).flat().sort();
     assert.deepEqual(names, expected);
@@ -100,6 +107,10 @@ describe("xAI caller gate", () => {
     assert.equal(SPENDERS.vision.length, 4);
     assert.equal(SPENDERS.image.length, 4);
     assert.equal(SPENDERS.search.length, 3);
+    assert.equal(SPENDERS.outfit_check.length, 1);
+    assert.equal(AI_FN_BUCKET.checkOutfit, "outfit_check");
+    assert.equal(AI_LIMITS.outfit_check.hour, 20);
+    assert.equal(AI_LIMITS.outfit_check.day, 20);
     assert.equal(AI_FN_BUCKET.aiStatus, undefined, "aiStatus is gated but not bucketed");
     for (const bucket of Object.keys(SPENDERS) as AiBucket[]) {
       assert.ok(AI_LIMITS[bucket].hour > 0 && AI_LIMITS[bucket].day >= AI_LIMITS[bucket].hour, bucket);
@@ -112,7 +123,7 @@ describe("xAI caller gate", () => {
   });
 
   it("every spender and aiStatus run the caller middleware and gate before any call", () => {
-    const files = ["../ai.ts", "../listing.ts", "../packshot-search.ts"];
+    const files = ["../ai.ts", "../listing.ts", "../packshot-search.ts", "../outfit-check-ask.ts"];
     const seen = new Set<string>();
     for (const rel of files) {
       const src = readFileSync(new URL(rel, import.meta.url), "utf8");

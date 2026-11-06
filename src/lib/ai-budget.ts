@@ -36,3 +36,14 @@ export const ONME_DOWNLOAD_DEADLINE_MS = 58000;
 export function onMeDownloadMs(elapsedMs: number): number {
   return Math.max(1000, ONME_DOWNLOAD_DEADLINE_MS - elapsedMs);
 }
+
+/** The whole outfit-check server call (one vision call, then the text loop), under the 60 s function limit. */
+export const CHECK_SERVER_MS = 25000;
+/** How long the dock waits for a photo check. The 9 s text deadline is too short for vision plus tools. */
+export const CHECK_DEADLINE_MS = 30000;
+/** Long edge of the photo sent to the check, in pixels. */
+export const CHECK_PHOTO_EDGE = 1024;
+/** JPEG quality of that photo. */
+export const CHECK_PHOTO_QUALITY = 0.8;
+/** The photo is refused after the resize when the JPEG is larger than this. */
+export const CHECK_PHOTO_MAX_BYTES = Math.floor(1.5 * 1024 * 1024);

@@ -20,7 +20,13 @@ export type ModelMessage =
   | { role: "assistant"; content: string; toolCalls?: ToolCall[] }
   | { role: "tool"; name: string; content: string };
 
-export type ModelReply = { toolCalls?: ToolCall[]; text?: string };
+export type ModelUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  reasoningTokens: number;
+};
+
+export type ModelReply = { toolCalls?: ToolCall[]; text?: string; usage?: ModelUsage };
 
 /** The injected model. Scripted in tests; a real caller adapts a provider to this shape. */
 export type Model = (messages: ModelMessage[], tools: ModelTool[]) => ModelReply | Promise<ModelReply>;
@@ -75,6 +81,22 @@ export function finalText(raw: string, pool: readonly import("../types.ts").Garm
   return accepted;
 }
 
+/** The same acceptance, one line at a time, so a verdict and its fixes stay separate lines. */
+export function finalTextLines(raw: string, pool: readonly import("../types.ts").Garment[]): string {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) return finalText(raw, pool);
+  const kept: string[] = [];
+  for (const line of lines) {
+    const one = finalText(line, pool);
+    if (one === NOT_IN_CLOSET) return NOT_IN_CLOSET;
+    kept.push(one);
+  }
+  return kept.join("\n");
+}
+
 export async function runAssistant(opts: {
   model: Model;
   registry: Registry;
@@ -83,6 +105,8 @@ export async function runAssistant(opts: {
   history?: ModelMessage[];
   prompt: string;
   maxSteps?: number;
+  /** Keep line breaks in the final text. The default collapses them, as the text stylist does. */
+  keepLines?: boolean;
 }): Promise<AssistantRun> {
   const maxSteps = Math.max(1, Math.floor(opts.maxSteps ?? DEFAULT_MAX_STEPS));
   const tools = toModelTools(opts.registry);
@@ -94,7 +118,7 @@ export async function runAssistant(opts: {
   const steps: Trace[] = [];
   let lastKey: string | null = null;
   const finish = (raw: string, stopReason: StopReason): AssistantRun => {
-    const text = finalText(raw, opts.ctx.pool);
+    const text = opts.keepLines ? finalTextLines(raw, opts.ctx.pool) : finalText(raw, opts.ctx.pool);
     const garmentIds = text === NOT_IN_CLOSET ? [] : idsInText(raw, opts.ctx.pool);
     return { text, garmentIds, steps, stopReason };
   };
