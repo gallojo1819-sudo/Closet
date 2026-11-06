@@ -25,11 +25,14 @@ export function Overlay({
   onClose,
   getAnchor,
   zClass = "z-[60]",
+  closeOnEscape = true,
 }: {
   children: ReactNode;
   onClose: () => void;
   getAnchor?: () => HTMLElement | null;
   zClass?: string;
+  /** Closet owns Escape for its piece/list/look stack and passes false. */
+  closeOnEscape?: boolean;
 }) {
   const md = useMdUp();
   const [box, setBox] = useState<ReturnType<typeof placeBesideTile> | null>(() => {
@@ -47,12 +50,13 @@ export function Overlay({
   }, []);
 
   useEffect(() => {
+    if (!closeOnEscape) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, closeOnEscape]);
 
   useEffect(() => {
     if (!md) {

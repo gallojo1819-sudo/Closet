@@ -48,6 +48,9 @@ export function LookSheet({
   getCard,
   initialLocked,
   house,
+  onBack,
+  backLabel,
+  closeOnEscape = true,
 }: {
   look: Look;
   pieces: Garment[];
@@ -59,6 +62,12 @@ export function LookSheet({
   getCard?: () => HTMLElement | null;
   initialLocked?: string[];
   house?: House | "all" | null;
+  /** List path only. Outfit-with-this looks omit it. */
+  onBack?: () => void;
+  /** "← Back to N looks", with the real card count. */
+  backLabel?: string;
+  /** Closet owns Escape for its stack and passes false. */
+  closeOnEscape?: boolean;
 }) {
   void book;
   const [ids, setIds] = useState(look.garmentIds);
@@ -198,7 +207,17 @@ export function LookSheet({
     l.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
   return (
-    <Overlay onClose={onClose} getAnchor={getCard} zClass="z-[60]">
+    <Overlay onClose={onClose} getAnchor={getCard} zClass="z-[60]" closeOnEscape={closeOnEscape}>
+        {onBack ? (
+          <button
+            type="button"
+            data-look-back
+            onClick={onBack}
+            className="sticky top-0 z-20 w-full border-b border-hairline bg-paper px-4 py-3 text-left text-sm text-ink"
+          >
+            {backLabel ?? "← Back"}
+          </button>
+        ) : null}
         <div className={cn("look-landing relative border-b border-hairline bg-paper aspect-[4/5] overflow-hidden", landing && "is-landing")}>
           <LookKit pieces={activePieces} thumb={false} className="border-0" />
           {showMe && painted && (
