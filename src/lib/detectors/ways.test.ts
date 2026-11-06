@@ -174,8 +174,10 @@ function misfile(wayId: string, look: Garment[]): string | null {
   }
 }
 
+const TODAY = "2026-10-08"; // America/New_York calendar day for drawSeed / todayNY pins
+
 function waysAt(occasion: Occasion, season: Season, weatherF?: number): Way[] {
-  return visibleDetectors(RACK, { occasion, season, color: null, weatherF });
+  return visibleDetectors(RACK, { occasion, season, color: null, weatherF, today: TODAY });
 }
 
 function names(look: Garment[]): string {
@@ -314,7 +316,7 @@ describe("a way look is one top, one bottom, one shoe, at most one outer; summer
     });
 
     it(`${at}: no This week card wears a summer shirt or the varsity as its outer`, () => {
-      const row = realWeekLooks(buildReshuffleRow(RACK, occasion, { season, cap: 8, salt: 1 }));
+      const row = realWeekLooks(buildReshuffleRow(RACK, occasion, { season, cap: 8, salt: 1, today: TODAY }));
       assert.ok(row.length >= 3, `${at}: ${row.length} cards`);
       const wrong: string[] = [];
       for (const look of row) {
