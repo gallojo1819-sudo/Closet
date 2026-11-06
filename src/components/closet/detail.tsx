@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Pencil } from "lucide-react";
 import { BodyPortal } from "@/components/closet/body-portal";
 import { GarmentImg } from "@/components/closet/gimg";
 import { OnMePanel } from "@/components/closet/on-me";
@@ -33,14 +33,26 @@ import {
   putThumb,
 } from "@/lib/images";
 import { costPerWear, money } from "@/lib/look";
-import { NO_OUTFIT_NOTE } from "@/lib/dress";
+import { NOT_NAMED_YET, NO_OUTFIT_NOTE, PICK_CATEGORY_NUDGE } from "@/lib/dress";
 import { looksWithLabel } from "@/lib/lookbook";
 import { displayName } from "@/lib/piece-label";
 import { PALETTE, nameWithColor } from "@/lib/color";
 import { derivedCategory } from "@/lib/garment-category";
 import { colorsForName, shownColors } from "@/lib/garment-color";
 import { styleNotes } from "@/lib/garment-notes";
-import { daysIdle } from "@/lib/style";
+import { daysIdle, isUnslottedLock } from "@/lib/style";
+import { NEW_PIECE_NAME } from "@/lib/ingest";
+import { isAccountSignedIn } from "@/lib/cloud/account";
+import { onPushSettled } from "@/lib/cloud/edit";
+import {
+  categoryWrite,
+  isFreshPiece,
+  nameOfferFromNotes,
+  notesBlurPlan,
+  removeTap,
+  shownField,
+  type NameOffer,
+} from "@/lib/piece-sheet";
 import { CATEGORIES, SEASONS, type Category, type Garment } from "@/lib/types";
 import { seasonsOf } from "@/lib/season";
 import { findThisHref } from "@/lib/scan";
@@ -127,7 +139,25 @@ export function placeBesideTile(tile: DOMRect): {
   };
 }
 
-export function GarmentDetail({
+export function GarmentDetail(props: {
+  garment: Garment;
+  onClose: () => void;
+  getTile?: () => HTMLElement | null;
+  /** Opens the "N looks with this" sheet; shown only when looksCount is above zero. */
+  onLooks?: () => void;
+  /** The real count of looks the piece leads (looksForHero), for the button's label. */
+  looksCount?: number;
+  /** Dresses the piece; false when no occasion holds a look, and the sheet says so. */
+  onOutfit?: () => boolean;
+}) {
+  return (
+    <BodyPortal>
+      <GarmentDetailSheet {...props} />
+    </BodyPortal>
+  );
+}
+
+export function GarmentDetailSheet({
   garment,
   onClose,
   getTile,
@@ -138,11 +168,8 @@ export function GarmentDetail({
   garment: Garment;
   onClose: () => void;
   getTile?: () => HTMLElement | null;
-  /** Opens the "N looks with this" sheet; shown only when looksCount is above zero. */
   onLooks?: () => void;
-  /** The real count of looks the piece leads (looksForHero), for the button's label. */
   looksCount?: number;
-  /** Dresses the piece; false when no occasion holds a look, and the sheet says so. */
   onOutfit?: () => boolean;
 }) {
   const [noOutfit, setNoOutfit] = useState(false);
@@ -156,11 +183,21 @@ export function GarmentDetail({
   const refPhoto = useCloset((s) => s.refPhoto);
   const [view, setView] = useState<"print" | "original" | "me">("print");
   const [name, setName] = useState(garment.name);
+  const [nameFocused, setNameFocused] = useState(false);
   const [subtype, setSubtype] = useState(garment.subtype ?? "");
+  const [subtypeFocused, setSubtypeFocused] = useState(false);
   /* A capture marker ("camera", "held") is not a style: the field starts blank instead. */
   const [notes, setNotes] = useState(styleNotes(garment.notes));
+  const [notesFocused, setNotesFocused] = useState(false);
+  const [nameOffer, setNameOffer] = useState<NameOffer | null>(() =>
+    nameOfferFromNotes(garment, styleNotes(garment.notes)),
+  );
   /* The name's colour leads: "Navy trousers" shows navy even when the pixels said light blue. */
   const [color, setColor] = useState(shownColors(garment)[0] ?? "");
+  const [colorFocused, setColorFocused] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const waitingSave = useRef(false);
   const [canPrint, setCanPrint] = useState(false);
   const [recoloring, setRecoloring] = useState(false);
   const [matching, setMatching] = useState(false);
@@ -201,17 +238,57 @@ export function GarmentDetail({
 
   useEffect(() => {
     setName(garment.name);
+    setNameFocused(false);
     setSubtype(garment.subtype ?? "");
+    setSubtypeFocused(false);
     setNotes(styleNotes(garment.notes));
+    setNotesFocused(false);
     setColor(shownColors(garment)[0] ?? "");
+    setColorFocused(false);
+    setNameOffer(nameOfferFromNotes(garment, styleNotes(garment.notes)));
+    setConfirmRemove(false);
+    setSaveMsg(null);
+    waitingSave.current = false;
     setCoverNote(null);
     setCoverError(null);
+    // Reset only when a different piece opens. Field updates while it stays open go through shownField.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [garment.id]);
+
+  useEffect(
+    () =>
+      onPushSettled((result) => {
+        if (!waitingSave.current) return;
+        waitingSave.current = false;
+        setSaveMsg(result.ok ? "Saved" : result.message);
+      }),
+    [],
+  );
+
+  const noteSaved = () => {
+    if (!isAccountSignedIn() || typeof window === "undefined") {
+      waitingSave.current = false;
+      setSaveMsg("Saved");
+      return;
+    }
+    waitingSave.current = true;
+    setSaveMsg(null);
+  };
+
+  const write = (patch: Partial<Garment>) => {
+    updateGarment(garment.id, patch);
+    noteSaved();
+  };
+
+  const shownName = shownField(garment.name, name, nameFocused);
+  const shownSubtype = shownField(garment.subtype ?? "", subtype, subtypeFocused);
+  const shownNotes = shownField(styleNotes(garment.notes), notes, notesFocused);
+  const shownColor = shownField(shownColors(garment)[0] ?? "", color, colorFocused);
 
   const commitPaid = () => {
     const n = parseFloat(paid);
     const next = Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : undefined;
-    if (next !== garment.paid) updateGarment(garment.id, { paid: next });
+    if (next !== garment.paid) write({ paid: next });
     setPaid(next != null ? String(next) : "");
   };
 
@@ -221,7 +298,11 @@ export function GarmentDetail({
       /* A renamed colour ("Navy trousers") carries its colour tag along. */
       const colors = colorsForName(next, garment.colors);
       const sameColors = colors.length === garment.colors.length && colors.every((c, i) => c === garment.colors[i]);
-      updateGarment(garment.id, { name: next, ...(sameColors ? {} : { colors }) });
+      write({
+        name: next,
+        ...(sameColors ? {} : { colors }),
+        ...(garment.needsCategory && next !== NEW_PIECE_NAME ? { needsCategory: false } : {}),
+      });
       if (!sameColors) setColor(colors[0] ?? "");
     } else setName(garment.name);
   };
@@ -229,7 +310,10 @@ export function GarmentDetail({
   const commitSubtype = () => {
     const next = subtype.trim();
     if (next !== (garment.subtype ?? "")) {
-      updateGarment(garment.id, { subtype: next });
+      write({
+        subtype: next,
+        ...(garment.needsCategory && garment.name.trim() !== NEW_PIECE_NAME ? { needsCategory: false } : {}),
+      });
     }
   };
 
@@ -248,12 +332,26 @@ export function GarmentDetail({
         notes,
       });
     }
-    if (sameNotes && sameSub && sameName && sameCat && !patch.tuck) return;
-    if (canPrint && notes.trim()) {
+    const offer = nameOfferFromNotes(garment, notes);
+    const unchanged = sameNotes && sameSub && sameName && sameCat && !patch.tuck;
+    const plan = notesBlurPlan({
+      fresh: isFreshPiece(garment),
+      canPrint,
+      notes,
+      unchanged,
+      offer: offer !== null,
+    });
+    if (plan === "idle") {
+      setNameOffer(null);
+      return;
+    }
+    if (plan === "match") {
+      setNameOffer(null);
       void matchCover();
       return;
     }
-    updateGarment(garment.id, patch);
+    if (!unchanged) write(patch);
+    setNameOffer(offer);
   };
 
   const commitColor = (raw: string) => {
@@ -271,8 +369,23 @@ export function GarmentDetail({
       (garment.colors[0] ?? "") !== next ||
       (patch.name && patch.name !== garment.name)
     ) {
-      updateGarment(garment.id, patch);
+      write(patch);
     }
+  };
+
+  const acceptNameOffer = () => {
+    if (!nameOffer) return;
+    write({
+      name: nameOffer.name,
+      category: nameOffer.category,
+      subtype: nameOffer.subtype,
+      ...(garment.needsCategory ? { needsCategory: false } : {}),
+    });
+    setName(nameOffer.name);
+    setSubtype(nameOffer.subtype);
+    setNameFocused(false);
+    setSubtypeFocused(false);
+    setNameOffer(null);
   };
 
   const updateCover = async () => {
@@ -293,7 +406,7 @@ export function GarmentDetail({
       await putImage(key, dataUrlToBlob(res.image));
       void putThumb(garment.id, res.image).catch(() => {});
       const named = nameWithColor(garment.name, next);
-      updateGarment(garment.id, {
+      write({
         cutoutSrc: key,
         colors: [next],
         ...(named !== garment.name ? { name: named } : {}),
@@ -312,7 +425,7 @@ export function GarmentDetail({
     const patch = patchFromNotes(garment, notes);
     if (patch.subtype != null) setSubtype(patch.subtype);
     if (patch.name) setName(patch.name);
-    updateGarment(garment.id, patch);
+    write(patch);
     if (!(patch.notes ?? "").trim()) {
       setCoverError("Describe the make first.");
       return;
@@ -349,7 +462,7 @@ export function GarmentDetail({
       await putThumb(garment.id, res.image);
       notifyImage(key);
       notifyImage(imageKey(garment.id, "t"));
-      updateGarment(garment.id, {
+      write({
         ...patch,
         cutoutSrc: key,
       });
@@ -364,7 +477,6 @@ export function GarmentDetail({
   };
 
   return (
-    <BodyPortal>
     <div
       data-piece-detail
       className={cn("fixed inset-0 z-50", !md && "flex items-end")}
@@ -521,14 +633,12 @@ export function GarmentDetail({
 
         </div>
         <div className="p-6 flex flex-col gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <select
-              value={derivedCategory(garment)}
-              onChange={(e) =>
-                updateGarment(garment.id, {
-                  category: e.target.value as Category,
-                })
-              }
+              aria-label="Category"
+              data-category-select
+              value={garment.category}
+              onChange={(e) => write(categoryWrite(e.target.value as Category, garment.needsCategory))}
               className="micro border border-hairline bg-card px-2 py-1 text-ink-soft"
             >
               {CATEGORIES.map((c) => (
@@ -537,19 +647,51 @@ export function GarmentDetail({
                 </option>
               ))}
             </select>
+            {garment.category === "other" && derivedCategory(garment) !== garment.category && (
+              <button
+                type="button"
+                onClick={() => write(categoryWrite(derivedCategory(garment), garment.needsCategory))}
+                className="micro border border-hairline px-2 py-1 text-ink-soft"
+              >
+                Looks like: {derivedCategory(garment)} — tap to set
+              </button>
+            )}
           </div>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={commitName}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-            aria-label="Name"
-            className="font-editorial text-3xl tracking-tight bg-transparent border-b border-transparent hover:border-hairline focus:border-hairline-strong focus:outline-none w-full"
-          />
+          {garment.needsCategory && (
+            <p className="text-sm text-ink-soft">{NOT_NAMED_YET}</p>
+          )}
+          <label className="block">
+            <span className="micro text-ink-soft inline-flex items-center gap-1">
+              <Pencil className="size-3" aria-hidden="true" />
+              Name
+            </span>
+            <input
+              value={shownName}
+              onChange={(e) => setName(e.target.value)}
+              onFocus={(e) => {
+                setNameFocused(true);
+                setName(garment.name);
+                e.currentTarget.select();
+              }}
+              onBlur={() => {
+                setNameFocused(false);
+                commitName();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+              autoFocus={garment.name === NEW_PIECE_NAME}
+              aria-label="Name"
+              className="mt-1 font-editorial text-3xl tracking-tight bg-transparent border border-hairline px-2 py-1 focus:border-hairline-strong focus:outline-none w-full"
+            />
+          </label>
+          {saveMsg && (
+            <p className={saveMsg === "Saved" ? "micro text-ink-soft" : "text-sm text-accent"} data-save-line>
+              {saveMsg}
+            </p>
+          )}
           <a
-            href={findThisHref(garment.brand, name)}
+            href={findThisHref(garment.brand, shownName)}
             target="_blank"
             rel="noreferrer noopener"
             className="micro self-start text-ink-soft underline underline-offset-2"
@@ -567,9 +709,16 @@ export function GarmentDetail({
               <dt className="micro text-ink-soft">Subtype</dt>
               <dd>
                 <input
-                  value={subtype}
+                  value={shownSubtype}
                   onChange={(e) => setSubtype(e.target.value)}
-                  onBlur={commitSubtype}
+                  onFocus={() => {
+                    setSubtypeFocused(true);
+                    setSubtype(garment.subtype ?? "");
+                  }}
+                  onBlur={() => {
+                    setSubtypeFocused(false);
+                    commitSubtype();
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
@@ -593,7 +742,7 @@ export function GarmentDetail({
                     <button
                       key={id}
                       type="button"
-                      onClick={() => updateGarment(garment.id, { tuck: id })}
+                      onClick={() => write({ tuck: id })}
                       className={cn(
                         "micro border px-2 py-1",
                         tuckOf(garment) === id
@@ -624,7 +773,7 @@ export function GarmentDetail({
                           const cur = new Set(seasonsOf(garment));
                           if (cur.has(s.id)) cur.delete(s.id);
                           else cur.add(s.id);
-                          updateGarment(garment.id, { seasons: [...cur] });
+                          write({ seasons: [...cur] });
                         }}
                         className={cn(
                           "micro border px-2 py-1",
@@ -648,14 +797,30 @@ export function GarmentDetail({
               <dt className="micro text-ink-soft">Style / make</dt>
               <dd className="mt-1 space-y-2">
                 <textarea
-                  value={notes}
+                  value={shownNotes}
                   onChange={(e) => setNotes(e.target.value)}
-                  onBlur={commitNotes}
+                  onFocus={() => {
+                    setNotesFocused(true);
+                    setNotes(styleNotes(garment.notes));
+                  }}
+                  onBlur={() => {
+                    setNotesFocused(false);
+                    commitNotes();
+                  }}
                   rows={3}
                   aria-label="Style / make"
                   placeholder="Gurkha. Extended waistband, side buckle, no belt, not a drawstring."
                   className="w-full border border-hairline bg-card px-2 py-2 text-sm leading-relaxed"
                 />
+                {nameOffer && (
+                  <button
+                    type="button"
+                    onClick={acceptNameOffer}
+                    className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+                  >
+                    Use as name?
+                  </button>
+                )}
                 {canPrint && (
                   <button
                     type="button"
@@ -683,7 +848,7 @@ export function GarmentDetail({
                       onClick={() => commitColor(c)}
                       className={cn(
                         "micro border px-2 py-1",
-                        (color || shownColors(garment)[0] || "") === c
+                        shownColor === c
                           ? "border-ink bg-ink text-paper"
                           : "border-hairline text-ink-soft",
                       )}
@@ -693,9 +858,16 @@ export function GarmentDetail({
                   ))}
                 </div>
                 <input
-                  value={color}
+                  value={shownColor}
                   onChange={(e) => setColor(e.target.value)}
-                  onBlur={() => commitColor(color)}
+                  onFocus={() => {
+                    setColorFocused(true);
+                    setColor(shownColors(garment)[0] ?? "");
+                  }}
+                  onBlur={() => {
+                    setColorFocused(false);
+                    commitColor(color);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
@@ -763,11 +935,14 @@ export function GarmentDetail({
             )}
           </div>
           {noOutfit && (
-            <p data-outfit-note className="mt-4 text-sm text-ink-soft">
-              {NO_OUTFIT_NOTE}
-            </p>
+            <div data-outfit-note className="mt-4">
+              <p className="text-sm text-ink-soft">{NO_OUTFIT_NOTE}</p>
+              {(garment.needsCategory || isUnslottedLock(garment)) && (
+                <p className="text-sm text-ink-soft">{PICK_CATEGORY_NUDGE}</p>
+              )}
+            </div>
           )}
-          <div className="mt-auto flex flex-wrap gap-2 pt-4">
+          <div className="mt-auto flex flex-wrap gap-2 pt-4" data-sheet-actions>
             {onOutfit && (
               <Button
                 onClick={() => {
@@ -788,19 +963,40 @@ export function GarmentDetail({
             <Button variant="ghost" onClick={onClose}>
               Close
             </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                removeGarment(garment.id);
-                onClose();
-              }}
-            >
-              Remove
-            </Button>
+          </div>
+          <div className="pt-3" data-remove-piece>
+            {confirmRemove ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm text-ink-soft">Remove this piece?</p>
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    const step = removeTap(true);
+                    if (!step.remove) return;
+                    removeGarment(garment.id);
+                    onClose();
+                  }}
+                >
+                  Remove
+                </Button>
+                <Button variant="ghost" onClick={() => setConfirmRemove(false)}>
+                  Keep
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="danger"
+                onClick={() => {
+                  const step = removeTap(false);
+                  if (step.confirm) setConfirmRemove(true);
+                }}
+              >
+                Remove
+              </Button>
+            )}
           </div>
         </div>
       </div>
     </div>
-    </BodyPortal>
   );
 }

@@ -19,6 +19,7 @@ import { garmentMemo, piecesMemo } from "./garment-memo.ts";
 import { isLinenCampPiece, isOvercoatPiece, lookFitsSeason, pieceFitsSeason, seasonFromWeather, seasonWarmth, type Season } from "./season.ts";
 import { jacketInfo, jeansWithBlazer, slotPieces, wearSlot } from "./stylist/jackets.ts";
 import { JACKET_COVER_IDS, needsJacketOnly, pieceRuleFails, relaxTiers, ruleFails, type RuleCtx } from "./stylist/legal.ts";
+import { wordsCategory } from "./camera-tag.ts";
 import { livePool } from "./rack.ts";
 import { onlyTopIsUntucked, resolveTuck } from "./tuck.ts";
 import { pieceVetoIds, tuckHabitIds, type TasteMemory } from "./taste.ts";
@@ -523,6 +524,97 @@ export function slotOf(g: Garment): Slot | null {
   return garmentMemo(g, "style.slotOf", slotTest);
 }
 
+/**
+ * A locked piece with no wear slot. Accessories (a belt, sunglasses, a cap) are not this:
+ * they still ride along on a look. Anything else must not be drawn around or bolted on.
+ */
+export function isUnslottedLock(g: Garment): boolean {
+  if (slotOf(g) !== null) return false;
+  if (g.category === "accessory") return false;
+  if (wordsCategory(`${g.name} ${g.subtype ?? ""} ${g.notes ?? ""}`) === "accessory") return false;
+  return true;
+}
+
+type WornRole = "top" | "mid" | "outer" | "bottom" | "footwear" | "other";
+
+/**
+ * The role each piece is worn in inside this look. Same split as slotPieces: an outerEligible
+ * layer is the outer when the look already has a top, not a second top. A mid stays a mid.
+ * A second shirt stays a top.
+ */
+function wornRoles(pieces: readonly Garment[]): Map<string, WornRole> {
+  const role = new Map<string, WornRole>();
+  const dual: Garment[] = [];
+  let hasTop = false;
+  let hasOuter = false;
+  let hasMid = false;
+  const set = (id: string, next: WornRole) => {
+    role.set(id, next);
+    if (next === "top") hasTop = true;
+    if (next === "outer") hasOuter = true;
+    if (next === "mid") hasMid = true;
+  };
+  for (const g of pieces) {
+    const slot = slotOf(g);
+    if (slot === "footwear") {
+      set(g.id, "footwear");
+      continue;
+    }
+    if (slot === "bottom") {
+      set(g.id, "bottom");
+      continue;
+    }
+    if (jacketInfo(g).outerEligible) {
+      dual.push(g);
+      continue;
+    }
+    const worn = wearSlot(g);
+    if (worn === "mid") {
+      set(g.id, "mid");
+      continue;
+    }
+    if (worn === "outer") {
+      set(g.id, "outer");
+      continue;
+    }
+    if (slot === "top" || slot === "dress") {
+      set(g.id, "top");
+      continue;
+    }
+    if (slot === "outerwear") {
+      set(g.id, "outer");
+      continue;
+    }
+    set(g.id, "other");
+  }
+  for (const g of dual) {
+    if (hasTop && !hasOuter) set(g.id, "outer");
+    else if (!hasTop) set(g.id, "top");
+    else if (!hasMid) set(g.id, "mid");
+    else set(g.id, "other");
+  }
+  return role;
+}
+
+/** The role this piece is worn in inside this look. */
+export function wornRole(g: Garment, pieces: readonly Garment[]): WornRole {
+  return wornRoles(pieces).get(g.id) ?? "other";
+}
+
+/**
+ * The look wears the anchor in its own role. A shoe is the only footwear, a bottom the only
+ * bottom, a top the only piece worn as a top. A mid layer and an outerEligible outer may sit with it.
+ */
+export function anchorLookOk(anchor: Garment, pieces: readonly Garment[]): boolean {
+  if (!pieces.some((p) => p.id === anchor.id)) return false;
+  const roles = wornRoles(pieces);
+  const role = roles.get(anchor.id) ?? "other";
+  if (role !== "top" && role !== "bottom" && role !== "footwear" && role !== "mid") return true;
+  let n = 0;
+  for (const piece of pieces) if ((roles.get(piece.id) ?? "other") === role) n += 1;
+  return n === 1;
+}
+
 function slotTest(g: Garment): Slot | null {
   const worn = wearSlot(g);
   if (worn === "outer") return "outerwear";
@@ -801,6 +893,10 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
   const pool = livePool(garments);
   const rng = rngFromSalt(opts.salt ?? 1);
   const lockedSet = new Set(opts.lockedIds ?? []);
+  for (const id of lockedSet) {
+    const locked = pool.find((x) => x.id === id);
+    if (locked && isUnslottedLock(locked)) return { ids: [], relaxed: [], tried: 0, hero: null };
+  }
   const taste = opts.taste;
   const vetoed = taste ? pieceVetoIds(taste) : new Set<string>();
   const today = opts.today ?? todayNY();
@@ -1034,7 +1130,10 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
     found = search();
   }
   if (!found) {
-    const locked = [...lockedSet].filter((id) => pool.some((g) => g.id === id));
+    const locked = [...lockedSet].filter((id) => {
+      const g = pool.find((x) => x.id === id);
+      return g !== undefined && !isUnslottedLock(g);
+    });
     return { ids: locked, relaxed: [], tried, hero: null };
   }
   const relaxed = found.relaxed;
@@ -1045,7 +1144,7 @@ export function pickLookWith(garments: Garment[], opts: PickOpts): PickResultDet
   if (belt && shoe && /loafer/.test(`${shoe.subtype} ${shoe.name}`.toLowerCase()) && !ids.includes(belt.id)) ids.push(belt.id);
   for (const id of lockedSet) {
     const g = pool.find((x) => x.id === id);
-    if (!g) continue;
+    if (!g || isUnslottedLock(g)) continue;
     if (!ids.includes(g.id)) ids.push(g.id);
   }
   return { ids, relaxed, tried, hero: found.hero };

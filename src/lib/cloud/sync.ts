@@ -39,7 +39,7 @@ import {
   type SyncMemory,
   type WriteResult,
 } from "./commit.ts";
-import { clearPendingEdit, onRefPhotoEdit, onUserEdit, peekPendingEdit } from "./edit.ts";
+import { clearPendingEdit, notePushSettled, onRefPhotoEdit, onUserEdit, peekPendingEdit } from "./edit.ts";
 import { isHomeEmail, WRONG_ACCOUNT } from "./home.ts";
 import { idbCount, isCloudSrc, rewriteCloudSrcs } from "./src.ts";
 import {
@@ -483,6 +483,7 @@ async function pushNow() {
     setLocalOnly(true);
     setAccountProgress(SAVE_RETRY);
     pushAgain = true;
+    notePushSettled({ ok: false, kind: "offline", message: SAVE_RETRY });
     return;
   }
   if (pushing) {
@@ -537,12 +538,19 @@ async function pushNow() {
     mem = result.mem;
     if (result.refused) {
       clearPendingEdit();
-      setAccountProgress("Didn't save — that would drop pieces you didn't delete.");
+      const message = "Didn't save — that would drop pieces you didn't delete.";
+      setAccountProgress(message);
+      notePushSettled({ ok: false, kind: "refused", message });
       return;
     }
     if (!result.wrote || !result.merged) {
-      if (result.retry) setAccountProgress(SAVE_RETRY);
-      else clearPendingEdit();
+      if (result.retry) {
+        setAccountProgress(SAVE_RETRY);
+        notePushSettled({ ok: false, kind: "error", message: SAVE_RETRY });
+      } else {
+        clearPendingEdit();
+        notePushSettled({ ok: false, kind: "error", message: "Couldn't save." });
+      }
       return;
     }
     // A newer edit arrived while this snapshot was in flight. Do not paint the
@@ -574,6 +582,7 @@ async function pushNow() {
     );
     setLocalOnly(false);
     if (getAccount().progress === SAVE_RETRY) setAccountProgress(null);
+    notePushSettled({ ok: true });
     void uploadRef(user.id, useCloset.getState().refPhoto);
   } finally {
     pushing = false;

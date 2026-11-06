@@ -15,7 +15,7 @@ import {
   unusedFromLooks,
 } from "./lookbook.ts";
 import { lookFitsSeason } from "./season.ts";
-import { HOUSE_CHIPS, leadHouse, slotOf } from "./style.ts";
+import { HOUSE_CHIPS, isUnslottedLock, leadHouse, slotOf } from "./style.ts";
 import { OCCASIONS, SEASONS, type Garment, type Look } from "./types.ts";
 
 function plate(
@@ -348,7 +348,9 @@ describe("lookbook invariants", () => {
     const week = buildWeek(FIXTURE, "2026-09-14");
     assert.equal(week.length, 7, `week ${week.length}`);
     const book = coverUnused(FIXTURE, [...week, ...buildLookbook(FIXTURE, "2026-09-14")]);
-    const unused = unusedFromLooks(FIXTURE, book).filter((g) => !g.seasons.length || g.seasons.includes("fall"));
+    const unused = unusedFromLooks(FIXTURE, book).filter(
+      (g) => (!g.seasons.length || g.seasons.includes("fall")) && !isUnslottedLock(g),
+    );
     assert.equal(unused.length, 0, `unused ${unused.map((g) => g.name).slice(0, 8).join(", ")}`);
     const ox = FIXTURE.find((g) => g.id === "ox-lb")!;
     const five = looksForHero(ox, FIXTURE);

@@ -286,6 +286,7 @@ describe("camera tag", () => {
   it("a brown jacket is outerwear on the same id; the tile name was already New piece", () => {
     assert.equal(CAMERA_TAG_MS, 12_000);
     assert.equal(CAMERA_TAG_RULES.includes("outerwear, never a top"), true);
+    assert.equal(CAMERA_TAG_RULES.includes("A pair of shoes is ONE item, count 1"), true);
     assert.equal(CAMERA_TAG_RULES.includes("hoodie"), true);
     assert.equal(CAMERA_TAG_RULES.includes("not the room"), true);
     const decision = decideCameraTag({
@@ -386,6 +387,21 @@ describe("camera tag", () => {
     const next = apply(decision);
     assert.equal(next.find((g) => g.id === "shot")?.name, "New piece");
     assert.equal(next.find((g) => g.id === "shot")?.category, "other");
+  });
+
+  it("a pair of shoes is one piece, even when the count is 2", () => {
+    const decision = decideCameraTag({
+      ok: true,
+      name: "Brown suede horsebit loafers",
+      category: "footwear",
+      subtype: "loafers",
+      count: 2,
+    });
+    assert.equal(decision.action, "update");
+    if (decision.action !== "update") return;
+    assert.equal(decision.patch.category, "footwear");
+    assert.equal(decision.patch.name, "Brown suede horsebit loafers");
+    assert.equal(decision.patch.subtype, "loafers");
   });
 
   it("a person is not saved as one top; one jacket still is that jacket", () => {

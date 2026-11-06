@@ -26,6 +26,30 @@ export function noteUserEdit(): void {
   for (const fn of listeners) fn();
 }
 
+/** How the account push for a user edit finished. The sheet waits on this before it says Saved. */
+export type PushSettle =
+  | { ok: true }
+  | { ok: false; kind: "refused" | "error" | "offline"; message: string };
+
+const settleListeners = new Set<(result: PushSettle) => void>();
+
+export function onPushSettled(fn: (result: PushSettle) => void): () => void {
+  settleListeners.add(fn);
+  return () => {
+    settleListeners.delete(fn);
+  };
+}
+
+export function notePushSettled(result: PushSettle): void {
+  for (const fn of settleListeners) {
+    try {
+      fn(result);
+    } catch {
+      /* a sheet listener cannot block the push */
+    }
+  }
+}
+
 const refListeners = new Set<Listener>();
 
 /** Only an explicit reference-photo change. A cloud merge must not set this. */
