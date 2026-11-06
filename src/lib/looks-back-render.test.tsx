@@ -14,7 +14,7 @@ vi.mock("@/components/closet/overlay", () => ({
 
 /** Canonical day for the parity hash. Clock runs below re-pin to this before hashing. */
 const PIN = "2026-11-04";
-const PARITY_HASH = "ddeda83f23759b394c2926fb1b655aefff000116813a1a0c6dcd0a8dc3ee892e";
+const PARITY_HASH = "4a4fcf28bde5ae19f11781497af5d82e7c943c94bb7107fde3119dab17321f0d";
 
 function pinDay(day: string) {
   vi.useFakeTimers({ toFake: ["Date"] });

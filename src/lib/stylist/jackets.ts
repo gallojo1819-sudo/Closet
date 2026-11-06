@@ -16,6 +16,7 @@ import {
   type Plate,
 } from "../house-profiles/evaluate.ts";
 import { WEATHER_THRESHOLDS } from "../weather.ts";
+import { oversizedOf } from "./oversized.ts";
 import { dominant, wash } from "./rules.ts";
 import classFile from "./data/2026-09-30-jacket-classification.json" with { type: "json" };
 import jacketRules from "./data/2026-09-30-jacket-rules.json" with { type: "json" };
@@ -762,7 +763,7 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
       const [worn, g] = pair;
       return Boolean(g && jsig(g, "chunky_knit", worn));
     });
-    if (chunky.length) {
+    if (chunky.length && !oversizedOf(outer)) {
       const regular = chunky.every(([, g]) => (g.fit ?? "").toLowerCase() === "regular");
       if (info.cut === "roomy") {
         /* roomy is allowed over a chunky knit */
@@ -853,6 +854,15 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
   }
   if (shoe && wet && suedeFootwear(shoe)) {
     hit("JKT-WET-2", "soft", -15, `suede shoes ${shoe.name} on a wet day`);
+  }
+
+  if (outer && countsAsOuter(outer) && !oversizedOf(outer)) {
+    for (const g of [top, mid]) {
+      if (!g || g.id === outer.id) continue;
+      if (oversizedOf(g)) {
+        hit("JKT-LAY-9", "hard", 0, `${g.name} is oversized; it only goes under an oversized jacket`);
+      }
+    }
   }
 
   if (outer && covered) {

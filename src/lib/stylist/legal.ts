@@ -25,6 +25,7 @@ import { pairingBlocked, pieceVetoIds, type TasteMemory } from "../taste.ts";
 import { evaluateColor } from "./colorChip.ts";
 import { piecesFromIds, stylistHits, type StylistHit } from "./rules.ts";
 import { coatSharesLookWithGraphic, isJacketAddition, jacketHits, jacketRequired, slotPieces, supersededStylist, wearSlot } from "./jackets.ts";
+import { shortOuterHits } from "./short-outer.ts";
 import { DELETED_SET, DELETED_SNEAKERS } from "./deleted.ts";
 
 export { DELETED_SNEAKERS };
@@ -164,6 +165,7 @@ function houseVerdict(ps: Partial<Record<string, Plate>>, ctx: LegalCtx): { pass
 export function isLegal(pieces: Garment[], ctx: LegalCtx): boolean {
   if (pieces.length < 3) return false;
   if (coatSharesLookWithGraphic(pieces)) return false;
+  if (shortOuterHits(pieces).length) return false;
   if (deletedSneaker(pieces.map((p) => p.id))) return false;
   if (clashes(pieces)) return false;
   const ps = slotted(pieces);
@@ -222,6 +224,7 @@ export function ruleHits(pieces: Garment[], ctx: RuleCtx): RuleHits {
   if (deletedSneaker(pieces.map((p) => p.id))) pushHard("DELETED");
   if (clashes(pieces)) pushHard("CLASH");
   if (coatSharesLookWithGraphic(pieces)) pushHard("GRAPHIC-COAT");
+  for (const id of shortOuterHits(pieces)) pushHard(id);
   const verdict = houseVerdict(ps, ctx);
   if (ctx.house && !verdict.passed) {
     for (const id of verdict.eval?.hardFails ?? []) pushHard(id);

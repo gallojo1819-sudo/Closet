@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { GarmentDetailSheet } from "@/components/closet/detail";
 import { liveSnapshot } from "./__fixtures__/snapshot.ts";
+import { oversizedOf } from "./stylist/oversized.ts";
 import { derivedCategory } from "./garment-category.ts";
 import { NEW_PIECE_NAME } from "./ingest.ts";
 import type { Garment } from "./types.ts";
@@ -89,5 +90,31 @@ describe("piece sheet markup", () => {
     expect(src).toContain("removeTap(true)");
     expect(src).toContain("shownField(");
     expect(src).not.toContain("value={derivedCategory(garment)}");
+  });
+
+  it("shows Oversized on for a default oversized top, off for the chore and a new piece, and hides it on a bottom", () => {
+    const navy = liveSnapshot.find((g) => g.id === "g_d1awqw83gd3c");
+    const chore = liveSnapshot.find((g) => g.id === "g_8qqqzpwxuwti");
+    const bottom = liveSnapshot.find((g) => g.category === "bottom");
+    expect(navy && chore && bottom).toBeTruthy();
+    const selected = (markup: string, value: "on" | "off") => {
+      const tag = markup.match(new RegExp(`<button[^>]*data-oversized-value="${value}"[^>]*>`));
+      expect(tag, value).toBeTruthy();
+      return tag![0]!.includes('aria-pressed="true"');
+    };
+    const navyMarkup = renderToStaticMarkup(<GarmentDetailSheet garment={navy!} onClose={() => {}} />);
+    expect(navyMarkup).toContain("data-oversized-row");
+    expect(navyMarkup).toContain(">Oversized<");
+    expect(selected(navyMarkup, "on")).toBe(oversizedOf(navy!));
+    expect(selected(navyMarkup, "off")).toBe(false);
+    const choreMarkup = renderToStaticMarkup(<GarmentDetailSheet garment={chore!} onClose={() => {}} />);
+    expect(selected(choreMarkup, "off")).toBe(true);
+    expect(selected(choreMarkup, "on")).toBe(false);
+    const fresh = piece({ id: "g_new", name: "New piece", category: "top", subtype: "shirt" });
+    const freshMarkup = renderToStaticMarkup(<GarmentDetailSheet garment={fresh} onClose={() => {}} />);
+    expect(oversizedOf(fresh)).toBe(false);
+    expect(selected(freshMarkup, "off")).toBe(true);
+    const bottomMarkup = renderToStaticMarkup(<GarmentDetailSheet garment={bottom!} onClose={() => {}} />);
+    expect(bottomMarkup).not.toContain("data-oversized-row");
   });
 });

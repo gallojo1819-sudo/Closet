@@ -69,6 +69,8 @@ export type Garment = {
   fit?: "slim" | "regular" | "relaxed";
   /** How the shirt is worn. Missing on old closet.v6 garments → guessTuck. */
   tuck?: Tuck;
+  /** Missing → default list (stylist/oversized.ts). */
+  oversized?: boolean;
   productUrl?: string;
   /** Fingerprint of the source File so a dump cannot add the same JPEG twice. */
   fileHash?: string;

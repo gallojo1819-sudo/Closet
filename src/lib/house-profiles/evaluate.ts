@@ -13,6 +13,8 @@ export type Plate = {
   colors?: string[];
   brand?: string;
   fit?: string;
+  /** Missing → the default oversized list. Same object the garment carries. */
+  oversized?: boolean;
   warmth?: number;
   notes?: string;
 };

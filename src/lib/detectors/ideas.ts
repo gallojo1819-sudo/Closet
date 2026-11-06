@@ -37,8 +37,9 @@ import { livePool } from "../rack.ts";
 import { rotationLookKey, rotationRank, type Rotation } from "../rotation.ts";
 import { pieceFitsSeason, type Season } from "../season.ts";
 import { daysIdle, isBrownSuedeOuter, slotOf } from "../style.ts";
-import { jacketRequired, wearSlot } from "../stylist/jackets.ts";
+import { jacketInfo, jacketRequired, wearSlot } from "../stylist/jackets.ts";
 import { relaxTiers } from "../stylist/legal.ts";
+import { oversizedOf } from "../stylist/oversized.ts";
 import { applyAtlas, pieceVetoIds, type TasteMemory } from "../taste.ts";
 import type { Garment, Occasion } from "../types.ts";
 import { todayNY } from "../utils.ts";
@@ -60,6 +61,13 @@ const IDLE_DAYS = 90;
 export const THEME_ROWS = 4;
 /** Candidates per slot a hero may try; cheap checks one hero, then one row, may spend. */
 const BEAM = 8;
+
+/** An oversized top under a regular counting jacket fails JKT-LAY-9. Skip it before it spends a try. */
+function regularCountingJacket(g: Garment): boolean {
+  if (oversizedOf(g)) return false;
+  const info = jacketInfo(g);
+  return Boolean(info.countsAsJacket && info.class && info.class !== "mid");
+}
 const HERO_TRIES = 400;
 const ROW_TRIES = 8000;
 /**
@@ -460,6 +468,7 @@ function dressHero(
         if (!d.coreOk(core)) continue;
         const layered = (list: Garment[]): Garment[] | null => {
           for (const layer of list) {
+            if (oversizedOf(top) && regularCountingJacket(layer)) continue;
             if (budget.tries <= 0 || budget.hero <= 0) return null;
             budget.tries -= 1;
             budget.hero -= 1;
@@ -1418,6 +1427,7 @@ function pairableIn(scope: string, hero: Garment, d: Dresser, budget: Budget): b
           if (!d.coreOk(core)) continue;
           if (slot !== "layer" && d.bareOk(core) && consider(core)) break search;
           for (const layer of layers) {
+            if (oversizedOf(top) && regularCountingJacket(layer)) continue;
             if (budget.tries <= 0) break search;
             budget.tries -= 1;
             budget.hero -= 1;

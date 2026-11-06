@@ -187,9 +187,7 @@ describe("T2 screenshot cards", () => {
   });
 
   const fixes = [
-    { top: "g_gp53xkrmem9b", outer: "g_1pg9y05mlkek", bottom: "g_dzsh3qh7v6sb", shoe: "g_8ukg5mi9r3fc" },
     { top: "g_2rtuat7aheik", outer: "g_juk45cokjxxy", bottom: "g_dzsh3qh7v6sb", shoe: "g_8ukg5mi9r3fc" },
-    { top: "g_gp53xkrmem9b", outer: "g_wwy9b2pusds3", bottom: "g_v3ovns4bv344", shoe: "g_8ukg5mi9r3fc" },
     { top: "g_xbt3gpjuo1p4", outer: "g_1pg9y05mlkek", bottom: "g_k75fdfdsnak0", shoe: "g_8ukg5mi9r3fc" },
     { mid: "g_j2id379jo424", outer: "g_8qqqzpwxuwti", bottom: "g_v3ovns4bv344", shoe: "g_b4zsf3dfrhdv" },
     { mid: "g_j2id379jo424", outer: "g_1pg9y05mlkek", bottom: "g_v3ovns4bv344", shoe: "g_b4zsf3dfrhdv" },
@@ -203,6 +201,18 @@ describe("T2 screenshot cards", () => {
       const hits = jacketHits(pieces(look), { occasion: "weekday", season });
       const hard = hits.filter((h) => h.severity === "hard").map((h) => h.why);
       expect(hard, JSON.stringify(look)).toEqual([]);
+    }
+  });
+
+  it("the grey knit under a regular jacket is JKT-LAY-9", () => {
+    const blocked = [
+      { top: "g_gp53xkrmem9b", outer: "g_1pg9y05mlkek", bottom: "g_dzsh3qh7v6sb", shoe: "g_8ukg5mi9r3fc" },
+      { top: "g_gp53xkrmem9b", outer: "g_wwy9b2pusds3", bottom: "g_v3ovns4bv344", shoe: "g_8ukg5mi9r3fc" },
+    ];
+    for (const look of blocked) {
+      const season = look.outer === "g_wwy9b2pusds3" ? "winter" : "fall";
+      const hits = jacketHits(pieces(look), { occasion: "weekday", season });
+      expect(hits.some((h) => h.id === "JKT-LAY-9" && h.severity === "hard"), JSON.stringify(look)).toBe(true);
     }
   });
 });

@@ -284,7 +284,10 @@ export function leadTop(pieces: readonly Garment[]): Garment | null {
   return tops.find((g) => isKnitTop(g)) ?? tops.find((g) => isShirtLike(g)) ?? null;
 }
 
-/** One tuck answer for the plate and the label. "none" when there is nothing to tuck. */
+/**
+ * One tuck answer for the plate and the label. "none" when there is nothing to tuck.
+ * An oversized lead is always out. A shirt under a vest is in, ahead of a learned habit.
+ */
 export function lookTuckDecision(
   pieces: readonly Garment[],
   occasion?: string,
@@ -293,6 +296,5 @@ export function lookTuckDecision(
   const lead = leadTop(pieces);
   if (!lead) return "none";
   if (!pieces.some((g) => slotOf(g) === "bottom")) return "none";
-  if (neverTuck.includes(lead.id)) return "out";
-  return resolveTuck(lead, occasion as Occasion | undefined, [...pieces]);
+  return resolveTuck(lead, occasion as Occasion | undefined, pieces, neverTuck);
 }

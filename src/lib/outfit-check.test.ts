@@ -378,6 +378,7 @@ describe("outfit check", () => {
       "XC-PROP-1", "XC-PROP-2", "XC-PAT-1", "XC-DEN-1", "XC-DEN-2",
       "COL-7", "COL-8", "COL-9", "COL-10", "COL-11", "COL-12", "COL-13",
       "JKT-LAY-1", "JKT-LAY-2", "JKT-LAY-3", "JKT-LAY-4", "JKT-LAY-5", "JKT-LAY-6", "JKT-LAY-7", "JKT-LAY-8",
+      "JKT-LAY-9", "JKT-LAY-10",
       "GRAPHIC_COAT", "SLOTS",
     ];
     for (const id of ids) {

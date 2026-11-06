@@ -13,6 +13,7 @@ import { slotOf } from "../style.ts";
 import { relaxTiers, ruleHits, type RuleHits } from "../stylist/legal.ts";
 import { DELETED_SET } from "../stylist/deleted.ts";
 import { jacketRequired } from "../stylist/jackets.ts";
+import { oversizedOf } from "../stylist/oversized.ts";
 import type { Garment, Look, Occasion } from "../types.ts";
 import { todayISO, todayNY } from "../utils.ts";
 import { detectorColor } from "./palette.ts";
@@ -675,6 +676,7 @@ function stampOf(garments: Garment[], season: string): string {
         g.material,
         g.archived ? "1" : "0",
         g.tuck ?? "",
+        oversizedOf(g) ? "1" : "0",
         (g.colors ?? []).join("."),
         (g.seasons ?? []).join("."),
       ].join(":"),

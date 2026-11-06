@@ -31,6 +31,8 @@ import {
   seasonFromWeather,
   type Season,
 } from "../season.ts";
+import { oversizedOf } from "../stylist/oversized.ts";
+import { isShortOuter } from "../stylist/short-outer.ts";
 import { daysIdle, slotOf } from "../style.ts";
 import { scrubHouseNames } from "../stylist-page.ts";
 import { explain, isLegal } from "../stylist/legal.ts";
@@ -112,6 +114,10 @@ type SlotCount = { tops: number; bottoms: number; shoes: number; jackets: number
 function slotCount(pieces: Garment[]): SlotCount {
   const count: SlotCount = { tops: 0, bottoms: 0, shoes: 0, jackets: 0 };
   for (const g of pieces) {
+    if (isShortOuter(g)) {
+      count.jackets += 1;
+      continue;
+    }
     const s = slotOf(g);
     if (s === "top" || s === "dress") count.tops += 1;
     else if (s === "bottom") count.bottoms += 1;
@@ -299,7 +305,11 @@ const buildLook: ToolDef<{ prompt: string; occasion?: Occasion; season?: Season;
     if (dressed(report, first)) return report;
     /* One retry that steers the atlas off the pieces that fail the season (its own avoid list). */
     const avoid: Record<string, number> = {};
-    for (const g of first) if (!pieceFitsSeason(g, season) && !locked.includes(g.id)) avoid[g.id] = 8;
+    for (const g of first) {
+      if (locked.includes(g.id)) continue;
+      if (!pieceFitsSeason(g, season)) avoid[g.id] = 8;
+      else if (!report.legal && oversizedOf(g) && (slotOf(g) === "top" || slotOf(g) === "dress")) avoid[g.id] = 8;
+    }
     if (Object.keys(avoid).length) {
       const again = composeAtlasLook({
         garments: live,

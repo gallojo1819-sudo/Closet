@@ -56,6 +56,7 @@ import {
 import { CATEGORIES, SEASONS, type Category, type Garment } from "@/lib/types";
 import { seasonsOf } from "@/lib/season";
 import { findThisHref } from "@/lib/scan";
+import { oversizedOf } from "@/lib/stylist/oversized";
 import { guessTuck } from "@/lib/tuck";
 import { fetchCloudBlob } from "@/lib/cloud/blobs";
 import { useCloset } from "@/lib/store";
@@ -771,6 +772,40 @@ export function GarmentDetailSheet({
                 </p>
               </dd>
             </div>
+            {(garment.category === "top" || garment.category === "outerwear") && (
+              <div className="col-span-2" data-oversized-row>
+                <dt className="micro text-ink-soft">Oversized</dt>
+                <dd className="mt-1">
+                  <div className="flex flex-wrap gap-1">
+                    {(
+                      [
+                        [true, "On"],
+                        [false, "Off"],
+                      ] as const
+                    ).map(([value, label]) => {
+                      const on = oversizedOf(garment) === value;
+                      return (
+                        <button
+                          key={label}
+                          type="button"
+                          data-oversized-value={value ? "on" : "off"}
+                          aria-pressed={on}
+                          onClick={() => write({ oversized: value })}
+                          className={cn(
+                            "micro min-h-11 min-w-11 border px-3 py-2",
+                            on
+                              ? "border-ink bg-ink text-paper"
+                              : "border-hairline text-ink-soft",
+                          )}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </dd>
+              </div>
+            )}
             <div className="col-span-2">
               <dt className="micro text-ink-soft">Season</dt>
               <dd className="mt-1 space-y-2">
