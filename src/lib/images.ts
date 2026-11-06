@@ -3,7 +3,7 @@
  * Full data URLs never go back into persist once migrated.
  */
 
-import { ImageFormatError, pastedFileLabel } from "./upload-read.ts";
+import { ImageFormatError, takePastedLabel, type PasteSeq } from "./upload-read.ts";
 
 const DB_NAME = "closet-images";
 const STORE = "images";
@@ -167,14 +167,9 @@ export function notifyImage(key: string) {
   imageWatchers.get(key)?.forEach((fn) => fn());
 }
 
-/**
- * Size + first 64KB. The clipboard names every paste `image.png` and stamps a
- * new lastModified, so the name is not part of the hash. Identical bytes are
- * the same piece.
- */
-export async function fileFingerprint(file: Blob): Promise<string> {
+async function digestFingerprint(file: Blob, metaText: string): Promise<string> {
   const head = await file.slice(0, 64 * 1024).arrayBuffer();
-  const meta = new TextEncoder().encode(`${file.size}\0`);
+  const meta = new TextEncoder().encode(metaText);
   const bytes = new Uint8Array(meta.byteLength + head.byteLength);
   bytes.set(meta, 0);
   bytes.set(new Uint8Array(head), meta.byteLength);
@@ -184,15 +179,38 @@ export async function fileFingerprint(file: Blob): Promise<string> {
     .join("");
 }
 
-/** One content hash per scan batch. A second file with the same bytes is a duplicate. */
+/**
+ * Size + first 64KB. The clipboard names every paste `image.png` and stamps a
+ * new lastModified, so the name is not part of the hash. Identical bytes are
+ * the same piece.
+ */
+export async function fileFingerprint(file: Blob): Promise<string> {
+  return digestFingerprint(file, `${file.size}\0`);
+}
+
+/**
+ * The hash stored on pieces added before the content-only fingerprint:
+ * name, size, lastModified, and the first 64KB.
+ */
+export async function legacyFileFingerprint(file: File): Promise<string> {
+  return digestFingerprint(file, `${file.name}\0${file.size}\0${file.lastModified}`);
+}
+
+/**
+ * One content hash per scan batch. A file already in the closet under the
+ * old name-and-mtime hash is still a duplicate. The value stored on a new
+ * piece is the content hash. Both go into `known`.
+ */
 export async function admitScanFile(
   file: Blob,
   known: Set<string>,
-): Promise<{ hash: string; duplicate: boolean }> {
+): Promise<{ hash: string; legacy: string | null; duplicate: boolean }> {
   const hash = await fileFingerprint(file);
-  if (known.has(hash)) return { hash, duplicate: true };
+  const legacy = file instanceof File ? await legacyFileFingerprint(file) : null;
+  const duplicate = known.has(hash) || (legacy !== null && known.has(legacy));
   known.add(hash);
-  return { hash, duplicate: false };
+  if (legacy) known.add(legacy);
+  return { hash, legacy, duplicate };
 }
 
 /** Resolve any stored src (idb key, data URL, or path) to a displayable URL. */
@@ -387,12 +405,13 @@ export type PreparedPaste = {
 export async function prepareClipboardFiles(
   files: File[],
   rasterize?: (file: File) => Promise<Blob>,
+  seq?: PasteSeq,
 ): Promise<PreparedPaste> {
+  const counter = seq ?? { n: 0 };
   const ready: File[] = [];
   const misses: { name: string; reason: "format" }[] = [];
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i]!;
-    const name = pastedFileLabel(i, file.name);
+  for (const file of files) {
+    const name = takePastedLabel(counter, file.name);
     try {
       ready.push(
         rasterize

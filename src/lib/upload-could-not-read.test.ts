@@ -7,15 +7,19 @@ register(new URL("../../scripts/ts-ext.mjs", import.meta.url), {
   parentURL: import.meta.url,
 });
 
-const { looksPage, frameRead, largestInkBounds, planMatte } = await import("./matte.ts");
-const { admitScanFile, clipboardWantsJpeg, prepareClipboardFiles } = await import("./images.ts");
+const { looksPage, frameRead, largestInkBounds, planMatte, chooseInkCrop, groundIsWhite, planForPixels } =
+  await import("./matte.ts");
+const { admitScanFile, clipboardWantsJpeg, legacyFileFingerprint, prepareClipboardFiles } =
+  await import("./images.ts");
 const {
   AlreadyInCloset,
   NEEDS_NAME_PROMPT,
   PageRejected,
   UPLOAD_MISS_COPY,
+  claimNaming,
   classifyScanError,
   listingUrlFromClipboard,
+  releaseNaming,
   tileCaption,
   uploadMissLine,
 } = await import("./upload-read.ts");
@@ -364,5 +368,141 @@ describe("banner copy", () => {
     assert.equal(log.includes("data.image"), false);
     assert.equal(log.includes("apiKey"), false);
     assert.equal(log.includes("XAI_API_KEY"), false);
+  });
+
+  it("does not offer an image url as a listing", () => {
+    assert.equal(listingUrlFromClipboard("", '<img src="https://cdn.example/garment.jpg">'), null);
+    assert.equal(
+      listingUrlFromClipboard(
+        "",
+        '<a href="https://www.farfetch.com/shopping/men/navy">navy</a><img src="https://cdn.example/a.jpg">',
+      ),
+      "https://www.farfetch.com/shopping/men/navy",
+    );
+  });
+});
+
+describe("legacy closet hashes", () => {
+  it("treats a photo saved under the old name-and-mtime hash as already in the closet", async () => {
+    const bytes = [4, 5, 6, 7, 8];
+    const stored = new File([Uint8Array.from(bytes)], "navy.png", {
+      type: "image/png",
+      lastModified: 1_700_000_000_000,
+    });
+    const legacy = await legacyFileFingerprint(stored);
+    const known = new Set([legacy]);
+    const again = new File([Uint8Array.from(bytes)], "navy.png", {
+      type: "image/png",
+      lastModified: 1_700_000_000_000,
+    });
+    const admitted = await admitScanFile(again, known);
+    assert.equal(admitted.duplicate, true);
+    assert.notEqual(admitted.hash, legacy);
+    assert.equal(known.has(admitted.hash), true);
+    assert.equal(known.has(legacy), true);
+
+    const different = [
+      png([1, 2, 3, 4], 11),
+      png([5, 6, 7, 8], 22),
+      png([9, 10, 11, 12], 33),
+    ];
+    const batch = new Set<string>();
+    for (const file of different) {
+      const one = await admitScanFile(file, batch);
+      assert.equal(one.duplicate, false);
+    }
+    const sameBytes = new File([Uint8Array.from([1, 2, 3, 4])], "other-name.png", {
+      type: "image/png",
+      lastModified: 99,
+    });
+    const dupe = await admitScanFile(sameBytes, batch);
+    assert.equal(dupe.duplicate, true);
+  });
+});
+
+describe("crop gaps", () => {
+  it("a near-white tee with a small dark logo is cropped to the tee", () => {
+    const w = 200;
+    const h = 320;
+    const tee = { x0: 40, y0: 50, x1: 160, y1: 280 };
+    const logo = { x0: 70, y0: 140, x1: 129, y1: 179 };
+    const data = paint(w, h, (x, y) => {
+      if (y <= 3 && x < 50) return [16, 16, 16];
+      if (rect(logo.x0, logo.y0, logo.x1, logo.y1, x, y)) return [12, 12, 20];
+      if (rect(tee.x0, tee.y0, tee.x1, tee.y1, x, y)) return [244, 244, 244];
+      return [255, 255, 255];
+    });
+    const ink = largestInkBounds(data, w, h);
+    assert.ok(ink);
+    const inkArea = (ink.maxX - ink.minX + 1) * (ink.maxY - ink.minY + 1);
+    assert.ok(inkArea / (w * h) < 0.04);
+    const box = chooseInkCrop(data, w, h, { r: 255, g: 255, b: 255 });
+    assert.ok(box);
+    assert.ok(box.minX <= tee.x0 && box.minY <= tee.y0);
+    assert.ok(box.maxX >= tee.x1 && box.maxY >= tee.y1);
+    const cover = ((box.maxX - box.minX + 1) * (box.maxY - box.minY + 1)) / (w * h);
+    assert.ok(cover > 0.2);
+  });
+
+  it("an off-white ground with a dark band takes the flood matte", () => {
+    assert.equal(groundIsWhite({ r: 222, g: 222, b: 222 }), false);
+    assert.equal(groundIsWhite({ r: 250, g: 250, b: 250 }), true);
+    const w = 90;
+    const h = 140;
+    const data = paint(w, h, (x, y) => {
+      if (y <= 6) return [20, 20, 20];
+      if (rect(28, 36, 62, 110, x, y)) return [18, 28, 72];
+      return [222, 222, 222];
+    });
+    assert.equal(looksPage(data, w, h), true);
+    assert.equal(frameRead(data, w, h), "product");
+    const plan = planForPixels(data, w, h);
+    assert.equal(plan.crop, "flood");
+    assert.equal(plan.kind, "phone");
+    assert.equal(
+      planMatte({ read: "product", chrome: true, studio: false, whiteGround: false }).crop,
+      "flood",
+    );
+  });
+});
+
+describe("re-tag guard", () => {
+  it("a second tap while naming is in flight does not start another run", async () => {
+    const inFlight = new Set<string>();
+    let runs = 0;
+    let finish = () => {};
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const start = (id: string) => {
+      if (!claimNaming(inFlight, id)) return null;
+      runs += 1;
+      return gate.finally(() => releaseNaming(inFlight, id));
+    };
+    const first = start("g_piece");
+    const second = start("g_piece");
+    assert.equal(runs, 1);
+    assert.equal(second, null);
+    assert.equal(inFlight.has("g_piece"), true);
+    finish();
+    await first;
+    assert.equal(inFlight.has("g_piece"), false);
+    assert.equal(claimNaming(inFlight, "g_piece"), true);
+    const studio = readFileSync(new URL("../components/add/studio.tsx", import.meta.url), "utf8");
+    assert.match(studio, /claimNaming\(namingRef\.current, id\)/);
+    assert.match(studio, /disabled=\{namingIds\.includes\(g\.id\)\}/);
+  });
+});
+
+describe("pasted names across pastes", () => {
+  it("keeps numbering going instead of restarting at pasted 1", async () => {
+    const seq = { n: 0 };
+    const first = await prepareClipboardFiles([png([1, 1, 1], 1)], undefined, seq);
+    const second = await prepareClipboardFiles([png([2, 2, 2], 2), png([3, 3, 3], 3)], undefined, seq);
+    assert.equal(first.ready[0]?.name, "pasted 1");
+    assert.deepEqual(
+      second.ready.map((file) => file.name),
+      ["pasted 2", "pasted 3"],
+    );
   });
 });

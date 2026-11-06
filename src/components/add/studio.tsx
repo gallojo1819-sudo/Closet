@@ -82,11 +82,13 @@ import { uid } from "@/lib/utils";
 import { guessTuck } from "@/lib/tuck";
 import {
   AlreadyInCloset,
+  claimNaming,
   classifyScanError,
   listingUrlFromClipboard,
   NEEDS_NAME_PROMPT,
   NotClothes,
   PageRejected,
+  releaseNaming,
   ScanEmpty,
   uploadMissLine,
   type UploadMiss,
@@ -141,6 +143,9 @@ export function Studio() {
   const [failed, setFailed] = useState<UploadMiss[]>([]);
   const [dupes, setDupes] = useState<string[]>([]);
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+  const [namingIds, setNamingIds] = useState<string[]>([]);
+  const namingRef = useRef(new Set<string>());
+  const pasteSeq = useRef({ n: 0 });
   const [skipped, setSkipped] = useState(0);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved[]>([]);
@@ -565,6 +570,7 @@ export function Studio() {
       const admitted = await admitScanFile(file, known);
       if (admitted.duplicate) throw new AlreadyInCloset();
       const hash = admitted.hash;
+      const legacy = admitted.legacy;
       const id = uid("g");
       let saved = false;
       try {
@@ -679,6 +685,7 @@ export function Studio() {
       } catch (e) {
         if (!saved) {
           known.delete(hash);
+          if (legacy) known.delete(legacy);
           onDropPreview(id);
         }
         throw e;
@@ -992,14 +999,21 @@ export function Studio() {
   };
 
   const reTagPiece = (id: string) => {
+    if (!claimNaming(namingRef.current, id)) return;
+    setNamingIds([...namingRef.current]);
     const hash = useCloset.getState().garments.find((item) => item.id === id)?.fileHash ?? "";
     void (async () => {
-      const blob = await getImage(imageKey(id, "o"));
-      if (!blob) {
-        markNeedsName(id);
-        return;
+      try {
+        const blob = await getImage(imageKey(id, "o"));
+        if (!blob) {
+          markNeedsName(id);
+          return;
+        }
+        await nameCameraPiece(id, blob, hash);
+      } finally {
+        releaseNaming(namingRef.current, id);
+        setNamingIds([...namingRef.current]);
       }
-      await nameCameraPiece(id, blob, hash);
     })();
   };
 
@@ -1235,7 +1249,7 @@ export function Studio() {
         setTab("dump");
       }
       void (async () => {
-        const prepared = await prepareClipboardFiles(files);
+        const prepared = await prepareClipboardFiles(files, undefined, pasteSeq.current);
         if (prepared.misses.length) setFailed((cur) => [...prepared.misses, ...cur]);
         if (prepared.ready.length) await scanFiles(prepared.ready);
       })();
@@ -1516,7 +1530,8 @@ export function Studio() {
                       </button>
                       <button
                         type="button"
-                        className="micro text-ink-soft hover:text-ink"
+                        className="micro text-ink-soft hover:text-ink disabled:opacity-40"
+                        disabled={namingIds.includes(g.id)}
                         onClick={() => reTagPiece(g.id)}
                       >
                         Re-tag

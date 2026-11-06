@@ -25,11 +25,33 @@ export const NEEDS_NAME_PROMPT = "Needs a name — tap to set";
 const GENERIC_PASTE =
   /^(image|img|clipboard|unknown|pasted)(\s*\(\d+\))?(\.(png|jpe?g|webp|gif|avif|bmp))?$/i;
 
+/** Counts generic clipboard names across pastes. `n` is how many have been issued. */
+export type PasteSeq = { n: number };
+
+/** Next generic name, or the file's own name when it is not `image.png`. */
+export function takePastedLabel(seq: PasteSeq, name: string): string {
+  const base = name.trim();
+  if (!base || GENERIC_PASTE.test(base)) {
+    seq.n += 1;
+    return `pasted ${seq.n}`;
+  }
+  return base;
+}
+
 /** Clipboard files arrive as image.png. Number them so three misses are not one name. */
 export function pastedFileLabel(index: number, name: string): string {
-  const base = name.trim();
-  if (!base || GENERIC_PASTE.test(base)) return `pasted ${index + 1}`;
-  return base;
+  return takePastedLabel({ n: index }, name);
+}
+
+/** One naming run per piece. A second tap while the first is in flight does nothing. */
+export function claimNaming(inFlight: Set<string>, id: string): boolean {
+  if (inFlight.has(id)) return false;
+  inFlight.add(id);
+  return true;
+}
+
+export function releaseNaming(inFlight: Set<string>, id: string): void {
+  inFlight.delete(id);
 }
 
 export function uploadMissLine(miss: UploadMiss): string {
@@ -124,8 +146,8 @@ export function classifyScanError(e: unknown, name: string, heic: boolean): Scan
 const IMAGE_EXT = /\.(jpe?g|png|webp|avif|gif|bmp|svg)(\?|$)/i;
 
 /**
- * A product-page URL from a copied image. Plain text wins, then a page href,
- * then an img src. Used to fill "Use listing".
+ * A product-page URL from a copied image. Plain text wins, then a page href.
+ * An img src is a CDN file, not a listing, so it does not fill Use listing.
  */
 export function listingUrlFromClipboard(text: string, html: string): string | null {
   const trimmed = text.trim();
@@ -134,7 +156,5 @@ export function listingUrlFromClipboard(text: string, html: string): string | nu
     (m) => m[1] ?? "",
   );
   const page = hrefs.find((h) => h && !IMAGE_EXT.test(h));
-  if (page) return page;
-  const src = html.match(/<img[^>]+src\s*=\s*["'](https?:\/\/[^"']+)["']/i)?.[1];
-  return src ?? null;
+  return page ?? null;
 }

@@ -177,11 +177,18 @@ type InkComp = {
   maxY: number;
 };
 
-function nearWhitePixel(r: number, g: number, b: number, a: number): boolean {
-  if (a < 24) return true;
+const NEAR_WHITE_MIN = 236;
+const NEAR_WHITE_SPREAD = 16;
+
+function isNearWhite(r: number, g: number, b: number): boolean {
   const lo = Math.min(r, g, b);
   const hi = Math.max(r, g, b);
-  return lo >= 236 && hi - lo <= 16;
+  return lo >= NEAR_WHITE_MIN && hi - lo <= NEAR_WHITE_SPREAD;
+}
+
+function nearWhitePixel(r: number, g: number, b: number, a: number): boolean {
+  if (a < 24) return true;
+  return isNearWhite(r, g, b);
 }
 
 /** Connected non-white blobs. A logo line is small; a product tile is not. */
@@ -309,10 +316,23 @@ export function planMatte(input: {
   return { kind: "phone", crop: "flood" };
 }
 
-function groundIsWhite(bg: { r: number; g: number; b: number }): boolean {
-  const lo = Math.min(bg.r, bg.g, bg.b);
-  const hi = Math.max(bg.r, bg.g, bg.b);
-  return lo >= 200 && hi - lo <= 18;
+/** Same cut as `nearWhitePixel`. Off-white (200–235) is not a studio ground. */
+export function groundIsWhite(bg: { r: number; g: number; b: number }): boolean {
+  return isNearWhite(bg.r, bg.g, bg.b);
+}
+
+/** The plan `matteToPaper` uses, without decoding an image element. */
+export function planForPixels(data: Uint8ClampedArray, w: number, h: number): MattePlan {
+  const { bg, frac, mad } = sampleBorder(data, w, h);
+  const chrome = looksPage(data, w, h);
+  const read = frameRead(data, w, h);
+  const studio = borderIsCleanStudio(bg, frac, mad, read === "page");
+  return planMatte({
+    read,
+    chrome,
+    studio,
+    whiteGround: groundIsWhite(bg),
+  });
 }
 
 /** Bbox of everything that is not the (uniform, clean) background. Used to
@@ -323,8 +343,9 @@ function contentBounds(
   h: number,
   bg: { r: number; g: number; b: number },
   tol: number,
+  floor = 30,
 ) {
-  const t = Math.max(30, tol);
+  const t = Math.max(floor, tol);
   let minX = w;
   let minY = h;
   let maxX = 0;
@@ -343,6 +364,24 @@ function contentBounds(
   }
   if (count < w * h * 0.02 || maxX <= minX || maxY <= minY) return null;
   return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Largest dark blob, unless that blob is only a logo (under 4% of the frame).
+ * Then cut everything that steps off the ground, including a near-white garment.
+ * The usual content floor of 30 treats a 244 tee on white as paper.
+ */
+export function chooseInkCrop(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number,
+  bg: { r: number; g: number; b: number },
+): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  const ink = largestInkBounds(data, w, h);
+  const frame = Math.max(1, w * h);
+  const cover = ink ? ((ink.maxX - ink.minX + 1) * (ink.maxY - ink.minY + 1)) / frame : 0;
+  if (ink && cover >= 0.04) return ink;
+  return contentBounds(data, w, h, bg, 8, 8) ?? ink;
 }
 
 function sampleForeground(
@@ -502,14 +541,7 @@ export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
   const { bg, frac, mad, floodTol } = sampleBorder(image.data, canvas.width, canvas.height);
 
   const chrome = looksPage(image.data, canvas.width, canvas.height);
-  const read = frameRead(image.data, canvas.width, canvas.height);
-  const studio = borderIsCleanStudio(bg, frac, mad, read === "page");
-  const plan = planMatte({
-    read,
-    chrome,
-    studio,
-    whiteGround: groundIsWhite(bg),
-  });
+  const plan = planForPixels(image.data, canvas.width, canvas.height);
   if (plan.kind === "page") {
     return {
       cutoutSrc: compositePaper(canvas, null),
@@ -519,12 +551,10 @@ export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
     };
   }
   if (plan.crop === "ink" || plan.crop === "content") {
-    const ink =
-      plan.crop === "ink"
-        ? largestInkBounds(image.data, canvas.width, canvas.height)
-        : null;
     const box =
-      ink ?? contentBounds(image.data, canvas.width, canvas.height, bg, floodTol);
+      plan.crop === "ink"
+        ? chooseInkCrop(image.data, canvas.width, canvas.height, bg)
+        : contentBounds(image.data, canvas.width, canvas.height, bg, floodTol);
     if (plan.crop === "ink" && !box) {
       return {
         cutoutSrc: compositePaper(canvas, null),
