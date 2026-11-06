@@ -23,9 +23,50 @@ export function tuckOf(g: Garment): Tuck {
   return g.tuck ?? guessTuck(g);
 }
 
-function isShirtLike(g: Garment): boolean {
+export function isShirtLike(g: Garment): boolean {
   const b = `${g.subtype} ${g.name}`.toLowerCase();
   return /shirt|oxford|polo|rugby|camp|overshirt|collar|henley/.test(b);
+}
+
+/**
+ * Sweaters, half-zips, quarter-zips, cardigans, knit or fleece pullovers, and
+ * sweatshirts. A knit polo or knit shirt stays a shirt. A hoodie is not a knit.
+ * isShirtLike is unchanged, so a sweatshirt still matches it for On You; the
+ * plate treats that word as a knit.
+ */
+export function isKnitTop(g: Garment): boolean {
+  const blob = `${g.subtype} ${g.name}`.toLowerCase();
+  if (/hoodie/.test(blob)) return false;
+  const knitWord = /sweater|knit|cardigan|half-?zip|quarter-?zip|pullover|fleece/.test(blob);
+  if (!knitWord) return false;
+  return !isShirtLike(g) || /sweatshirt/.test(blob);
+}
+
+/** "tucked" only for a real shirt. A sweatshirt or knit worn in says nothing. */
+export function tuckMark(
+  d: "in" | "out" | "none",
+  lead: Garment | null,
+): "untucked" | "tucked" | null {
+  switch (d) {
+    case "out":
+      return "untucked";
+    case "in": {
+      if (!lead) return null;
+      const blob = `${lead.subtype} ${lead.name}`.toLowerCase();
+      // A sweatshirt matches isShirtLike ("shirt"). So does a collared sweater
+      // and a knit shirt. None of those are labeled tucked.
+      if (/sweatshirt/.test(blob)) return null;
+      if (/sweat|sweater|knit|zip|fleece|cardigan|pullover/.test(blob)) return null;
+      if (isShirtLike(lead)) return "tucked";
+      return null;
+    }
+    case "none":
+      return null;
+    default: {
+      const never: never = d;
+      return never;
+    }
+  }
 }
 
 /** How this shirt is worn for this occasion. User chip in/out still wins. */

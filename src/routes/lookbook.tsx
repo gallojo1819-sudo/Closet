@@ -4,6 +4,7 @@ import { DetectorSections } from "@/components/closet/detector-sections";
 import { IdleMount } from "@/components/closet/idle-mount";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { LookKit } from "@/components/closet/look-kit";
+import { TuckNote } from "@/components/closet/tuck-note";
 import { LookSheet } from "@/components/closet/look-sheet";
 import { LookSkeleton, RackSkeleton } from "@/components/closet/look-skeleton";
 import { Overlay } from "@/components/closet/overlay";
@@ -42,7 +43,9 @@ import { NO_OUTFIT_NOTE } from "@/lib/dress";
 import { lookbookCountLine, pageResolved, screenLookCount, weekShowsEmptyReason, weekShowsSkeletons } from "@/lib/lookbook-status";
 import { seasonChipRow, seasonControlLabel, seasonFromWeather } from "@/lib/season";
 import { paletteCss } from "@/lib/color";
-import { cardTag, spreadTitle, weekLeadPiece } from "@/lib/look";
+import { cardTag, leadTop, lookTuckDecision, spreadTitle, weekLeadPiece } from "@/lib/look";
+import { tuckMark } from "@/lib/tuck";
+import { useTuckHabits } from "@/lib/use-tuck-habits";
 import { pieceLabel } from "@/lib/piece-label";
 import { useAccount } from "@/lib/cloud/account";
 import { EMPTY_DEVICE_COPY } from "@/lib/cloud/copy";
@@ -183,6 +186,8 @@ function LookCard({
   pool: Garment[];
 }) {
   const dots = pieceDots(pieces);
+  const habits = useTuckHabits();
+  const tuckDecision = lookTuckDecision(pieces, look.occasion, habits);
   return (
     <li
       id={`look-${look.id}`}
@@ -216,6 +221,7 @@ function LookCard({
       <p className="mt-1 text-sm leading-snug">
         {pieces.map((g) => pieceLabel(g, pool)).join(" · ")}
       </p>
+      <TuckNote d={tuckDecision} lead={leadTop(pieces)} className="mt-1" />
       {dots.length > 0 && (
         <div className="mt-2 flex gap-1.5" aria-hidden="true">
           {dots.map((dot) => (
@@ -235,6 +241,7 @@ function LookCard({
 
 function LookbookPage() {
   const hydrated = useCloset((s) => s.hydrated);
+  const habits = useTuckHabits();
   const account = useAccount();
   const garmentsAll = useCloset((s) => s.garments);
   const looksAll = useCloset((s) => s.looks);
@@ -984,6 +991,8 @@ function LookbookPage() {
             <ul className="mt-4 grid grid-cols-2 gap-3">
               {heroDrawn.map((look) => {
                 const pieces = piecesFor(look);
+                const d = lookTuckDecision(pieces, look.occasion, habits);
+                const mark = tuckMark(d, leadTop(pieces));
                 return (
                   <li key={look.id}>
                     <button
@@ -993,7 +1002,10 @@ function LookbookPage() {
                     >
                       <LookKit pieces={pieces} className="pointer-events-none aspect-[4/5]" />
                       <p className="mt-2 text-sm">{spreadTitle(pieces, look.occasion as Occasion, "all", season)}</p>
-                      <p className="micro text-ink-soft">{look.occasion}</p>
+                      <p className="micro text-ink-soft">
+                        {look.occasion}
+                        {mark ? ` · ${mark}` : ""}
+                      </p>
                     </button>
                   </li>
                 );

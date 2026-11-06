@@ -23,6 +23,71 @@ const STACK: Record<
   other: { left: 16, top: 36, w: 64, z: 3, r: 0, hx: 12, hy: 12 },
 };
 
+/**
+ * Untucked lay. The lead hem crosses the waistband; the shoes sit low and to
+ * the left so most of the trouser box stays readable. bottom.top is 36 rather
+ * than 34 so the hem overlap stays within 32% of the trouser width.
+ */
+const UNTUCKED = {
+  top: { left: 6, top: 1, w: 58, z: 6 },
+  bottom: { left: 22, top: 36, w: 72, z: 3 },
+  footwear: { left: 2, top: 72, w: 40, z: 8 },
+} as const;
+
+/**
+ * Piece box on the plate. "in", "none", and undefined match the tucked STACK,
+ * including the per-piece jitter. "out" moves the lead top (n = 1), the first
+ * bottom, and the first shoe. A top that is not the lead sits on the lead's
+ * box, shifted down-right, and never larger than the lead.
+ */
+// The plate and its tests share this. It is not a component.
+// eslint-disable-next-line react-refresh/only-export-components
+export function flatLayBox(
+  slot: string,
+  n: number,
+  jit: number,
+  tuck?: "in" | "out" | "none",
+): { left: number; top: number; w: number; z: number } {
+  const base = STACK[slot] ?? STACK.other!;
+  const shift = (n - 1) * 5;
+  const placed = {
+    left: base.left + shift + jit,
+    top: base.top + shift * 0.6 + jit,
+    w: base.w,
+    z: base.z + n,
+  };
+  if (tuck !== "out") return placed;
+  if (slot === "top" && n === 1) {
+    return { left: UNTUCKED.top.left, top: UNTUCKED.top.top, w: UNTUCKED.top.w, z: UNTUCKED.top.z };
+  }
+  if (slot === "bottom" && n === 1) {
+    return {
+      left: UNTUCKED.bottom.left,
+      top: UNTUCKED.bottom.top,
+      w: UNTUCKED.bottom.w,
+      z: UNTUCKED.bottom.z,
+    };
+  }
+  if (slot === "footwear" && n === 1) {
+    return {
+      left: UNTUCKED.footwear.left,
+      top: UNTUCKED.footwear.top,
+      w: UNTUCKED.footwear.w,
+      z: UNTUCKED.footwear.z,
+    };
+  }
+  if (slot === "top" && n > 1) {
+    const lead = UNTUCKED.top;
+    return {
+      left: lead.left + 4,
+      top: lead.top + 3,
+      w: lead.w,
+      z: lead.z - 1,
+    };
+  }
+  return placed;
+}
+
 export function FlatLay({
   pieces,
   className,
@@ -31,6 +96,8 @@ export function FlatLay({
   activeId = null,
   onPick,
   caption,
+  tuck,
+  leadId,
 }: {
   pieces: Garment[];
   className?: string;
@@ -40,6 +107,10 @@ export function FlatLay({
   activeId?: string | null;
   onPick?: (id: string | null) => void;
   caption?: React.ReactNode;
+  /** Same decision the label uses. Omitted, "in", and "none" draw the tucked plate. */
+  tuck?: "in" | "out" | "none";
+  /** The lead top, when tuck is "out". */
+  leadId?: string;
 }) {
   const seen: Record<string, number> = {};
   const picking = Boolean(onPick && activeId);
@@ -66,8 +137,17 @@ export function FlatLay({
         const base = STACK[slot] ?? STACK.other!;
         const h = hash(g.id);
         const jit = ((h % 1000) / 1000 - 0.5) * 3;
-        const shift = (n - 1) * 5;
         const picked = picking && activeId === g.id;
+        const leadHere = tuck === "out" && leadId != null && g.id === leadId && slot === "top";
+        const firstHem =
+          tuck === "out" && !leadHere && (slot === "bottom" || slot === "footwear") && n === 1;
+        const underLead = tuck === "out" && slot === "top" && !leadHere;
+        const box = flatLayBox(
+          slot,
+          leadHere ? 1 : underLead ? Math.max(n, 2) : n,
+          jit,
+          leadHere || firstHem || underLead ? "out" : tuck === "out" ? undefined : tuck,
+        );
         const img = (
           <GarmentImg
             garment={g}
@@ -83,10 +163,10 @@ export function FlatLay({
             data-piece={onPick ? g.id : undefined}
             className={cn("flat-piece absolute", picked && "is-picked")}
             style={{
-              left: `${base.left + shift + jit}%`,
-              top: `${base.top + shift * 0.6 + jit}%`,
-              width: `${base.w}%`,
-              zIndex: picked ? 50 : base.z + n,
+              left: `${box.left}%`,
+              top: `${box.top}%`,
+              width: `${box.w}%`,
+              zIndex: picked ? 50 : box.z,
               ["--rx" as string]: "0px",
               ["--ry" as string]: "0px",
               ["--rr" as string]: `${base.r + jit}deg`,

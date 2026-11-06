@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { GarmentImg } from "@/components/closet/gimg";
 import { LookCollage } from "@/components/closet/look-collage";
+import { TuckNote } from "@/components/closet/tuck-note";
 import { LookBuilder } from "@/components/closet/look-builder";
 import { LookSheet } from "@/components/closet/look-sheet";
 import { OnMePanel } from "@/components/closet/on-me";
 import { WearButton } from "@/components/closet/wear-button";
 import { Button } from "@/components/ui/button";
-import { alternatives, dropNote, kitCells, unwornLine } from "@/lib/look";
+import { alternatives, dropNote, kitCells, leadTop, lookTuckDecision, unwornLine } from "@/lib/look";
 import { pieceLabel } from "@/lib/piece-label";
 import { isFakeName } from "@/lib/rack";
 import { todayLookPieces } from "@/lib/today-look";
@@ -22,6 +23,7 @@ import { avoidedUniformLine, lastWornDays, todayOccasion } from "@/lib/style";
 import { emptyTaste, leftOffLine } from "@/lib/taste";
 import { todaySuggestions } from "@/lib/today-suggest";
 import { useCloset } from "@/lib/store";
+import { useTuckHabits } from "@/lib/use-tuck-habits";
 import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
 import { useIsClient } from "@/lib/use-client";
 import { OCCASIONS, type Garment, type Look, type Occasion } from "@/lib/types";
@@ -46,6 +48,7 @@ function Today() {
   const looksAll = useCloset((s) => s.looks);
   const thisWeek = useCloset((s) => s.thisWeek);
   const taste = useCloset((s) => s.taste) ?? emptyTaste();
+  const habits = useTuckHabits();
   const hydrated = useCloset((s) => s.hydrated);
   const account = useAccount();
   const [view, setView] = useState<"paper" | "me">("paper");
@@ -145,6 +148,7 @@ function Today() {
     [garments, shown],
   );
   const occasion = todayOccasion(drop);
+  const todayTuck = lookTuckDecision(shown, occasion, habits);
   const note = dropNote(shown, weather, occasion, drop?.moment, undefined, dropSeason);
   const done = drop?.worn || drop?.verdict === "worn";
   /* Suggest: up to three drawn alternates (today-suggest.ts), built only while the block is open. */
@@ -373,6 +377,7 @@ function Today() {
           <div>
             <p className="micro text-ink-soft">Today’s look</p>
             <h2 className="mt-1 font-editorial text-3xl tracking-tight">{lookName}</h2>
+            <TuckNote d={todayTuck} lead={leadTop(shown)} className="mt-1" />
             <p className="mt-3 text-sm text-ink-soft leading-relaxed">{note}</p>
             {drop?.lockNote && (
               <p className="mt-2 text-sm text-ink-soft">{drop.lockNote}</p>
