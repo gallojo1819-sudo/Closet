@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { BodyPortal } from "@/components/closet/body-portal";
 import { GarmentDetail } from "@/components/closet/detail";
 import { IdleMount } from "@/components/closet/idle-mount";
@@ -9,6 +9,14 @@ import { LookSheet } from "@/components/closet/look-sheet";
 import { OutlineJacket } from "@/components/closet/outline";
 import { GarmentTile } from "@/components/closet/tile";
 import { looksForHero, looksWithLabel } from "@/lib/lookbook";
+import {
+  backToLooksLabel,
+  closeAll,
+  popOne,
+  topLayer,
+  type ClosetLayerState,
+  type Layer,
+} from "@/lib/closet-layers";
 import {
   blobToDataUrl,
   getImage,
@@ -42,7 +50,15 @@ async function embedSrc(src: string): Promise<string> {
   return blob ? blobToDataUrl(blob) : src;
 }
 
+type LayerSnap = {
+  openId: string | null;
+  heroLooks: Look[];
+  heroOpen: Look | null;
+  heroFromList: boolean;
+};
+
 function ClosetPage() {
+  const router = useRouter();
   const hydrated = useCloset((s) => s.hydrated);
   const garmentsAll = useCloset((s) => s.garments);
   const plateIds = jacketsNeedingPlate(garmentsAll)
@@ -64,6 +80,7 @@ function ClosetPage() {
   const [outlineId, setOutlineId] = useState<string | null>(null);
   const [heroLooks, setHeroLooks] = useState<Look[]>([]);
   const [heroOpen, setHeroOpen] = useState<Look | null>(null);
+  const [heroFromList, setHeroFromList] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selecting, setSelecting] = useState(false);
@@ -71,6 +88,20 @@ function ClosetPage() {
   const habits = useTuckHabits();
   const importRef = useRef<HTMLInputElement>(null);
   const tileEls = useRef(new Map<string, HTMLElement>());
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const listScrollTop = useRef(0);
+  const snaps = useRef(new Map<number, LayerSnap>());
+  const depthRef = useRef(0);
+  const seenIndex = useRef<number | null>(null);
+  const ignoreRef = useRef(0);
+  const openIdRef = useRef<string | null>(null);
+  const heroLooksRef = useRef<Look[]>([]);
+  const heroOpenRef = useRef<Look | null>(null);
+  const heroFromListRef = useRef(false);
+  const outlineRef = useRef<string | null>(null);
+  const selectingRef = useRef(false);
+  const retreatRef = useRef<() => void>(() => {});
+  const closeRef = useRef<() => void>(() => {});
 
   const exportCloset = async () => {
     setBusy(true);
@@ -129,7 +160,7 @@ function ClosetPage() {
       if (typeof data.refPhoto === "string" && data.refPhoto.startsWith("data:")) {
         setRefPhoto(await stashDataUrl("idb:me:ref", data.refPhoto));
       }
-      setOpenId(null);
+      closeRef.current();
     } catch {
       setImportError("That file is not a closet export.");
     } finally {
@@ -173,29 +204,12 @@ function ClosetPage() {
   const showingDemo = garments.some((g) => g.demo);
   const selectedCount = selected.size;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (outlineId) {
-        setOutlineId(null);
-        return;
-      }
-      if (openId) {
-        setOpenPiece(null);
-        return;
-      }
-      if (!selecting) return;
-      setSelecting(false);
-      setSelected(new Set());
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selecting, openId, outlineId]);
-
-  const getOpenTile = useCallback(
-    () => (openId ? tileEls.current.get(openId) ?? null : null),
-    [openId],
-  );
+  openIdRef.current = openId;
+  heroLooksRef.current = heroLooks;
+  heroOpenRef.current = heroOpen;
+  heroFromListRef.current = heroFromList;
+  outlineRef.current = outlineId;
+  selectingRef.current = selecting;
 
   const setOpenPiece = (id: string | null) => {
     const go = () => flushSync(() => setOpenId(id));
@@ -205,6 +219,256 @@ function ClosetPage() {
     }
     go();
   };
+
+  const holdPageScroll = () => {
+    const flag = router as unknown as { _scroll?: { n?: boolean } };
+    if (flag._scroll) flag._scroll.n = false;
+  };
+
+  const restore = (snap: LayerSnap | null) => {
+    const next: LayerSnap = snap ?? {
+      openId: null,
+      heroLooks: [],
+      heroOpen: null,
+      heroFromList: false,
+    };
+    if (heroOpenRef.current !== next.heroOpen) setHeroOpen(next.heroOpen);
+    if (heroFromListRef.current !== next.heroFromList) setHeroFromList(next.heroFromList);
+    if (heroLooksRef.current !== next.heroLooks) setHeroLooks(next.heroLooks);
+    if (openIdRef.current !== next.openId) setOpenPiece(next.openId);
+    heroOpenRef.current = next.heroOpen;
+    heroFromListRef.current = next.heroFromList;
+    heroLooksRef.current = next.heroLooks;
+    openIdRef.current = next.openId;
+  };
+
+  const pushLayer = (layer: Layer, snap: LayerSnap) => {
+    holdPageScroll();
+    const loc = router.history.location;
+    router.history.push(loc.href, { ...loc.state, closetLayer: layer });
+    router.history.flush();
+    const idx = router.history.location.state.__TSR_index;
+    snaps.current.set(idx, snap);
+    depthRef.current += 1;
+    seenIndex.current = idx;
+  };
+
+  const replaceLayer = (layer: Layer, snap: LayerSnap) => {
+    holdPageScroll();
+    const loc = router.history.location;
+    router.history.replace(loc.href, { ...loc.state, closetLayer: layer });
+    router.history.flush();
+    const idx = router.history.location.state.__TSR_index;
+    snaps.current.set(idx, snap);
+    seenIndex.current = idx;
+  };
+
+  const applyPop = (next: ClosetLayerState) => {
+    if (!next.lookOpen && heroOpenRef.current) {
+      setHeroOpen(null);
+      heroOpenRef.current = null;
+    }
+    if (heroFromListRef.current !== next.lookFromList) {
+      setHeroFromList(next.lookFromList);
+      heroFromListRef.current = next.lookFromList;
+    }
+    if (!next.listOpen && heroLooksRef.current.length > 0) {
+      setHeroLooks([]);
+      heroLooksRef.current = [];
+    }
+    if (openIdRef.current !== next.openId) {
+      setOpenPiece(next.openId);
+      openIdRef.current = next.openId;
+    }
+  };
+
+  const layersNow = (): ClosetLayerState => ({
+    openId: openIdRef.current,
+    listOpen: heroLooksRef.current.length > 0,
+    lookOpen: heroOpenRef.current != null,
+    lookFromList: heroFromListRef.current,
+  });
+
+  const retreatOne = () => {
+    const layers = layersNow();
+    const top = topLayer(layers);
+    if (!top) return;
+    const pushed = top === "piece" || top === "list" || (top === "look" && layers.lookFromList);
+    if (pushed && depthRef.current > 0) {
+      holdPageScroll();
+      router.history.back();
+      return;
+    }
+    applyPop(popOne(layers));
+  };
+
+  const closeEverything = () => {
+    const n = depthRef.current;
+    if (n > 0) {
+      holdPageScroll();
+      router.history.go(-n);
+      return;
+    }
+    applyPop(closeAll(layersNow()));
+  };
+
+  retreatRef.current = retreatOne;
+  closeRef.current = closeEverything;
+
+  const openPiece = (id: string) => {
+    const snap: LayerSnap = { openId: id, heroLooks: [], heroOpen: null, heroFromList: false };
+    if (
+      openIdRef.current &&
+      heroLooksRef.current.length === 0 &&
+      !heroOpenRef.current &&
+      depthRef.current > 0
+    ) {
+      replaceLayer("piece", snap);
+    } else {
+      pushLayer("piece", snap);
+    }
+    setOpenPiece(id);
+    openIdRef.current = id;
+  };
+
+  const openList = () => {
+    const snap: LayerSnap = {
+      openId: openIdRef.current,
+      heroLooks: openLooks,
+      heroOpen: null,
+      heroFromList: false,
+    };
+    pushLayer("list", snap);
+    setHeroLooks(openLooks);
+    setHeroOpen(null);
+    setHeroFromList(false);
+    heroLooksRef.current = openLooks;
+    heroOpenRef.current = null;
+    heroFromListRef.current = false;
+  };
+
+  const openLookFromList = (look: Look) => {
+    listScrollTop.current = listScrollRef.current?.scrollTop ?? listScrollTop.current;
+    const snap: LayerSnap = {
+      openId: openIdRef.current,
+      heroLooks: heroLooksRef.current,
+      heroOpen: look,
+      heroFromList: true,
+    };
+    pushLayer("look", snap);
+    setHeroOpen(look);
+    setHeroFromList(true);
+    heroOpenRef.current = look;
+    heroFromListRef.current = true;
+  };
+
+  const openOutfitLook = (look: Look) => {
+    const n = depthRef.current;
+    if (n > 0) {
+      ignoreRef.current += n;
+      depthRef.current = 0;
+      holdPageScroll();
+      router.history.go(-n);
+    }
+    /* One paint: the look, with the piece already gone. A view transition here
+       keeps the piece sheet on screen for the whole animation. */
+    flushSync(() => {
+      setHeroLooks([]);
+      setHeroFromList(false);
+      setHeroOpen(look);
+      setOpenId(null);
+    });
+    heroLooksRef.current = [];
+    heroFromListRef.current = false;
+    heroOpenRef.current = look;
+    openIdRef.current = null;
+  };
+
+  const replaceAlternate = (next: Look) => {
+    setHeroOpen(next);
+    heroOpenRef.current = next;
+    if (!heroFromListRef.current || depthRef.current <= 0) return;
+    replaceLayer("look", {
+      openId: openIdRef.current,
+      heroLooks: heroLooksRef.current,
+      heroOpen: next,
+      heroFromList: true,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (heroOpen) return;
+    const el = listScrollRef.current;
+    if (!el) return;
+    if (Math.abs(el.scrollTop - listScrollTop.current) > 1) {
+      el.scrollTop = listScrollTop.current;
+    }
+  }, [heroOpen, heroLooks]);
+
+  const onHistoryRef = useRef<(event: {
+    action: { type: string };
+    location: { pathname: string; state: { __TSR_index: number } };
+  }) => void>(() => {});
+  onHistoryRef.current = (event) => {
+    const next = event.location.state.__TSR_index;
+    const onCloset = event.location.pathname === "/closet";
+    if (event.action.type === "PUSH" || event.action.type === "REPLACE") {
+      if (onCloset) holdPageScroll();
+      seenIndex.current = next;
+      return;
+    }
+    if (seenIndex.current === next) return;
+    const prev = seenIndex.current ?? next;
+    seenIndex.current = next;
+    if (onCloset) holdPageScroll();
+    const steps = Math.abs(next - prev);
+    if (ignoreRef.current > 0) {
+      ignoreRef.current = Math.max(0, ignoreRef.current - (steps || 1));
+      return;
+    }
+    /* Back from a bare /closet entry still leaves the page. Nothing to pop. */
+    if (depthRef.current === 0 && !snaps.current.has(next)) return;
+    if (next > prev) {
+      const snap = snaps.current.get(next);
+      if (!snap) return;
+      depthRef.current += steps;
+      restore(snap);
+      return;
+    }
+    depthRef.current = Math.max(0, depthRef.current - steps);
+    restore(snaps.current.get(next) ?? null);
+  };
+
+  useEffect(() => {
+    seenIndex.current = router.history.location.state.__TSR_index;
+    return router.history.subscribe((event) => onHistoryRef.current(event));
+  }, [router]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (outlineRef.current) {
+        outlineRef.current = null;
+        setOutlineId(null);
+        return;
+      }
+      if (topLayer(layersNow())) {
+        e.preventDefault();
+        retreatRef.current();
+        return;
+      }
+      if (!selectingRef.current) return;
+      setSelecting(false);
+      setSelected(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const getOpenTile = useCallback(
+    () => (openId ? tileEls.current.get(openId) ?? null : null),
+    [openId],
+  );
 
   const exitSelect = () => {
     setSelecting(false);
@@ -419,7 +683,11 @@ function ClosetPage() {
                     setOutlineId(g.id);
                     return;
                   }
-                  setOpenPiece(openId === g.id ? null : g.id);
+                  if (openId === g.id) {
+                    retreatOne();
+                    return;
+                  }
+                  openPiece(g.id);
                 }}
               />
               </IdleMount>
@@ -438,36 +706,41 @@ function ClosetPage() {
           key={open.id}
           garment={open}
           getTile={getOpenTile}
-          onClose={() => {
-            setOpenPiece(null);
-            setHeroLooks([]);
-            setHeroOpen(null);
-          }}
+          closeOnEscape={false}
+          onClose={() => retreatOne()}
           looksCount={openLooks.length}
-          onLooks={() => {
-            setHeroLooks(openLooks);
-            setHeroOpen(null);
-          }}
+          onLooks={openList}
           onOutfit={() => {
             const look = outfitWith([open.id]);
             if (!look) return false;
-            setOpenPiece(null);
-            setHeroLooks([]);
-            setHeroOpen(look);
+            openOutfitLook(look);
             return true;
           }}
         />
       )}
-      {heroLooks.length > 0 && !heroOpen && (
+      {heroLooks.length > 0 && (
         <BodyPortal>
-        <div className="fixed inset-0 z-[55] flex items-end md:items-center justify-center">
+        <div
+          className={cn(
+            "fixed inset-0 z-[55] flex items-end md:items-center justify-center",
+            heroOpen && "invisible pointer-events-none",
+          )}
+          aria-hidden={heroOpen ? true : undefined}
+        >
           <button
             type="button"
             className="absolute inset-0 bg-ink/20"
             aria-label="Close"
-            onClick={() => setHeroLooks([])}
+            onClick={() => retreatOne()}
           />
-          <div className="relative z-10 w-full max-h-[92dvh] overflow-auto bg-paper border border-hairline p-4 md:max-w-lg">
+          <div
+            ref={listScrollRef}
+            data-hero-list
+            onScroll={(e) => {
+              listScrollTop.current = e.currentTarget.scrollTop;
+            }}
+            className="relative z-10 w-full max-h-[92dvh] overflow-auto bg-paper border border-hairline p-4 md:max-w-lg"
+          >
             <p className="micro text-ink-soft">With this</p>
             <p className="mt-1 font-editorial text-2xl tracking-tight" data-hero-heading>
               {looksWithLabel(heroCards.length, open?.name ?? "this")}
@@ -481,7 +754,7 @@ function ClosetPage() {
                   <li key={look.id}>
                     <button
                       type="button"
-                      onClick={() => setHeroOpen(look)}
+                      onClick={() => openLookFromList(look)}
                       className="block w-full text-left"
                     >
                       <HeroLookCard
@@ -497,7 +770,7 @@ function ClosetPage() {
             </ul>
             <button
               type="button"
-              onClick={() => setHeroLooks([])}
+              onClick={() => retreatOne()}
               className="micro mt-4 text-ink-soft hover:text-ink"
             >
               Close
@@ -515,14 +788,17 @@ function ClosetPage() {
           book={heroLooks}
           closet={garments}
           initialLocked={heroOpen.lookbook === false ? drop?.lockedIds : undefined}
-          onClose={() => setHeroOpen(null)}
+          closeOnEscape={false}
+          onBack={heroFromList ? retreatOne : undefined}
+          backLabel={heroFromList ? backToLooksLabel(heroCards.length) : undefined}
+          onClose={() => closeEverything()}
           onWear={() => {
             wearToday(
               heroOpen.garmentIds.filter((id) => garments.some((g) => g.id === id)),
             );
-            setHeroOpen(null);
+            retreatOne();
           }}
-          onOpenLook={(next) => setHeroOpen(next)}
+          onOpenLook={replaceAlternate}
         />
       )}
     </div>

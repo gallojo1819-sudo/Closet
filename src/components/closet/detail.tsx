@@ -149,6 +149,8 @@ export function GarmentDetail(props: {
   looksCount?: number;
   /** Dresses the piece; false when no occasion holds a look, and the sheet says so. */
   onOutfit?: () => boolean;
+  /** Closet owns Escape for its piece/list/look stack and passes false. */
+  closeOnEscape?: boolean;
 }) {
   return (
     <BodyPortal>
@@ -164,6 +166,7 @@ export function GarmentDetailSheet({
   onLooks,
   looksCount,
   onOutfit,
+  closeOnEscape = true,
 }: {
   garment: Garment;
   onClose: () => void;
@@ -171,6 +174,7 @@ export function GarmentDetailSheet({
   onLooks?: () => void;
   looksCount?: number;
   onOutfit?: () => boolean;
+  closeOnEscape?: boolean;
 }) {
   const [noOutfit, setNoOutfit] = useState(false);
   const wearToday = useCloset((s) => s.wearToday);
@@ -221,12 +225,13 @@ export function GarmentDetailSheet({
   }, [garment.id, garment.cutoutSrc, garment.imageSrc]);
 
   useEffect(() => {
+    if (!closeOnEscape) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, closeOnEscape]);
 
   useEffect(() => bindClosetPiece(garment.id), [garment.id]);
 
