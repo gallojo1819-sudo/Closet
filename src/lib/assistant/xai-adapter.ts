@@ -5,7 +5,7 @@
  * the caller's quota gate: one unit per model call, never per ask. The models are tried in
  * order and the next one is tried only when the previous POST failed.
  */
-import type { Model, ModelMessage, ModelReply, ToolCall } from "./loop.ts";
+import type { Model, ModelMessage, ModelReply, ModelUsage, ToolCall } from "./loop.ts";
 import type { ModelTool } from "./registry.ts";
 
 export type XaiPost = (body: unknown, signal?: AbortSignal) => Promise<{ ok: boolean; json: unknown; error?: string }>;
@@ -112,16 +112,41 @@ export function parseArguments(raw: unknown): unknown {
   }
 }
 
+function finiteCount(raw: unknown): number | undefined {
+  return typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? raw : undefined;
+}
+
+/** Token counts from a chat-completions body, when the provider sent them. Reasoning is omitted when absent. */
+export function readUsage(json: unknown): ModelUsage | undefined {
+  const usage = (json as { usage?: unknown } | null)?.usage;
+  if (!usage || typeof usage !== "object") return undefined;
+  const row = usage as {
+    prompt_tokens?: unknown;
+    completion_tokens?: unknown;
+    completion_tokens_details?: { reasoning_tokens?: unknown };
+  };
+  const promptTokens = finiteCount(row.prompt_tokens);
+  const completionTokens = finiteCount(row.completion_tokens);
+  const reasoningTokens = finiteCount(row.completion_tokens_details?.reasoning_tokens);
+  if (promptTokens === undefined && completionTokens === undefined && reasoningTokens === undefined) return undefined;
+  return {
+    promptTokens: promptTokens ?? 0,
+    completionTokens: completionTokens ?? 0,
+    reasoningTokens: reasoningTokens ?? 0,
+  };
+}
+
 export function fromXaiReply(json: unknown): ModelReply {
   const body = json as { choices?: { message?: XaiChoiceMessage }[] } | null;
   const message = body?.choices?.[0]?.message;
-  if (!message) return { text: "" };
+  const usage = readUsage(json);
+  if (!message) return { text: "", ...(usage ? { usage } : {}) };
   const calls = (message.tool_calls ?? []).filter((c) => typeof c?.function?.name === "string");
   if (calls.length) {
     const toolCalls: ToolCall[] = calls.map((c) => ({ name: c.function!.name!, args: parseArguments(c.function!.arguments) }));
-    return { toolCalls, ...(message.content ? { text: message.content } : {}) };
+    return { toolCalls, ...(message.content ? { text: message.content } : {}), ...(usage ? { usage } : {}) };
   }
-  return { text: typeof message.content === "string" ? message.content : "" };
+  return { text: typeof message.content === "string" ? message.content : "", ...(usage ? { usage } : {}) };
 }
 
 /**
@@ -154,4 +179,40 @@ export function xaiModel(
     }
     throw new AssistantModelError(lastError || "model");
   };
+}
+
+export const VISION_MAX_TOKENS = 600;
+export const VISION_TEMPERATURE = 0;
+
+export type VisionPart = { type: "image_url"; image_url: { url: string } } | { type: "text"; text: string };
+
+/**
+ * One vision call. The image is a user part on this request only; the text loop stays string
+ * content. Models are tried in order and the next one only after a failed POST. No quota gate:
+ * the caller takes its one unit for the whole check.
+ */
+export async function xaiVisionJson(
+  post: XaiPost,
+  opts: { models: readonly string[]; image: string; system: string; text: string; signal?: AbortSignal },
+): Promise<{ text: string }> {
+  const messages = [
+    { role: "system" as const, content: opts.system },
+    {
+      role: "user" as const,
+      content: [
+        { type: "image_url" as const, image_url: { url: opts.image } },
+        { type: "text" as const, text: opts.text },
+      ] satisfies VisionPart[],
+    },
+  ];
+  const body = { messages, temperature: VISION_TEMPERATURE, max_tokens: VISION_MAX_TOKENS };
+  let lastError = "";
+  for (const model of opts.models) {
+    if (opts.signal?.aborted) throw new AssistantTimeoutError();
+    const r = await post({ model, ...body }, opts.signal);
+    if (r.ok) return { text: fromXaiReply(r.json).text ?? "" };
+    lastError = r.error ?? "";
+    if (opts.signal?.aborted) throw new AssistantTimeoutError();
+  }
+  throw new AssistantModelError(lastError || "model");
 }

@@ -4,7 +4,7 @@
  * limits, and the in-memory fallback one serverless instance uses when the RPC is missing.
  */
 
-export type AiBucket = "chat" | "vision" | "image" | "search";
+export type AiBucket = "chat" | "vision" | "image" | "search" | "outfit_check";
 
 /** Every server function that spends a key, by the bucket it draws on. aiStatus is gated but not bucketed. */
 export const AI_FN_BUCKET: Record<string, AiBucket> = {
@@ -24,6 +24,7 @@ export const AI_FN_BUCKET: Record<string, AiBucket> = {
   findOfficialCover: "search",
   searchOfficial: "search",
   fetchListing: "search",
+  checkOutfit: "outfit_check",
 };
 
 export type AiLimit = { hour: number; day: number };
@@ -34,6 +35,8 @@ const DEFAULT_LIMITS: Record<AiBucket, AiLimit> = {
   vision: { hour: 300, day: 1500 },
   image: { hour: 150, day: 600 },
   search: { hour: 100, day: 400 },
+  /* One photo check is one unit. 20 a day is the approved cap, about $5 at the high estimate. */
+  outfit_check: { hour: 20, day: 20 },
 };
 
 export const HOUR_SECONDS = 3600;

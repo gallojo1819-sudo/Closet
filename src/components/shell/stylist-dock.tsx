@@ -2,7 +2,13 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { OutfitCheckBar } from "@/components/shell/outfit-check-bar";
 import { askStylist, trendLayer } from "@/lib/ai";
+import { CHECK_DEADLINE_MS } from "@/lib/ai-budget";
+import { checkOutfit } from "@/lib/outfit-check-ask";
+import { prepareOutfitPhoto, submitOutfitCheck } from "@/lib/outfit-check-client";
+import { SIGNED_OUT, limitMessage } from "@/lib/auth/ai-quota";
+import { CHECK_LOADING_TEXT, CHECK_USER_TURN } from "@/lib/outfit-check-copy";
 import {
   WHICH_PIECE,
   dressThisPiece,
@@ -65,7 +71,7 @@ import {
   trendDue,
 } from "@/lib/taste";
 import { OCCASIONS, type Garment, type Occasion, type StylistMessage } from "@/lib/types";
-import { cn, todayISO } from "@/lib/utils";
+import { cn, todayISO, todayNY } from "@/lib/utils";
 
 let trendPassStarted = false;
 /* This session's thread is what this dock pushed since the app opened, by id (stylist-session.ts):
@@ -136,6 +142,12 @@ export function StylistDock() {
   const todayLine = todayPieces.length >= 2 ? lookReply(todayPieces) : null;
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [photoNotice, setPhotoNotice] = useState<string | null>(null);
+  /* The photo for a user turn. Component state only: it is not a field on the message, so closet.v6 never stores it. */
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [mockKind, setMockKind] = useState<string | null>(null);
   /* "Something different today": each ask draws again, a turn further along the Skip surface. */
   const differentTurn = useRef(0);
   const explicitWrite = useRef(false);
@@ -153,6 +165,25 @@ export function StylistDock() {
     return () => {
       panelListeners.delete(fn);
     };
+  }, []);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || typeof window === "undefined") return;
+    const value = new URLSearchParams(window.location.search).get("outfitCheck");
+    if (value !== "open" && value !== "picker" && value !== "loading" && value !== "verdict" && value !== "cap" && value !== "signedout") return;
+    setOpen(true);
+    setMockKind(value);
+    if (value === "picker") setPickerOpen(true);
+    if (value === "loading") setChecking(true);
+    if (value === "loading" || value === "verdict") {
+      setThumbs({
+        "mock-user":
+          "data:image/svg+xml," +
+          encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="96"><rect fill="#e6e0d4" width="80" height="96"/><rect fill="#31456b" x="22" y="16" width="36" height="28"/><rect fill="#6d3b3b" x="26" y="46" width="28" height="28"/><rect fill="#5c4033" x="24" y="76" width="12" height="12"/><rect fill="#5c4033" x="44" y="76" width="12" height="12"/></svg>',
+          ),
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -554,9 +585,59 @@ export function StylistDock() {
     stampMessage(messageId, { lookId: id });
   };
 
+  const checkPhoto = async (file: File) => {
+    if (busy) return;
+    const prepared = await prepareOutfitPhoto(file);
+    if (!prepared.ok) {
+      setPhotoNotice(prepared.error);
+      setPickerOpen(false);
+      return;
+    }
+    setPhotoNotice(null);
+    setPickerOpen(false);
+    const userId = pushMessage({ role: "user", text: CHECK_USER_TURN });
+    setThumbs((prev) => ({ ...prev, [userId]: prepared.image }));
+    setChecking(true);
+    setBusy(true);
+    try {
+      const here = readStylistPage();
+      const res = await submitOutfitCheck(
+        {
+          image: prepared.image,
+          garments: forStylist,
+          page: here,
+          taste: tasteNow ?? emptyTaste(),
+          ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
+        },
+        { check: (data) => checkOutfit({ data }), deadlineMs: CHECK_DEADLINE_MS },
+      );
+      if (!res.ok) {
+        pushMessage({ role: "stylist", text: res.error });
+        return;
+      }
+      const pieces = res.garmentIds
+        .map((id) => owned.find((g) => g.id === id))
+        .filter((g): g is Garment => Boolean(g));
+      pushMessage({
+        role: "stylist",
+        text: res.text,
+        ...(pieces.length >= 2
+          ? {
+              garmentIds: pieces.map((g) => g.id),
+              draftName: nameLook(pieces),
+              draftOccasion: pageOccasion(here.occasion, res.occasion),
+            }
+          : {}),
+      });
+    } finally {
+      setBusy(false);
+      setChecking(false);
+    }
+  };
+
   const form = (
     <form
-      className="flex gap-2"
+      className="flex flex-wrap gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         void send(text);
@@ -567,7 +648,14 @@ export function StylistDock() {
         onChange={(e) => setText(e.target.value)}
         placeholder="Saturday, nothing planned"
         disabled={owned.length === 0}
-        className="h-11 flex-1 border border-hairline bg-paper px-3 text-sm text-ink placeholder:text-ink-soft disabled:opacity-40"
+        className="h-11 min-w-0 flex-1 border border-hairline bg-paper px-3 text-sm text-ink placeholder:text-ink-soft disabled:opacity-40"
+      />
+      <OutfitCheckBar
+        pickerOpen={pickerOpen}
+        busy={busy}
+        notice={photoNotice}
+        onToggle={() => setPickerOpen((openNow) => !openNow)}
+        onFile={(file) => void checkPhoto(file)}
       />
       <Button variant="primary" type="submit" disabled={busy || owned.length === 0}>
         Send
@@ -575,7 +663,26 @@ export function StylistDock() {
     </form>
   );
 
-  const thread = sessionThread(messages, SESSION_IDS, echo);
+  const liveThread = sessionThread(messages, SESSION_IDS, echo);
+  const thread = (() => {
+    if (!import.meta.env.DEV || !mockKind || mockKind === "open" || mockKind === "picker") return liveThread;
+    const createdAt = `${todayNY()}T16:00:00.000Z`;
+    const user = { id: "mock-user", role: "user" as const, text: CHECK_USER_TURN, createdAt };
+    if (mockKind === "cap") return [{ id: "mock-reply", role: "stylist" as const, text: limitMessage(86400), createdAt }];
+    if (mockKind === "signedout") return [{ id: "mock-reply", role: "stylist" as const, text: SIGNED_OUT, createdAt }];
+    if (mockKind === "verdict") {
+      return [
+        user,
+        {
+          id: "mock-reply",
+          role: "stylist" as const,
+          text: "Almost.\nTuck the flannel, or swap it to the navy sweater.\nBrown boots over the white sneakers.",
+          createdAt,
+        },
+      ];
+    }
+    return [user];
+  })();
   /* "This look": this session's last stylist answer when it was pushed today; else Today's look. */
   const lastStylist = thisLookMessage(thread);
   const error = lastStylist?.text === NOT_IN_CLOSET ? lastStylist.text : null;
@@ -675,6 +782,10 @@ export function StylistDock() {
                     </div>
                   )}
                 </>
+              ) : checking ? (
+                <p data-outfit-loading className="mt-1 flex items-center gap-2 text-sm text-ink-soft">
+                  <Loader2 className="size-4 animate-spin" /> {CHECK_LOADING_TEXT}
+                </p>
               ) : busy ? (
                 <p className="mt-1 flex items-center gap-2 text-sm text-ink-soft">
                   <Loader2 className="size-4 animate-spin" /> Considering the closet…
@@ -698,8 +809,12 @@ export function StylistDock() {
                 </div>
               ) : null}
             </div>
-            <StylistThread messages={thread} />
-            {busy ? (
+            <StylistThread messages={thread} images={thumbs} />
+            {checking ? (
+              <p data-outfit-loading className="mt-2 flex items-center gap-2 px-4 text-sm text-ink-soft">
+                <Loader2 className="size-4 animate-spin" /> {CHECK_LOADING_TEXT}
+              </p>
+            ) : busy ? (
               <p data-stylist-thinking className="mt-2 flex items-center gap-2 px-4 text-sm text-ink-soft">
                 <Loader2 className="size-4 animate-spin" /> Thinking…
               </p>

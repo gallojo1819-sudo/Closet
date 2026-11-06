@@ -16,14 +16,26 @@ export function sessionMessages(messages: readonly StylistMessage[], since: stri
  * The chat as it was said, in order: the user's own question as a bubble on the right, the
  * stylist's answer on the left. Pure markup, no store, no router.
  */
-export function StylistThread({ messages }: { messages: readonly StylistMessage[] }) {
+export function StylistThread({
+  messages,
+  images,
+}: {
+  messages: readonly StylistMessage[];
+  /** In-memory photo for a user turn. Never persisted. */
+  images?: Readonly<Record<string, string>>;
+}) {
   if (!messages.length) return null;
   return (
     <ol data-stylist-thread className="mt-3 space-y-2 border-t border-hairline px-4 pt-3">
       {messages.map((m) =>
         m.role === "user" ? (
           <li key={m.id} data-stylist-user className="flex justify-end">
-            <p className="max-w-[85%] bg-paper-deep px-3 py-2 text-sm text-ink">{m.text}</p>
+            <div className="max-w-[85%] bg-paper-deep px-3 py-2 text-sm text-ink">
+              {images?.[m.id] ? (
+                <img alt="" src={images[m.id]} className="mb-1 h-24 w-20 object-cover" />
+              ) : null}
+              <p>{m.text}</p>
+            </div>
           </li>
         ) : (
           <li key={m.id} data-stylist-reply className="flex justify-start">
