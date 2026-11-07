@@ -34,7 +34,8 @@ import { composeAtlasLook, emptyTaste } from "./taste.ts";
 import { dressThisPiece } from "./dress.ts";
 import { ruleHits } from "./stylist/legal.ts";
 import { countsAsOuter, jacketRequired } from "./stylist/jackets.ts";
-import { weekRotationRow } from "./detectors/ideas.ts";
+import { slotOf } from "./style.ts";
+import { renderedSectionLooks, rowWays, visibleDetectors, weekRotationRow } from "./detectors.ts";
 import { todayLookPieces } from "./today-look.ts";
 import { emptyRotation } from "./rotation.ts";
 import { leadTop, lookTuckDecision } from "./look.ts";
@@ -252,26 +253,73 @@ describe("jacket edit", () => {
     assert.deepEqual(coreIds(on.ids), core.map((g) => g.id).sort());
   });
 
-  it("a generated out row does not seat the toggle over pleats while a strict jacket fits", () => {
-    const week = weekRotationRow(closet, {
+  it("week and detector rows seat a strict jacket before a toggle or denim over pleats", () => {
+    const cases: { date: string; occasion: Occasion; core: string[] }[] = [
+      { date: "2026-11-06", occasion: "out", core: ["g_3821acdhupu9", "g_5g4fqg77s4rw", "g_lad85rg9nxs3"] },
+      { date: "2026-11-06", occasion: "out", core: ["g_3821acdhupu9", "g_5g4fqg77s4rw", "g_yfkavdj5irwe"] },
+      { date: "2026-11-04", occasion: "weekday", core: ["g_1zteshjh31ac", "g_bee1dg9rnfe5", "g_yae8h1k9pjm1"] },
+      { date: "2026-11-04", occasion: "out", core: ["g_oimadifuvalb", "g_yae8h1k9pjm1", "g_yfkavdj5irwe"] },
+      { date: "2026-11-04", occasion: "out", core: ["g_8ukg5mi9r3fc", "g_salzdhuswyd3", "g_yfkavdj5irwe"] },
+    ];
+    const found = new Map<string, string>();
+    for (const row of cases) {
+      const season = "fall" as const;
+      const week = weekRotationRow(closet, {
+        occasion: row.occasion,
+        season,
+        salt: 0,
+        today: row.date,
+        cap: 8,
+        rotation: emptyRotation(),
+      });
+      const ways = rowWays(visibleDetectors(closet, { occasion: row.occasion, season, salt: 0, today: row.date }), closet, {
+        occasion: row.occasion,
+        season,
+        salt: 0,
+        today: row.date,
+        rotation: emptyRotation(),
+      });
+      const cards = [
+        ...week.looks,
+        ...renderedSectionLooks(ways, row.occasion).map((card) =>
+          card.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g)),
+        ),
+      ];
+      for (const look of cards) {
+        const core = look.filter((g) => slotOf(g) !== "outerwear" && !countsAsOuter(g));
+        const key = `${row.date}|${row.occasion}|${[...core.map((g) => g.id)].sort().join("+")}`;
+        const jacket = selectedOuter(look).jacket;
+        const sameCore = row.core.every((id) => look.some((g) => g.id === id)) && look.every((g) => row.core.includes(g.id) || g.id === jacket?.id);
+        if (sameCore) found.set(`${row.date}|${row.occasion}|${[...row.core].sort().join("+")}`, jacket?.id ?? "");
+        if (!lastResortNote(look)) continue;
+        const strict = jacketChoices(core, closet, { occasion: row.occasion, season }).filter((choice) => choice.tier === "strict");
+        assert.equal(strict.length, 0, `${key} kept ${jacket?.id}`);
+        assert.equal(lastResortNote(look), NOTE_LAST);
+      }
+    }
+    for (const row of cases) {
+      const key = `${row.date}|${row.occasion}|${[...row.core].sort().join("+")}`;
+      const jacket = found.get(key);
+      assert.ok(jacket, key);
+      assert.equal(lastResortNote(pieces([...row.core, jacket!])), null, key);
+    }
+  });
+
+  it("a closet with only a toggle over pleats labels that jacket a last resort", () => {
+    const ids = ["g_5gfabeezh485", "g_oimadifuvalb", "g_yfkavdj5irwe", "g_yae8h1k9pjm1"];
+    const tiny = pieces(ids);
+    const week = weekRotationRow(tiny, {
       occasion: "out",
       season: "fall",
       salt: 0,
       today: "2026-11-06",
-      cap: 8,
+      cap: 4,
       rotation: emptyRotation(),
     });
-    const toggle = "g_5gfabeezh485";
-    for (const look of week.looks) {
-      const jacket = look.find((g) => g.id === toggle);
-      const bottom = look.find((g) => /pleat/i.test(`${g.name} ${g.subtype ?? ""}`));
-      if (!jacket || !bottom) continue;
-      const core = look.filter((g) => g.id !== toggle);
-      const strict = jacketChoices(core, closet, { occasion: "out", season: "fall" }).filter((row) => row.tier === "strict");
-      const unused = strict.filter((row) => !week.looks.some((other) => other.some((g) => g.id === row.id)));
-      assert.equal(unused.length, 0, look.map((g) => g.id).join(","));
-      assert.equal(lastResortNote(look), NOTE_LAST);
-    }
+    const look = week.looks.find((row) => row.some((g) => g.id === "g_5gfabeezh485"));
+    assert.ok(look);
+    assert.equal(lastResortNote(look), NOTE_LAST);
+    assert.equal(jacketChoices(look.filter((g) => g.id !== "g_5gfabeezh485"), tiny, { occasion: "out", season: "fall" }).some((row) => row.tier === "strict"), false);
   });
 });
 

@@ -58,6 +58,7 @@ export const NOTE_ONE = "One other jacket works with these pieces.";
 export const NOTE_ONLY = "This is the only jacket that works with these pieces.";
 export const NOTE_LAST = "Last resort. A toggle or denim jacket over pleated trousers is not a clean match.";
 export const NOTE_WHICH = "More than one jacket is on this look. Pick which one.";
+export const NOTE_HELD = "A jacket is already on this look.";
 
 const FORM = new Set(["JKT-FORM-1", "JKT-FORM-2"]);
 

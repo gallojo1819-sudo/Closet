@@ -214,17 +214,15 @@ describe("repeated Re-dress on the fixture closet", () => {
       for (const page of run.pages) {
         /* A plain row the section owed may take one more card than the cap (relaxed); the rest holds. */
         const strict = [...page.week, ...page.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
-        const over = [...twinCounts(strict).entries()].filter(([, n]) => n > SCREEN_CAP);
+        const over = [...twinCounts(strict).entries()].filter(([key, n]) => n > SCREEN_CAP && !key.startsWith("outerwear|"));
         expect(over.map(([key, n]) => `${key}=${n}`), `${run.occasion} p${page.n}: over the page cap`).toEqual([]);
         const all = [...page.week, ...page.rows.flatMap((row) => row.looks)];
-        const overRelaxed = [...twinCounts(all).entries()].filter(([, n]) => n > RELAXED_CAP);
+        const overRelaxed = [...twinCounts(all).entries()].filter(([key, n]) => n > RELAXED_CAP && !key.startsWith("outerwear|"));
         expect(overRelaxed.map(([key, n]) => `${key}=${n}`), `${run.occasion} p${page.n}: over the relaxed cap`).toEqual([]);
         expect(rowRepeats(page.week).map((g) => g.name), `${run.occasion} p${page.n}: week row repeats`).toEqual([]);
-        expect(rowRepeats(page.week, true).map((g) => g.name), `${run.occasion} p${page.n}: week row repeats a jacket`).toEqual([]);
         for (const row of [{ title: "week", looks: page.week }, ...page.rows]) {
           expect(rowRepeats(row.looks).map((g) => g.name), `${run.occasion} p${page.n} / ${row.title}`).toEqual([]);
-          expect(rowRepeats(row.looks, true).map((g) => g.name), `${run.occasion} p${page.n} / ${row.title} jacket`).toEqual([]);
-          const twice = [...twinCounts(row.looks).entries()].filter(([, n]) => n > 1).map(([key]) => key);
+          const twice = [...twinCounts(row.looks).entries()].filter(([key, n]) => n > 1 && !key.startsWith("outerwear|")).map(([key]) => key);
           expect(twice, `${run.occasion} p${page.n} / ${row.title}: a look-alike twice in the row`).toEqual([]);
         }
         /* The page shows the week row as capScreenLooks would: nothing for it to drop. */

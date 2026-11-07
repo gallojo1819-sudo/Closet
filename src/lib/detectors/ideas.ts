@@ -35,12 +35,12 @@ import { weekLeadPiece } from "../look.ts";
 import { lookFitsOccasion, lookHasColor } from "../lookbook.ts";
 import { livePool } from "../rack.ts";
 import { rotationLookKey, rotationRank, type Rotation } from "../rotation.ts";
-import { pieceFitsSeason, type Season } from "../season.ts";
+import { lookFitsSeason, pieceFitsSeason, type Season } from "../season.ts";
 import { daysIdle, isBrownSuedeOuter, slotOf } from "../style.ts";
-import { jacketChoices, lastResortNote, type JacketContext } from "../jacket-edit.ts";
+import { jacketChoices, lastResortNote, selectedOuter, type JacketContext } from "../jacket-edit.ts";
 import type { JacketGateConditions } from "../jacket-weather.ts";
 import { jacketInfo, jacketRequired, wearSlot } from "../stylist/jackets.ts";
-import { relaxTiers } from "../stylist/legal.ts";
+import { isLegal, relaxTiers, ruleHits } from "../stylist/legal.ts";
 import { oversizedOf } from "../stylist/oversized.ts";
 import { applyAtlas, pieceVetoIds, type TasteMemory } from "../taste.ts";
 import type { Garment, Occasion } from "../types.ts";
@@ -822,7 +822,10 @@ function spreadJackets(
   }
 }
 
-/** Swap a toggle over pleats for a strict jacket that is not already on the row. The other pieces stay. */
+/**
+ * A toggle or denim jacket over pleats is seated only when no strict jacket fits this core.
+ * A strict jacket already on another card still fits. The other pieces stay.
+ */
 function preferStrictJackets(
   looks: Garment[][],
   live: readonly Garment[],
@@ -831,7 +834,15 @@ function preferStrictJackets(
   season: Season,
   weatherF: number | undefined,
   conditions: JacketGateConditions | undefined,
-  finalOk: (pieces: Garment[]) => boolean,
+  book?: {
+    counts?: Map<string, number>;
+    led?: Set<string>;
+    twins?: Twins;
+    leadOf?: (pieces: readonly Garment[]) => Garment | null;
+    waived?: Map<string, string[]>;
+    /** When the caller counts the finished looks itself, only read the cap. */
+    track?: boolean;
+  },
 ): void {
   const ctx: JacketContext = {
     occasion,
@@ -842,23 +853,72 @@ function preferStrictJackets(
     ...(conditions?.windy !== undefined ? { windy: conditions.windy } : {}),
   };
   const byId = new Map(live.map((g) => [g.id, g]));
-  const used = new Set(looks.flat().map((g) => g.id));
   for (let i = 0; i < looks.length; i += 1) {
     const look = looks[i]!;
-    const toggle = look.find((g) => /toggle/i.test(`${g.name} ${g.subtype ?? ""}`));
-    if (!toggle || !lastResortNote(look)) continue;
-    const core = look.filter((g) => g.id !== toggle.id);
+    if (!lastResortNote(look)) continue;
+    const jacket = selectedOuter(look).jacket;
+    if (!jacket) continue;
+    const core = look.filter((g) => g.id !== jacket.id);
+    const legalCtx = {
+      occasion,
+      season,
+      pool: [...pool],
+      ...(weatherF !== undefined ? { weatherF } : {}),
+      ...(conditions ? { conditions } : {}),
+    };
+    const beforeSoft = new Set(ruleHits(look, legalCtx).soft);
     const choices = jacketChoices(core, pool, ctx).filter((row) => row.tier === "strict");
-    const next = choices.map((row) => byId.get(row.id)).find((g): g is Garment => {
-      if (!g) return false;
-      return !used.has(g.id);
-    });
-    if (!next) continue;
-    const replaced = [...core, next];
-    if (!finalOk(replaced)) continue;
-    used.delete(toggle.id);
-    used.add(next.id);
+    const rank = (id: string) => {
+      const count = book?.counts?.get(id) ?? 0;
+      const garment = byId.get(id);
+      const leads = garment && book?.led && book.twins ? book.led.has(book.twins.key(garment)) : false;
+      return (leads ? 100 : 0) + count;
+    };
+    choices.sort((a, b) => rank(a.id) - rank(b.id) || (a.id < b.id ? -1 : 1));
+    let next: Garment | undefined;
+    let replaced: Garment[] | undefined;
+    const accept = (candidate: Garment, busy: boolean) => {
+      if (candidate.id === jacket.id) return false;
+      const count = book?.counts?.get(candidate.id) ?? 0;
+      const leads = book?.led && book.twins ? book.led.has(book.twins.key(candidate)) : false;
+      if (count >= SCREEN_CAP) return false;
+      if (!busy && leads) return false;
+      const pieces = [...core, candidate];
+      if (!lookFitsSeason(pieces, season as Season)) return false;
+      if (!isLegal(pieces, legalCtx)) return false;
+      const hits = ruleHits(pieces, legalCtx);
+      if (hits.hard.length || hits.soft.some((id) => !beforeSoft.has(id))) return false;
+      next = candidate;
+      replaced = pieces;
+      return true;
+    };
+    for (const choice of choices) {
+      const candidate = byId.get(choice.id);
+      if (candidate && accept(candidate, false)) break;
+    }
+    if (!next) {
+      for (const choice of choices) {
+        const candidate = byId.get(choice.id);
+        if (candidate && accept(candidate, true)) break;
+      }
+    }
+    if (!next || !replaced) continue;
+    const leadOf = book?.leadOf ?? leadPiece;
+    const was = book?.led && book.twins ? leadOf(look) : null;
     looks[i] = replaced;
+    if (book?.waived) {
+      const prev = book.waived.get(lookKey(look));
+      if (prev) book.waived.set(lookKey(replaced), prev);
+    }
+    if (book?.counts && book.track !== false) {
+      book.counts.set(jacket.id, Math.max(0, (book.counts.get(jacket.id) ?? 1) - 1));
+      book.counts.set(next.id, (book.counts.get(next.id) ?? 0) + 1);
+    }
+    if (book?.led && book.twins) {
+      if (was) book.led.delete(book.twins.key(was));
+      const now = leadOf(replaced);
+      if (now) book.led.add(book.twins.key(now));
+    }
   }
 }
 
@@ -1027,6 +1087,13 @@ function forgottenWay(
   const shippedLed = new Set(ctx.led ?? []);
   noteLeads(rows, ctx.twins, shippedLed);
   spreadJackets(rows, d, shipped, new Map(live.map((g) => [g.id, g])), ctx.rotation, ctx.twins, shippedLed);
+  preferStrictJackets(rows, live, pool, ctx.occasion, ctx.season, ctx.weatherF, ctx.conditions, {
+    counts: shipped,
+    led: shippedLed,
+    twins: ctx.twins,
+    leadOf: leadPiece,
+    waived,
+  });
   for (const [id, n] of shipped) counts.set(id, n);
   return {
     id: FORGOTTEN_ID,
@@ -1109,6 +1176,13 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
       continue;
     }
     spreadJackets(looks, d, local, byId, ctx.rotation, twins, ledLocal);
+    preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
+      counts: local,
+      led: ledLocal,
+      twins,
+      leadOf: leadPiece,
+      waived,
+    });
     counts = local;
     led = ledLocal;
     out.push({ ...way, pieces: looks[0] ?? way.pieces, looks: { ...way.looks, [occasion]: looks }, waived: waivedOf(looks) });
@@ -1154,6 +1228,27 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
       }
       if (!looks.length) return;
       spreadJackets(looks, d, counts, byId, rotation, twins, ledLocal);
+      preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
+        counts,
+        led: ledLocal,
+        twins,
+        leadOf: leadPiece,
+        waived,
+      });
+      if (looks.length < ROW_MIN) {
+        const more = again(d, RELAXED_CAP);
+        if (more.length > looks.length) {
+          looks = more;
+          relaxed = true;
+          preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
+            counts,
+            led: ledLocal,
+            twins,
+            leadOf: leadPiece,
+            waived,
+          });
+        }
+      }
       led = ledLocal;
       out.push({
         id: `${FILL_ID}-${fills + 1}`,
@@ -1210,6 +1305,13 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
         kept.push(look);
       }
       if (!kept.length) continue;
+      preferStrictJackets(kept, live, pool, occasion, season, weatherF, conditions, {
+        counts,
+        track: false,
+        led,
+        twins,
+        leadOf: leadPiece,
+      });
       for (const look of kept) for (const g of look) counts.set(g.id, (counts.get(g.id) ?? 0) + 1);
       out.push({ ...way, pieces: kept[0]!, looks: { ...way.looks, [occasion]: kept } });
     }
@@ -1605,7 +1707,13 @@ export function weekRotationRow(
     }
   }
   spreadJackets(looks, strict, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation, twins, led, weekLeadPiece);
-  preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, (pieces) => strict.finalOk(pieces));
+  preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
+    counts,
+    led,
+    twins,
+    leadOf: weekLeadPiece,
+    waived,
+  });
   if (ctx.rotation) settle(strict, pairable, ctx.rotation, twins, live.length);
   /* Every piece this scope has found unpairable so far, so the caller's list is complete. */
   const unpairable: Garment[] = [];

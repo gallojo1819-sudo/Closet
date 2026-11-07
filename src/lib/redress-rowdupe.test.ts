@@ -209,7 +209,7 @@ describe(`six pages per chapter on the ${CLOSET.length}-piece closet`, () => {
     for (const run of RUNS) {
       for (const page of run.pages) {
         for (const row of [{ title: "week", looks: page.week }, ...page.rows]) {
-          const twice = [...keyCounts(row.looks).entries()].filter(([, n]) => n > 1).map(([key]) => key);
+          const twice = [...keyCounts(row.looks).entries()].filter(([key, n]) => n > 1 && !key.startsWith("outerwear|")).map(([key]) => key);
           expect(twice, `${run.occasion} page ${page.n} / ${row.title}: twice in the row`).toEqual([]);
         }
       }
@@ -221,10 +221,10 @@ describe(`six pages per chapter on the ${CLOSET.length}-piece closet`, () => {
       for (const page of run.pages) {
         const relaxed = page.rows.some((row) => row.relaxed);
         const cap = relaxed ? RELAXED_CAP : SCREEN_CAP;
-        const over = [...keyCounts(page.page).entries()].filter(([, n]) => n > cap);
+        const over = [...keyCounts(page.page).entries()].filter(([key, n]) => n > cap && !key.startsWith("outerwear|"));
         expect(over, `${run.occasion} page ${page.n}: over the page cap`).toEqual([]);
         const strict = [...page.week, ...page.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
-        const overStrict = [...keyCounts(strict).entries()].filter(([, n]) => n > SCREEN_CAP);
+        const overStrict = [...keyCounts(strict).entries()].filter(([key, n]) => n > SCREEN_CAP && !key.startsWith("outerwear|"));
         expect(overStrict, `${run.occasion} page ${page.n}: over the cap outside the relaxed rows`).toEqual([]);
       }
     }

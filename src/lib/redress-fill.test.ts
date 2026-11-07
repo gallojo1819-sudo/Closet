@@ -278,15 +278,14 @@ describe("six Re-dresses on the snapshot closet, every chapter", () => {
       for (const tap of run.taps) {
         /* A plain row the section owed may take one more card than the cap (relaxed); the rest holds. */
         const strict = [...tap.week, ...tap.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
-        const over = [...twinCounts(strict).entries()].filter(([, n]) => n > SCREEN_CAP);
+        const over = [...twinCounts(strict).entries()].filter(([key, n]) => n > SCREEN_CAP && !key.startsWith("outerwear|"));
         expect(over.map(([key, n]) => `${key}=${n}`), `${run.occasion} tap ${tap.n}: over the page cap`).toEqual([]);
-        const overRelaxed = [...twinCounts(tap.page).entries()].filter(([, n]) => n > RELAXED_CAP);
+        const overRelaxed = [...twinCounts(tap.page).entries()].filter(([key, n]) => n > RELAXED_CAP && !key.startsWith("outerwear|"));
         expect(overRelaxed.map(([key, n]) => `${key}=${n}`), `${run.occasion} tap ${tap.n}: over the relaxed cap`).toEqual([]);
         const rows = [{ title: "week", looks: tap.week }, ...tap.rows];
         for (const row of rows) {
           expect(rowRepeats(row.looks).map((g) => g.name), `${run.occasion} tap ${tap.n} / ${row.title}`).toEqual([]);
-          expect(rowRepeats(row.looks, true).map((g) => g.name), `${run.occasion} tap ${tap.n} / ${row.title} jacket`).toEqual([]);
-          const twice = [...twinCounts(row.looks).entries()].filter(([, n]) => n > 1).map(([key]) => key);
+          const twice = [...twinCounts(row.looks).entries()].filter(([key, n]) => n > 1 && !key.startsWith("outerwear|")).map(([key]) => key);
           expect(twice, `${run.occasion} tap ${tap.n} / ${row.title}: a look-alike twice in the row`).toEqual([]);
         }
       }
