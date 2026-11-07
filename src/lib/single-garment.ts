@@ -36,20 +36,58 @@ export function singleGarmentNoun(g: { subtype?: string; category?: string }): s
 }
 
 /**
- * A uniform studio ground the catalog itself asks for. #F4EFE6 is the app paper.
- * A room, scenery, a person, a hand, a hanger, or a second garment is not this.
+ * Backstop only. The prompt is what tells the model a plain paper ground is not a "no".
+ * A "no" is flipped only when every token is in this closed set and one of them names
+ * the ground. Any other word, a negation, or a pattern word stays rejected.
  */
-const PAPER_STUDIO =
-  /(?:#f4efe6|\bf4efe6\b|\bbeige\b|\boff-white\b|\boff white\b|\bneutral\b|\btransparent\b|\bstudio\b|\bpaper\b)/i;
+const ALLOWED_REASON = new Set([
+  "plain",
+  "uniform",
+  "solid",
+  "beige",
+  "paper",
+  "cream",
+  "off-white",
+  "neutral",
+  "studio",
+  "background",
+  "visible",
+  "white",
+  "light",
+  "a",
+  "the",
+  "is",
+  "of",
+]);
 
-const CONTAMINATED =
-  /\b(second|another|two|extras?|layers?|collars?|sleeves?|trousers?|persons?|people|skin|hairs?|hands?|hangers?|rooms?|scenery|landscapes?|walls?|floors?|furniture|models?|faces?|mannequins?|bodies|body)\b/i;
+/** A token that actually names the allowed ground. "background visible" alone is not one. */
+const GROUND_REASON = new Set(["beige", "paper", "cream", "off-white", "neutral", "studio", "white"]);
 
-/** True when `why` names only an allowed studio ground and nothing else in the frame. */
+function reasonTokens(why: string): string[] {
+  return why
+    .toLowerCase()
+    .replace(/[^a-z0-9#\s-]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 0);
+}
+
+function isNegation(token: string): boolean {
+  return token === "not" || token === "no" || token === "non" || token.startsWith("non-");
+}
+
+/**
+ * True only when the whole reason is a plain paper or studio ground.
+ * Lowercased, punctuation other than `#` and `-` removed, then split on whitespace.
+ */
 export function paperStudioOnly(why: string): boolean {
-  const text = why.trim();
-  if (!text || CONTAMINATED.test(text)) return false;
-  return PAPER_STUDIO.test(text);
+  const tokens = reasonTokens(why);
+  if (tokens.length === 0) return false;
+  let ground = false;
+  for (const token of tokens) {
+    if (isNegation(token) || !ALLOWED_REASON.has(token)) return false;
+    if (GROUND_REASON.has(token)) ground = true;
+  }
+  return ground;
 }
 
 /**
@@ -69,11 +107,9 @@ export function singleGarmentQuestion(noun: string): string {
   const what = noun.trim() || "garment";
   return (
     `Does this image show exactly one ${what}? ` +
-    "A uniform neutral studio background, a transparent background, or the app paper #F4EFE6 is allowed. " +
+    "A plain, uniform paper, studio, or transparent background (like #F4EFE6) is expected and is never a reason for no. " +
     'Return ONLY JSON: {"one":"yes|no|unclear","why":""}. ' +
-    "one is no when any part of a second garment (a layer worn under or over it, a collar, a sleeve, a trouser leg), " +
-    "a person, skin, hair, a hand, a hanger, a room, or scenery is visible. " +
-    "A plain beige, off-white, neutral, transparent, or #F4EFE6 paper background alone is not a reason for no. " +
+    "one is no only for a room, furniture, scenery, a person or any body part, a hanger, or a second garment or item. " +
     "one is unclear when you cannot tell. why is a few words, empty on yes. JSON only."
   );
 }
