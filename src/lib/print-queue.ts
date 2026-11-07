@@ -162,10 +162,11 @@ function applyHint(id: string, hint: TagHint | null | undefined) {
   useCloset.getState().updateGarment(id, { name: hint.name, category: hint.category });
 }
 
-function markUnnamed(id: string) {
+function markUnnamed(id: string): boolean {
   const g = useCloset.getState().garments.find((item) => item.id === id);
-  if (!g || g.name !== NEW_PIECE_NAME) return;
+  if (!g || g.name !== NEW_PIECE_NAME) return false;
   useCloset.getState().updateGarment(id, { needsCategory: true });
+  return true;
 }
 
 /**
@@ -177,7 +178,14 @@ function markUnnamed(id: string) {
 export function enqueueTag(
   id: string,
   cover: string,
-  opts?: { tag?: TagFn; hint?: TagHint | null; timeoutMs?: number; mirror?: () => void },
+  opts?: {
+    tag?: TagFn;
+    hint?: TagHint | null;
+    timeoutMs?: number;
+    mirror?: () => void;
+    onNamed?: (patch: { name: string; category: Category }) => void;
+    onAsk?: () => void;
+  },
 ): Promise<void> {
   const queued = useCloset.getState().garments.find((g) => g.id === id);
   const snap0 = queued ? stampOf(queued) : null;
@@ -194,22 +202,27 @@ export function enqueueTag(
       let patch = chosenPatch(decideCameraTag(reply));
       if (!patch) {
         if (!rowEdited(id, snap)) {
+          const before = useCloset.getState().garments.find((g) => g.id === id);
           applyHint(id, opts?.hint);
           const hinted = useCloset.getState().garments.find((g) => g.id === id);
+          if (hinted && before && hinted.name !== before.name) {
+            opts?.onNamed?.({ name: hinted.name, category: hinted.category });
+          }
           if (hinted) snap = stampOf(hinted);
         }
         if (!useCloset.getState().garments.some((g) => g.id === id)) return;
         reply = await readTag(tagFn, image, ms);
         patch = chosenPatch(decideCameraTag(reply));
         if (!patch) {
-          if (!rowEdited(id, snap)) markUnnamed(id);
+          if (!rowEdited(id, snap) && markUnnamed(id)) opts?.onAsk?.();
           return;
         }
       }
       if (rowEdited(id, snap)) return;
       applyTag(id, patch, reply, opts?.mirror);
+      opts?.onNamed?.({ name: patch.name, category: patch.category });
     } catch {
-      if (!rowEdited(id, snap)) markUnnamed(id);
+      if (!rowEdited(id, snap) && markUnnamed(id)) opts?.onAsk?.();
     }
   });
   tagChain = run.then(

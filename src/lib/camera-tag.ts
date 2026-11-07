@@ -1,8 +1,11 @@
 import { isFakeName } from "./rack.ts";
 import type { Category } from "./types.ts";
 
-/** Camera naming waits this long, then keeps “New piece”. */
+/** First naming wait. A miss retries once for twice this long, then asks for a name. */
 export const CAMERA_TAG_MS = 12_000;
+
+/** Second attempt after a timeout or an empty tag. Longer than the first. */
+export const NAMING_RETRY_MS = CAMERA_TAG_MS * 2;
 
 /**
  * Added to the tag prompt. A jacket is outerwear. The outline guess must not
@@ -189,4 +192,50 @@ export function decideCameraTag(tag: CameraTag): CameraTagDecision {
     };
   }
   return { action: "update", patch };
+}
+
+export type NamingOutcome =
+  | { step: "apply"; patch: CameraPatch }
+  | { step: "worn" }
+  | { step: "ask" };
+
+/**
+ * One read, then one longer retry when the tag times out, is empty, or has no
+ * fallback. A worn frame with two or more boxes is the worn picker, not a miss.
+ * Two misses ask for a name instead of leaving "New piece".
+ */
+export async function nameWithRetry(opts: {
+  read: (ms: number) => Promise<CameraTagDecision>;
+  countWorn?: (decision: Extract<CameraTagDecision, { action: "worn" }>) => Promise<number>;
+  firstMs?: number;
+  retryMs?: number;
+}): Promise<NamingOutcome> {
+  const firstMs = opts.firstMs ?? CAMERA_TAG_MS;
+  const retryMs = opts.retryMs ?? NAMING_RETRY_MS;
+  const once = async (ms: number, attempt: 0 | 1): Promise<NamingOutcome | { step: "retry" }> => {
+    const decision = await opts.read(ms);
+    switch (decision.action) {
+      case "update":
+        return { step: "apply", patch: decision.patch };
+      case "worn": {
+        const boxes = opts.countWorn ? await opts.countWorn(decision) : 0;
+        if (boxes >= 2) return { step: "worn" };
+        if (decision.fallback) return { step: "apply", patch: decision.fallback };
+        break;
+      }
+      case "keep":
+        break;
+      default: {
+        const neverAction: never = decision;
+        return neverAction;
+      }
+    }
+    if (attempt === 0) return { step: "retry" };
+    return { step: "ask" };
+  };
+  const first = await once(firstMs, 0);
+  if (first.step !== "retry") return first;
+  const second = await once(retryMs, 1);
+  if (second.step === "retry") return { step: "ask" };
+  return second;
 }
