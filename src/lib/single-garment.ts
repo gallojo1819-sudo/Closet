@@ -35,14 +35,45 @@ export function singleGarmentNoun(g: { subtype?: string; category?: string }): s
   return "garment";
 }
 
+/**
+ * A uniform studio ground the catalog itself asks for. #F4EFE6 is the app paper.
+ * A room, scenery, a person, a hand, a hanger, or a second garment is not this.
+ */
+const PAPER_STUDIO =
+  /(?:#f4efe6|\bf4efe6\b|\bbeige\b|\boff-white\b|\boff white\b|\bneutral\b|\btransparent\b|\bstudio\b|\bpaper\b)/i;
+
+const CONTAMINATED =
+  /\b(second|another|two|extras?|layers?|collars?|sleeves?|trousers?|persons?|people|skin|hairs?|hands?|hangers?|rooms?|scenery|landscapes?|walls?|floors?|furniture|models?|faces?|mannequins?|bodies|body)\b/i;
+
+/** True when `why` names only an allowed studio ground and nothing else in the frame. */
+export function paperStudioOnly(why: string): boolean {
+  const text = why.trim();
+  if (!text || CONTAMINATED.test(text)) return false;
+  return PAPER_STUDIO.test(text);
+}
+
+/**
+ * A "no" whose only reason is the paper the print prompt requested is one garment.
+ * Any other "no", and every "unclear", is left alone. An empty why is not accepted.
+ */
+export function normalizeSingleVerdict(
+  one: SingleVerdict,
+  why: string,
+): { one: SingleVerdict; why: string } {
+  if (one === "no" && paperStudioOnly(why)) return { one: "yes", why: "" };
+  return { one, why: one === "yes" ? "" : why };
+}
+
 /** The question, verbatim. JSON only, like the other checkers. */
 export function singleGarmentQuestion(noun: string): string {
   const what = noun.trim() || "garment";
   return (
-    `Does this image show exactly one ${what}, with no part of any other garment, body or background? ` +
+    `Does this image show exactly one ${what}? ` +
+    "A uniform neutral studio background, a transparent background, or the app paper #F4EFE6 is allowed. " +
     'Return ONLY JSON: {"one":"yes|no|unclear","why":""}. ' +
     "one is no when any part of a second garment (a layer worn under or over it, a collar, a sleeve, a trouser leg), " +
-    "a person, skin, hair, a hand, a hanger or a room is visible. " +
+    "a person, skin, hair, a hand, a hanger, a room, or scenery is visible. " +
+    "A plain beige, off-white, neutral, transparent, or #F4EFE6 paper background alone is not a reason for no. " +
     "one is unclear when you cannot tell. why is a few words, empty on yes. JSON only."
   );
 }
@@ -64,7 +95,7 @@ export function parseSingleGarment(text: string): { one: SingleVerdict; why: str
     if (!("one" in o)) return { one: "unclear", why: "unreadable" };
     const one = verdictWord(o.one);
     const why = typeof o.why === "string" ? o.why.trim().slice(0, 80) : "";
-    return { one, why: one === "yes" ? "" : why };
+    return normalizeSingleVerdict(one, why);
   } catch {
     return { one: "unclear", why: "unreadable" };
   }
@@ -75,7 +106,7 @@ function settle(raw: RawSingleVerdict): { one: SingleVerdict; why: string } {
   if (typeof raw.one === "string" || typeof raw.one === "boolean") {
     const one = verdictWord(raw.one);
     const why = typeof raw.why === "string" ? raw.why.trim().slice(0, 80) : "";
-    return { one, why: one === "yes" ? "" : why };
+    return normalizeSingleVerdict(one, why);
   }
   return { one: "unclear", why: "unreadable" };
 }

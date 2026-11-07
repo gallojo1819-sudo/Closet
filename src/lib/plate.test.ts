@@ -219,7 +219,7 @@ describe("a camera photo labeled cutout is not a plate", () => {
     assert.equal(paper.imageSrc, "o.jpg");
     assert.equal(hasCleanCover(paper), false);
     assert.equal(needsReprintTile(paper), true);
-    assert.equal(REPRINT_CAPTION, "Plate failed — outline the jacket.");
+    assert.equal(REPRINT_CAPTION, "Photo cleanup needs another try — outline the piece.");
   });
 
   it("the signed-in closet pass does not skip reprint false", () => {
@@ -266,7 +266,7 @@ describe("plate patch", () => {
     assert.equal(kept.cutoutSrc, "idb:suede:c");
     assert.equal(kept.reprint, false);
     assert.equal("imageSrc" in kept, false);
-    assert.equal(REPRINT_CAPTION, "Plate failed — outline the jacket.");
+    assert.equal(REPRINT_CAPTION, "Photo cleanup needs another try — outline the piece.");
   });
 });
 
@@ -328,6 +328,71 @@ describe("a copied phone photo is not a plate", () => {
     assert.equal(marked.reprint, true);
     assert.equal("imageSrc" in marked, false);
     resetBlobHashes();
+  });
+});
+
+const NAVY_PHOTO = "sb:5d458205-b3ca-433a-8b75-4c0a2bbfa1ee/g_ukietgtd0g64/o.jpg";
+const NAVY_CUTOUT = "sb:5d458205-b3ca-433a-8b75-4c0a2bbfa1ee/g_ukietgtd0g64/c-96a44251.jpg";
+const NAVY_AT = () => "2026-11-07T14:57:47.000Z";
+
+describe("a beige paper plate", () => {
+  it("one navy sweater on beige paper is clean, and the stored refusal stays until a recheck", async () => {
+    const stored = {
+      category: "top",
+      imageSrc: NAVY_PHOTO,
+      cutoutSrc: NAVY_CUTOUT,
+      imageSource: "cutout" as const,
+      reprint: true,
+      matteQuality: "busy" as const,
+    };
+    assert.equal(hasCleanCover(stored), false);
+    assert.equal(needsReprintTile(stored), true);
+    assert.equal(/\bjacket\b/i.test(REPRINT_CAPTION), false);
+
+    const beige = await checkSingleGarment(
+      { image: "data:image/jpeg;base64,navy", noun: "sweater" },
+      async () => ({ one: "no", why: "plain beige background visible" }),
+      { now: NAVY_AT },
+    );
+    const patch = plateResultPatch(
+      NAVY_PHOTO,
+      { reprint: false, cutoutSrc: NAVY_CUTOUT },
+      NAVY_CUTOUT,
+      NAVY_CUTOUT,
+      beige,
+    );
+    assert.equal(patch.matteQuality, "clean");
+    assert.equal(patch.reprint, false);
+    assert.equal(patch.cutoutSrc, NAVY_CUTOUT);
+    assert.equal(patch.cutoutCheck.one, "yes");
+    assert.equal(patch.cutoutCheck.why, "");
+    const saved = { category: "top", imageSrc: NAVY_PHOTO, ...patch };
+    assert.equal(hasCleanCover(saved), true);
+    assert.equal(needsReprintTile(saved), false);
+  });
+
+  it("a second garment, a person, or a room is still a reprint", async () => {
+    for (const why of ["a second garment at the hem", "a person is visible", "a room behind the piece"]) {
+      const bad = await checkSingleGarment(
+        { image: "data:image/jpeg;base64,navy", noun: "sweater" },
+        async () => ({ one: "no", why }),
+        { now: NAVY_AT },
+      );
+      assert.equal(bad.one, "no", why);
+      const patch = plateResultPatch(
+        NAVY_PHOTO,
+        { reprint: false, cutoutSrc: NAVY_CUTOUT },
+        NAVY_CUTOUT,
+        NAVY_CUTOUT,
+        bad,
+      );
+      assert.equal(patch.matteQuality, "busy", why);
+      assert.equal(patch.reprint, true, why);
+      assert.equal(patch.cutoutSrc, "", why);
+      const tile = { category: "top", imageSrc: NAVY_PHOTO, ...patch };
+      assert.equal(needsReprintTile(tile), true, why);
+      assert.equal(hasCleanCover(tile), false, why);
+    }
   });
 });
 

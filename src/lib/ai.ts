@@ -9,6 +9,7 @@ import {
   COMPOSE_TEMPERATURE,
   parseCompose,
 } from "./compose";
+import { heldCleanupPrompt } from "./held-prompt";
 import { parseScanClass, type ScanClass, type ScanSlot } from "./scan";
 import type { StylistPageContext } from "./stylist-page";
 import { askStylistCore, phasesLine, type ChatFn, type StylistAskResult } from "./stylist-ask";
@@ -352,15 +353,22 @@ export const HELD_JACKET_RETRY =
 
 export const printGarment = createServerFn({ method: "POST" })
   .middleware([closetCaller])
-  .validator((input: { image: string; held?: boolean; retry?: boolean }) => input)
+  .validator(
+    (input: { image: string; held?: boolean; retry?: boolean; category?: string; noun?: string }) =>
+      input,
+  )
   .handler(async ({ data, context }): Promise<EditResult> => {
     const gate = await callerGate(context, "printGarment");
     if (!gate.ok) return { ok: false, error: gate.error };
     if (!process.env.XAI_API_KEY) return { ok: false, error: "Set XAI_API_KEY for catalog covers." };
     const prompt = data.held
-      ? data.retry
-        ? `${HELD_JACKET_PROMPT} ${HELD_JACKET_RETRY}`
-        : HELD_JACKET_PROMPT
+      ? heldCleanupPrompt({
+          category: data.category,
+          noun: data.noun,
+          retry: Boolean(data.retry),
+          jacketPrompt: HELD_JACKET_PROMPT,
+          jacketRetry: HELD_JACKET_RETRY,
+        })
       : PRINT_PROMPT;
     return imagineEdit(prompt, data.image);
   });

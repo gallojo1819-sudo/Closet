@@ -4,6 +4,7 @@ import {
   checkSingleGarment,
   colorsFromPlateTag,
   cutoutCheckOf,
+  paperStudioOnly,
   parseSingleGarment,
   singleGarmentNoun,
   singleGarmentQuestion,
@@ -13,11 +14,18 @@ const NOW = () => "2026-10-16T12:00:00.000Z";
 const PLATE = { image: "data:image/jpeg;base64,plate", noun: "sweater" };
 
 describe("the single-garment question", () => {
-  it("names the piece and asks for one of it with nothing else", () => {
+  it("names the piece, allows app paper, and still rejects a second garment, a person, or a room", () => {
     const q = singleGarmentQuestion("sweater");
-    assert.match(q, /^Does this image show exactly one sweater, with no part of any other garment, body or background\?/);
+    assert.match(q, /^Does this image show exactly one sweater\?/);
+    assert.match(q, /uniform neutral studio background/);
+    assert.match(q, /transparent background/);
+    assert.match(q, /#F4EFE6/);
+    assert.match(q, /plain beige, off-white, neutral, transparent, or #F4EFE6 paper background alone is not a reason for no/);
+    assert.match(q, /a second garment/);
+    assert.match(q, /a person, skin, hair, a hand, a hanger, a room, or scenery/);
     assert.match(q, /"one":"yes\|no\|unclear"/);
-    assert.equal(singleGarmentQuestion("  ").startsWith("Does this image show exactly one garment,"), true);
+    assert.doesNotMatch(q, /no part of any other garment, body or background/);
+    assert.equal(singleGarmentQuestion("  ").startsWith("Does this image show exactly one garment?"), true);
   });
 
   it("the noun is the subtype, else the category, else garment", () => {
@@ -38,6 +46,10 @@ describe("parsing the answer", () => {
       why: "jacket sleeve at the left",
     });
     assert.deepEqual(parseSingleGarment('{"one":"unclear","why":""}'), { one: "unclear", why: "" });
+    assert.deepEqual(parseSingleGarment('{"one":"no","why":"plain beige background visible"}'), {
+      one: "yes",
+      why: "",
+    });
     assert.deepEqual(parseSingleGarment('{"one":true}'), { one: "yes", why: "" });
     assert.deepEqual(parseSingleGarment('{"one":"maybe"}'), { one: "unclear", why: "" });
   });
@@ -99,6 +111,65 @@ describe("checkSingleGarment", () => {
     assert.equal(empty.one, "unclear");
     assert.equal(empty.why, "no image");
     assert.equal(asked, 0);
+  });
+});
+
+describe("a paper studio background", () => {
+  it("accepts beige, app paper, neutral, and transparent, and nothing else", () => {
+    for (const why of [
+      "plain beige background visible",
+      "uniform neutral studio background",
+      "transparent background",
+      "app paper #F4EFE6",
+      "off-white paper",
+    ]) {
+      assert.equal(paperStudioOnly(why), true, why);
+    }
+    for (const why of [
+      "",
+      "background visible",
+      "a second garment at the hem",
+      "a person is visible",
+      "a room behind the piece",
+      "scenery outside",
+      "a hand holding it",
+      "a hanger",
+      "jacket sleeve at the left",
+      "person on beige paper",
+      "beige room",
+    ]) {
+      assert.equal(paperStudioOnly(why), false, why);
+    }
+  });
+
+  it("one sweater on beige paper is yes; a second garment, a person, or a room stays no", async () => {
+    const beige = await checkSingleGarment(
+      PLATE,
+      async () => ({ one: "no", why: "plain beige background visible" }),
+      { now: NOW },
+    );
+    assert.deepEqual(cutoutCheckOf(beige), { one: "yes", why: "", at: NOW() });
+    for (const why of ["#F4EFE6 paper", "transparent background", "neutral studio"]) {
+      const paper = await checkSingleGarment(PLATE, async () => ({ one: "no", why }), { now: NOW });
+      assert.equal(paper.one, "yes", why);
+    }
+    for (const why of ["a second garment", "a person is visible", "a room behind the piece"]) {
+      const bad = await checkSingleGarment(PLATE, async () => ({ one: "no", why }), { now: NOW });
+      assert.equal(bad.one, "no", why);
+      assert.equal(bad.why, why, why);
+    }
+    const vague = await checkSingleGarment(
+      PLATE,
+      async () => ({ one: "no", why: "background visible" }),
+      { now: NOW },
+    );
+    assert.equal(vague.one, "no");
+    const unclear = await checkSingleGarment(
+      PLATE,
+      async () => ({ one: "unclear", why: "plain beige background visible" }),
+      { now: NOW },
+    );
+    assert.equal(unclear.one, "unclear");
   });
 });
 

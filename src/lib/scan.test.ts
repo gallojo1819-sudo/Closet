@@ -20,6 +20,7 @@ import {
   slotFitsCategory,
   writtenCutout,
 } from "./scan.ts";
+import { heldCleanupPrompt } from "./held-prompt.ts";
 
 describe("parseScanClass", () => {
   it("skips food", () => {
@@ -364,7 +365,8 @@ describe("held garment cover", () => {
     assert.notEqual(written.cutoutSrc, "photo://jacket");
     assert.equal(savedCutout, "");
     assert.equal(written.message, HAND_COVER_MESSAGE);
-    assert.equal(written.message, "Plate failed — outline the jacket.");
+    assert.equal(written.message, "Photo cleanup needs another try — outline the piece.");
+    assert.equal(/\bjacket\b/i.test(written.message), false);
     const direct = writtenCutout({
       photo: "photo://jacket",
       plate: "plate://hand",
@@ -542,6 +544,90 @@ describe("held garment cover", () => {
     assert.match(ai, /Not a flat ghost of the lining\./);
     assert.match(ai, /No second garment, no model, no text\./);
     assert.match(ai, /The last plate still showed a person\. Fail if any skin remains\./);
+    assert.match(ai, /heldCleanupPrompt\(\{/);
+    assert.match(ai, /category: data\.category/);
+    assert.match(ai, /noun: data\.noun/);
+    const jacketPrompt = "Keep this exact jacket: suede or canvas.";
+    const jacketRetry = "Fail if any skin remains.";
+    const top = heldCleanupPrompt({
+      category: "top",
+      noun: "top",
+      retry: true,
+      jacketPrompt,
+      jacketRetry,
+    });
+    assert.equal(/\bjacket\b/i.test(top), false);
+    assert.match(top, /this exact top/);
+    assert.match(top, /Keep this exact shape, color, and fabric/);
+    assert.match(top, /#F4EFE6/);
+    const trousers = heldCleanupPrompt({
+      category: "bottom",
+      noun: "pair of trousers",
+      retry: true,
+      jacketPrompt,
+      jacketRetry,
+    });
+    assert.equal(/\bjacket\b/i.test(trousers), false);
+    assert.match(trousers, /this exact pair of trousers/);
+    const shoes = heldCleanupPrompt({
+      category: "footwear",
+      noun: "pair of shoes",
+      retry: true,
+      jacketPrompt,
+      jacketRetry,
+    });
+    assert.equal(/\bjacket\b/i.test(shoes), false);
+    const dress = heldCleanupPrompt({
+      category: "dress",
+      noun: "dress",
+      retry: false,
+      jacketPrompt,
+      jacketRetry,
+    });
+    assert.equal(/\bjacket\b/i.test(dress), false);
+    assert.match(dress, /this exact dress/);
+    const coat = heldCleanupPrompt({
+      category: "outerwear",
+      noun: "jacket",
+      retry: true,
+      jacketPrompt,
+      jacketRetry,
+    });
+    assert.equal(coat, `${jacketPrompt} ${jacketRetry}`);
+    const legacy = heldCleanupPrompt({ retry: true, jacketPrompt, jacketRetry });
+    assert.equal(legacy, `${jacketPrompt} ${jacketRetry}`);
+    const outline = readFileSync(
+      new URL("../components/closet/outline.tsx", import.meta.url),
+      "utf8",
+    );
+    assert.equal(outline.includes("classifyScan"), false);
+    assert.match(outline, /category: garment\.category/);
+    assert.match(outline, /REPRINT_PAID_NOTICE/);
+    assert.match(outline, /Confirm makes a paid AI cleanup call/);
+    assert.match(outline, /Opening this and Cancel make no paid call/);
+    assert.equal(
+      /\bjacket\b/i.test(
+        outline.slice(
+          outline.indexOf("export const REPRINT_PAID_NOTICE"),
+          outline.indexOf("export function OutlineJacket"),
+        ),
+      ),
+      false,
+    );
+    assert.match(outline, /data-reprint-notice/);
+    assert.match(outline, />\s*Cancel\s*</);
+    const outlineFn = outline.slice(outline.indexOf("export function OutlineJacket"));
+    const confirmAt = outlineFn.indexOf("const confirm");
+    const before = outlineFn.slice(0, confirmAt);
+    assert.equal(before.includes("printGarment("), false);
+    assert.equal(before.includes("guardedPlatePatch("), false);
+    assert.equal(before.includes("judgeHeldPlate("), false);
+    const confirm = outlineFn.slice(confirmAt);
+    assert.ok(confirm.indexOf("guardedPlatePatch(") < confirm.indexOf("printGarment("));
+    const noticeAt = outline.indexOf("{REPRINT_PAID_NOTICE}");
+    const confirmLabel = outline.indexOf(": \"Confirm\"}");
+    assert.ok(noticeAt > 0 && confirmLabel > noticeAt);
+    assert.match(outline, /onClick=\{onClose\}/);
     assert.match(ai, /one garment in a hand, on a hanger, or held up to the camera/);
     assert.match(ai, /A hand and a hanger are not a second garment/);
     const shotAt = studio.indexOf("const takeCameraShot");
