@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { OutfitCheckBar } from "@/components/shell/outfit-check-bar";
 import { StylistThread } from "@/components/shell/stylist-thread";
-import { CHECK_HEIC_TEXT, CHECK_OVERSIZE_TEXT, CHECK_TYPE_TEXT, CHECK_USER_TURN } from "../outfit-check-copy.ts";
+import { CHECK_HEIC_TEXT, CHECK_OVERSIZE_TEXT, CHECK_SIGN_IN_LABEL, CHECK_TYPE_TEXT, CHECK_USER_TURN } from "../outfit-check-copy.ts";
 import { prepareOutfitPhoto, submitOutfitCheck } from "../outfit-check-client.ts";
 import { jpegDataUrl } from "../images.ts";
 
@@ -95,5 +95,31 @@ describe("outfit check dock", () => {
       <OutfitCheckBar pickerOpen={false} busy={false} notice={CHECK_OVERSIZE_TEXT} onToggle={() => {}} onFile={() => {}} />,
     );
     expect(markup).toContain(CHECK_OVERSIZE_TEXT);
+  });
+
+  it("signed out and unresolved cannot open the picker", () => {
+    const clicks: string[] = [];
+    const signedOut = renderToStaticMarkup(
+      <OutfitCheckBar
+        auth="out"
+        pickerOpen
+        busy={false}
+        onToggle={() => clicks.push("toggle")}
+        onFile={() => clicks.push("file")}
+      />,
+    );
+    expect(signedOut).toContain(CHECK_SIGN_IN_LABEL);
+    expect(signedOut).toContain("disabled");
+    expect(signedOut).not.toContain("data-outfit-picker");
+    expect(signedOut).not.toContain("data-outfit-check=");
+    expect(signedOut).not.toContain('type="file"');
+    const pending = renderToStaticMarkup(
+      <OutfitCheckBar auth="pending" pickerOpen busy={false} onToggle={() => clicks.push("toggle")} onFile={() => {}} />,
+    );
+    expect(pending).toBe("");
+    expect(clicks).toEqual([]);
+    const dock = readFileSync(new URL("../../components/shell/stylist-dock.tsx", import.meta.url), "utf8");
+    expect(dock).toContain("checkAuthRef.current !== \"in\"");
+    expect(dock).toContain("setPickerOpen(false)");
   });
 });

@@ -15,6 +15,7 @@ import { migrateImagesToIdb } from "@/lib/migrate";
 import { bootCloset, openPersistGate, seedState, useCloset } from "@/lib/store";
 import { useDailyPick } from "@/lib/use-daily-pick";
 import { cn } from "@/lib/utils";
+import { setJacketDraftAccount } from "@/lib/jacket-draft";
 import { noteRoute } from "@/lib/stylist-page";
 import { BottomNav } from "./bottom-nav";
 import { StylistDock } from "./stylist-dock";
@@ -83,6 +84,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   /* The closet.v6 seed lands after hydration and before paint: the server HTML (an empty
      closet) is what React hydrates, then this render shows the pieces. See bootCloset. */
+  useEffect(() => {
+    setJacketDraftAccount(account.user?.id ?? "");
+  }, [account.user?.id]);
+
   useLayoutEffect(() => {
     if (useCloset.getState().garments.length > 0) return;
     const seed = bootCloset();

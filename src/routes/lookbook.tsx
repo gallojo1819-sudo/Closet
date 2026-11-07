@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DetectorSections } from "@/components/closet/detector-sections";
 import { IdleMount } from "@/components/closet/idle-mount";
@@ -10,6 +10,9 @@ import { LookSkeleton, RackSkeleton } from "@/components/closet/look-skeleton";
 import { Overlay } from "@/components/closet/overlay";
 import { GarmentTile } from "@/components/closet/tile";
 import { rackLine } from "@/lib/gaps";
+import { draftStamp, effectiveIds, readJacketDraft, subscribeJacketDrafts, jacketDraftVersion } from "@/lib/jacket-draft";
+import { lastResortNote } from "@/lib/jacket-edit";
+import { assistantConditions, pageJacketWeather } from "@/lib/jacket-weather";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import {
@@ -53,10 +56,10 @@ import { livePool } from "@/lib/rack";
 import { advanceRotation, readRotation, ROTATION_KEY, writeRotation, type Rotation } from "@/lib/rotation";
 import { daysIdle, slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
-import { realWeatherF, writeStylistPage } from "@/lib/stylist-page";
+import { writeStylistPage } from "@/lib/stylist-page";
 import { emptyTaste } from "@/lib/taste";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, todayNY } from "@/lib/utils";
 
 const NO_WAYS: Way[] = [];
 
@@ -168,6 +171,7 @@ function LookCard({
   occasionLabel,
   seasonLabel,
   note,
+  warning,
   named,
   pool,
 }: {
@@ -182,6 +186,7 @@ function LookCard({
   occasionLabel: string;
   seasonLabel: string;
   note?: string | null;
+  warning?: string | null;
   named: boolean;
   pool: Garment[];
 }) {
@@ -235,6 +240,16 @@ function LookCard({
       )}
       <p className="micro mt-2 text-ink-soft">{cardTag(wayTitle, occasionLabel, seasonLabel)}</p>
       {note && <p className="micro mt-1 text-ink-soft">{note}</p>}
+      {warning && (
+        <p className="micro mt-1 text-ink" data-weather-warned>
+          {warning}
+        </p>
+      )}
+      {lastResortNote(pieces) ? (
+        <p className="micro mt-1 text-ink-soft" data-last-resort>
+          {lastResortNote(pieces)}
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -282,20 +297,23 @@ function LookbookPage() {
   const season: Season = seasonChip === "auto" ? autoSeason : seasonChip;
   /* The Auto chip always names what Auto resolves, so a tapped season never gets a twin. */
   const seasonShown = seasonControlLabel("auto", new Date(), drop?.weather?.f);
-  const pageWeather = realWeatherF(drop?.weather);
+  const pageJacket = useMemo(() => pageJacketWeather(drop?.weather), [drop?.weather]);
+  const pageWeather = pageJacket.weatherF;
+  const pageConditions = pageJacket.conditions;
+  useSyncExternalStore(subscribeJacketDrafts, jacketDraftVersion, () => 0);
   /* Detector sections build after first paint; until then the section is empty, then the same rows land. */
   /* Re-dress bumps rowSalt; the rows rebuild in the same idle callback (rowWays), and the old
      rows stay on screen until the new ones land: the salt is not one of the readiness inputs. */
   const [rowSalt, setRowSalt] = useState(0);
   const [waysFor, setWaysFor] = useState<{ inputs: unknown[]; ways: Way[]; shown: Way[] } | null>(null);
-  const waysInputs = [garments, occasion, season, color, pageWeather];
+  const waysInputs = [garments, occasion, season, color, pageWeather, pageConditions];
   const waysReady = Boolean(waysFor && waysFor.inputs.every((value, i) => Object.is(value, waysInputs[i])));
   /* Week-card house titles wait for the same rows, so render never builds the cell book. */
   const ways = waysReady && waysFor ? waysFor.ways : NO_WAYS;
   /* The rows as rendered (up to ROW_MAX each): the sections and the stylist page both read these. */
   const shownWays = waysReady && waysFor ? waysFor.shown : NO_WAYS;
   useEffect(() => {
-    const run = () => warmCellBook(garments, season, pageWeather);
+    const run = () => warmCellBook(garments, season, pageWeather, pageConditions);
     const idle = window.requestIdleCallback;
     if (typeof idle === "function") {
       const id = idle(run);
@@ -303,7 +321,7 @@ function LookbookPage() {
     }
     const id = window.setTimeout(run, 0);
     return () => window.clearTimeout(id);
-  }, [garments, season, pageWeather]);
+  }, [garments, season, pageWeather, pageConditions]);
   const seasonLabel =
     seasonChip === "auto"
       ? `Auto · ${SEASONS.find((s) => s.id === autoSeason)?.label ?? "Fall"}`
@@ -314,18 +332,55 @@ function LookbookPage() {
     for (const g of garments) for (const c of g.colors) if (c) set.add(c.toLowerCase());
     return [...set].sort();
   }, [garments]);
-  const piecesFor = (look: Look) =>
-    look.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+  const stampFor = useCallback(
+    (look: { occasion?: string }) =>
+      draftStamp({
+        date: todayNY(),
+        occasion: look.occasion || occasion,
+        season,
+        weather: drop?.weather,
+      }),
+    [occasion, season, drop?.weather],
+  );
+  const jacketCtxFor = useCallback(
+    (occ: string) => ({
+      occasion: occ,
+      season,
+      ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
+      measured: pageJacket.measured,
+      ...(pageConditions?.highF !== undefined ? { highF: pageConditions.highF } : {}),
+      ...(pageConditions?.wet !== undefined ? { wet: pageConditions.wet } : {}),
+      ...(pageConditions?.windy !== undefined ? { windy: pageConditions.windy } : {}),
+    }),
+    [season, pageWeather, pageJacket.measured, pageConditions],
+  );
+  const piecesFor = (look: Look) => {
+    const over = effectiveIds(look.garmentIds, stampFor(look), ownedIds, {
+      closet: garments,
+      ctx: jacketCtxFor(look.occasion || occasion),
+    });
+    const ids = over ?? look.garmentIds;
+    return ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+  };
+  const warningFor = (look: Look) => readJacketDraft(look.garmentIds, stampFor(look))?.warning ?? null;
+  const projectCard = (look: Garment[]) => {
+    const ids = look.map((g) => g.id);
+    const stamp = stampFor({ occasion });
+    const over = effectiveIds(ids, stamp, ownedIds, { closet: garments, ctx: jacketCtxFor(occasion) });
+    const show = (over ?? ids).map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    return { show, base: look, warning: readJacketDraft(ids, stamp)?.warning ?? null };
+  };
 
   /* The vetoes are the one taste input the rows read; the stored technique weights are never read. */
   const tasteKey = `${taste.vetoes.length}`;
-  const filterKey = `${occasion}:${season}:${color ?? ""}:${garments.length}:${tasteKey}:${pageWeather ?? ""}`;
+  const condKey = `${pageWeather ?? ""}:${pageConditions?.wet ?? ""}:${pageConditions?.windy ?? ""}:${pageConditions?.highF ?? ""}`;
+  const filterKey = `${occasion}:${season}:${color ?? ""}:${garments.length}:${tasteKey}:${condKey}`;
   const preview = useMemo(
     () =>
       firstWeekLooks(garments, occasion, {
         season,
         color,
-        weather: drop?.weather?.measured ? drop.weather : null,
+        weather: drop?.weather ?? null,
       }),
     [garments, occasion, season, color, drop?.weather],
   );
@@ -377,6 +432,7 @@ function LookbookPage() {
       season,
       color,
       weatherF: pageWeather,
+      conditions: pageConditions,
       taste,
       rotation: getRotation(),
       stuck: stuckFor(),
@@ -391,7 +447,7 @@ function LookbookPage() {
     }
     recordPage(built.looks.map((look) => look.map((g) => g.id)));
     return looksFromRows(built.looks, occasion, built.demoted);
-  }, [garments, occasion, season, color, pageWeather, taste, filterKey, getRotation, stuckFor, recordPage]);
+  }, [garments, occasion, season, color, pageWeather, pageConditions, taste, filterKey, getRotation, stuckFor, recordPage]);
   useEffect(() => {
     let cancel = false;
     let timer = 0;
@@ -445,16 +501,17 @@ function LookbookPage() {
   );
   const suggested = useMemo(() => lastSuggested({ drop, journal, looks: looksAll }), [drop, journal, looksAll]);
   useEffect(() => {
-    const inputs = [garments, occasion, season, color, pageWeather];
+    const inputs = [garments, occasion, season, color, pageWeather, pageConditions];
     let cancelled = false;
     const run = () => {
       if (cancelled) return;
-      const found = visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather, salt: rowSalt });
+      const found = visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather, conditions: pageConditions, salt: rowSalt });
       const shown = rowWays(found, garments, {
         occasion,
         season,
         color,
         weatherF: pageWeather,
+        conditions: pageConditions,
         salt: rowSalt,
         onScreen: weekIds,
         leadIds,
@@ -478,7 +535,7 @@ function LookbookPage() {
       cancelled = true;
       window.clearTimeout(id);
     };
-  }, [garments, occasion, season, color, pageWeather, rowSalt, weekIds, leadIds, suggested, getRotation, stuckFor, recordPage]);
+  }, [garments, occasion, season, color, pageWeather, pageConditions, rowSalt, weekIds, leadIds, suggested, getRotation, stuckFor, recordPage]);
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const rack = useMemo(
@@ -586,9 +643,11 @@ function LookbookPage() {
       seen.add(id);
       out.push({ id, garmentIds: [...garmentIds] });
     };
-    for (const look of weekRow) add(look.id, look.garmentIds);
-    for (const look of sectionLooks) add(look.id, look.garmentIds);
-    for (const look of heroCards) add(look.id, look.garmentIds);
+    const edited = (ids: readonly string[]) =>
+      effectiveIds(ids, stampFor({ occasion }), ownedIds, { closet: garments, ctx: jacketCtxFor(occasion) }) ?? ids;
+    for (const look of weekRow) add(look.id, edited(look.garmentIds));
+    for (const look of sectionLooks) add(look.id, edited(look.garmentIds));
+    for (const look of heroCards) add(look.id, edited(look.garmentIds));
     return out;
   })();
   const onScreenLookIds = screenLooks.map((look) => look.id);
@@ -603,8 +662,9 @@ function LookbookPage() {
       onScreenLookIds,
       screenLooks,
       ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
+      ...(assistantConditions(pageJacket) ? { conditions: assistantConditions(pageJacket) } : {}),
     });
-  }, [occasion, season, color, heroId, screenKey, pageWeather, onScreenLookIds, screenLooks]);
+  }, [occasion, season, color, heroId, screenKey, pageWeather, pageConditions, pageJacket.measured, onScreenLookIds, screenLooks]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-6 py-8 md:py-12 rise">
@@ -759,6 +819,7 @@ function LookbookPage() {
           season={season}
           color={color}
           onOpen={openPlate}
+          project={projectCard}
         />
       )}
       <div className="mt-6 flex flex-wrap gap-3">
@@ -896,6 +957,7 @@ function LookbookPage() {
                   occasionLabel={chapterLabel}
                   seasonLabel={seasonName}
                   note={card.why}
+                  warning={warningFor(look)}
                   pool={garments}
                   named={openId === look.id}
                   highlight={highlightId === look.id}
@@ -1025,13 +1087,24 @@ function LookbookPage() {
         <LookSheet
           look={openLook}
           pieces={openPieces}
+          draftBaseIds={openLook.garmentIds}
+          draftStamp={stampFor(openLook)}
+          jacketCtx={{
+            occasion: openLook.occasion || occasion,
+            season,
+            weatherF: pageWeather,
+            measured: pageJacket.measured,
+            highF: pageConditions?.highF,
+            wet: pageConditions?.wet,
+            windy: pageConditions?.windy,
+          }}
           book={book}
           closet={garments}
           initialLocked={openLook.lookbook === false ? drop?.lockedIds : undefined}
           getCard={getOpenCard}
           onClose={() => setOpenId(null)}
-          onWear={() => {
-            wearToday(openPieces.map((g) => g.id));
+          onWear={(ids) => {
+            wearToday(ids);
             setOpenId(null);
             setDressed(null);
           }}

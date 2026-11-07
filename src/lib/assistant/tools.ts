@@ -39,6 +39,7 @@ import { scrubHouseNames } from "../stylist-page.ts";
 import { explain, isLegal } from "../stylist/legal.ts";
 import { listActive } from "../stylist-notes/notes.ts";
 import { relevantNotes } from "../stylist-notes/rank.ts";
+import { atlasPick, type AtlasConditions } from "../jacket-weather.ts";
 import { composeAtlasLook } from "../taste.ts";
 import { todayLookPieces } from "../today-look.ts";
 import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion } from "../types.ts";
@@ -97,12 +98,68 @@ function occasionFor(ctx: AssistantCtx, asked?: Occasion): Occasion {
   return mapOccasion(ctx.page.occasion ?? "weekday");
 }
 
+function gateConditions(ctx: AssistantCtx): AtlasConditions | undefined {
+  const c = ctx.conditions;
+  if (!c) return undefined;
+  if (c.measured !== true && c.highF === undefined && c.wet === undefined && c.windy === undefined) return undefined;
+  return c;
+}
+
 function checkCtx(ctx: AssistantCtx, occasion: Occasion, season: Season): CheckCtx {
+  const conditions = gateConditions(ctx);
   return {
     occasion,
     season,
     ...(typeof ctx.weatherF === "number" && Number.isFinite(ctx.weatherF) ? { weatherF: ctx.weatherF } : {}),
+    ...(conditions
+      ? {
+          conditions: {
+            ...(conditions.highF !== undefined ? { highF: conditions.highF } : {}),
+            ...(conditions.wet !== undefined ? { wet: conditions.wet } : {}),
+            ...(conditions.windy !== undefined ? { windy: conditions.windy } : {}),
+          },
+        }
+      : {}),
   };
+}
+
+/** The draw for closet_build_look. Conditions ride through every retry. A bare weatherF stays unmeasured. */
+function atlasFor(
+  ctx: AssistantCtx,
+  args: {
+    prompt: string;
+    occasion?: Occasion;
+    season: Season;
+    avoid?: Record<string, number>;
+    previousIds?: string[];
+    lockedIds?: string[];
+  },
+) {
+  const conditions = gateConditions(ctx);
+  return composeAtlasLook({
+    garments: pool(ctx),
+    prompt: args.prompt,
+    taste: ctx.taste,
+    season: args.season,
+    ...(args.occasion ? { occasion: args.occasion } : {}),
+    ...(typeof ctx.weatherF === "number" ? { weatherF: ctx.weatherF } : {}),
+    ...(conditions ? { conditions } : {}),
+    ...(args.avoid ? { avoid: args.avoid } : {}),
+    ...(args.previousIds ? { previousIds: args.previousIds } : {}),
+    ...(args.lockedIds?.length ? { lockedIds: args.lockedIds } : {}),
+  });
+}
+
+function dressWeather(ctx: AssistantCtx, season: Season) {
+  const picked = atlasPick({
+    occasion: "weekday",
+    season,
+    weatherF: ctx.weatherF,
+    conditions: gateConditions(ctx),
+  });
+  if (!picked.weather) return {};
+  if (!picked.gated) return { weather: picked.weather };
+  return { weather: picked.weather, season };
 }
 
 /** The plain line for a rule, never its id. */
@@ -292,14 +349,7 @@ const buildLook: ToolDef<{ prompt: string; occasion?: Occasion; season?: Season;
     const live = pool(ctx);
     const season = seasonFor(ctx, args.season);
     const locked = args.lockedIds ?? [];
-    const atlas = composeAtlasLook({
-      garments: live,
-      prompt: args.prompt,
-      taste: ctx.taste,
-      ...(typeof ctx.weatherF === "number" ? { weatherF: ctx.weatherF } : {}),
-      ...(args.occasion ? { occasion: args.occasion } : {}),
-      ...(locked.length ? { lockedIds: locked } : {}),
-    });
+    const atlas = atlasFor(ctx, { prompt: args.prompt, season, occasion: args.occasion, lockedIds: locked });
     const occasion = args.occasion ?? atlas.occasion;
     const first = byIds(atlas.garmentIds, live);
     let report = reportLook(ctx, first, occasion, season);
@@ -312,15 +362,13 @@ const buildLook: ToolDef<{ prompt: string; occasion?: Occasion; season?: Season;
       else if (!report.legal && oversizedOf(g) && (slotOf(g) === "top" || slotOf(g) === "dress")) avoid[g.id] = 8;
     }
     if (Object.keys(avoid).length) {
-      const again = composeAtlasLook({
-        garments: live,
+      const again = atlasFor(ctx, {
         prompt: args.prompt,
-        taste: ctx.taste,
+        season,
         occasion,
         avoid,
         previousIds: first.map((g) => g.id),
-        ...(typeof ctx.weatherF === "number" ? { weatherF: ctx.weatherF } : {}),
-        ...(locked.length ? { lockedIds: locked } : {}),
+        lockedIds: locked,
       });
       const second = byIds(again.garmentIds, live);
       const next = reportLook(ctx, second, occasion, season);
@@ -334,7 +382,7 @@ const buildLook: ToolDef<{ prompt: string; occasion?: Occasion; season?: Season;
       garments: live,
       occasion,
       taste: ctx.taste,
-      ...(typeof ctx.weatherF === "number" ? { weather: { f: ctx.weatherF, label: "Fair", code: 2 } } : {}),
+      ...dressWeather(ctx, season),
     });
     if (fromDresser) {
       const next = reportLook(ctx, fromDresser.pieces, fromDresser.occasion, season);

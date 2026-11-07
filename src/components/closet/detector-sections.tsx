@@ -21,20 +21,26 @@ const NOTE = "Not enough of your pieces for this here yet.";
  */
 type OpenPlate = (pieces: Garment[], occasion: Occasion, el: HTMLElement) => void;
 
+export type ProjectedLook = { show: Garment[]; base: Garment[]; warning?: string | null };
+
 function PlateCard({
   look,
+  base,
+  warning,
   occasion,
   onOpen,
 }: {
   look: Garment[];
+  base: Garment[];
+  warning?: string | null;
   occasion: Occasion;
   onOpen?: OpenPlate;
 }) {
   return (
-    <div className="w-full">
+    <div className="w-full" data-detector-card>
       <button
         type="button"
-        onClick={(e) => onOpen?.(look, occasion, e.currentTarget)}
+        onClick={(e) => onOpen?.(base, occasion, e.currentTarget)}
         aria-label={`Open ${pieceLine(look).replaceAll(" · ", ", ")}`}
         className="block w-full text-left focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-ink"
       >
@@ -42,6 +48,11 @@ function PlateCard({
         <p className="mt-3 font-editorial text-[19px] leading-tight tracking-tight">{ideaTitle(look)}</p>
         <p className="mt-1 text-xs leading-snug text-ink-soft">{pieceLine(look)}</p>
       </button>
+      {warning ? (
+        <p data-weather-warned className="mt-1 text-xs text-ink">
+          {warning}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -50,11 +61,13 @@ function Chapter({
   title,
   occasion,
   looks,
+  project,
   onOpen,
 }: {
   title: string;
   occasion: Occasion;
   looks: Garment[][];
+  project?: (look: Garment[]) => ProjectedLook;
   onOpen?: OpenPlate;
 }) {
   if (looks.length < 1) return null;
@@ -62,9 +75,19 @@ function Chapter({
     <div>
       <p className="mt-3 micro text-ink-soft">{OCCASION_LABEL[occasion]}</p>
       <PlateRack label={`${title} outfits`} looks={looks}>
-        {looks.map((look, index) => (
-          <PlateCard key={`${occasion}:${index}`} look={look} occasion={occasion} onOpen={onOpen} />
-        ))}
+        {looks.map((look, index) => {
+          const projected = project?.(look) ?? { show: look, base: look };
+          return (
+            <PlateCard
+              key={`${occasion}:${index}`}
+              look={projected.show}
+              base={projected.base}
+              warning={projected.warning}
+              occasion={occasion}
+              onOpen={onOpen}
+            />
+          );
+        })}
       </PlateRack>
       {looks.length < 3 ? (
         <p data-way-short className="mt-3 text-sm text-ink-soft">{`Only ${looks.length} in your closet.`}</p>
@@ -85,6 +108,7 @@ export function DetectorSections({
   color = null,
   activeId = null,
   onOpen,
+  project,
 }: {
   garments: Garment[];
   ways?: Way[];
@@ -93,6 +117,8 @@ export function DetectorSections({
   color?: string | null;
   activeId?: string | null;
   onOpen?: OpenPlate;
+  /** Edited ids for the card. Opening still passes the original pieces. */
+  project?: (look: Garment[]) => ProjectedLook;
 }) {
   const found = ways ?? visibleDetectors(garments, { occasion, season, color });
   const { usual, rows } = sectionRows(found, occasion, activeId);
@@ -112,9 +138,19 @@ export function DetectorSections({
         <section>
           <h2 className="font-editorial text-2xl tracking-tight">Your usual</h2>
           <PlateRack label="Your usual outfits" looks={looks.map((plate) => plate.look)}>
-            {looks.map((plate, index) => (
-              <PlateCard key={`usual:${index}`} look={plate.look} occasion={plate.occasion} onOpen={onOpen} />
-            ))}
+            {looks.map((plate, index) => {
+              const projected = project?.(plate.look) ?? { show: plate.look, base: plate.look };
+              return (
+                <PlateCard
+                  key={`usual:${index}`}
+                  look={projected.show}
+                  base={projected.base}
+                  warning={projected.warning}
+                  occasion={plate.occasion}
+                  onOpen={onOpen}
+                />
+              );
+            })}
           </PlateRack>
         </section>
       </div>
@@ -125,7 +161,13 @@ export function DetectorSections({
       {rows.map((row) => (
         <section key={row.id}>
           <h2 className="font-editorial text-2xl tracking-tight">{row.title}</h2>
-          <Chapter title={row.title} occasion={occasion} looks={row.looks.map((plate) => plate.look)} onOpen={onOpen} />
+          <Chapter
+            title={row.title}
+            occasion={occasion}
+            looks={row.looks.map((plate) => plate.look)}
+            project={project}
+            onOpen={onOpen}
+          />
         </section>
       ))}
     </div>

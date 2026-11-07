@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { jacketDraftVersion, subscribeJacketDrafts } from "@/lib/jacket-draft";
 import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -135,10 +137,11 @@ export function StylistDock() {
      same pieces the Today page shows (today-look.ts: the drop dated today, else the daily pick
      under today's frozen bucket), read the instant the panel opens, on every page. */
   const todaySeason = todaySeasonBucket(drop?.weather?.f);
-  const todayPieces = useMemo(
-    () => todayLookPieces({ drop, journal, thisWeek, garments: owned, taste: tasteNow ?? undefined, season: todaySeason }),
-    [drop, journal, thisWeek, owned, tasteNow, todaySeason],
-  );
+  const draftVersion = useSyncExternalStore(subscribeJacketDrafts, jacketDraftVersion, () => 0);
+  const todayPieces = useMemo(() => {
+    void draftVersion;
+    return todayLookPieces({ drop, journal, thisWeek, garments: owned, taste: tasteNow ?? undefined, season: todaySeason });
+  }, [drop, journal, thisWeek, owned, tasteNow, todaySeason, draftVersion]);
   const todayLine = todayPieces.length >= 2 ? lookReply(todayPieces) : null;
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -148,6 +151,11 @@ export function StylistDock() {
   /* The photo for a user turn. Component state only: it is not a field on the message, so closet.v6 never stores it. */
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [mockKind, setMockKind] = useState<string | null>(null);
+  const session = useCurrentUserState();
+  const liveAuth = session.isPending ? "pending" : session.user ? "in" : "out";
+  const checkAuth = mockKind === "signedout" ? "out" : liveAuth;
+  const checkAuthRef = useRef(checkAuth);
+  checkAuthRef.current = checkAuth;
   /* "Something different today": each ask draws again, a turn further along the Skip surface. */
   const differentTurn = useRef(0);
   const explicitWrite = useRef(false);
@@ -399,6 +407,14 @@ export function StylistDock() {
         occasion: brief,
         taste,
         ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
+        ...(here.conditions
+          ? {
+              conditions: here.conditions,
+              ...(here.season === "spring" || here.season === "summer" || here.season === "fall" || here.season === "winter"
+                ? { season: here.season }
+                : {}),
+            }
+          : {}),
       });
       const pieces = rolled.garmentIds
         .map((id) => owned.find((g) => g.id === id))
@@ -512,6 +528,14 @@ export function StylistDock() {
         occasion: pageOccasion(here.occasion, todayOccasion(drop)),
         taste,
         ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
+        ...(here.conditions
+          ? {
+              conditions: here.conditions,
+              ...(here.season === "spring" || here.season === "summer" || here.season === "fall" || here.season === "winter"
+                ? { season: here.season }
+                : {}),
+            }
+          : {}),
       });
       if (!local) {
         pushMessage({ role: "stylist", text: "Couldn't reach the stylist, and nothing in your closet makes a full look. Try again." });
@@ -585,12 +609,27 @@ export function StylistDock() {
     stampMessage(messageId, { lookId: id });
   };
 
+  useEffect(() => {
+    if (checkAuth === "in") return;
+    setPickerOpen(false);
+    setPhotoNotice(null);
+  }, [checkAuth]);
+
   const checkPhoto = async (file: File) => {
+    if (checkAuthRef.current !== "in") {
+      setPickerOpen(false);
+      return;
+    }
     if (busy) return;
     const prepared = await prepareOutfitPhoto(file);
     if (!prepared.ok) {
       setPhotoNotice(prepared.error);
       setPickerOpen(false);
+      return;
+    }
+    if (checkAuthRef.current !== "in") {
+      setPickerOpen(false);
+      setPhotoNotice(null);
       return;
     }
     setPhotoNotice(null);
@@ -651,11 +690,18 @@ export function StylistDock() {
         className="h-11 min-w-0 flex-1 border border-hairline bg-paper px-3 text-sm text-ink placeholder:text-ink-soft disabled:opacity-40"
       />
       <OutfitCheckBar
-        pickerOpen={pickerOpen}
+        auth={checkAuth}
+        pickerOpen={pickerOpen && checkAuth === "in"}
         busy={busy}
         notice={photoNotice}
-        onToggle={() => setPickerOpen((openNow) => !openNow)}
-        onFile={(file) => void checkPhoto(file)}
+        onToggle={() => {
+          if (checkAuthRef.current !== "in") return;
+          setPickerOpen((openNow) => !openNow);
+        }}
+        onFile={(file) => {
+          if (checkAuthRef.current !== "in") return;
+          void checkPhoto(file);
+        }}
       />
       <Button variant="primary" type="submit" disabled={busy || owned.length === 0}>
         Send

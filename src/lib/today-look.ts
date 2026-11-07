@@ -10,11 +10,14 @@
  * look on the page. No React and no store. The day's conditions key is read when the caller
  * does not pass one, the same way the season bucket is frozen, and never closet.v6.
  */
+import { draftStamp, effectiveIds } from "./jacket-draft.ts";
+import { pageJacketWeather } from "./jacket-weather.ts";
 import type { FrozenConditions } from "./daily-pick.ts";
 import { pickDropIds } from "./drop-pick.ts";
 import { sortLook } from "./look.ts";
 import { weekStripDays } from "./lookbook.ts";
 import { seasonFromWeather, type Season } from "./season.ts";
+import { todayOccasion } from "./style.ts";
 import type { TasteMemory } from "./taste.ts";
 import { readTodayConditions } from "./today-season.ts";
 import type { DailyDrop, Garment, Look } from "./types.ts";
@@ -58,8 +61,8 @@ export function dailyPickIds(state: TodayLookState, today = todayNY()): string[]
   ).ids;
 }
 
-/** The pieces on Today, in the page's order. Empty only when the closet cannot dress at all. */
-export function todayLookPieces(state: TodayLookState, today = todayNY()): Garment[] {
+/** The ids on Today before a session jacket draft, in the page's order. */
+function todayBaseIds(state: TodayLookState, today: string): string[] {
   const garments = [...state.garments];
   const cells = weekStripDays({
     days: lastDays(7, today),
@@ -70,15 +73,48 @@ export function todayLookPieces(state: TodayLookState, today = todayNY()): Garme
     garments,
   });
   const cell = cells.find((c) => c.iso === today);
-  const ids = cell?.look?.garmentIds?.length ? cell.look.garmentIds : dailyPickIds(state, today);
+  return cell?.look?.garmentIds?.length ? [...cell.look.garmentIds] : dailyPickIds(state, today);
+}
+
+/** The pieces on Today, in the page's order. A session jacket draft replaces the jacket only. */
+export function todayLookPieces(state: TodayLookState, today = todayNY()): Garment[] {
+  const garments = [...state.garments];
+  const ids = todayLookIds(state, today);
+  const drop = isDrop(state.drop) ? state.drop : null;
+  const season = state.season ?? seasonFromWeather(drop?.weather?.f);
+  const stamp = draftStamp({
+    date: today,
+    occasion: todayOccasion(drop, today),
+    season,
+    weather: drop?.weather,
+  });
+  const owned = new Set(garments.filter((g) => !g.archived).map((g) => g.id));
+  const page = pageJacketWeather(drop?.weather);
+  const over = effectiveIds(ids, stamp, owned, {
+    closet: garments,
+    ctx: {
+      occasion: todayOccasion(drop, today),
+      season,
+      ...(page.weatherF !== undefined ? { weatherF: page.weatherF } : {}),
+      measured: page.measured,
+      ...(page.conditions?.highF !== undefined ? { highF: page.conditions.highF } : {}),
+      ...(page.conditions?.wet !== undefined ? { wet: page.conditions.wet } : {}),
+      ...(page.conditions?.windy !== undefined ? { windy: page.conditions.windy } : {}),
+    },
+  });
   return sortLook(
-    ids
+    (over ?? ids)
       .map((id) => garments.find((g) => g.id === id))
       .filter((g): g is Garment => Boolean(g)),
   );
 }
 
-/** The ids of todayLookPieces. */
+/** The page's ids before a jacket draft, in the page's order. */
 export function todayLookIds(state: TodayLookState, today = todayNY()): string[] {
-  return todayLookPieces(state, today).map((g) => g.id);
+  const garments = [...state.garments];
+  return sortLook(
+    todayBaseIds(state, today)
+      .map((id) => garments.find((g) => g.id === id))
+      .filter((g): g is Garment => Boolean(g)),
+  ).map((g) => g.id);
 }

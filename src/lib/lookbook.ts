@@ -54,6 +54,7 @@ import { approvedProfile } from "./house-profiles/load.ts";
 import { evaluateColor, colorEmptyCopy } from "./stylist/colorChip.ts";
 import { assignSlots } from "./house-profiles/evaluate.ts";
 import { isCreamCable, matchRecipe } from "./recipes.ts";
+import { pageJacketWeather } from "./jacket-weather.ts";
 import { lookFitsSeason, seasonFromWeather, weatherForSeason } from "./season.ts";
 import { mapOccasion, OCCASIONS, type Garment, type Look, type Occasion, type Season, type WeatherSnap } from "./types.ts";
 import { todayISO, todayNY } from "./utils.ts";
@@ -2007,10 +2008,8 @@ export function firstWeekLooks(
 ): { looks: Look[]; reason: string } {
   const pool = lookbookPool(garments);
   const season = opts?.season;
-  const weatherF =
-    opts?.weather?.measured === true && typeof opts.weather.f === "number" && Number.isFinite(opts.weather.f)
-      ? opts.weather.f
-      : undefined;
+  const page = pageJacketWeather(opts?.weather ?? null);
+  const weatherF = page.weatherF;
   const tops = pool.filter((g) => {
     const slot = slotOf(g);
     return slot === "top" || slot === "dress";
@@ -2025,9 +2024,10 @@ export function firstWeekLooks(
   const ctx = {
     occasion,
     season: sea,
-    ...(weatherF !== undefined ? { weatherF } : {}),
+    ...(page.measured && weatherF !== undefined ? { weatherF } : {}),
+    ...(page.conditions ? { conditions: page.conditions } : {}),
   };
-  const need = jacketRequired(occasion, sea, weatherF);
+  const need = jacketRequired(occasion, sea, page.measured ? weatherF : undefined, page.conditions);
   const jackets = pool.filter((g) => slotOf(g) === "outerwear" || jacketWearSlot(g) === "outer");
   if (need && jackets.length === 0) {
     return {

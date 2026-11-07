@@ -3,7 +3,8 @@ import { drawSeed } from "./draw.ts";
 import { resolvePiecesFromText } from "./dress.ts";
 import { isFakeName, livePool } from "./rack.ts";
 import { clashes, defaultOccasion, isHoodiePiece, isTrueOuter, pickLook, slotOf } from "./style.ts";
-import type { Garment, Occasion } from "./types.ts";
+import { atlasPick, type AtlasConditions } from "./jacket-weather.ts";
+import type { Garment, Occasion, Season } from "./types.ts";
 import { todayNY } from "./utils.ts";
 
 /**
@@ -699,6 +700,16 @@ export function composeAtlasLook(opts: {
   /** The seed of the draw (drawSeed); the day and the prompt when absent. */
   salt?: number;
   today?: string;
+  /**
+   * The chapter season. Applied to the draw only when `conditions` is gated,
+   * so a bare weatherF number keeps the old unmeasured path.
+   */
+  season?: Season;
+  /**
+   * Measured weather. Absent, a numeric weatherF stays unmeasured: no 72°F
+   * waiver, no rain or wind, no requireOuter. Never invent a dry default.
+   */
+  conditions?: AtlasConditions;
 }): AtlasLook {
   const taste = normalizeTaste(opts.taste);
   const pool = livePool(opts.garments);
@@ -717,11 +728,17 @@ export function composeAtlasLook(opts: {
   const dressable = pool.filter((g) => (!banned.has(g.id) && !excluded.has(g.id)) || locked.includes(g.id));
   const today = opts.today ?? todayNY();
   const salt = opts.salt ?? drawSeed(today, `stylist:${occasion}:${opts.prompt.trim().toLowerCase()}`, liveIdsKey(pool));
+  const picked = atlasPick({
+    occasion,
+    season: opts.season,
+    weatherF: opts.weatherF,
+    conditions: opts.conditions,
+  });
   const ids = pickLook(dressable, {
     occasion,
-    ...(typeof opts.weatherF === "number" && Number.isFinite(opts.weatherF)
-      ? { weather: { f: opts.weatherF, label: "Fair", code: 2 } }
-      : {}),
+    ...(picked.weather ? { weather: picked.weather } : {}),
+    ...(picked.gated && opts.season ? { season: opts.season } : {}),
+    ...(picked.requireOuter !== undefined ? { requireOuter: picked.requireOuter } : {}),
     lockedIds: locked,
     previousIds: opts.previousIds,
     taste,

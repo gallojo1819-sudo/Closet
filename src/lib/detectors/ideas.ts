@@ -35,10 +35,12 @@ import { weekLeadPiece } from "../look.ts";
 import { lookFitsOccasion, lookHasColor } from "../lookbook.ts";
 import { livePool } from "../rack.ts";
 import { rotationLookKey, rotationRank, type Rotation } from "../rotation.ts";
-import { pieceFitsSeason, type Season } from "../season.ts";
+import { lookFitsSeason, pieceFitsSeason, type Season } from "../season.ts";
 import { daysIdle, isBrownSuedeOuter, slotOf } from "../style.ts";
+import { jacketChoices, lastResortNote, selectedOuter, type JacketContext } from "../jacket-edit.ts";
+import type { JacketGateConditions } from "../jacket-weather.ts";
 import { jacketInfo, jacketRequired, wearSlot } from "../stylist/jackets.ts";
-import { relaxTiers } from "../stylist/legal.ts";
+import { isLegal, relaxTiers, ruleHits } from "../stylist/legal.ts";
 import { oversizedOf } from "../stylist/oversized.ts";
 import { applyAtlas, pieceVetoIds, type TasteMemory } from "../taste.ts";
 import type { Garment, Occasion } from "../types.ts";
@@ -252,6 +254,8 @@ export type IdeaContext = {
   season: Season | string;
   color?: string | null;
   weatherF?: number;
+  /** Today's measured high, rain and wind. The season argument stays the preview season. */
+  conditions?: JacketGateConditions;
   /** 0 is the best row; a Re-dress salt re-orders the heroes and their partners. */
   salt?: number;
   /** Piece ids already on the screen before the rows (the week row), one entry per card. */
@@ -818,6 +822,105 @@ function spreadJackets(
   }
 }
 
+/**
+ * A toggle or denim jacket over pleats is seated only when no strict jacket fits this core.
+ * A strict jacket already on another card still fits. The other pieces stay.
+ */
+export function preferStrictJackets(
+  looks: Garment[][],
+  live: readonly Garment[],
+  pool: readonly Garment[],
+  occasion: Occasion,
+  season: Season,
+  weatherF: number | undefined,
+  conditions: JacketGateConditions | undefined,
+  book?: {
+    counts?: Map<string, number>;
+    led?: Set<string>;
+    twins?: Twins;
+    leadOf?: (pieces: readonly Garment[]) => Garment | null;
+    waived?: Map<string, string[]>;
+    /** When the caller counts the finished looks itself, only read the cap. */
+    track?: boolean;
+  },
+): void {
+  const ctx: JacketContext = {
+    occasion,
+    season,
+    ...(weatherF !== undefined ? { weatherF, measured: true } : {}),
+    ...(conditions?.highF !== undefined ? { highF: conditions.highF } : {}),
+    ...(conditions?.wet !== undefined ? { wet: conditions.wet } : {}),
+    ...(conditions?.windy !== undefined ? { windy: conditions.windy } : {}),
+  };
+  const byId = new Map(live.map((g) => [g.id, g]));
+  for (let i = 0; i < looks.length; i += 1) {
+    const look = looks[i]!;
+    if (!lastResortNote(look)) continue;
+    const jacket = selectedOuter(look).jacket;
+    if (!jacket) continue;
+    const core = look.filter((g) => g.id !== jacket.id);
+    const legalCtx = {
+      occasion,
+      season,
+      pool: [...pool],
+      ...(weatherF !== undefined ? { weatherF } : {}),
+      ...(conditions ? { conditions } : {}),
+    };
+    const beforeSoft = new Set(ruleHits(look, legalCtx).soft);
+    const choices = jacketChoices(core, pool, ctx).filter((row) => row.tier === "strict");
+    const rank = (id: string) => {
+      const count = book?.counts?.get(id) ?? 0;
+      const garment = byId.get(id);
+      const leads = garment && book?.led && book.twins ? book.led.has(book.twins.key(garment)) : false;
+      return (leads ? 100 : 0) + count;
+    };
+    choices.sort((a, b) => rank(a.id) - rank(b.id) || (a.id < b.id ? -1 : 1));
+    let next: Garment | undefined;
+    let replaced: Garment[] | undefined;
+    const accept = (candidate: Garment, busy: boolean) => {
+      if (candidate.id === jacket.id) return false;
+      /* A full cap ranks this jacket later. It does not take the jacket off the list. */
+      const leads = book?.led && book.twins ? book.led.has(book.twins.key(candidate)) : false;
+      if (!busy && leads) return false;
+      const pieces = [...core, candidate];
+      if (!lookFitsSeason(pieces, season as Season)) return false;
+      if (!isLegal(pieces, legalCtx)) return false;
+      const hits = ruleHits(pieces, legalCtx);
+      if (hits.hard.length || hits.soft.some((id) => !beforeSoft.has(id))) return false;
+      next = candidate;
+      replaced = pieces;
+      return true;
+    };
+    for (const choice of choices) {
+      const candidate = byId.get(choice.id);
+      if (candidate && accept(candidate, false)) break;
+    }
+    if (!next) {
+      for (const choice of choices) {
+        const candidate = byId.get(choice.id);
+        if (candidate && accept(candidate, true)) break;
+      }
+    }
+    if (!next || !replaced) continue;
+    const leadOf = book?.leadOf ?? leadPiece;
+    const was = book?.led && book.twins ? leadOf(look) : null;
+    looks[i] = replaced;
+    if (book?.waived) {
+      const prev = book.waived.get(lookKey(look));
+      if (prev) book.waived.set(lookKey(replaced), prev);
+    }
+    if (book?.counts && book.track !== false) {
+      book.counts.set(jacket.id, Math.max(0, (book.counts.get(jacket.id) ?? 1) - 1));
+      book.counts.set(next.id, (book.counts.get(next.id) ?? 0) + 1);
+    }
+    if (book?.led && book.twins) {
+      if (was) book.led.delete(book.twins.key(was));
+      const now = leadOf(replaced);
+      if (now) book.led.add(book.twins.key(now));
+    }
+  }
+}
+
 function cellDresser(
   cell: Cell,
   live: Garment[],
@@ -826,8 +929,9 @@ function cellDresser(
   weatherF: number | undefined,
   color: string | null,
   pool: Garment[],
+  conditions?: JacketGateConditions,
 ): Dresser {
-  const needJacket = jacketRequired(occasion, season, weatherF);
+  const needJacket = jacketNeed(occasion, season, weatherF, conditions);
   /* A jacket theme: only a jacket may be the layer, and no card goes without one. */
   const jacket = cellKit.jacketTheme(cell);
   const owed = cellKit.layerOwed(cell);
@@ -842,10 +946,10 @@ function cellDresser(
       cellKit.seasonFits(pieces, season) &&
       cellKit.passesCheap(cell, pieces, occasion, season, pool, 0, true) &&
       colorOk(pieces) &&
-      cellKit.legalOk(pieces, occasion, season, weatherF, relax),
+      cellKit.legalOk(pieces, occasion, season, weatherF, relax, conditions),
     tierOf: (pieces) =>
       cellKit.seasonFits(pieces, season) && cellKit.passesCheap(cell, pieces, occasion, season, pool, 0, true) && colorOk(pieces)
-        ? cellKit.ruleTier(pieces, occasion, season, weatherF)
+        ? cellKit.ruleTier(pieces, occasion, season, weatherF, conditions)
         : -1,
     bareOk: () => !needJacket && !jacket,
     theme: (g, slot) => isTheme(cell, g, slot),
@@ -854,6 +958,22 @@ function cellDresser(
 
 /** The forgotten row has no cell: the shared hard rules, the occasion and season gates, then isLegal. */
 const PLAIN_CELL = { key: "", tuck: "", ban: [], fails: [] } as unknown as Cell;
+
+/** Jacket gate. With no conditions this is jacketRequired(occasion, season, weatherF). */
+function jacketNeed(
+  occasion: string,
+  season: string,
+  weatherF: number | undefined,
+  conditions?: JacketGateConditions,
+): boolean {
+  const high = typeof conditions?.highF === "number" && Number.isFinite(conditions.highF) ? conditions.highF : undefined;
+  const temp = high ?? weatherF;
+  const cond =
+    conditions && (conditions.wet !== undefined || conditions.windy !== undefined)
+      ? { wet: conditions.wet, windy: conditions.windy }
+      : undefined;
+  return jacketRequired(occasion, season, temp, cond);
+}
 
 /** A jacket: classified outer, or filed as outerwear. Cardigans, fleeces and vests are not. */
 export function isOuterPiece(g: Garment): boolean {
@@ -874,8 +994,9 @@ function forgottenDresser(
   weatherF: number | undefined,
   color: string | null,
   pool: Garment[],
+  conditions?: JacketGateConditions,
 ): Dresser {
-  const needJacket = jacketRequired(occasion, season, weatherF);
+  const needJacket = jacketNeed(occasion, season, weatherF, conditions);
   const colorOk = (pieces: Garment[]) => !color || lookHasColor(pieces, color);
   const cheap = (pieces: Garment[]) =>
     new Set(pieces.map((g) => g.id)).size === pieces.length &&
@@ -891,8 +1012,8 @@ function forgottenDresser(
     shoes: live.filter((g) => slotOf(g) === "footwear" && inSeason(g)),
     layers: live.filter((g) => isOuterPiece(g) && inSeason(g)),
     coreOk: cheap,
-    finalOk: (pieces, relax) => cheap(pieces) && colorOk(pieces) && cellKit.legalOk(pieces, occasion, season, weatherF, relax),
-    tierOf: (pieces) => (cheap(pieces) && colorOk(pieces) ? cellKit.ruleTier(pieces, occasion, season, weatherF) : -1),
+    finalOk: (pieces, relax) => cheap(pieces) && colorOk(pieces) && cellKit.legalOk(pieces, occasion, season, weatherF, relax, conditions),
+    tierOf: (pieces) => (cheap(pieces) && colorOk(pieces) ? cellKit.ruleTier(pieces, occasion, season, weatherF, conditions) : -1),
     bareOk: () => !needJacket,
     theme: (g) => forgotten.has(g.id),
   };
@@ -912,6 +1033,7 @@ function forgottenWay(
     occasion: Occasion;
     season: Season;
     weatherF: number | undefined;
+    conditions?: JacketGateConditions;
     color: string | null;
     salt: number;
     /** The row's draw seed (drawSeed). */
@@ -930,9 +1052,9 @@ function forgottenWay(
 ): Way | null {
   const forgotten = forgottenIds(garments, { today: ctx.today, suggested: ctx.suggested });
   if (!live.some((g) => forgotten.has(g.id))) return null;
-  const d = forgottenDresser(live, forgotten, ctx.occasion, ctx.season, ctx.weatherF, ctx.color, pool);
+  const d = forgottenDresser(live, forgotten, ctx.occasion, ctx.season, ctx.weatherF, ctx.color, pool, ctx.conditions);
   const seen = new Set<string>();
-  const scope = scopeKey(ctx.occasion, ctx.season, ctx.color, ctx.weatherF, live);
+  const scope = scopeKey(ctx.occasion, ctx.season, ctx.color, ctx.weatherF, live, ctx.conditions);
   const skip = new Set(ctx.stuck ?? []);
   for (const [id, hit] of PAIRABLE.get(scope) ?? []) if (hit.cheap) skip.add(id);
   /* The row dresses on its own counts and leads: only the cards it ships are charged to the page. */
@@ -964,6 +1086,13 @@ function forgottenWay(
   const shippedLed = new Set(ctx.led ?? []);
   noteLeads(rows, ctx.twins, shippedLed);
   spreadJackets(rows, d, shipped, new Map(live.map((g) => [g.id, g])), ctx.rotation, ctx.twins, shippedLed);
+  preferStrictJackets(rows, live, pool, ctx.occasion, ctx.season, ctx.weatherF, ctx.conditions, {
+    counts: shipped,
+    led: shippedLed,
+    twins: ctx.twins,
+    leadOf: leadPiece,
+    waived,
+  });
   for (const [id, n] of shipped) counts.set(id, n);
   return {
     id: FORGOTTEN_ID,
@@ -987,6 +1116,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
   const season = (ctx.season || "fall") as Season;
   const color = ctx.color ?? null;
   const weatherF = finiteTemp(ctx.weatherF);
+  const conditions = ctx.conditions;
   const salt = ctx.salt ?? 0;
   const today = ctx.today ?? todayNY();
   const pool = livePool(garments);
@@ -998,17 +1128,17 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
   const liveIds = liveIdsKey(live);
   /* Each row's own draw stream: the day, the row, the closet and the Re-dress salt. */
   const seedOf = (rowId: string) => drawSeed(today, `lookbook:${occasion}:${rowId}`, liveIds, salt);
-  if (ways.some((way) => way.usual)) return storedRows(ways, garments, { occasion, season, color, weatherF, salt });
+  if (ways.some((way) => way.usual)) return storedRows(ways, garments, { occasion, season, color, weatherF, salt, conditions });
   /* The listed ways first, then every other open cell, in the day's seeded order: a theme the
      list left out may still dress three distinct heroes. */
-  const extra = rankedWays(garments, { occasion, season, color, weatherF, today, salt }).filter(
+  const extra = rankedWays(garments, { occasion, season, color, weatherF, today, salt, conditions }).filter(
     (way) => !ways.some((have) => have.id === way.id),
   );
   const order = [...ways, ...extra].filter((way) => (way.looks[occasion] ?? []).length > 0);
   const out: Way[] = [];
   const short: Way[] = [];
-  const scope = scopeKey(occasion, season, color, weatherF, live);
-  if (ctx.rotation) census(scope, plainDresser(live, occasion, season, weatherF, color, pool, undefined, false));
+  const scope = scopeKey(occasion, season, color, weatherF, live, conditions);
+  if (ctx.rotation) census(scope, plainDresser(live, occasion, season, weatherF, color, pool, undefined, false, conditions));
   const unpairable = new Set(ctx.stuck ?? []);
   for (const [id, hit] of PAIRABLE.get(scope) ?? []) if (hit.cheap) unpairable.add(id);
   const waived = new Map<string, string[]>();
@@ -1036,7 +1166,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     if (out.length >= themeCap) break;
     const cell = cellKit.cells().find((row) => row.id === way.id);
     if (!cell) continue;
-    const d = cellDresser(cell, live, occasion, season, weatherF, color, pool);
+    const d = cellDresser(cell, live, occasion, season, weatherF, color, pool, conditions);
     const local = new Map(counts);
     const ledLocal = new Set(led);
     const looks = fillRow(d, local, { salt, stream: seedOf(way.id), fresh, rotation: ctx.rotation, skip: ctx.stuck, max: rowMax(d), twins, led: ledLocal, waived }, ROW_MIN);
@@ -1045,6 +1175,13 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
       continue;
     }
     spreadJackets(looks, d, local, byId, ctx.rotation, twins, ledLocal);
+    preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
+      counts: local,
+      led: ledLocal,
+      twins,
+      leadOf: leadPiece,
+      waived,
+    });
     counts = local;
     led = ledLocal;
     out.push({ ...way, pieces: looks[0] ?? way.pieces, looks: { ...way.looks, [occasion]: looks }, waived: waivedOf(looks) });
@@ -1059,7 +1196,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     const rotation = ctx.rotation;
     if (!rotation) return;
     while (out.length < upTo && fills < FILL_TITLES.length) {
-      const d = plainDresser(live, occasion, season, weatherF, color, pool, undefined, false);
+      const d = plainDresser(live, occasion, season, weatherF, color, pool, undefined, false, conditions);
       const ledLocal = new Set(led);
       const opts: RowOpts = {
         salt,
@@ -1074,8 +1211,8 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
         waived,
       };
       let looks = fillRow(d, counts, opts, ROW_MIN);
-      const needJacket = jacketRequired(occasion, season, weatherF);
-      const bare = needJacket ? plainDresser(live, occasion, season, weatherF, color, pool, undefined, true) : null;
+      const needJacket = jacketNeed(occasion, season, weatherF, conditions);
+      const bare = needJacket ? plainDresser(live, occasion, season, weatherF, color, pool, undefined, true, conditions) : null;
       const again = (dd: Dresser, cap: number) =>
         heroRow(dd, counts, { ...opts, rotation: unseen(rotation), seed: looks, max: ROW_MIN, cap });
       if (looks.length < ROW_MIN && bare) looks = again({ ...bare, layers: [] }, SCREEN_CAP);
@@ -1090,6 +1227,27 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
       }
       if (!looks.length) return;
       spreadJackets(looks, d, counts, byId, rotation, twins, ledLocal);
+      preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
+        counts,
+        led: ledLocal,
+        twins,
+        leadOf: leadPiece,
+        waived,
+      });
+      if (looks.length < ROW_MIN) {
+        const more = again(d, RELAXED_CAP);
+        if (more.length > looks.length) {
+          looks = more;
+          relaxed = true;
+          preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
+            counts,
+            led: ledLocal,
+            twins,
+            leadOf: leadPiece,
+            waived,
+          });
+        }
+      }
       led = ledLocal;
       out.push({
         id: `${FILL_ID}-${fills + 1}`,
@@ -1109,6 +1267,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     occasion,
     season,
     weatherF,
+    conditions,
     color,
     salt,
     stream: seedOf(FORGOTTEN_ID),
@@ -1117,7 +1276,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     suggested: ctx.suggested,
     rotation: ctx.rotation,
     stuck: ctx.stuck,
-    max: forgottenWanted ? rowMax(plainDresser(live, occasion, season, weatherF, color, pool, undefined, false)) : undefined,
+    max: forgottenWanted ? rowMax(plainDresser(live, occasion, season, weatherF, color, pool, undefined, false, conditions)) : undefined,
     twins,
     led,
   });
@@ -1145,6 +1304,13 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
         kept.push(look);
       }
       if (!kept.length) continue;
+      preferStrictJackets(kept, live, pool, occasion, season, weatherF, conditions, {
+        counts,
+        track: false,
+        led,
+        twins,
+        leadOf: leadPiece,
+      });
       for (const look of kept) for (const g of look) counts.set(g.id, (counts.get(g.id) ?? 0) + 1);
       out.push({ ...way, pieces: kept[0]!, looks: { ...way.looks, [occasion]: kept } });
     }
@@ -1214,8 +1380,9 @@ function plainDresser(
   pool: Garment[],
   taste: TasteMemory | undefined,
   bare: boolean,
+  conditions?: JacketGateConditions,
 ): Dresser {
-  const needJacket = jacketRequired(occasion, season, weatherF);
+  const needJacket = jacketNeed(occasion, season, weatherF, conditions);
   const colorOk = (pieces: Garment[]) => !color || lookHasColor(pieces, color);
   const tasteOk = (pieces: Garment[]) => {
     if (!taste || !taste.vetoes.length) return true;
@@ -1236,8 +1403,8 @@ function plainDresser(
     layers: live.filter((g) => isOuterPiece(g) && inSeason(g)),
     coreOk: cheap,
     finalOk: (pieces, relax) =>
-      cheap(pieces) && colorOk(pieces) && tasteOk(pieces) && cellKit.legalOk(pieces, occasion, season, weatherF, relax),
-    tierOf: (pieces) => (cheap(pieces) && colorOk(pieces) && tasteOk(pieces) ? cellKit.ruleTier(pieces, occasion, season, weatherF) : -1),
+      cheap(pieces) && colorOk(pieces) && tasteOk(pieces) && cellKit.legalOk(pieces, occasion, season, weatherF, relax, conditions),
+    tierOf: (pieces) => (cheap(pieces) && colorOk(pieces) && tasteOk(pieces) ? cellKit.ruleTier(pieces, occasion, season, weatherF, conditions) : -1),
     bareOk: () => bare || !needJacket,
     theme: () => true,
     wide: true,
@@ -1265,8 +1432,17 @@ type PairVerdict = { tier: number; cost: number; cheap: boolean };
  */
 const PAIR_SEARCHES = 6;
 
-function scopeKey(occasion: Occasion, season: Season, color: string | null, weatherF: number | undefined, live: Garment[]): string {
-  return [occasion, season, color ?? "", weatherF ?? "", live.map((g) => g.id).join(",")].join("|");
+function scopeKey(
+  occasion: Occasion,
+  season: Season,
+  color: string | null,
+  weatherF: number | undefined,
+  live: Garment[],
+  conditions?: JacketGateConditions,
+): string {
+  const base = [occasion, season, color ?? "", weatherF ?? "", live.map((g) => g.id).join(",")].join("|");
+  if (!conditions) return base;
+  return `${base}|${conditions.highF ?? ""}:${conditions.wet ?? ""}:${conditions.windy ?? ""}`;
 }
 
 function pairCache(scope: string): Map<string, PairVerdict> {
@@ -1488,6 +1664,7 @@ export function weekRotationRow(
   const season = (ctx.season || "fall") as Season;
   const color = ctx.color ?? null;
   const weatherF = finiteTemp(ctx.weatherF);
+  const conditions = ctx.conditions;
   const cap = Math.max(0, ctx.cap ?? ROW_MAX);
   const pool = livePool(garments);
   const veto = ctx.taste ? pieceVetoIds(ctx.taste) : null;
@@ -1497,8 +1674,8 @@ export function weekRotationRow(
   const today = ctx.today ?? todayNY();
   const fresh = (g: Garment, onScreen: number) => freshness(g, { today, suggested: ctx.suggested }, onScreen);
   const salt = ctx.salt ?? 0;
-  const strict = plainDresser(live, occasion, season, weatherF, color, pool, ctx.taste, false);
-  const scope = scopeKey(occasion, season, color, weatherF, live);
+  const strict = plainDresser(live, occasion, season, weatherF, color, pool, ctx.taste, false, conditions);
+  const scope = scopeKey(occasion, season, color, weatherF, live, conditions);
   if (ctx.rotation) census(scope, strict);
   const skip = new Set(ctx.stuck ?? []);
   for (const [id, hit] of PAIRABLE.get(scope) ?? []) if (hit.cheap) skip.add(id);
@@ -1516,12 +1693,12 @@ export function weekRotationRow(
   /* The unseen looks first; when they run out, the least-recently-shown pieces fill the row to its cap. */
   const looks = fillRow(strict, counts, opts, cap);
   const demoted: number[] = [];
-  const needJacket = jacketRequired(occasion, season, weatherF);
+  const needJacket = jacketNeed(occasion, season, weatherF, conditions);
   if (needJacket && looks.length < cap) {
     /* The jackets are spent (or none left pairs): the rest of the row goes bare, marked demoted. */
     const used = new Set(looks.flat().map((g) => g.id));
     const left = live.filter((g) => !used.has(g.id));
-    const bare = plainDresser(left, occasion, season, weatherF, color, pool, ctx.taste, true);
+    const bare = plainDresser(left, occasion, season, weatherF, color, pool, ctx.taste, true, conditions);
     const more = fillRow({ ...bare, layers: [] }, counts, { ...opts, max: cap - looks.length }, cap - looks.length);
     for (const look of more) {
       demoted.push(looks.length);
@@ -1529,6 +1706,13 @@ export function weekRotationRow(
     }
   }
   spreadJackets(looks, strict, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation, twins, led, weekLeadPiece);
+  preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
+    counts,
+    led,
+    twins,
+    leadOf: weekLeadPiece,
+    waived,
+  });
   if (ctx.rotation) settle(strict, pairable, ctx.rotation, twins, live.length);
   /* Every piece this scope has found unpairable so far, so the caller's list is complete. */
   const unpairable: Garment[] = [];
@@ -1554,27 +1738,28 @@ export function wayCanDress(
   jacket: Garment,
   open: readonly Garment[],
   garments: Garment[],
-  ctx: Pick<IdeaContext, "occasion" | "season" | "weatherF" | "color" | "today" | "suggested">,
+  ctx: Pick<IdeaContext, "occasion" | "season" | "weatherF" | "conditions" | "color" | "today" | "suggested">,
 ): boolean {
   const occasion = (ctx.occasion || "weekday") as Occasion;
   const season = (ctx.season || "fall") as Season;
   const color = ctx.color ?? null;
   const weatherF = finiteTemp(ctx.weatherF);
+  const conditions = ctx.conditions;
   const pool = livePool(garments);
   const live = [jacket, ...open.filter((g) => g.id !== jacket.id)];
   let d: Dresser;
   let themed: (look: Garment[]) => boolean;
   if (wayId === FORGOTTEN_ID) {
     const forgotten = forgottenIds(garments, { today: ctx.today ?? todayNY(), suggested: ctx.suggested });
-    d = forgottenDresser(live, forgotten, occasion, season, weatherF, color, pool);
+    d = forgottenDresser(live, forgotten, occasion, season, weatherF, color, pool, conditions);
     themed = (look) => look.some((g) => forgotten.has(g.id));
   } else if (wayId.startsWith(FILL_ID)) {
-    d = plainDresser(live, occasion, season, weatherF, color, pool, undefined, false);
+    d = plainDresser(live, occasion, season, weatherF, color, pool, undefined, false, conditions);
     themed = () => true;
   } else {
     const cell = cellKit.cells().find((row) => row.id === wayId);
     if (!cell) return false;
-    const cd = cellDresser(cell, live, occasion, season, weatherF, color, pool);
+    const cd = cellDresser(cell, live, occasion, season, weatherF, color, pool, conditions);
     d = cd;
     themed = (look) => look.some((g) => {
       const slot = slotNameOf(g, cell);

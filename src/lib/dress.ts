@@ -1,4 +1,5 @@
 import { liveIdsKey } from "./daily-pick.ts";
+import { requireOuterFromSnap, snapIsGated } from "./jacket-weather.ts";
 import { drawSeed } from "./draw.ts";
 import { heroOccasionsFor, lookCountMap } from "./lookbook.ts";
 import type { TasteMemory } from "./taste.ts";
@@ -10,6 +11,7 @@ import {
   type Garment,
   type Look,
   type Occasion,
+  type Season,
   type WearEntry,
   type WeatherSnap,
 } from "./types.ts";
@@ -157,6 +159,11 @@ export function dressThisPiece(opts: {
   /** A counter mixed into the seed (another turn for the same piece). */
   turn?: number;
   today?: string;
+  /**
+   * Used with a gated weather snap (measured, high, rain or wind) to set
+   * requireOuter. An unmeasured snap keeps the draw as it was.
+   */
+  season?: Season;
 }): DressResult | null {
   const pool = livePool(opts.garments);
   const lockedIds = [...new Set(opts.lockedIds)].filter((id) =>
@@ -177,9 +184,13 @@ export function dressThisPiece(opts: {
   const repeats =
     opts.repeatPairs ?? weekUniformKeys(opts.journal ?? [], pool);
   const today = opts.today ?? todayNY();
+  const gated = snapIsGated(opts.weather) && opts.season !== undefined;
   const picked = pickLookWith(pool, {
     occasion,
     weather: opts.weather ?? { f: 68, label: "Fair", code: 2 },
+    ...(gated && opts.weather && opts.season
+      ? { season: opts.season, requireOuter: requireOuterFromSnap(occasion, opts.season, opts.weather) }
+      : {}),
     lockedIds,
     previousIds: opts.previousIds,
     repeatPairs: repeats,

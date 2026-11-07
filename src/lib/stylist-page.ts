@@ -1,4 +1,5 @@
 import { liveIdsKey } from "./daily-pick.ts";
+import type { AtlasConditions } from "./jacket-weather.ts";
 import { drawOrder, drawSeed, pieceWeight, rngFromSalt, type WeightCtx } from "./draw.ts";
 import { displayName } from "./piece-label.ts";
 import { clashes, slotOf, todayOccasion } from "./style.ts";
@@ -19,6 +20,8 @@ export type StylistPageContext = {
   openGarmentId?: string;
   onScreenLookIds: string[];
   weatherF?: number;
+  /** Measured high, rain and wind. A missing field was not measured. */
+  conditions?: AtlasConditions;
 };
 
 export type ScreenLook = { id: string; garmentIds: string[] };
@@ -31,6 +34,7 @@ export type StylistPageInput = {
   openGarmentId?: string | null;
   onScreenLookIds?: string[];
   weatherF?: number;
+  conditions?: AtlasConditions;
   /** Piece ids for the rendered cards. Not part of the context object. */
   screenLooks?: ScreenLook[];
 };
@@ -115,7 +119,23 @@ function finite(n: unknown): number | undefined {
   return typeof n === "number" && Number.isFinite(n) ? n : undefined;
 }
 
+function condKey(c?: AtlasConditions): string {
+  if (!c) return "";
+  return `${c.measured ?? ""}:${c.highF ?? ""}:${c.wet ?? ""}:${c.windy ?? ""}`;
+}
+
+function copyConditions(c?: AtlasConditions): AtlasConditions | undefined {
+  if (!c) return undefined;
+  const next: AtlasConditions = {};
+  if (c.measured === true) next.measured = true;
+  if (typeof c.highF === "number" && Number.isFinite(c.highF)) next.highF = c.highF;
+  if (typeof c.wet === "boolean") next.wet = c.wet;
+  if (typeof c.windy === "boolean") next.windy = c.windy;
+  return condKey(next) === "" ? undefined : next;
+}
+
 function copyPage(page: StylistPageContext): StylistPageContext {
+  const conditions = copyConditions(page.conditions);
   return {
     route: page.route,
     onScreenLookIds: [...page.onScreenLookIds],
@@ -124,6 +144,7 @@ function copyPage(page: StylistPageContext): StylistPageContext {
     ...(page.color ? { color: page.color } : {}),
     ...(page.openGarmentId ? { openGarmentId: page.openGarmentId } : {}),
     ...(finite(page.weatherF) !== undefined ? { weatherF: page.weatherF } : {}),
+    ...(conditions ? { conditions } : {}),
   };
 }
 
@@ -139,6 +160,7 @@ function samePage(next: StylistPageContext, prevLooks: string, nextLooks: string
   if ((current.color ?? "") !== (next.color ?? "")) return false;
   if ((current.openGarmentId ?? "") !== (next.openGarmentId ?? "")) return false;
   if (finite(current.weatherF) !== finite(next.weatherF)) return false;
+  if (condKey(current.conditions) !== condKey(next.conditions)) return false;
   if (current.onScreenLookIds.join("|") !== next.onScreenLookIds.join("|")) return false;
   return prevLooks === nextLooks;
 }
@@ -172,6 +194,7 @@ export function writeStylistPage(input: StylistPageInput): void {
     ...(input.color ? { color: input.color } : {}),
     ...(input.openGarmentId ? { openGarmentId: input.openGarmentId } : {}),
     ...(finite(input.weatherF) !== undefined ? { weatherF: input.weatherF } : {}),
+    ...(copyConditions(input.conditions) ? { conditions: copyConditions(input.conditions) } : {}),
   });
   if (samePage(next, prevLooks, looksKey(ids))) return;
   current = next;

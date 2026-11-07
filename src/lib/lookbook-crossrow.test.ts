@@ -35,6 +35,7 @@ import {
 import { weekLeadPiece } from "./look.ts";
 import { leadPiece } from "./look-collage.ts";
 import { lookFitsOccasion } from "./lookbook.ts";
+import { jacketChoices, lastResortNote, ordinaryUses, selectedOuter, strictFirstReplacement } from "./jacket-edit.ts";
 import { passesRules } from "./stylist/legal.ts";
 import { advanceRotation, emptyRotation, type Rotation } from "./rotation.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
@@ -141,18 +142,23 @@ describe("six pages per chapter on the snapshot closet", () => {
   it("a. a piece (with its look-alikes) leads at most one card on the whole page: the week row, every row, the forgotten row", () => {
     for (const run of RUNS) {
       for (const page of run.pages) {
-        const leads = new Map<string, string[]>();
+        const leads = new Map<string, { where: string; look: Garment[] }[]>();
         const cards = [
-          ...page.week.map((look, i) => ({ where: `week card ${i + 1}`, lead: weekLeadPiece(look) })),
-          ...page.rows.flatMap((row) => row.looks.map((look, i) => ({ where: `${row.title} card ${i + 1}`, lead: leadPiece(look) }))),
+          ...page.week.map((look, i) => ({ where: `week card ${i + 1}`, lead: weekLeadPiece(look), look })),
+          ...page.rows.flatMap((row) => row.looks.map((look, i) => ({ where: `${row.title} card ${i + 1}`, lead: leadPiece(look), look }))),
         ];
         for (const card of cards) {
           const lead = card.lead;
           expect(lead, `${run.occasion} page ${page.n}: ${card.where} has no lead`).not.toBeNull();
           const key = KEY.get(lead!.id)!;
-          leads.set(key, [...(leads.get(key) ?? []), card.where]);
+          leads.set(key, [...(leads.get(key) ?? []), { where: card.where, look: card.look }]);
         }
-        const twice = [...leads.entries()].filter(([, where]) => where.length > 1).map(([key, where]) => `${BY_ID.get(key.split("|")[0] ?? "")?.name ?? key} leads ${where.join(", ")}`);
+        const twice = [...leads.entries()].filter(([key, group]) => {
+          if (group.length <= 1) return false;
+          if (!key.startsWith("outerwear|")) return true;
+          const ordinary = group.filter((item) => !strictFirstReplacement(item.look, CLOSET, run.occasion, SEASON));
+          return ordinary.length > 1;
+        }).map(([key, group]) => `${BY_ID.get(key.split("|")[0] ?? "")?.name ?? key} leads ${group.map((item) => item.where).join(", ")}`);
         expect(twice, `${run.occasion} page ${page.n}`).toEqual([]);
         /* The week row reports the same leads the rows were handed. */
         expect(page.weekLeads).toEqual(page.week.map((look) => weekLeadPiece(look)!.id));
@@ -164,13 +170,28 @@ describe("six pages per chapter on the snapshot closet", () => {
     for (const run of RUNS) {
       for (const page of run.pages) {
         const strict = [...page.week, ...page.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
-        const over = [...keyCounts(strict).entries()].filter(([, n]) => n > SCREEN_CAP).map(([key, n]) => `${key}=${n}`);
+        const keyOf = (g: Garment) => KEY.get(g.id)!;
+        const over = [...keyCounts(strict).entries()].filter(([key, n]) => n > SCREEN_CAP && ordinaryUses(strict, key, keyOf, CLOSET, run.occasion, SEASON) > SCREEN_CAP).map(([key, n]) => `${key}=${n}`);
         expect(over, `${run.occasion} page ${page.n}: over the page cap outside relaxed rows`).toEqual([]);
-        const overRelaxed = [...keyCounts(page.page).entries()].filter(([, n]) => n > RELAXED_CAP).map(([key, n]) => `${key}=${n}`);
+        const overRelaxed = [...keyCounts(page.page).entries()].filter(([key, n]) => n > RELAXED_CAP && ordinaryUses(page.page, key, keyOf, CLOSET, run.occasion, SEASON) > RELAXED_CAP).map(([key, n]) => `${key}=${n}`);
         expect(overRelaxed, `${run.occasion} page ${page.n}: over the relaxed cap`).toEqual([]);
         /* A relaxed row is the short-pool case only: at the strict cap it had no card left. */
         for (const row of page.rows.filter((r) => r.relaxed)) {
-          expect(proof(run, page, row.id, true), `${run.occasion} page ${page.n} / ${row.title}: relaxed with room to spare`).toBeNull();
+          const spare = roomLeft(
+            { closet: CLOSET, occasion: run.occasion, season: SEASON, today: TODAY, week: page.week, rows: page.rows, stuck: page.stuck, eligible: new Set(run.eligible) },
+            row.id,
+            { strictCap: true },
+          );
+          const trueLastResort = Boolean(
+            spare &&
+              lastResortNote(spare.look) &&
+              !jacketChoices(
+                spare.look.filter((g) => g.id !== selectedOuter(spare.look).jacket?.id),
+                CLOSET,
+                { occasion: run.occasion, season: SEASON },
+              ).some((choice) => choice.tier === "strict"),
+          );
+          expect(trueLastResort ? null : spare, `${run.occasion} page ${page.n} / ${row.title}: relaxed with room to spare`).toBeNull();
         }
       }
     }

@@ -18,6 +18,9 @@ import { cutoutsForOnYou, leadTop, lookTuckDecision, nameLook, spreadTitle } fro
 import { tuckMark } from "@/lib/tuck";
 import { useTuckHabits } from "@/lib/use-tuck-habits";
 import { pieceLabel } from "@/lib/piece-label";
+import { editJacket, lastResortNote, legacyJacketAction, NOTE_HELD, NOTE_WHICH, reconcileOpenLook, selectedOuter, type JacketContext } from "@/lib/jacket-edit";
+import { effectiveIds, jacketDraftAccount, readJacketDraft, rememberJacketDraft } from "@/lib/jacket-draft";
+import { countsAsOuter } from "@/lib/stylist/jackets";
 import { moreOutfitsForLook } from "@/lib/dress";
 import type { House } from "@/lib/houses";
 import { comboKey } from "@/lib/lookbook";
@@ -51,13 +54,16 @@ export function LookSheet({
   onBack,
   backLabel,
   closeOnEscape = true,
+  draftBaseIds,
+  draftStamp: draftStampProp,
+  jacketCtx,
 }: {
   look: Look;
   pieces: Garment[];
   book: Look[];
   closet: Garment[];
   onClose: () => void;
-  onWear: () => void;
+  onWear: (ids: string[]) => void;
   onOpenLook: (look: Look) => void;
   getCard?: () => HTMLElement | null;
   initialLocked?: string[];
@@ -68,9 +74,22 @@ export function LookSheet({
   backLabel?: string;
   /** Closet owns Escape for its stack and passes false. */
   closeOnEscape?: boolean;
+  /** Original ids of this look. The session draft is keyed by these, not the edited ids. */
+  draftBaseIds?: string[];
+  /** Occasion, season, date and weather. A look without one keeps its draft to itself. */
+  draftStamp?: string;
+  /** Today's measured weather and the chapter season. Off in required weather warns. */
+  jacketCtx?: Partial<JacketContext>;
 }) {
   void book;
-  const [ids, setIds] = useState(look.garmentIds);
+  const baseIds = draftBaseIds ?? look.garmentIds;
+  const stamp = draftStampProp ?? `look:${look.id}`;
+  const [ids, setIds] = useState(() => {
+    const owned = new Set(closet.filter((g) => !g.archived).map((g) => g.id));
+    return effectiveIds(baseIds, stamp, owned) ?? look.garmentIds;
+  });
+  const [jacketNote, setJacketNote] = useState<string | null>(null);
+  const [jacketWarning, setJacketWarning] = useState<string | null>(null);
   const [swapSlot, setSwapSlot] = useState<WearSlot | null>(null);
   const closetById = useMemo(() => new Map(closet.map((g) => [g.id, g])), [closet]);
   const activePieces = useMemo(
@@ -94,6 +113,47 @@ export function LookSheet({
   const piecesRef = useRef(activePieces);
   piecesRef.current = activePieces;
   const saveLook = useCloset((s) => s.saveLook);
+  const taste = useCloset((s) => s.taste);
+  const applyJacket = (action: "off" | "on" | "next" | "set", chooseId?: string) => {
+    const draft = readJacketDraft(baseIds, stamp);
+    const result = editJacket({
+      ids,
+      closet,
+      action,
+      chooseId,
+      ctx: {
+        occasion: jacketCtx?.occasion ?? mapOccasion(look.occasion),
+        season: jacketCtx?.season ?? "fall",
+        weatherF: jacketCtx?.weatherF,
+        measured: jacketCtx?.measured,
+        highF: jacketCtx?.highF,
+        wet: jacketCtx?.wet,
+        windy: jacketCtx?.windy,
+        lockedIds,
+        taste,
+      },
+      lastJacketId: draft?.lastJacketId,
+    });
+    setIds(result.ids);
+    setJacketNote(result.note);
+    setJacketWarning(result.warning);
+    rememberJacketDraft({
+      baseIds,
+      ids: result.ids,
+      stamp,
+      accountId: "",
+      off: result.off,
+      jacketId: result.jacketId,
+      lastJacketId: result.lastJacketId,
+      weatherWarned: result.weatherWarned,
+      warning: result.warning,
+      note: result.note,
+      outdoorsValid: result.outdoorsValid,
+    });
+    setShowMe(false);
+  };
+  const outer = selectedOuter(activePieces);
+  const jacketOn = Boolean(outer.jacket);
   const habits = useTuckHabits();
   const looks = useCloset((s) => s.looks);
   const refPhoto = useCloset((s) => s.refPhoto);
@@ -133,13 +193,48 @@ export function LookSheet({
     };
   }, [look.id, cacheKey]);
 
+  const idsRef = useRef(ids);
+  idsRef.current = ids;
+  const fitKey = closet.map((g) => `${g.id}:${g.archived ? 1 : 0}:${g.oversized === undefined ? "" : g.oversized ? 1 : 0}:${g.fit ?? ""}`).join(",");
+  const jacketCtxKey = `${jacketCtx?.occasion ?? ""}|${jacketCtx?.season ?? ""}|${jacketCtx?.weatherF ?? ""}|${jacketCtx?.measured ? 1 : 0}|${jacketCtx?.wet ?? ""}|${jacketCtx?.windy ?? ""}|${jacketCtx?.highF ?? ""}`;
+  const baseKey = baseIds.join(",");
+  const accountNow = jacketDraftAccount();
+  /* Date, occasion, season, account and the source ids. Weather is not part of this, so a wetter
+     day keeps an Off edit and only the warning changes. */
+  const sourceKey = `${look.id}|${baseKey}|${accountNow}|${stamp.split("|").slice(0, 3).join("|")}`;
+  const sourceRef = useRef<string | null>(null);
   useEffect(() => {
-    setIds(look.garmentIds);
+    const owned = new Set(closet.filter((g) => !g.archived).map((g) => g.id));
+    const ctx: JacketContext = {
+      occasion: jacketCtx?.occasion ?? mapOccasion(look.occasion),
+      season: jacketCtx?.season ?? "fall",
+      weatherF: jacketCtx?.weatherF,
+      measured: jacketCtx?.measured,
+      highF: jacketCtx?.highF,
+      wet: jacketCtx?.wet,
+      windy: jacketCtx?.windy,
+      lockedIds,
+      taste,
+    };
+    const first = sourceRef.current === null;
+    const sourceChanged = sourceRef.current !== null && sourceRef.current !== sourceKey;
+    sourceRef.current = sourceKey;
+    const drafted = sourceChanged ? null : effectiveIds(baseIds, stamp, owned, { closet, ctx });
+    const show = (next: ReturnType<typeof reconcileOpenLook>) => {
+      setIds(next.ids);
+      setJacketNote(next.note);
+      setJacketWarning(next.warning);
+    };
+    if (drafted) {
+      show(reconcileOpenLook(drafted, closet, ctx));
+    } else if (first || sourceChanged) {
+      show(reconcileOpenLook(baseIds, closet, ctx));
+    } else {
+      show(reconcileOpenLook(idsRef.current, closet, ctx));
+    }
     setSwapSlot(null);
-    setLockedIds(
-      (initialLocked ?? []).filter((id) => look.garmentIds.includes(id)),
-    );
-  }, [look.id]);
+    setLockedIds((initialLocked ?? []).filter((id) => look.garmentIds.includes(id)));
+  }, [look.id, stamp, fitKey, jacketCtxKey, accountNow, baseKey, sourceKey]);
 
   const lockForMore = lockedIds.length ? lockedIds : look.garmentIds.slice(0, 1);
   const alts = showAlts
@@ -244,7 +339,7 @@ export function LookSheet({
             <WearButton
               className="h-9 px-4 text-[13px]"
               onConfirming={() => setLanding(true)}
-              onWear={onWear}
+              onWear={() => onWear(activePieces.map((g) => g.id))}
             />
             <button
               type="button"
@@ -294,6 +389,43 @@ export function LookSheet({
               Close
             </button>
           </div>
+          <div data-jacket-edit className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              data-jacket-off
+              aria-pressed={!jacketOn}
+              onClick={() => applyJacket("off")}
+              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+            >
+              Jacket off
+            </button>
+            <button
+              type="button"
+              data-jacket-on
+              aria-pressed={jacketOn}
+              onClick={() => applyJacket("on")}
+              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+            >
+              Jacket on
+            </button>
+            <button
+              type="button"
+              data-jacket-next
+              onClick={() => applyJacket("next")}
+              className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+            >
+              Try another jacket
+            </button>
+          </div>
+          {jacketWarning ? (
+            <p data-weather-warned className="text-sm text-ink">
+              {jacketWarning}
+            </p>
+          ) : null}
+          {jacketNote ? <p data-jacket-note className="text-sm text-ink-soft">{jacketNote}</p> : null}
+          {!jacketNote && lastResortNote(activePieces) ? (
+            <p data-last-resort className="text-sm text-ink-soft">{lastResortNote(activePieces)}</p>
+          ) : null}
           {dressing && <p className="micro text-ink-soft">{ON_ME_BUSY_HINT}</p>}
           {dressError && <p className="text-sm text-accent">{dressError}</p>}
           <ul className="flex gap-2 overflow-x-auto">
@@ -309,6 +441,20 @@ export function LookSheet({
                   <button
                     type="button"
                     onClick={() => {
+                      const kind = on ? "remove" : "add";
+                      const action = legacyJacketAction(g, activePieces, kind);
+                      if (action === "off") {
+                        applyJacket("off");
+                        return;
+                      }
+                      if (action === "set") {
+                        applyJacket("set", g.id);
+                        return;
+                      }
+                      if (action === "blocked") {
+                        setJacketNote(kind === "add" ? NOTE_HELD : NOTE_WHICH);
+                        return;
+                      }
                       if (on) {
                         if (ids.length <= 2) return;
                         setIds((cur) => cur.filter((id) => id !== g.id));
@@ -345,10 +491,20 @@ export function LookSheet({
                   >
                     {locked ? "Unlock" : "Lock"}
                   </button>
-                  {slot && on && (
+                  {on && (slot || outer.jacket?.id === g.id) && (
                     <button
                       type="button"
-                      onClick={() => setSwapSlot((cur) => (cur === slot ? null : slot))}
+                      onClick={() => {
+                        if (legacyJacketAction(g, activePieces, "swap") === "next") {
+                          applyJacket("next");
+                          return;
+                        }
+                        if (legacyJacketAction(g, activePieces, "swap") === "blocked") {
+                          setJacketNote(NOTE_WHICH);
+                          return;
+                        }
+                        if (slot) setSwapSlot((cur) => (cur === slot ? null : slot));
+                      }}
                       className="micro mt-1 block text-ink-soft hover:text-ink"
                     >
                       Swap
@@ -358,6 +514,15 @@ export function LookSheet({
                     <button
                       type="button"
                       onClick={() => {
+                        const action = legacyJacketAction(g, activePieces, "remove");
+                        if (action === "blocked") {
+                          setJacketNote(NOTE_WHICH);
+                          return;
+                        }
+                        if (action === "off") {
+                          applyJacket("off");
+                          return;
+                        }
                         if (ids.length <= 2) return;
                         setIds((cur) => cur.filter((id) => id !== g.id));
                         setLockedIds((cur) => cur.filter((id) => id !== g.id));
@@ -374,14 +539,18 @@ export function LookSheet({
           </ul>
           {swapSlot && (
             <div className="flex flex-wrap gap-2 border border-hairline p-2">
-              {closet
-                .filter((g) => wearSlot(g) === swapSlot && !ids.includes(g.id))
+              {closet.filter((g) => wearSlot(g) === swapSlot && !ids.includes(g.id) && !countsAsOuter(g))
                 .slice(0, 24)
                 .map((g) => (
                   <button
                     key={g.id}
                     type="button"
                     onClick={() => {
+                      if (swapSlot === "outerwear" && outer.jacket && countsAsOuter(g)) {
+                        applyJacket("set", g.id);
+                        setSwapSlot(null);
+                        return;
+                      }
                       const occupant = activePieces.find((x) => wearSlot(x) === swapSlot);
                       setIds((cur) => {
                         if (!occupant) return [...cur, g.id];

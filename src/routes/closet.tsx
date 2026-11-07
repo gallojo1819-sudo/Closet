@@ -792,10 +792,8 @@ function ClosetPage() {
           onBack={heroFromList ? retreatOne : undefined}
           backLabel={heroFromList ? backToLooksLabel(heroCards.length) : undefined}
           onClose={() => closeEverything()}
-          onWear={() => {
-            wearToday(
-              heroOpen.garmentIds.filter((id) => garments.some((g) => g.id === id)),
-            );
+          onWear={(ids) => {
+            wearToday(ids);
             retreatOne();
           }}
           onOpenLook={replaceAlternate}

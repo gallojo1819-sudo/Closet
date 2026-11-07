@@ -438,7 +438,7 @@ function suedeFootwear(g: Plate): boolean {
   return material.includes("suede") || name.includes("suede");
 }
 
-function countsAsOuter(g: Plate | undefined): boolean {
+export function countsAsOuter(g: Plate | undefined): boolean {
   if (!g || knitOrFleeceLayer(g)) return false;
   const info = jacketInfo(g);
   return Boolean(info.countsAsJacket && info.class && info.class !== "mid");

@@ -29,6 +29,7 @@ import {
   visibleDetectors,
   weekRotationRow,
 } from "./detectors.ts";
+import { ordinaryUses, unjustifiedJacketRepeats } from "./jacket-edit.ts";
 import { screenLookCount } from "./lookbook-status.ts";
 import { advanceRotation, emptyRotation, type Rotation } from "./rotation.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
@@ -209,8 +210,10 @@ describe(`six pages per chapter on the ${CLOSET.length}-piece closet`, () => {
     for (const run of RUNS) {
       for (const page of run.pages) {
         for (const row of [{ title: "week", looks: page.week }, ...page.rows]) {
-          const twice = [...keyCounts(row.looks).entries()].filter(([, n]) => n > 1).map(([key]) => key);
+          const keyOf = (g: Garment) => TWINS.key(g);
+          const twice = [...keyCounts(row.looks).entries()].filter(([key, n]) => n > 1 && ordinaryUses(row.looks, key, keyOf, CLOSET, run.occasion, SEASON) > 1).map(([key]) => key);
           expect(twice, `${run.occasion} page ${page.n} / ${row.title}: twice in the row`).toEqual([]);
+          expect(unjustifiedJacketRepeats(row.looks, CLOSET, run.occasion, SEASON), `${run.occasion} page ${page.n} / ${row.title}: jacket`).toEqual([]);
         }
       }
     }
@@ -221,10 +224,11 @@ describe(`six pages per chapter on the ${CLOSET.length}-piece closet`, () => {
       for (const page of run.pages) {
         const relaxed = page.rows.some((row) => row.relaxed);
         const cap = relaxed ? RELAXED_CAP : SCREEN_CAP;
-        const over = [...keyCounts(page.page).entries()].filter(([, n]) => n > cap);
+        const keyOf = (g: Garment) => TWINS.key(g);
+        const over = [...keyCounts(page.page).entries()].filter(([key, n]) => n > cap && ordinaryUses(page.page, key, keyOf, CLOSET, run.occasion, SEASON) > cap);
         expect(over, `${run.occasion} page ${page.n}: over the page cap`).toEqual([]);
         const strict = [...page.week, ...page.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
-        const overStrict = [...keyCounts(strict).entries()].filter(([, n]) => n > SCREEN_CAP);
+        const overStrict = [...keyCounts(strict).entries()].filter(([key, n]) => n > SCREEN_CAP && ordinaryUses(strict, key, keyOf, CLOSET, run.occasion, SEASON) > SCREEN_CAP);
         expect(overStrict, `${run.occasion} page ${page.n}: over the cap outside the relaxed rows`).toEqual([]);
       }
     }

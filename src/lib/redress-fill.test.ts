@@ -28,12 +28,14 @@ import {
   SUEDE_SHARE,
   twinCounts,
   twinGroups,
+  twinKey,
   visibleDetectors,
   weekRotationRow,
 } from "./detectors.ts";
 import { isLongSleeveTop, lookFitsOccasion } from "./lookbook.ts";
 import { advanceRotation, emptyRotation, rotationLookKey, type Rotation } from "./rotation.ts";
 import { lookFitsSeason } from "./season.ts";
+import { ordinaryUses, unjustifiedJacketRepeats } from "./jacket-edit.ts";
 import { isBrownSuedeOuter } from "./style.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
@@ -278,15 +280,15 @@ describe("six Re-dresses on the snapshot closet, every chapter", () => {
       for (const tap of run.taps) {
         /* A plain row the section owed may take one more card than the cap (relaxed); the rest holds. */
         const strict = [...tap.week, ...tap.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
-        const over = [...twinCounts(strict).entries()].filter(([, n]) => n > SCREEN_CAP);
+        const over = [...twinCounts(strict).entries()].filter(([key, n]) => n > SCREEN_CAP && ordinaryUses(strict, key, twinKey, CLOSET, run.occasion, SEASON) > SCREEN_CAP);
         expect(over.map(([key, n]) => `${key}=${n}`), `${run.occasion} tap ${tap.n}: over the page cap`).toEqual([]);
-        const overRelaxed = [...twinCounts(tap.page).entries()].filter(([, n]) => n > RELAXED_CAP);
+        const overRelaxed = [...twinCounts(tap.page).entries()].filter(([key, n]) => n > RELAXED_CAP && ordinaryUses(tap.page, key, twinKey, CLOSET, run.occasion, SEASON) > RELAXED_CAP);
         expect(overRelaxed.map(([key, n]) => `${key}=${n}`), `${run.occasion} tap ${tap.n}: over the relaxed cap`).toEqual([]);
         const rows = [{ title: "week", looks: tap.week }, ...tap.rows];
         for (const row of rows) {
           expect(rowRepeats(row.looks).map((g) => g.name), `${run.occasion} tap ${tap.n} / ${row.title}`).toEqual([]);
-          expect(rowRepeats(row.looks, true).map((g) => g.name), `${run.occasion} tap ${tap.n} / ${row.title} jacket`).toEqual([]);
-          const twice = [...twinCounts(row.looks).entries()].filter(([, n]) => n > 1).map(([key]) => key);
+          expect(unjustifiedJacketRepeats(row.looks, CLOSET, run.occasion, SEASON), `${run.occasion} tap ${tap.n} / ${row.title} jacket`).toEqual([]);
+          const twice = [...twinCounts(row.looks).entries()].filter(([key, n]) => n > 1 && ordinaryUses(row.looks, key, twinKey, CLOSET, run.occasion, SEASON) > 1).map(([key]) => key);
           expect(twice, `${run.occasion} tap ${tap.n} / ${row.title}: a look-alike twice in the row`).toEqual([]);
         }
       }

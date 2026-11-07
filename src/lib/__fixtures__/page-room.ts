@@ -7,6 +7,7 @@
  * the row is truly full. For tests only.
  */
 import { forgottenIds, isOuterPiece, RELAXED_CAP, SCREEN_CAP, seasonFits, twinGroups, type Twins } from "../detectors.ts";
+import { jacketChoices, lastResortNote } from "../jacket-edit.ts";
 import { cellKit } from "../detectors/cells.ts";
 import { leadPiece } from "../look-collage.ts";
 import { weekLeadPiece } from "../look.ts";
@@ -99,7 +100,10 @@ export function roomLeft(input: PageRoomInput, rowId: string, opts: { strictCap?
           const look = [...core, jacket];
           if (!themed(look)) continue;
           const waived = passes(look);
-          if (waived) return { look, waived };
+          if (!waived) continue;
+          const formality = lastResortNote(look) || waived.some((id) => id === "JKT-FORM-1" || id === "JKT-FORM-2");
+          if (formality && jacketChoices(core, pool, { occasion: input.occasion, season: input.season }).some((row) => row.tier === "strict")) continue;
+          return { look, waived };
         }
       }
     }

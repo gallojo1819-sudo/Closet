@@ -38,7 +38,14 @@ function rotate<T>(list: T[], by: number): T[] {
 
 export function usualFromCloset(
   garments: Garment[],
-  opts: { occasion: Occasion | string; season: Season | string; weatherF?: number; max?: number; salt?: number },
+  opts: {
+    occasion: Occasion | string;
+    season: Season | string;
+    weatherF?: number;
+    max?: number;
+    salt?: number;
+    conditions?: { highF?: number; wet?: boolean; windy?: boolean };
+  },
 ): UsualResult {
   const max = opts.max ?? 3;
   const salt = opts.salt ?? 0;
@@ -50,12 +57,14 @@ export function usualFromCloset(
   const shoes = rotate(live.filter((g) => slotOf(g) === "footwear"), salt * 13);
   const jackets = live.filter(isJacket);
   const weatherF = finiteTemp(opts.weatherF);
+  const high = finiteTemp(opts.conditions?.highF);
   const ctx = {
     occasion: opts.occasion,
     season: opts.season,
-    ...(weatherF !== undefined ? { weatherF } : {}),
+    ...((high ?? weatherF) !== undefined ? { weatherF: high ?? weatherF } : {}),
+    ...(opts.conditions ? { conditions: opts.conditions } : {}),
   };
-  const need = jacketRequired(String(opts.occasion), String(opts.season), weatherF);
+  const need = jacketRequired(String(opts.occasion), String(opts.season), high ?? weatherF, opts.conditions);
   const where = label(String(opts.occasion), String(opts.season));
   if (!tops.length || !bottoms.length || !shoes.length) {
     return { looks: [], reason: `${where} needs a top, a bottom, and a shoe from this closet.` };

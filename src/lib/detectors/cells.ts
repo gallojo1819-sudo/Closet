@@ -474,16 +474,34 @@ function finiteTemp(n: unknown): number | undefined {
   return typeof n === "number" && Number.isFinite(n) ? n : undefined;
 }
 
-function hitsOf(pieces: Garment[], occasion: string, season: string, weatherF?: number): RuleHits {
+function hitsOf(
+  pieces: Garment[],
+  occasion: string,
+  season: string,
+  weatherF?: number,
+  conditions?: { highF?: number; wet?: boolean; windy?: boolean },
+): RuleHits {
   const temp = finiteTemp(weatherF);
-  const key = `${occasion}|${season}|${temp ?? ""}|${pieces.map((g) => g.id).sort().join(",")}`;
+  const high = finiteTemp(conditions?.highF);
+  const condKey = conditions ? `|${high ?? ""}:${conditions.wet ?? ""}:${conditions.windy ?? ""}` : "";
+  const key = `${occasion}|${season}|${temp ?? ""}${condKey}|${pieces.map((g) => g.id).sort().join(",")}`;
   const hit = LEGAL.get(key);
   if (hit !== undefined) return hit;
+  const jacketF = high ?? temp;
   const hits = ruleHits(pieces, {
     house: null,
     occasion,
     season,
-    ...(temp !== undefined ? { weatherF: temp } : {}),
+    ...(jacketF !== undefined ? { weatherF: jacketF } : {}),
+    ...(conditions && (high !== undefined || conditions.wet !== undefined || conditions.windy !== undefined)
+      ? {
+          conditions: {
+            ...(high !== undefined ? { highF: high } : {}),
+            ...(conditions.wet !== undefined ? { wet: conditions.wet } : {}),
+            ...(conditions.windy !== undefined ? { windy: conditions.windy } : {}),
+          },
+        }
+      : {}),
   });
   LEGAL.set(key, hits);
   if (LEGAL.size > 200_000) LEGAL.clear();
@@ -495,8 +513,15 @@ function hitsOf(pieces: Garment[], occasion: string, season: string, weatherF?: 
  * context. `relax` names the soft rules a relax tier waives (ideas.ts: a hero no strict look
  * can hold); a hard rule is never waived.
  */
-function legalOk(pieces: Garment[], occasion: string, season: string, weatherF?: number, relax?: readonly string[]): boolean {
-  const hits = hitsOf(pieces, occasion, season, weatherF);
+function legalOk(
+  pieces: Garment[],
+  occasion: string,
+  season: string,
+  weatherF?: number,
+  relax?: readonly string[],
+  conditions?: { highF?: number; wet?: boolean; windy?: boolean },
+): boolean {
+  const hits = hitsOf(pieces, occasion, season, weatherF, conditions);
   if (hits.hard.length) return false;
   if (!hits.soft.length) return true;
   if (!relax?.length) return false;
@@ -507,8 +532,14 @@ function legalOk(pieces: Garment[], occasion: string, season: string, weatherF?:
  * The lowest relax tier (relaxTiers: 0 strict) under which the look passes, or -1 when a hard
  * rule, or a soft rule no tier waives, fails it. One rule check, read per tier.
  */
-function ruleTier(pieces: Garment[], occasion: string, season: string, weatherF?: number): number {
-  const hits = hitsOf(pieces, occasion, season, weatherF);
+function ruleTier(
+  pieces: Garment[],
+  occasion: string,
+  season: string,
+  weatherF?: number,
+  conditions?: { highF?: number; wet?: boolean; windy?: boolean },
+): number {
+  const hits = hitsOf(pieces, occasion, season, weatherF, conditions);
   if (hits.hard.length) return -1;
   if (!hits.soft.length) return 0;
   const tiers = relaxTiers();
@@ -596,7 +627,14 @@ export function maxDisjoint(looks: Garment[][]): Garment[][] {
   return best.slice(0, 5);
 }
 
-function dressCell(cell: Cell, pool: Garment[], occasion: Occasion, season: Season, weatherF?: number): Garment[][] {
+function dressCell(
+  cell: Cell,
+  pool: Garment[],
+  occasion: Occasion,
+  season: Season,
+  weatherF?: number,
+  conditions?: { highF?: number; wet?: boolean; windy?: boolean },
+): Garment[][] {
   if (!cellGateOpen(cell.key, occasion, season)) return [];
   const tops = takeBucket(
     pool
@@ -642,11 +680,16 @@ function dressCell(cell: Cell, pool: Garment[], occasion: Occasion, season: Seas
     }
   }
   const stored: Garment[][] = [];
-  const needJacket = jacketRequired(occasion, season, finiteTemp(weatherF));
+  const needJacket = jacketRequired(
+    occasion,
+    season,
+    finiteTemp(conditions?.highF) ?? finiteTemp(weatherF),
+    conditions,
+  );
   const remember = (pieces: Garment[]) => {
     if (stored.length >= STORE_CAP) return;
     if (stored.some((row) => idsOf(row) === idsOf(pieces))) return;
-    if (!legalOk(pieces, occasion, season, weatherF)) return;
+    if (!legalOk(pieces, occasion, season, weatherF, undefined, conditions)) return;
     stored.push(pieces);
   };
   for (const core of cores) {
@@ -686,10 +729,16 @@ function stampOf(garments: Garment[], season: string): string {
   return `${season}|${body}`;
 }
 
-export function warmCellBook(garments: Garment[], season: Season, weatherF?: number): Built[] {
+export function warmCellBook(
+  garments: Garment[],
+  season: Season,
+  weatherF?: number,
+  conditions?: { highF?: number; wet?: boolean; windy?: boolean },
+): Built[] {
   const live = livePool(garments).filter((g) => !DELETED.has(g.id));
   const temp = finiteTemp(weatherF);
-  const stamp = `${stampOf(live, season)}|${temp ?? ""}`;
+  const condBit = conditions ? `|${conditions.highF ?? ""}:${conditions.wet ?? ""}:${conditions.windy ?? ""}` : "";
+  const stamp = `${stampOf(live, season)}|${temp ?? ""}${condBit}`;
   const hit = BOOKS.get(stamp);
   if (hit) return hit;
   const built = CELLS.map((cell) => {
@@ -700,7 +749,7 @@ export function warmCellBook(garments: Garment[], season: Season, weatherF?: num
       travel: [],
       comfy: [],
     } as Record<Occasion, Garment[][]>;
-    for (const occasion of OCCASION_ORDER) looks[occasion] = dressCell(cell, live, occasion, season, temp);
+    for (const occasion of OCCASION_ORDER) looks[occasion] = dressCell(cell, live, occasion, season, temp, conditions);
     return { cell, looks };
   });
   BOOKS.set(stamp, built);
@@ -753,8 +802,14 @@ function emptyCounts(): Record<Occasion, number> {
   return { weekday: 0, out: 0, weekend: 0, travel: 0, comfy: 0 };
 }
 
-function yourUsual(garments: Garment[], season: string, occasion: Occasion, weatherF?: number): Way[] {
-  const built = usualFromCloset(garments, { occasion, season, weatherF });
+function yourUsual(
+  garments: Garment[],
+  season: string,
+  occasion: Occasion,
+  weatherF?: number,
+  conditions?: { highF?: number; wet?: boolean; windy?: boolean },
+): Way[] {
+  const built = usualFromCloset(garments, { occasion, season, weatherF, conditions });
   const counts = emptyCounts();
   counts[occasion] = built.looks.length;
   const looks: Partial<Record<Occasion, Garment[][]>> = {};
@@ -844,18 +899,25 @@ function fillRow(start: Garment[][], stored: Garment[][]): Garment[][] {
 export function storedRows(
   ways: Way[],
   garments: Garment[],
-  ctx: { occasion: Occasion | string; season: Season | string; color?: string | null; weatherF?: number; salt?: number },
+  ctx: {
+    occasion: Occasion | string;
+    season: Season | string;
+    color?: string | null;
+    weatherF?: number;
+    salt?: number;
+    conditions?: { highF?: number; wet?: boolean; windy?: boolean };
+  },
 ): Way[] {
   const occasion = (ctx.occasion || "weekday") as Occasion;
   const season = (ctx.season || "fall") as Season;
   const color = ctx.color ?? null;
   const weatherF = finiteTemp(ctx.weatherF);
   const salt = ctx.salt ?? 0;
-  const book = warmCellBook(garments, season, weatherF);
+  const book = warmCellBook(garments, season, weatherF, ctx.conditions);
   return ways.map((way) => {
     if (way.usual) {
       if (!(way.looks[occasion] ?? []).length) return way;
-      const built = usualFromCloset(garments, { occasion, season, weatherF, max: ROW_MAX, salt });
+      const built = usualFromCloset(garments, { occasion, season, weatherF, max: ROW_MAX, salt, conditions: ctx.conditions });
       if (!built.looks.length) return way;
       return {
         ...way,
@@ -883,6 +945,8 @@ export type WaysContext = {
   season?: Season | string;
   color?: string | null;
   weatherF?: number;
+  /** Today's measured high, rain and wind. Omitted, the gate sees weatherF alone. */
+  conditions?: { highF?: number; wet?: boolean; windy?: boolean };
   /** The day of the draw (drawSeed); the clock's when absent. */
   today?: string;
   /** A Re-dress counter mixed into the seed. */
@@ -893,7 +957,7 @@ export function visibleDetectors(garments: Garment[], ctx: WaysContext = {}): Wa
   const season = (ctx.season || "fall") as Season;
   const occasion = (ctx.occasion || undefined) as Occasion | undefined;
   const ranked = rankedWays(garments, ctx);
-  if (!ranked.length) return yourUsual(garments, season, occasion ?? "weekday", finiteTemp(ctx.weatherF));
+  if (!ranked.length) return yourUsual(garments, season, occasion ?? "weekday", finiteTemp(ctx.weatherF), ctx.conditions);
   return ranked.slice(0, CAP);
 }
 
@@ -907,7 +971,7 @@ export function rankedWays(garments: Garment[], ctx: WaysContext = {}): Way[] {
   const color = ctx.color ?? null;
   const weatherF = finiteTemp(ctx.weatherF);
   const occasion = (ctx.occasion || undefined) as Occasion | undefined;
-  const book = warmCellBook(garments, season, weatherF);
+  const book = warmCellBook(garments, season, weatherF, ctx.conditions);
   const open = book
     .filter((built) => cellOpen(built, season, color, occasion))
     .sort((a, b) => a.cell.id.localeCompare(b.cell.id, undefined, { numeric: true }));
