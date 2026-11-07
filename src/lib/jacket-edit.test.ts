@@ -35,7 +35,8 @@ import { dressThisPiece } from "./dress.ts";
 import { ruleHits } from "./stylist/legal.ts";
 import { countsAsOuter, jacketRequired } from "./stylist/jackets.ts";
 import { slotOf } from "./style.ts";
-import { renderedSectionLooks, rowWays, visibleDetectors, weekRotationRow } from "./detectors.ts";
+import { renderedSectionLooks, rowWays, SCREEN_CAP, visibleDetectors, weekRotationRow } from "./detectors.ts";
+import { preferStrictJackets } from "./detectors/ideas.ts";
 import { todayLookPieces } from "./today-look.ts";
 import { emptyRotation } from "./rotation.ts";
 import { leadTop, lookTuckDecision } from "./look.ts";
@@ -302,6 +303,72 @@ describe("jacket edit", () => {
       const jacket = found.get(key);
       assert.ok(jacket, key);
       assert.equal(lastResortNote(pieces([...row.core, jacket!])), null, key);
+    }
+  });
+
+  it("a capped ledger still seats the least-used strict jacket on the week and detector paths", () => {
+    const samples: { name: string; original: string[]; last: string; strict: string[]; even: string; least: string }[] = [
+      {
+        name: "toggle",
+        original: ["g_5gfabeezh485", "g_3821acdhupu9", "g_5g4fqg77s4rw", "g_lad85rg9nxs3"],
+        last: "g_5gfabeezh485",
+        strict: ["g_1pg9y05mlkek", "g_x4adkv9zu9yu"],
+        even: "g_1pg9y05mlkek",
+        least: "g_x4adkv9zu9yu",
+      },
+      {
+        name: "denim",
+        original: ["g_vtbi91noucd3", "g_xuqvrfy5ocv4", "g_bee1dg9rnfe5", "g_8nrtffa2s13s"],
+        last: "g_vtbi91noucd3",
+        strict: ["g_1pg9y05mlkek", "g_3qjmw7n4wj2a", "g_juk45cokjxxy", "g_py2swfwot1ed", "g_whgv0gu6m08l", "g_x4adkv9zu9yu"],
+        even: "g_1pg9y05mlkek",
+        least: "g_3qjmw7n4wj2a",
+      },
+      {
+        name: "denim polo",
+        original: ["g_ulv8tgkujvjh", "g_bq9qnaa1vkon", "g_66xj06nllgf2", "g_wymz2j18s6wh"],
+        last: "g_ulv8tgkujvjh",
+        strict: ["g_3qjmw7n4wj2a", "g_py2swfwot1ed", "g_x4adkv9zu9yu"],
+        even: "g_3qjmw7n4wj2a",
+        least: "g_py2swfwot1ed",
+      },
+    ];
+    const seat = (ids: string[], counts: Map<string, number>) => {
+      const rows = [pieces(ids)];
+      preferStrictJackets(rows, closet, closet, "out", "fall", undefined, undefined, { counts });
+      return rows[0]!;
+    };
+    for (const sample of samples) {
+      const evenLook = seat(sample.original, new Map(sample.strict.map((id) => [id, SCREEN_CAP])));
+      assert.equal(selectedOuter(evenLook).jacket?.id, sample.even, `${sample.name} even`);
+      assert.equal(lastResortNote(evenLook), null, `${sample.name} even`);
+      const uneven = new Map(sample.strict.map((id) => [id, id === sample.even ? SCREEN_CAP + 3 : SCREEN_CAP]));
+      const leastLook = seat(sample.original, uneven);
+      assert.equal(selectedOuter(leastLook).jacket?.id, sample.least, `${sample.name} least`);
+      assert.equal(lastResortNote(leastLook), null, `${sample.name} least`);
+
+      const pool = pieces([...new Set([...sample.original, ...sample.strict])]);
+      const onScreen = sample.strict.flatMap((id) => [id, id]);
+      const ctx = { occasion: "out" as const, season: "fall" as const, salt: 0, today: "2026-11-06", rotation: emptyRotation(), onScreen };
+      const week = weekRotationRow(pool, { ...ctx, cap: 8 });
+      /* A usual-only list returns stored rows before the strict-first pass. Theme and fill rows are the detector path. */
+      const listed = visibleDetectors(pool, ctx).filter((way) => !way.usual);
+      const ways = rowWays(listed, pool, ctx);
+      const detector = renderedSectionLooks(ways, "out").map((card) =>
+        card.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g)),
+      );
+      const core = sample.original.filter((id) => id !== sample.last);
+      const sameCore = (look: readonly Garment[]) => core.every((id) => look.some((g) => g.id === id));
+      for (const [path, rows] of [["week", week.looks], ["detector", detector]] as const) {
+        const hits = rows.filter(sameCore);
+        assert.ok(hits.length > 0, `${sample.name} ${path}`);
+        for (const look of hits) {
+          const jacket = selectedOuter(look).jacket;
+          assert.ok(jacket && sample.strict.includes(jacket.id), `${sample.name} ${path} ${jacket?.id ?? "none"}`);
+          assert.notEqual(jacket.id, sample.last, `${sample.name} ${path}`);
+          assert.equal(lastResortNote(look), null, `${sample.name} ${path}`);
+        }
+      }
     }
   });
 

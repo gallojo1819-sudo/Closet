@@ -39,6 +39,7 @@ import library from "./detectors/library.json" with { type: "json" };
 import { ideaTitle, outerLabel, pieceLine } from "./look-collage.ts";
 import { buildReshuffleRow, lookbookPool } from "./lookbook.ts";
 import { isLinenCampPiece, lookFitsSeason } from "./season.ts";
+import { ordinaryUses } from "./jacket-edit.ts";
 import { slotOf } from "./style.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
@@ -225,7 +226,7 @@ describe("the screen cap and freshness", () => {
     for (const { occasion, rows, week } of SCREENS) {
       const screen = [...rows.flatMap((way) => rowLooks(way, occasion)), ...week];
       const counts = pieceCounts(screen);
-      const over = [...counts.entries()].filter(([, n]) => n > SCREEN_CAP);
+      const over: [string, number][] = [...counts.entries()].filter(([id, n]) => n > SCREEN_CAP && ordinaryUses(screen, id, (piece: Garment) => piece.id, FIXTURE, occasion, SEASON) > SCREEN_CAP);
       assert.deepEqual(
         over.map(([id, n]) => `${BY_ID.get(id)?.name}=${n}`),
         [],

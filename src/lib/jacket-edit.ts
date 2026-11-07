@@ -60,6 +60,61 @@ export const NOTE_LAST = "Last resort. A toggle or denim jacket over pleated tro
 export const NOTE_WHICH = "More than one jacket is on this look. Pick which one.";
 export const NOTE_HELD = "A jacket is already on this look.";
 
+/** This card is a pleated core whose jacket is a strict fit, not a toggle or denim last resort. */
+export function strictFirstReplacement(
+  look: readonly Garment[],
+  closet: readonly Garment[],
+  occasion: string,
+  season: string,
+): boolean {
+  const jacket = selectedOuter(look).jacket;
+  if (!jacket) return false;
+  const bottom = look.find((g) => slotOf(g) === "bottom");
+  if (!bottom || !`${bottom.name} ${bottom.subtype ?? ""}`.toLowerCase().includes("pleat")) return false;
+  const core = look.filter((g) => g.id !== jacket.id);
+  return jacketChoices(core, closet, { occasion, season }).some((row) => row.tier === "strict" && row.id === jacket.id);
+}
+
+/**
+ * Cards that use `key` and are not a strict-first pleat replacement of that jacket.
+ * The replacement jacket does not count. Every other piece on that card does.
+ */
+export function ordinaryUses(
+  looks: readonly (readonly Garment[])[],
+  key: string,
+  keyOf: (g: Garment) => string,
+  closet: readonly Garment[],
+  occasion: string,
+  season: string,
+): number {
+  let count = 0;
+  for (const look of looks) {
+    if (!look.some((g) => keyOf(g) === key)) continue;
+    const jacket = selectedOuter(look).jacket;
+    if (jacket && keyOf(jacket) === key && strictFirstReplacement(look, closet, occasion, season)) continue;
+    count += 1;
+  }
+  return count;
+}
+
+/** Jacket names repeated on two cards that are not strict-first pleat replacements. */
+export function unjustifiedJacketRepeats(
+  looks: readonly (readonly Garment[])[],
+  closet: readonly Garment[],
+  occasion: string,
+  season: string,
+): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const look of looks) {
+    const jacket = selectedOuter(look).jacket;
+    if (!jacket || strictFirstReplacement(look, closet, occasion, season)) continue;
+    if (seen.has(jacket.id)) names.push(jacket.name);
+    else seen.add(jacket.id);
+  }
+  return names;
+}
+
 const FORM = new Set(["JKT-FORM-1", "JKT-FORM-2"]);
 
 function conditionsOf(ctx: JacketContext): JacketGateConditions | undefined {

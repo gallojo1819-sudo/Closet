@@ -31,6 +31,7 @@ import {
 import { lookFitsOccasion } from "./lookbook.ts";
 import { advanceRotation, emptyRotation, rotationLookKey, type Rotation } from "./rotation.ts";
 import { lookFitsSeason } from "./season.ts";
+import { ordinaryUses, unjustifiedJacketRepeats } from "./jacket-edit.ts";
 import { isBrownSuedeOuter } from "./style.ts";
 import { isLegal } from "./stylist/legal.ts";
 import { OCCASIONS, type Garment, type Occasion, type Season } from "./types.ts";
@@ -215,17 +216,18 @@ describe("six Re-dresses on the live closet, every chapter", () => {
         const rows = [{ title: "week", looks: tap.week, relaxed: false }, ...tap.rows];
         for (const row of rows) {
           expect(rowRepeats(row.looks).map((g) => g.name), `${run.occasion} tap ${tap.n} / ${row.title}`).toEqual([]);
-          const inRow = [...twinCounts(row.looks).entries()].filter(([key, n]) => n > 1 && !key.startsWith("outerwear|"));
+          expect(unjustifiedJacketRepeats(row.looks, CLOSET, run.occasion, SEASON), `${run.occasion} tap ${tap.n} / ${row.title} jacket`).toEqual([]);
+          const inRow = [...twinCounts(row.looks).entries()].filter(([key, n]) => n > 1 && ordinaryUses(row.looks, key, twinKey, CLOSET, run.occasion, SEASON) > 1);
           expect(inRow, `${run.occasion} tap ${tap.n} / ${row.title}: twice in the row`).toEqual([]);
         }
         /* A plain row the section owed may take one more card than the cap (relaxed); the rest of
            the page keeps the strict cap, and a page with no relaxed row keeps it everywhere. */
         const relaxed = tap.rows.some((row) => row.relaxed);
         const cap = relaxed ? RELAXED_CAP : SCREEN_CAP;
-        const over = [...twinCounts(tap.page).entries()].filter(([key, n]) => n > cap && !key.startsWith("outerwear|"));
+        const over = [...twinCounts(tap.page).entries()].filter(([key, n]) => n > cap && ordinaryUses(tap.page, key, twinKey, CLOSET, run.occasion, SEASON) > cap);
         expect(over, `${run.occasion} tap ${tap.n}: over the page cap`).toEqual([]);
         const strictPage = [...tap.week, ...tap.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
-        const overStrict = [...twinCounts(strictPage).entries()].filter(([key, n]) => n > SCREEN_CAP && !key.startsWith("outerwear|"));
+        const overStrict = [...twinCounts(strictPage).entries()].filter(([key, n]) => n > SCREEN_CAP && ordinaryUses(strictPage, key, twinKey, CLOSET, run.occasion, SEASON) > SCREEN_CAP);
         expect(overStrict, `${run.occasion} tap ${tap.n}: over the cap outside the relaxed rows`).toEqual([]);
       }
     }
@@ -241,14 +243,17 @@ describe("six Re-dresses on the live closet, every chapter", () => {
         const relaxed = tap.rows.some((row) => row.relaxed);
         const cap = relaxed ? RELAXED_CAP : SCREEN_CAP;
         expect(counts.get(WHITE_SNEAKERS) ?? 0, `${run.occasion} tap ${tap.n}: white sneakers`).toBeLessThanOrEqual(cap);
+        expect(ordinaryUses(tap.page, BROWN_SUEDE_JACKET, twinKey, CLOSET, run.occasion, SEASON), `${run.occasion} tap ${tap.n}: brown suede jacket`).toBeLessThanOrEqual(cap);
         const strictPage = [...tap.week, ...tap.rows.filter((row) => !row.relaxed).flatMap((row) => row.looks)];
         const strictCounts = twinCounts(strictPage);
         expect(strictCounts.get(WHITE_SNEAKERS) ?? 0, `${run.occasion} tap ${tap.n}: white sneakers outside a relaxed row`).toBeLessThanOrEqual(SCREEN_CAP);
+        expect(ordinaryUses(strictPage, BROWN_SUEDE_JACKET, twinKey, CLOSET, run.occasion, SEASON), `${run.occasion} tap ${tap.n}: brown suede outside a relaxed row`).toBeLessThanOrEqual(SCREEN_CAP);
         sneakers += counts.get(WHITE_SNEAKERS) ?? 0;
         suede += counts.get(BROWN_SUEDE_JACKET) ?? 0;
         for (const row of [{ title: "week", looks: tap.week }, ...tap.rows]) {
           const inRow = twinCounts(row.looks);
           expect(inRow.get(WHITE_SNEAKERS) ?? 0, `${run.occasion} tap ${tap.n} / ${row.title}: white sneakers`).toBeLessThanOrEqual(1);
+          expect(ordinaryUses(row.looks, BROWN_SUEDE_JACKET, twinKey, CLOSET, run.occasion, SEASON), `${run.occasion} tap ${tap.n} / ${row.title}: brown suede`).toBeLessThanOrEqual(1);
         }
       }
     }

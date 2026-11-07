@@ -826,7 +826,7 @@ function spreadJackets(
  * A toggle or denim jacket over pleats is seated only when no strict jacket fits this core.
  * A strict jacket already on another card still fits. The other pieces stay.
  */
-function preferStrictJackets(
+export function preferStrictJackets(
   looks: Garment[][],
   live: readonly Garment[],
   pool: readonly Garment[],
@@ -879,9 +879,8 @@ function preferStrictJackets(
     let replaced: Garment[] | undefined;
     const accept = (candidate: Garment, busy: boolean) => {
       if (candidate.id === jacket.id) return false;
-      const count = book?.counts?.get(candidate.id) ?? 0;
+      /* A full cap ranks this jacket later. It does not take the jacket off the list. */
       const leads = book?.led && book.twins ? book.led.has(book.twins.key(candidate)) : false;
-      if (count >= SCREEN_CAP) return false;
       if (!busy && leads) return false;
       const pieces = [...core, candidate];
       if (!lookFitsSeason(pieces, season as Season)) return false;
