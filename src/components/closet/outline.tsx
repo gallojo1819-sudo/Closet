@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { BodyPortal } from "@/components/closet/body-portal";
-import { classifyScan, printGarment } from "@/lib/ai";
+import { printGarment } from "@/lib/ai";
 import { dataUrlToBlob, imageKey, notifyImage, putImage, putThumb } from "@/lib/images";
 import { guardedPlatePatch, readGarmentPhoto, recolorFromPlate } from "@/lib/plate-pass";
 import { judgeHeldPlate } from "@/lib/packshot-search";
@@ -14,10 +14,16 @@ const START: CropBox = { x: 0.18, y: 0.12, w: 0.64, h: 0.76 };
 
 export const SINGLE_FAIL_MESSAGE = "Still seeing more than this piece — tighten the box.";
 
+/** Shown before Confirm. Opening the box and Cancel do not call the model. */
+export const REPRINT_PAID_NOTICE =
+  "Confirm makes a paid AI cleanup call. The existing cutout is checked again first. A new plate is made only if that cutout still fails. Opening this and Cancel make no paid call.";
+
 /**
- * One box on the original. Confirm reprints that crop, runs the hand check, then the
- * single-garment check; a plate that shows another piece is written busy (the paper tile),
- * never clean, and the tool stays open for a tighter box. A clean plate re-reads the colours.
+ * One box on the original. Confirm rechecks the cutout already on file before any image
+ * edit. A pass keeps those bytes. Otherwise it reprints the crop, runs the hand check,
+ * then the single-garment check; a plate that shows another piece is written busy (the
+ * paper tile), never clean, and the tool stays open for a tighter box. A clean new plate
+ * re-reads the colours. Opening this and Cancel make no paid call.
  */
 export function OutlineJacket({
   garment,
@@ -43,23 +49,6 @@ export function OutlineJacket({
       live = false;
     };
   }, [garment.id, garment.imageSrc]);
-
-  useEffect(() => {
-    if (!photo) return;
-    let live = true;
-    void (async () => {
-      try {
-        const scan = await classifyScan({ data: { image: photo } });
-        const next = scan.ok ? scan.boxes[0]?.box : null;
-        if (live && next) setBox(next);
-      } catch {
-        /* the centered box stays */
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [photo]);
 
   const drag = (mode: "move" | "resize") => (e: ReactPointerEvent) => {
     e.preventDefault();
@@ -104,12 +93,33 @@ export function OutlineJacket({
     setBusy(true);
     setLine(null);
     try {
+      const noun = singleGarmentNoun(garment);
+      const existing = garment.cutoutSrc.trim();
+      const original = garment.imageSrc.trim();
+      /* Recheck the cutout already on file. A pass keeps those bytes and skips the edit. */
+      if (existing && existing !== original) {
+        const recheck = await guardedPlatePatch({
+          id: garment.id,
+          photoSrc: garment.imageSrc,
+          written: { reprint: false, cutoutSrc: existing },
+          plateKey: existing,
+          previous: existing,
+          noun,
+        });
+        if (recheck.matteQuality === "clean") {
+          useCloset.getState().updateGarment(garment.id, recheck);
+          onClose();
+          return;
+        }
+      }
       const crop = await cropToBox(photo, box);
       if (!crop) {
         setLine(OUTLINE_FAIL_MESSAGE);
         return;
       }
-      const printed = await printGarment({ data: { image: crop, held: true, retry: true } });
+      const printed = await printGarment({
+        data: { image: crop, held: true, retry: true, category: garment.category, noun },
+      });
       const plate = printed.ok && printed.image ? printed.image : "";
       let checker = "";
       if (plate) {
@@ -126,7 +136,7 @@ export function OutlineJacket({
         photoSrc: garment.imageSrc,
         written: { reprint: false, cutoutSrc: plate },
         plateKey: key,
-        noun: singleGarmentNoun(garment),
+        noun,
       });
       if (patch.matteQuality !== "clean") {
         /* The old cut-out may be the one that bled: it is not kept as clean. */
@@ -181,15 +191,28 @@ export function OutlineJacket({
         </div>
         <div className="flex flex-col gap-2 p-4">
           <p className="text-sm">{garment.name}</p>
+          <p className="micro text-ink-soft" data-reprint-notice>
+            {REPRINT_PAID_NOTICE}
+          </p>
           {line ? <p className="micro text-accent">{line}</p> : null}
-          <button
-            type="button"
-            disabled={busy || !photo}
-            onClick={() => void confirm()}
-            className="micro border border-hairline px-3 py-2 text-ink disabled:opacity-40"
-          >
-            {busy ? "Printing…" : "Confirm"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onClose}
+              className="micro flex-1 border border-hairline px-3 py-2 text-ink disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={busy || !photo}
+              onClick={() => void confirm()}
+              className="micro flex-1 border border-hairline px-3 py-2 text-ink disabled:opacity-40"
+            >
+              {busy ? "Printing…" : "Confirm"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

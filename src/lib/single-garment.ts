@@ -35,14 +35,114 @@ export function singleGarmentNoun(g: { subtype?: string; category?: string }): s
   return "garment";
 }
 
+/**
+ * Backstop only. The prompt is what tells the model a plain paper ground is not a "no".
+ * A "no" is flipped only when every token is in this closed set, one token is a ground
+ * noun, and another describes that noun. "light" is not a token: only the colour phrases
+ * "light beige" and "light grey" are. Any other word, a negation, or a pattern word stays rejected.
+ */
+const ALLOWED_REASON = new Set([
+  "plain",
+  "uniform",
+  "solid",
+  "beige",
+  "paper",
+  "cream",
+  "off-white",
+  "neutral",
+  "studio",
+  "background",
+  "backdrop",
+  "ground",
+  "visible",
+  "white",
+  "light-beige",
+  "light-grey",
+  "a",
+  "the",
+  "is",
+  "of",
+]);
+
+/** The noun the reason has to be about. Studio or white alone is not this. */
+const GROUND_NOUN = new Set(["background", "paper", "backdrop", "ground"]);
+
+/** A colour or finish that describes the ground noun. */
+const GROUND_DESCRIPTOR = new Set([
+  "plain",
+  "uniform",
+  "solid",
+  "beige",
+  "cream",
+  "off-white",
+  "neutral",
+  "studio",
+  "white",
+  "light-beige",
+  "light-grey",
+]);
+
+function reasonTokens(why: string): string[] {
+  const raw = why
+    .toLowerCase()
+    .replace(/[^a-z0-9#\s-]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 0);
+  const tokens: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const token = raw[i] ?? "";
+    const next = raw[i + 1];
+    if (token === "light" && (next === "beige" || next === "grey")) {
+      tokens.push(`light-${next}`);
+      i += 1;
+      continue;
+    }
+    tokens.push(token);
+  }
+  return tokens;
+}
+
+function isNegation(token: string): boolean {
+  return token === "not" || token === "no" || token === "non" || token.startsWith("non-");
+}
+
+/**
+ * True only when the whole reason is a plain paper or studio ground.
+ * Lowercased, punctuation other than `#` and `-` removed, then split on whitespace.
+ */
+export function paperStudioOnly(why: string): boolean {
+  const tokens = reasonTokens(why);
+  if (tokens.length === 0) return false;
+  let noun = false;
+  let described = false;
+  for (const token of tokens) {
+    if (isNegation(token) || !ALLOWED_REASON.has(token)) return false;
+    if (GROUND_NOUN.has(token)) noun = true;
+    if (GROUND_DESCRIPTOR.has(token)) described = true;
+  }
+  return noun && described;
+}
+
+/**
+ * A "no" whose only reason is the paper the print prompt requested is one garment.
+ * Any other "no", and every "unclear", is left alone. An empty why is not accepted.
+ */
+export function normalizeSingleVerdict(
+  one: SingleVerdict,
+  why: string,
+): { one: SingleVerdict; why: string } {
+  if (one === "no" && paperStudioOnly(why)) return { one: "yes", why: "" };
+  return { one, why: one === "yes" ? "" : why };
+}
+
 /** The question, verbatim. JSON only, like the other checkers. */
 export function singleGarmentQuestion(noun: string): string {
   const what = noun.trim() || "garment";
   return (
-    `Does this image show exactly one ${what}, with no part of any other garment, body or background? ` +
+    `Does this image show exactly one ${what}? ` +
+    "A plain, uniform paper, studio, or transparent background (like #F4EFE6) is expected and is never a reason for no. " +
     'Return ONLY JSON: {"one":"yes|no|unclear","why":""}. ' +
-    "one is no when any part of a second garment (a layer worn under or over it, a collar, a sleeve, a trouser leg), " +
-    "a person, skin, hair, a hand, a hanger or a room is visible. " +
+    "one is no only for a room, furniture, scenery, a person or any body part, a hanger, or a second garment or item. " +
     "one is unclear when you cannot tell. why is a few words, empty on yes. JSON only."
   );
 }
@@ -64,7 +164,7 @@ export function parseSingleGarment(text: string): { one: SingleVerdict; why: str
     if (!("one" in o)) return { one: "unclear", why: "unreadable" };
     const one = verdictWord(o.one);
     const why = typeof o.why === "string" ? o.why.trim().slice(0, 80) : "";
-    return { one, why: one === "yes" ? "" : why };
+    return normalizeSingleVerdict(one, why);
   } catch {
     return { one: "unclear", why: "unreadable" };
   }
@@ -75,7 +175,7 @@ function settle(raw: RawSingleVerdict): { one: SingleVerdict; why: string } {
   if (typeof raw.one === "string" || typeof raw.one === "boolean") {
     const one = verdictWord(raw.one);
     const why = typeof raw.why === "string" ? raw.why.trim().slice(0, 80) : "";
-    return { one, why: one === "yes" ? "" : why };
+    return normalizeSingleVerdict(one, why);
   }
   return { one: "unclear", why: "unreadable" };
 }

@@ -45,7 +45,7 @@ const HOLDER_LABEL = /\b(hands?|hangers?|arms?|sleeves?|fingers?)\b/i;
 const HELD_CUE = /\b(hands?|hangers?|held|holding|arms?|sleeves?)\b/i;
 const WORN_PERSON = /\b(person|people|selfie|wearing)\b/i;
 
-export const PLATE_FAIL_MESSAGE = "Plate failed — outline the jacket.";
+export const PLATE_FAIL_MESSAGE = "Photo cleanup needs another try — outline the piece.";
 export const OUTLINE_FAIL_MESSAGE = "Still seeing the hanger";
 export const HAND_COVER_MESSAGE = PLATE_FAIL_MESSAGE;
 const SKIP_FILE =
