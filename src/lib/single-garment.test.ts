@@ -116,14 +116,23 @@ describe("checkSingleGarment", () => {
   });
 });
 
-/** Reasons a "no" may be treated as paper. Every token is on the allowlist, and one names the ground. */
+/** Reasons a "no" may be treated as paper. A ground noun, described by a colour or finish. */
 const PAPER_REASONS = [
   "plain beige background visible",
   "plain paper background",
   "uniform off-white studio background",
   "uniform neutral studio background",
   "off-white paper",
-  "neutral studio",
+  "light beige paper background",
+] as const;
+
+/** Studio gear and a bare colour. None of these names a described ground noun. */
+const STUDIO_GEAR_REASONS = [
+  "a studio light is visible",
+  "studio lamp visible",
+  "light visible",
+  "studio visible",
+  "white visible",
 ] as const;
 
 /**
@@ -189,11 +198,12 @@ describe("a paper studio background", () => {
     }
   });
 
-  it("the three plain-paper reasons come back clean", async () => {
+  it("a described paper ground comes back clean", async () => {
     for (const why of [
       "plain beige background visible",
       "plain paper background",
       "uniform off-white studio background",
+      "light beige paper background",
     ] as const) {
       assert.equal(paperStudioOnly(why), true, why);
       const check = await checkSingleGarment(PLATE, async () => ({ one: "no", why }), { now: NOW });
@@ -207,6 +217,17 @@ describe("a paper studio background", () => {
     );
     assert.equal(unclear.one, "unclear");
     assert.equal(unclear.why, "plain beige background visible");
+  });
+
+  it("a studio light or a bare colour stays rejected", async () => {
+    for (const why of STUDIO_GEAR_REASONS) {
+      assert.equal(paperStudioOnly(why), false, why);
+      const check = await checkSingleGarment(PLATE, async () => ({ one: "no", why }), { now: NOW });
+      assert.equal(check.one, "no", why);
+      assert.equal(check.why, why, why);
+    }
+    assert.equal(paperStudioOnly("neutral studio"), false);
+    assert.equal(paperStudioOnly("light grey paper background"), true);
   });
 
   it("all 48 adversarial reasons stay rejected", async () => {

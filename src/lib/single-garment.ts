@@ -37,8 +37,9 @@ export function singleGarmentNoun(g: { subtype?: string; category?: string }): s
 
 /**
  * Backstop only. The prompt is what tells the model a plain paper ground is not a "no".
- * A "no" is flipped only when every token is in this closed set and one of them names
- * the ground. Any other word, a negation, or a pattern word stays rejected.
+ * A "no" is flipped only when every token is in this closed set, one token is a ground
+ * noun, and another describes that noun. "light" is not a token: only the colour phrases
+ * "light beige" and "light grey" are. Any other word, a negation, or a pattern word stays rejected.
  */
 const ALLOWED_REASON = new Set([
   "plain",
@@ -51,24 +52,54 @@ const ALLOWED_REASON = new Set([
   "neutral",
   "studio",
   "background",
+  "backdrop",
+  "ground",
   "visible",
   "white",
-  "light",
+  "light-beige",
+  "light-grey",
   "a",
   "the",
   "is",
   "of",
 ]);
 
-/** A token that actually names the allowed ground. "background visible" alone is not one. */
-const GROUND_REASON = new Set(["beige", "paper", "cream", "off-white", "neutral", "studio", "white"]);
+/** The noun the reason has to be about. Studio or white alone is not this. */
+const GROUND_NOUN = new Set(["background", "paper", "backdrop", "ground"]);
+
+/** A colour or finish that describes the ground noun. */
+const GROUND_DESCRIPTOR = new Set([
+  "plain",
+  "uniform",
+  "solid",
+  "beige",
+  "cream",
+  "off-white",
+  "neutral",
+  "studio",
+  "white",
+  "light-beige",
+  "light-grey",
+]);
 
 function reasonTokens(why: string): string[] {
-  return why
+  const raw = why
     .toLowerCase()
     .replace(/[^a-z0-9#\s-]/g, " ")
     .split(/\s+/)
     .filter((token) => token.length > 0);
+  const tokens: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const token = raw[i] ?? "";
+    const next = raw[i + 1];
+    if (token === "light" && (next === "beige" || next === "grey")) {
+      tokens.push(`light-${next}`);
+      i += 1;
+      continue;
+    }
+    tokens.push(token);
+  }
+  return tokens;
 }
 
 function isNegation(token: string): boolean {
@@ -82,12 +113,14 @@ function isNegation(token: string): boolean {
 export function paperStudioOnly(why: string): boolean {
   const tokens = reasonTokens(why);
   if (tokens.length === 0) return false;
-  let ground = false;
+  let noun = false;
+  let described = false;
   for (const token of tokens) {
     if (isNegation(token) || !ALLOWED_REASON.has(token)) return false;
-    if (GROUND_REASON.has(token)) ground = true;
+    if (GROUND_NOUN.has(token)) noun = true;
+    if (GROUND_DESCRIPTOR.has(token)) described = true;
   }
-  return ground;
+  return noun && described;
 }
 
 /**
