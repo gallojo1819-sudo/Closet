@@ -145,9 +145,10 @@ function looksStudio(
 }
 
 /** Shopping-page screenshots also have a white border, but the top/bottom
- *  bands carry nav text, prices, "Add to bag", SKU/ID blocks. Dense dark ink
- *  there means page chrome — extract the garment, never frame the webpage. */
-function looksPage(data: Uint8ClampedArray, w: number, h: number): boolean {
+ *  bands carry nav text, prices, "Add to bag", SKU/ID blocks. Dark ink there
+ *  is page chrome. A single garment on white trips this too — that is not,
+ *  by itself, a reason to reject the file. */
+export function looksPage(data: Uint8ClampedArray, w: number, h: number): boolean {
   const band = Math.max(8, Math.round(h * 0.09));
   let dark = 0;
   let n = 0;
@@ -166,6 +167,174 @@ function looksPage(data: Uint8ClampedArray, w: number, h: number): boolean {
   return n > 0 && dark / n > 0.004;
 }
 
+export const NO_GARMENT_REASON = "No garment in the frame.";
+
+type InkComp = {
+  area: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+const NEAR_WHITE_MIN = 236;
+const NEAR_WHITE_SPREAD = 16;
+
+function isNearWhite(r: number, g: number, b: number): boolean {
+  const lo = Math.min(r, g, b);
+  const hi = Math.max(r, g, b);
+  return lo >= NEAR_WHITE_MIN && hi - lo <= NEAR_WHITE_SPREAD;
+}
+
+function nearWhitePixel(r: number, g: number, b: number, a: number): boolean {
+  if (a < 24) return true;
+  return isNearWhite(r, g, b);
+}
+
+/** Connected non-white blobs. A logo line is small; a product tile is not. */
+function inkComponents(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number,
+): { comps: InkComp[]; samples: number } {
+  const step = w * h > 350_000 ? 3 : w * h > 140_000 ? 2 : 1;
+  const gw = Math.ceil(w / step);
+  const gh = Math.ceil(h / step);
+  const mask = new Uint8Array(gw * gh);
+  for (let gy = 0; gy < gh; gy++) {
+    const y = Math.min(h - 1, gy * step);
+    for (let gx = 0; gx < gw; gx++) {
+      const x = Math.min(w - 1, gx * step);
+      const i = (y * w + x) * 4;
+      if (!nearWhitePixel(data[i]!, data[i + 1]!, data[i + 2]!, data[i + 3]!)) {
+        mask[gy * gw + gx] = 1;
+      }
+    }
+  }
+  const seen = new Uint8Array(mask.length);
+  const comps: InkComp[] = [];
+  const stack: number[] = [];
+  const push = (n: number) => {
+    if (!mask[n] || seen[n]) return;
+    seen[n] = 1;
+    stack.push(n);
+  };
+  for (let start = 0; start < mask.length; start++) {
+    if (!mask[start] || seen[start]) continue;
+    let area = 0;
+    let minX = gw;
+    let minY = gh;
+    let maxX = 0;
+    let maxY = 0;
+    push(start);
+    while (stack.length) {
+      const p = stack.pop()!;
+      const x = p % gw;
+      const y = (p / gw) | 0;
+      area++;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+      if (x > 0) push(p - 1);
+      if (x + 1 < gw) push(p + 1);
+      if (y > 0) push(p - gw);
+      if (y + 1 < gh) push(p + gw);
+    }
+    comps.push({
+      area,
+      minX: minX * step,
+      minY: minY * step,
+      maxX: Math.min(w - 1, maxX * step + step - 1),
+      maxY: Math.min(h - 1, maxY * step + step - 1),
+    });
+  }
+  return { comps, samples: Math.max(1, gw * gh) };
+}
+
+function productTile(box: InkComp, w: number, h: number, samples: number): boolean {
+  const bw = box.maxX - box.minX + 1;
+  const bh = box.maxY - box.minY + 1;
+  return box.area / samples >= 0.02 && bw >= w * 0.12 && bh >= h * 0.08;
+}
+
+/**
+ * A full shopping-page screenshot: page chrome, a tall frame (or three tiles),
+ * and more than one product-sized blob on a white ground.
+ * One garment on white is a product even when `looksPage` is true.
+ */
+export function frameRead(data: Uint8ClampedArray, w: number, h: number): "product" | "page" {
+  if (w < 8 || h < 8) return "product";
+  if (!looksPage(data, w, h)) return "product";
+  const { comps, samples } = inkComponents(data, w, h);
+  let white = 0;
+  const step = w * h > 350_000 ? 3 : w * h > 140_000 ? 2 : 1;
+  for (let y = 0; y < h; y += step) {
+    for (let x = 0; x < w; x += step) {
+      const i = (y * w + x) * 4;
+      if (nearWhitePixel(data[i]!, data[i + 1]!, data[i + 2]!, data[i + 3]!)) white++;
+    }
+  }
+  const whiteFrac = white / samples;
+  const tiles = comps.filter((c) => productTile(c, w, h, samples));
+  const tall = h / w >= 1.45;
+  if (whiteFrac >= 0.35 && ((tall && tiles.length >= 2) || tiles.length >= 3)) return "page";
+  return "product";
+}
+
+/** Bbox of the largest non-white object. Null when the frame is blank. */
+export function largestInkBounds(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number,
+): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  const { comps } = inkComponents(data, w, h);
+  let best: InkComp | null = null;
+  for (const c of comps) {
+    if (!best || c.area > best.area) best = c;
+  }
+  if (!best || best.area < 4) return null;
+  return { minX: best.minX, minY: best.minY, maxX: best.maxX, maxY: best.maxY };
+}
+
+export type MattePlan = {
+  kind: IngestKind;
+  /** ink: largest garment. content: every non-background pixel. flood: phone matte. frame: whole page. */
+  crop: "ink" | "content" | "flood" | "frame";
+};
+
+/** What to do with a decoded frame. A page screenshot is the only reject. */
+export function planMatte(input: {
+  read: "product" | "page";
+  chrome: boolean;
+  studio: boolean;
+  whiteGround: boolean;
+}): MattePlan {
+  if (input.read === "page") return { kind: "page", crop: "frame" };
+  if (input.studio) return { kind: "studio", crop: input.chrome ? "ink" : "content" };
+  if (input.chrome && input.whiteGround) return { kind: "phone", crop: "ink" };
+  return { kind: "phone", crop: "flood" };
+}
+
+/** Same cut as `nearWhitePixel`. Off-white (200–235) is not a studio ground. */
+export function groundIsWhite(bg: { r: number; g: number; b: number }): boolean {
+  return isNearWhite(bg.r, bg.g, bg.b);
+}
+
+/** The plan `matteToPaper` uses, without decoding an image element. */
+export function planForPixels(data: Uint8ClampedArray, w: number, h: number): MattePlan {
+  const { bg, frac, mad } = sampleBorder(data, w, h);
+  const chrome = looksPage(data, w, h);
+  const read = frameRead(data, w, h);
+  const studio = borderIsCleanStudio(bg, frac, mad, read === "page");
+  return planMatte({
+    read,
+    chrome,
+    studio,
+    whiteGround: groundIsWhite(bg),
+  });
+}
+
 /** Bbox of everything that is not the (uniform, clean) background. Used to
  *  fill official shots to ~80% of the page instead of a postage stamp. */
 function contentBounds(
@@ -174,8 +343,9 @@ function contentBounds(
   h: number,
   bg: { r: number; g: number; b: number },
   tol: number,
+  floor = 30,
 ) {
-  const t = Math.max(30, tol);
+  const t = Math.max(floor, tol);
   let minX = w;
   let minY = h;
   let maxX = 0;
@@ -194,6 +364,24 @@ function contentBounds(
   }
   if (count < w * h * 0.02 || maxX <= minX || maxY <= minY) return null;
   return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Largest dark blob, unless that blob is only a logo (under 4% of the frame).
+ * Then cut everything that steps off the ground, including a near-white garment.
+ * The usual content floor of 30 treats a 244 tee on white as paper.
+ */
+export function chooseInkCrop(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number,
+  bg: { r: number; g: number; b: number },
+): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  const ink = largestInkBounds(data, w, h);
+  const frame = Math.max(1, w * h);
+  const cover = ink ? ((ink.maxX - ink.minX + 1) * (ink.maxY - ink.minY + 1)) / frame : 0;
+  if (ink && cover >= 0.04) return ink;
+  return contentBounds(data, w, h, bg, 8, 8) ?? ink;
 }
 
 function sampleForeground(
@@ -352,15 +540,36 @@ export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const { bg, frac, mad, floodTol } = sampleBorder(image.data, canvas.width, canvas.height);
 
-  const page = looksPage(image.data, canvas.width, canvas.height);
-  if (borderIsCleanStudio(bg, frac, mad, page)) {
-    // Clean product shot: crop to the garment so it fills the page.
-    const box = contentBounds(image.data, canvas.width, canvas.height, bg, floodTol);
+  const chrome = looksPage(image.data, canvas.width, canvas.height);
+  const plan = planForPixels(image.data, canvas.width, canvas.height);
+  if (plan.kind === "page") {
+    return {
+      cutoutSrc: compositePaper(canvas, null),
+      quality: "busy",
+      kind: "page",
+      reason: "Shopping page — crop to one piece.",
+    };
+  }
+  if (plan.crop === "ink" || plan.crop === "content") {
+    const box =
+      plan.crop === "ink"
+        ? chooseInkCrop(image.data, canvas.width, canvas.height, bg)
+        : contentBounds(image.data, canvas.width, canvas.height, bg, floodTol);
+    if (plan.crop === "ink" && !box) {
+      return {
+        cutoutSrc: compositePaper(canvas, null),
+        quality: "busy",
+        kind: "phone",
+        reason: NO_GARMENT_REASON,
+      };
+    }
     return {
       cutoutSrc: compositePaper(canvas, box),
-      quality: "clean",
-      kind: "studio",
-      reason: "Already a catalog shot — centered on paper, pixels untouched.",
+      quality: plan.kind === "studio" ? "clean" : "ok",
+      kind: plan.kind,
+      reason: chrome
+        ? "Cut the garment out of the product photo."
+        : "Already a catalog shot — centered on paper, pixels untouched.",
     };
   }
 
@@ -382,7 +591,7 @@ export async function matteToPaper(imageSrc: string): Promise<MatteResult> {
     quality = "ok";
     reason = "Floated on paper. Soft edge — a plainer surface will be tighter.";
   }
-  return { cutoutSrc, quality, reason, kind: page ? "page" : "phone" };
+  return { cutoutSrc, quality, reason, kind: "phone" };
 }
 
 export function preflightHints(file: File): string[] {

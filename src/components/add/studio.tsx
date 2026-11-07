@@ -2,7 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Images, Link2, Loader2 } from "lucide-react";
 import { HangtagSource } from "@/components/add/hangtag-source";
 import { Button } from "@/components/ui/button";
-import { imageKey, putImage, putThumb, blobToDataUrl, dataUrlToBlob, deleteImage, fileFingerprint, getImage } from "@/lib/images";
+import {
+  admitScanFile,
+  imageKey,
+  putImage,
+  putThumb,
+  blobToDataUrl,
+  dataUrlToBlob,
+  deleteImage,
+  getImage,
+  prepareClipboardFiles,
+} from "@/lib/images";
 import {
   CAMERA_EDGE,
   CAMERA_JPEG,
@@ -27,14 +37,20 @@ import {
   shrinkFile,
   withTimeout,
 } from "@/lib/ingest";
-import { imageBorderIsCleanStudio, matteToPaper, readAsImageSrc } from "@/lib/matte";
+import { imageBorderIsCleanStudio, matteToPaper, NO_GARMENT_REASON, readAsImageSrc } from "@/lib/matte";
 import { enqueuePrint, enqueueTag, singleBoxHint } from "@/lib/print-queue";
 import { WornPicker } from "@/components/add/worn-picker";
 import { classifyScan, printGarment, readAiStatus, tagGarment } from "@/lib/ai";
 import { judgeHeldPlate } from "@/lib/packshot-search";
 import { cropHeldPhoto, guardedPlatePatch } from "@/lib/plate-pass";
 import { singleGarmentNoun } from "@/lib/single-garment";
-import { CAMERA_TAG_MS, decideCameraTag } from "@/lib/camera-tag";
+import {
+  CAMERA_TAG_MS,
+  decideCameraTag,
+  nameWithRetry,
+  wordsCategory,
+  type CameraPatch,
+} from "@/lib/camera-tag";
 import { getAccount } from "@/lib/cloud/account";
 import { getSupabase } from "@/lib/cloud/client";
 import { garmentV2Fields, garmentWriter, mirrorGarmentFields } from "@/lib/data/mirror";
@@ -64,6 +80,19 @@ import { useCloset } from "@/lib/store";
 import type { Category, ImageSource, Tuck } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { guessTuck } from "@/lib/tuck";
+import {
+  AlreadyInCloset,
+  claimNaming,
+  classifyScanError,
+  listingUrlFromClipboard,
+  NEEDS_NAME_PROMPT,
+  NotClothes,
+  PageRejected,
+  releaseNaming,
+  ScanEmpty,
+  uploadMissLine,
+  type UploadMiss,
+} from "@/lib/upload-read";
 
 let cameraResumeStarted = false;
 
@@ -81,6 +110,7 @@ type Saved = {
   category: Category;
   cutout: string;
   reprint?: boolean;
+  needsName?: boolean;
   matches?: OfficialHit[];
   query?: string;
 };
@@ -97,23 +127,6 @@ type RouteResult =
   | { type: "pieces"; pieces: Saved[] }
   | { type: "worn"; pick: WornPick };
 
-class PageRejected extends Error {}
-class AlreadyInCloset extends Error {
-  constructor() {
-    super("Already in the closet.");
-  }
-}
-class NotClothes extends Error {
-  constructor() {
-    super("Not clothes.");
-  }
-}
-class ScanEmpty extends Error {
-  constructor() {
-    super("Could not pull a garment.");
-  }
-}
-
 function badName(name: string): boolean {
   return isFakeName(name);
 }
@@ -127,9 +140,12 @@ export function Studio() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [failed, setFailed] = useState<string[]>([]);
-  const [rejected, setRejected] = useState<string[]>([]);
+  const [failed, setFailed] = useState<UploadMiss[]>([]);
   const [dupes, setDupes] = useState<string[]>([]);
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+  const [namingIds, setNamingIds] = useState<string[]>([]);
+  const namingRef = useRef(new Set<string>());
+  const pasteSeq = useRef({ n: 0 });
   const [skipped, setSkipped] = useState(0);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [saved, setSaved] = useState<Saved[]>([]);
@@ -292,7 +308,21 @@ export function Studio() {
         },
         { quiet: true },
       );
-      enqueueTag(opts.id, opts.cover, { hint: opts.hint ?? null });
+      enqueueTag(opts.id, opts.cover, {
+        hint: opts.hint ?? null,
+        onNamed: (patch) => {
+          setSaved((cur) =>
+            cur.map((s) =>
+              s.id === opts.id
+                ? { ...s, name: patch.name, category: patch.category, needsName: false }
+                : s,
+            ),
+          );
+        },
+        onAsk: () => {
+          setSaved((cur) => cur.map((s) => (s.id === opts.id ? { ...s, needsName: true } : s)));
+        },
+      });
       mirrorAdded(opts.id);
       enqueuePrint(opts.id, opts.original);
       return {
@@ -329,14 +359,74 @@ export function Studio() {
     [landMatte],
   );
 
+  const applyCameraPatch = useCallback((pieceId: string, patch: CameraPatch) => {
+    if (!useCloset.getState().garments.some((g) => g.id === pieceId)) return;
+    useCloset.getState().updateGarment(pieceId, {
+      name: patch.name,
+      category: patch.category,
+      subtype: patch.subtype,
+      colors: patch.colors,
+      material: patch.material,
+      needsCategory: false,
+      ...(patch.brand ? { brand: patch.brand } : {}),
+    });
+    setSaved((cur) =>
+      cur.map((s) =>
+        s.id === pieceId
+          ? { ...s, name: patch.name, category: patch.category, needsName: false }
+          : s,
+      ),
+    );
+    void mirrorGarmentFields(
+      garmentWriter(getSupabase()),
+      getAccount().user?.id ?? null,
+      garmentV2Fields({
+        id: pieceId,
+        name: patch.name,
+        category: patch.category,
+        subtype: patch.subtype,
+        colors: patch.colors,
+        material: patch.material,
+        brand: patch.brand,
+      }),
+    ).catch(() => false);
+  }, []);
+
+  const markNeedsName = useCallback((pieceId: string) => {
+    const g = useCloset.getState().garments.find((item) => item.id === pieceId);
+    if (g && g.name === NEW_PIECE_NAME) {
+      useCloset.getState().updateGarment(pieceId, { needsCategory: true });
+    }
+    setSaved((cur) =>
+      cur.map((s) => {
+        if (s.id !== pieceId) return s;
+        if (!s.needsName && s.name !== NEW_PIECE_NAME && s.name !== ADDING_NAME) return s;
+        return { ...s, needsName: true };
+      }),
+    );
+  }, []);
+
   const nameCameraPiece = useCallback(
     async (pieceId: string, jpeg: Blob, hash: string) => {
+      let image = "";
       try {
-        const image = await blobToDataUrl(jpeg);
-        const tag = await withTimeout(tagGarment({ data: { image } }), CAMERA_TAG_MS);
-        if (!useCloset.getState().garments.some((g) => g.id === pieceId)) return;
-        const decision = decideCameraTag(tag);
-        if (decision.action === "worn") {
+        image = await blobToDataUrl(jpeg);
+      } catch {
+        markNeedsName(pieceId);
+        return;
+      }
+      const outcome = await nameWithRetry({
+        firstMs: CAMERA_TAG_MS,
+        retryMs: CAMERA_TAG_MS * 2,
+        read: async (ms) => {
+          try {
+            const tag = await withTimeout(tagGarment({ data: { image } }), ms);
+            return decideCameraTag(tag);
+          } catch {
+            return { action: "keep" as const };
+          }
+        },
+        countWorn: async () => {
           const scan = await withTimeout(classifyScan({ data: { image } }), CAMERA_TAG_MS);
           const boxes =
             scan && "ok" in scan && scan.ok
@@ -349,71 +439,27 @@ export function Studio() {
               ...q,
               { id: uid("w"), original: image, hash, boxes, done: [] },
             ]);
-            return;
           }
-          const fallback = decision.fallback;
-          if (!fallback) return;
-          useCloset.getState().updateGarment(pieceId, {
-            name: fallback.name,
-            category: fallback.category,
-            subtype: fallback.subtype,
-            colors: fallback.colors,
-            material: fallback.material,
-            ...(fallback.brand ? { brand: fallback.brand } : {}),
-          });
-          void mirrorGarmentFields(
-            garmentWriter(getSupabase()),
-            getAccount().user?.id ?? null,
-            garmentV2Fields({
-              id: pieceId,
-              name: fallback.name,
-              category: fallback.category,
-              subtype: fallback.subtype,
-              colors: fallback.colors,
-              material: fallback.material,
-              brand: fallback.brand,
-            }),
-          ).catch(() => false);
-          setSaved((cur) =>
-            cur.map((s) =>
-              s.id === pieceId ? { ...s, name: fallback.name, category: fallback.category } : s,
-            ),
-          );
+          return boxes.length;
+        },
+      });
+      if (!useCloset.getState().garments.some((g) => g.id === pieceId)) return;
+      switch (outcome.step) {
+        case "worn":
           return;
+        case "ask":
+          markNeedsName(pieceId);
+          return;
+        case "apply":
+          applyCameraPatch(pieceId, outcome.patch);
+          return;
+        default: {
+          const neverStep: never = outcome;
+          return neverStep;
         }
-        if (decision.action !== "update") return;
-        const patch = decision.patch;
-        useCloset.getState().updateGarment(pieceId, {
-          name: patch.name,
-          category: patch.category,
-          subtype: patch.subtype,
-          colors: patch.colors,
-          material: patch.material,
-          ...(patch.brand ? { brand: patch.brand } : {}),
-        });
-        setSaved((cur) =>
-          cur.map((s) =>
-            s.id === pieceId ? { ...s, name: patch.name, category: patch.category } : s,
-          ),
-        );
-        void mirrorGarmentFields(
-          garmentWriter(getSupabase()),
-          getAccount().user?.id ?? null,
-          garmentV2Fields({
-            id: pieceId,
-            name: patch.name,
-            category: patch.category,
-            subtype: patch.subtype,
-            colors: patch.colors,
-            material: patch.material,
-            brand: patch.brand,
-          }),
-        ).catch(() => false);
-      } catch {
-        /* New piece */
       }
     },
-    [removeGarment],
+    [applyCameraPatch, markNeedsName, removeGarment],
   );
 
   const commitHeldPhoto = useCallback(
@@ -521,9 +567,10 @@ export function Studio() {
       onDropPreview: (id: string) => void,
       fromCamera?: boolean,
     ): Promise<RouteResult & { previewId?: string }> => {
-      const hash = await fileFingerprint(file);
-      if (known.has(hash)) throw new AlreadyInCloset();
-      known.add(hash);
+      const admitted = await admitScanFile(file, known);
+      if (admitted.duplicate) throw new AlreadyInCloset();
+      const hash = admitted.hash;
+      const legacy = admitted.legacy;
       const id = uid("g");
       let saved = false;
       try {
@@ -621,6 +668,7 @@ export function Studio() {
         }
 
         if (matte.kind === "page") throw new PageRejected();
+        if (matte.reason === NO_GARMENT_REASON) throw new ScanEmpty();
 
         const piece = await landMatte({
           id,
@@ -637,6 +685,7 @@ export function Studio() {
       } catch (e) {
         if (!saved) {
           known.delete(hash);
+          if (legacy) known.delete(legacy);
           onDropPreview(id);
         }
         throw e;
@@ -660,7 +709,7 @@ export function Studio() {
       let next = 0;
       let done = 0;
       const total = images.length;
-      const misses: string[] = [];
+      const misses: UploadMiss[] = [];
       const already: string[] = [];
       const worker = async () => {
         for (;;) {
@@ -693,23 +742,27 @@ export function Studio() {
             }
           } catch (e) {
             done++;
-            if (e instanceof AlreadyInCloset) {
-              already.push(file.name);
-              setProgress(`${done} of ${total} · Already in the closet.`);
-            } else if (e instanceof NotClothes) {
-              setSkipped((n) => n + 1);
-              setProgress(`${done} of ${total} · Not clothes.`);
-            } else if (e instanceof Error && e.message === HEIC_ERROR) {
-              setError(HEIC_ERROR);
-            } else if (e instanceof ScanEmpty) {
-              misses.push(file.name);
-              setProgress(`${done} of ${total}`);
-            } else if (e instanceof PageRejected) {
-              misses.push(file.name);
-              setProgress(`${done} of ${total}`);
-            } else {
-              misses.push(file.name);
-              setProgress(`${done} of ${total}`);
+            const caught = classifyScanError(e, file.name, isHeicFile(file));
+            switch (caught.type) {
+              case "dupe":
+                already.push(caught.name);
+                setProgress(`${done} of ${total} · Already in the closet.`);
+                break;
+              case "skip":
+                setSkipped((n) => n + 1);
+                setProgress(`${done} of ${total} · Not clothes.`);
+                break;
+              case "heic":
+                setError(HEIC_ERROR);
+                break;
+              case "miss":
+                misses.push(caught.miss);
+                setProgress(`${done} of ${total}`);
+                break;
+              default: {
+                const neverCaught: never = caught;
+                return neverCaught;
+              }
             }
           }
         }
@@ -931,6 +984,39 @@ export function Studio() {
     setSaved((cur) => cur.filter((s) => s.id !== id));
   };
 
+  const commitTileName = (id: string) => {
+    const next = (nameDrafts[id] ?? "").trim();
+    if (!next || badName(next) || next === NEW_PIECE_NAME) return;
+    const category = wordsCategory(next) ?? "other";
+    updateGarment(id, {
+      name: next,
+      category,
+      needsCategory: category === "other",
+    });
+    setSaved((cur) =>
+      cur.map((s) => (s.id === id ? { ...s, name: next, category, needsName: false } : s)),
+    );
+  };
+
+  const reTagPiece = (id: string) => {
+    if (!claimNaming(namingRef.current, id)) return;
+    setNamingIds([...namingRef.current]);
+    const hash = useCloset.getState().garments.find((item) => item.id === id)?.fileHash ?? "";
+    void (async () => {
+      try {
+        const blob = await getImage(imageKey(id, "o"));
+        if (!blob) {
+          markNeedsName(id);
+          return;
+        }
+        await nameCameraPiece(id, blob, hash);
+      } finally {
+        releaseNaming(namingRef.current, id);
+        setNamingIds([...namingRef.current]);
+      }
+    })();
+  };
+
   const tapWorn = async (box: WornBox) => {
     const pick = wornQueue[0];
     if (!pick || extractingBox) return;
@@ -1143,19 +1229,30 @@ export function Studio() {
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const text = e.clipboardData?.getData("text") ?? "";
-      if (/^https?:\/\//i.test(text.trim()) && !e.clipboardData?.files.length) {
-        e.preventDefault();
-        setUrl(text.trim());
-        return;
-      }
+      const html = e.clipboardData?.getData("text/html") ?? "";
+      const listing = listingUrlFromClipboard(text, html);
       const files = [...(e.clipboardData?.items ?? [])]
         .filter((i) => i.type.startsWith("image/"))
         .map((i) => i.getAsFile())
         .filter((f): f is File => !!f);
-      if (files.length) {
-        e.preventDefault();
-        void scanFiles(files);
+      if (!files.length) {
+        if (listing) {
+          e.preventDefault();
+          setUrl(listing);
+          setTab("dump");
+        }
+        return;
       }
+      e.preventDefault();
+      if (listing) {
+        setUrl(listing);
+        setTab("dump");
+      }
+      void (async () => {
+        const prepared = await prepareClipboardFiles(files, undefined, pasteSeq.current);
+        if (prepared.misses.length) setFailed((cur) => [...prepared.misses, ...cur]);
+        if (prepared.ready.length) await scanFiles(prepared.ready);
+      })();
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
@@ -1332,18 +1429,13 @@ export function Studio() {
           Not clothes.{skipped > 1 ? ` · ${skipped} photos.` : ""}
         </p>
       )}
-      {rejected.length > 0 && (
-        <p className="text-sm text-accent border border-accent/40 bg-card px-4 py-3">
-          {rejected.slice(0, 6).join(", ")}
-          {rejected.length > 6 ? "…" : ""} — that’s a webpage. Paste the product
-          link, or right-click the clothing photo.
-        </p>
-      )}
       {failed.length > 0 && (
-        <p className="text-sm text-accent border border-accent/40 bg-card px-4 py-3">
-          Could not read {failed.length}: {failed.slice(0, 6).join(", ")}
-          {failed.length > 6 ? "…" : ""}. The rest are in the closet.
-        </p>
+        <ul className="text-sm text-accent border border-accent/40 bg-card px-4 py-3 space-y-1">
+          {failed.slice(0, 6).map((miss, i) => (
+            <li key={`${miss.reason}-${miss.name}-${i}`}>{uploadMissLine(miss)}</li>
+          ))}
+          {failed.length > 6 ? <li>…</li> : null}
+        </ul>
       )}
       {dupes.length > 0 && (
         <p className="text-sm text-ink-soft border border-hairline bg-card px-4 py-3">
@@ -1414,10 +1506,44 @@ export function Studio() {
                     />
                   )}
                 </div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-sm leading-snug">{g.name}</p>
-                  <span className="micro text-ink-soft">{g.category}</span>
-                </div>
+                {g.needsName ? (
+                  <form
+                    className="space-y-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      commitTileName(g.id);
+                    }}
+                  >
+                    <p className="text-sm leading-snug">{NEEDS_NAME_PROMPT}</p>
+                    <input
+                      aria-label={NEEDS_NAME_PROMPT}
+                      value={nameDrafts[g.id] ?? ""}
+                      onChange={(e) =>
+                        setNameDrafts((cur) => ({ ...cur, [g.id]: e.target.value }))
+                      }
+                      placeholder="Navy zip sweater"
+                      className="h-8 w-full border border-hairline bg-paper px-1 text-sm"
+                    />
+                    <div className="flex gap-3">
+                      <button type="submit" className="micro text-ink-soft hover:text-ink">
+                        Set name
+                      </button>
+                      <button
+                        type="button"
+                        className="micro text-ink-soft hover:text-ink disabled:opacity-40"
+                        disabled={namingIds.includes(g.id)}
+                        onClick={() => reTagPiece(g.id)}
+                      >
+                        Re-tag
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-sm leading-snug">{g.name}</p>
+                    <span className="micro text-ink-soft">{g.category}</span>
+                  </div>
+                )}
                 <button
                   type="button"
                   className="micro text-ink-soft hover:text-ink"

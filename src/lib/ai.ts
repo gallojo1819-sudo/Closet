@@ -110,14 +110,26 @@ const CATEGORY_SET = new Set([
   "other",
 ]);
 
+/** Server-side naming trace. No image bytes, no key, no closet row. */
+function logTag(event: "start" | "ok" | "fail", extra?: { reason?: string; status?: number }) {
+  console.error("[closet-name] tagGarment", { event, ...extra });
+}
+
 export const tagGarment = createServerFn({ method: "POST" })
   .middleware([closetCaller])
   .validator((input: { image: string; context?: string }) => input)
   .handler(async ({ data, context }): Promise<TagResult> => {
+    logTag("start");
     const gate = await callerGate(context, "tagGarment");
-    if (!gate.ok) return { ok: false, error: gate.error };
+    if (!gate.ok) {
+      logTag("fail", { reason: "gate" });
+      return { ok: false, error: gate.error };
+    }
     const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) return { ok: false, error: "AI tagging is unavailable here." };
+    if (!apiKey) {
+      logTag("fail", { reason: "no-key" });
+      return { ok: false, error: "AI tagging is unavailable here." };
+    }
 
     const userContent: unknown[] = [
       { type: "image_url", image_url: { url: data.image } },
@@ -150,14 +162,20 @@ export const tagGarment = createServerFn({ method: "POST" })
         { role: "user", content: userContent },
       ],
     });
-    if (!tagged.ok) return { ok: false, error: tagged.error };
+    if (!tagged.ok) {
+      logTag("fail", { reason: "http", status: tagged.status });
+      return { ok: false, error: tagged.error };
+    }
     const body = tagged.json as {
       choices?: { message?: { content?: string } }[];
     };
     const text = body.choices?.[0]?.message?.content ?? "";
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
-    if (start < 0 || end < start) return { ok: false, error: "Could not read tag." };
+    if (start < 0 || end < start) {
+      logTag("fail", { reason: "parse" });
+      return { ok: false, error: "Could not read tag." };
+    }
     try {
       const parsed = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
       const rawCategory = String(parsed.category ?? "other");
@@ -182,6 +200,7 @@ export const tagGarment = createServerFn({ method: "POST" })
         tuckRaw === "in" || tuckRaw === "out" || tuckRaw === "either"
           ? tuckRaw
           : undefined;
+      logTag("ok");
       return {
         ok: true,
         name,
@@ -200,6 +219,7 @@ export const tagGarment = createServerFn({ method: "POST" })
         person,
       };
     } catch {
+      logTag("fail", { reason: "parse" });
       return { ok: false, error: "Could not parse tag." };
     }
   });
