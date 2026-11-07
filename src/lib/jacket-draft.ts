@@ -4,7 +4,9 @@
  * cloud payload. A reload or a new tab drops it. Sign-out clears it.
  * Toggling calls rememberJacketDraft and nothing else.
  */
-import type { WeatherSnap } from "./types.ts";
+import { reconcileOpenLook } from "./jacket-edit.ts";
+import type { JacketContext } from "./jacket-edit.ts";
+import type { Garment, WeatherSnap } from "./types.ts";
 import { pageJacketWeather } from "./jacket-weather.ts";
 
 export type JacketDraft = {
@@ -75,6 +77,7 @@ export function draftStamp(input: {
     input.occasion,
     input.season,
     page.weatherF ?? "",
+    page.measured ? "1" : "0",
     page.conditions?.wet ?? "",
     page.conditions?.windy ?? "",
     page.conditions?.highF ?? "",
@@ -102,14 +105,46 @@ export function readJacketDraft(baseIds: readonly string[], stamp: string): Jack
   return hit;
 }
 
-/** The effective ids when a draft matches and every id is still owned. Otherwise null. */
+export type DraftCheck = {
+  closet: readonly Garment[];
+  ctx: JacketContext;
+};
+
+/**
+ * The effective ids when a draft matches this look and still passes.
+ * Archived or missing pieces drop it. A fit or oversized change that makes the
+ * jacket illegal is repaired to a strict jacket, or the jacket comes off.
+ * Passing only the owned set checks ownership. Pass `check` to revalidate the garments.
+ */
 export function effectiveIds(
   baseIds: readonly string[],
   stamp: string,
   owned: ReadonlySet<string>,
+  check?: DraftCheck,
 ): string[] | null {
   const hit = readJacketDraft(baseIds, stamp);
   if (!hit) return null;
-  if (hit.ids.some((id) => !owned.has(id))) return null;
-  return [...hit.ids];
+  if (hit.ids.some((id) => !owned.has(id))) {
+    drafts.delete(keyOf(baseIds, stamp));
+    emit();
+    return null;
+  }
+  if (!check) return [...hit.ids];
+  const repaired = reconcileOpenLook(hit.ids, check.closet, check.ctx);
+  const same = repaired.ids.length === hit.ids.length && repaired.ids.every((id, i) => id === hit.ids[i]);
+  if (!same || repaired.warning !== hit.warning || repaired.note !== hit.note) {
+    drafts.set(keyOf(baseIds, stamp), {
+      ...hit,
+      ids: [...repaired.ids],
+      off: repaired.off,
+      jacketId: repaired.jacketId,
+      lastJacketId: repaired.lastJacketId,
+      weatherWarned: repaired.weatherWarned,
+      warning: repaired.warning,
+      note: repaired.note,
+      outdoorsValid: repaired.outdoorsValid,
+    });
+    emit();
+  }
+  return [...repaired.ids];
 }

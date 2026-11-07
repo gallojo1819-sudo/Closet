@@ -70,6 +70,21 @@ export function pageJacketWeather(
   };
 }
 
+/**
+ * What the page hands the assistant. A measured degree stays measured when rain,
+ * wind, and the daily high were not sent. A bucket degree is not marked measured,
+ * and missing rain or wind is not filled in as false.
+ */
+export function assistantConditions(page: PageJacketWeather): AtlasConditions | undefined {
+  if (!page.measured && !page.conditions) return undefined;
+  return {
+    ...(page.measured ? { measured: true } : {}),
+    ...(page.conditions?.highF !== undefined ? { highF: page.conditions.highF } : {}),
+    ...(page.conditions?.wet !== undefined ? { wet: page.conditions.wet } : {}),
+    ...(page.conditions?.windy !== undefined ? { windy: page.conditions.windy } : {}),
+  };
+}
+
 export function jacketNeed(
   occasion: string,
   season: string,

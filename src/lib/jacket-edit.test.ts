@@ -9,11 +9,15 @@ import { testCloset } from "./__fixtures__/snapshot.ts";
 import {
   editJacket,
   jacketChoices,
+  lastResortNote,
+  legacyJacketAction,
+  NOTE_LAST,
   NOTE_NONE,
   NOTE_NO_JACKET,
   NOTE_ONLY_TOP,
   NOTE_UNLOCK,
   NOTE_WHICH,
+  reconcileOpenLook,
   selectedOuter,
 } from "./jacket-edit.ts";
 import {
@@ -25,11 +29,14 @@ import {
   rememberJacketDraft,
   setJacketDraftAccount,
 } from "./jacket-draft.ts";
-import { atlasPick, jacketTempOf, pageJacketWeather } from "./jacket-weather.ts";
+import { assistantConditions, atlasPick, jacketTempOf, pageJacketWeather } from "./jacket-weather.ts";
 import { composeAtlasLook, emptyTaste } from "./taste.ts";
 import { dressThisPiece } from "./dress.ts";
 import { ruleHits } from "./stylist/legal.ts";
 import { countsAsOuter, jacketRequired } from "./stylist/jackets.ts";
+import { weekRotationRow } from "./detectors/ideas.ts";
+import { todayLookPieces } from "./today-look.ts";
+import { emptyRotation } from "./rotation.ts";
 import { leadTop, lookTuckDecision } from "./look.ts";
 import { tuckMark } from "./tuck.ts";
 import { shortOuterHits } from "./stylist/short-outer.ts";
@@ -229,6 +236,43 @@ describe("jacket edit", () => {
     });
     assert.equal(vetoed.choices.some((row) => row.id === "g_qnmo5yzgl50b"), false);
   });
+
+  it("Off then On replaces a toggle over pleats when a strict jacket fits", () => {
+    const ids = ["g_5gfabeezh485", "g_oimadifuvalb", "g_yfkavdj5irwe", "g_yae8h1k9pjm1"];
+    const ctx = { occasion: "out" as const, season: "fall" as const };
+    const core = pieces(ids).filter((g) => g.id !== "g_5gfabeezh485");
+    const choices = jacketChoices(core, closet, ctx);
+    assert.ok(choices.some((row) => row.tier === "strict"));
+    const off = editJacket({ ids, closet, action: "off", ctx });
+    const on = editJacket({ ids: off.ids, closet, action: "on", ctx, lastJacketId: "g_5gfabeezh485" });
+    assert.notEqual(on.jacketId, "g_5gfabeezh485");
+    assert.equal(on.tier, "strict");
+    assert.equal(on.note, null);
+    assert.equal(on.outdoorsValid, true);
+    assert.deepEqual(coreIds(on.ids), core.map((g) => g.id).sort());
+  });
+
+  it("a generated out row does not seat the toggle over pleats while a strict jacket fits", () => {
+    const week = weekRotationRow(closet, {
+      occasion: "out",
+      season: "fall",
+      salt: 0,
+      today: "2026-11-06",
+      cap: 8,
+      rotation: emptyRotation(),
+    });
+    const toggle = "g_5gfabeezh485";
+    for (const look of week.looks) {
+      const jacket = look.find((g) => g.id === toggle);
+      const bottom = look.find((g) => /pleat/i.test(`${g.name} ${g.subtype ?? ""}`));
+      if (!jacket || !bottom) continue;
+      const core = look.filter((g) => g.id !== toggle);
+      const strict = jacketChoices(core, closet, { occasion: "out", season: "fall" }).filter((row) => row.tier === "strict");
+      const unused = strict.filter((row) => !week.looks.some((other) => other.some((g) => g.id === row.id)));
+      assert.equal(unused.length, 0, look.map((g) => g.id).join(","));
+      assert.equal(lastResortNote(look), NOTE_LAST);
+    }
+  });
 });
 
 describe("jacket weather", () => {
@@ -267,6 +311,44 @@ describe("jacket weather", () => {
     assert.equal(jacketRequired("weekend", "fall", 73, { wet: true }), true);
     const springDry = pageJacketWeather({ f: 73, label: "Warm", measured: true });
     assert.equal(jacketRequired("weekday", "spring", springDry.weatherF, springDry.conditions), false);
+  });
+
+  it("measured-only 73 and 48 keep the measured flag through the assistant builder", () => {
+    const warm = pageJacketWeather({ f: 73, label: "Clear", measured: true });
+    const warmCtx = assistantConditions(warm);
+    assert.equal(warmCtx?.wet, undefined);
+    assert.equal(warmCtx?.windy, undefined);
+    assert.deepEqual(warmCtx, { measured: true });
+    const warmPick = atlasPick({ occasion: "weekday", season: "fall", weatherF: warm.weatherF, conditions: warmCtx });
+    assert.equal(warmPick.gated, true);
+    assert.equal(warmPick.requireOuter, false);
+    assert.equal(warmPick.weather?.measured, true);
+    const cold = pageJacketWeather({ f: 48, label: "Clear", measured: true });
+    const coldPick = atlasPick({
+      occasion: "weekday",
+      season: "fall",
+      weatherF: cold.weatherF,
+      conditions: assistantConditions(cold),
+    });
+    assert.equal(coldPick.gated, true);
+    assert.equal(coldPick.requireOuter, true);
+    const full = pageJacketWeather({ f: 64, label: "Mild", measured: true, highF: 48, wet: true, windy: true });
+    const fullCtx = assistantConditions(full);
+    assert.equal(fullCtx?.measured, true);
+    assert.equal(fullCtx?.highF, 48);
+    assert.equal(fullCtx?.wet, true);
+    assert.equal(fullCtx?.windy, true);
+    const bucket = assistantConditions(pageJacketWeather({ f: 64, label: "Mild" }));
+    assert.equal(bucket, undefined);
+    const absent = assistantConditions(pageJacketWeather(null));
+    assert.equal(absent, undefined);
+    const preview = atlasPick({
+      occasion: "weekday",
+      season: "spring",
+      weatherF: 48,
+      conditions: assistantConditions(pageJacketWeather({ f: 64, label: "Mild", measured: true, highF: 48, windy: true })),
+    });
+    assert.equal(preview.requireOuter, true);
   });
 
   it("composeAtlasLook and the locked dresser keep the gate", () => {
@@ -368,5 +450,166 @@ describe("jacket draft storage", () => {
     assert.match(sheet, /saveLook\(\{/);
     assert.match(sheet, /garmentIds: activePieces\.map/);
     assert.match(sheet, /rememberJacketDraft/);
+  });
+
+  it("a fit change, an archive, and a date or account change drop a stale jacket", () => {
+    const cord = byId.get("g_x4adkv9zu9yu")!;
+    const knit = byId.get("g_gp53xkrmem9b")!;
+    const bottom = byId.get("g_6xkkzn06sbdm")!;
+    const shoe = byId.get("g_2djvq6l9qxbb")!;
+    const ids = [cord.id, knit.id, bottom.id, shoe.id];
+    const stamp = draftStamp({ date: "2026-11-06", occasion: "out", season: "fall", weather: null });
+    const ctx = { occasion: "out" as const, season: "fall" as const };
+    rememberJacketDraft({
+      baseIds: ids,
+      ids,
+      stamp,
+      accountId: "",
+      off: false,
+      jacketId: cord.id,
+      lastJacketId: cord.id,
+      weatherWarned: false,
+      warning: null,
+      note: null,
+      outdoorsValid: true,
+    });
+    const changed = closet.map((g) => (g.id === cord.id ? { ...g, oversized: false } : g));
+    const owned = new Set(changed.filter((g) => !g.archived).map((g) => g.id));
+    const repaired = effectiveIds(ids, stamp, owned, { closet: changed, ctx });
+    assert.ok(repaired);
+    const hits = ruleHits(
+      repaired.map((id) => changed.find((g) => g.id === id)!),
+      { occasion: "out", season: "fall", pool: changed },
+    );
+    assert.equal(hits.hard.includes("JKT-LAY-9"), false);
+    assert.equal(hits.hard.includes("JKT-LAY-5"), false);
+    const archived = changed.map((g) => (g.id === cord.id ? { ...g, archived: true } : g));
+    const still = new Set(archived.filter((g) => !g.archived).map((g) => g.id));
+    rememberJacketDraft({
+      baseIds: ids,
+      ids,
+      stamp,
+      accountId: "",
+      off: false,
+      jacketId: cord.id,
+      lastJacketId: cord.id,
+      weatherWarned: false,
+      warning: null,
+      note: null,
+      outdoorsValid: true,
+    });
+    assert.equal(effectiveIds(ids, stamp, still, { closet: archived, ctx }), null);
+    rememberJacketDraft({
+      baseIds: ids,
+      ids,
+      stamp,
+      accountId: "",
+      off: false,
+      jacketId: cord.id,
+      lastJacketId: cord.id,
+      weatherWarned: false,
+      warning: null,
+      note: null,
+      outdoorsValid: true,
+    });
+    assert.equal(readJacketDraft(ids, draftStamp({ date: "2026-11-07", occasion: "out", season: "fall", weather: null })), null);
+    setJacketDraftAccount("someone-else");
+    assert.equal(readJacketDraft(ids, stamp), null);
+    const open = reconcileOpenLook(ids, changed, ctx);
+    assert.equal(ruleHits(open.ids.map((id) => changed.find((g) => g.id === id)!), { occasion: "out", season: "fall", pool: changed }).hard.includes("JKT-LAY-9"), false);
+  });
+
+  it("Today and a detector card show the edited ids and reopen on the original look", () => {
+    const base = [CHORE, ...WEEKDAY_CORE];
+    const weather = { f: 48, label: "Cold", code: 3, measured: true as const, highF: 48, wet: true };
+    const stamp = draftStamp({ date: "2026-11-06", occasion: "weekday", season: "fall", weather });
+    const ctx = { occasion: "weekday" as const, season: "fall" as const, weatherF: 48, measured: true, highF: 48, wet: true };
+    const off = editJacket({ ids: base, closet, action: "off", ctx });
+    rememberJacketDraft({
+      baseIds: base,
+      ids: off.ids,
+      stamp,
+      accountId: "",
+      off: off.off,
+      jacketId: off.jacketId,
+      lastJacketId: off.lastJacketId,
+      weatherWarned: off.weatherWarned,
+      warning: off.warning,
+      note: off.note,
+      outdoorsValid: off.outdoorsValid,
+    });
+    const owned = new Set(closet.map((g) => g.id));
+    const card = effectiveIds(base, stamp, owned, { closet, ctx });
+    assert.ok(card);
+    assert.equal(card.includes(CHORE), false);
+    assert.match(readJacketDraft(base, stamp)?.warning ?? "", /jacket/);
+    const shown = todayLookPieces(
+      {
+        drop: { date: "2026-11-06", garmentIds: base, worn: false, verdict: "pending", occasion: "weekday", weather },
+        garments: closet,
+        season: "fall",
+      },
+      "2026-11-06",
+    );
+    assert.equal(shown.some((g) => g.id === CHORE), false);
+    assert.deepEqual(shown.map((g) => g.id).sort(), card.sort());
+    const next = editJacket({ ids: card, closet, action: "next", ctx, lastJacketId: CHORE });
+    rememberJacketDraft({
+      baseIds: base,
+      ids: next.ids,
+      stamp,
+      accountId: "",
+      off: next.off,
+      jacketId: next.jacketId,
+      lastJacketId: next.lastJacketId,
+      weatherWarned: next.weatherWarned,
+      warning: next.warning,
+      note: next.note,
+      outdoorsValid: next.outdoorsValid,
+    });
+    const reopened = effectiveIds(base, stamp, owned, { closet, ctx });
+    assert.ok(reopened);
+    assert.notEqual(reopened.join(","), card.join(","));
+    assert.equal(reopened.includes(CHORE), false);
+    assert.deepEqual(readJacketDraft(base, stamp)?.baseIds, base);
+  });
+});
+
+describe("legacy jacket controls", () => {
+  it("routes the overshirt, a locked jacket, two outers, and adding a jacket through the resolver", () => {
+    const over = byId.get("g_v7uvadckh79p")!;
+    const base = byId.get("g_6lolc7ma0mk8")!;
+    const bottom = byId.get("g_xi3w7tz3aren")!;
+    const shoe = byId.get("g_rxglifsoqobm")!;
+    const worn = [over, base, bottom, shoe];
+    assert.equal(selectedOuter(worn).jacket?.id, over.id);
+    assert.equal(legacyJacketAction(over, worn, "swap"), "next");
+    assert.equal(legacyJacketAction(over, worn, "remove"), "off");
+    assert.equal(legacyJacketAction(base, worn, "swap"), "plain");
+    const only = [over, bottom, shoe];
+    assert.equal(selectedOuter(only).blocked, "only-top");
+    assert.equal(legacyJacketAction(over, only, "remove"), "plain");
+    const chore = byId.get("g_8qqqzpwxuwti")!;
+    const field = byId.get("g_qnmo5yzgl50b")!;
+    const two = [chore, field, base, bottom, shoe];
+    assert.equal(legacyJacketAction(chore, two, "remove"), "blocked");
+    assert.equal(legacyJacketAction(field, two, "swap"), "blocked");
+    const bare = [base, bottom, shoe];
+    assert.equal(legacyJacketAction(chore, bare, "add"), "set");
+    const locked = editJacket({
+      ids: [chore.id, base.id, bottom.id, shoe.id],
+      closet,
+      action: "off",
+      ctx: { occasion: "weekend", season: "fall", lockedIds: [chore.id] },
+    });
+    assert.equal(locked.changed, false);
+    assert.equal(locked.note, NOTE_UNLOCK);
+    const ctx = { occasion: "weekday" as const, season: "fall" as const };
+    const swapped = editJacket({ ids: worn.map((g) => g.id), closet, action: "next", ctx });
+    assert.notEqual(swapped.jacketId, over.id);
+    const restored = editJacket({ ids: swapped.ids, closet, action: "set", chooseId: over.id, ctx });
+    assert.equal(restored.jacketId, over.id);
+    assert.equal(restored.ids.filter((id) => id === over.id).length, 1);
+    assert.equal(selectedOuter(pieces(restored.ids)).jacket?.id, over.id);
   });
 });

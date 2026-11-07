@@ -21,6 +21,39 @@ async function shot(page: Page, name: string) {
   console.log("shot", name);
 }
 
+async function stubWeather(page: Page) {
+  await page.route("https://api.open-meteo.com/**", (route) => route.abort());
+  await page.route("**/_serverFn/**", (route) => {
+    const id = route.request().url().split("/_serverFn/")[1] ?? "";
+    let file = "";
+    try {
+      file = Buffer.from(decodeURIComponent(id), "base64").toString("utf8");
+    } catch {
+      file = "";
+    }
+    if (file.includes("weather.ts")) return route.abort();
+    return route.continue();
+  });
+}
+
+async function stableDetector(page: Page) {
+  await page.waitForFunction(
+    () => document.querySelector("[data-look-count]")?.getAttribute("data-resolved") === "1",
+    undefined,
+    { timeout: 120000 },
+  );
+  const detector = page.locator("[data-detector-card]").first();
+  await detector.waitFor({ timeout: 60000 });
+  let last = "";
+  for (let i = 0; i < 8; i += 1) {
+    const text = (await detector.textContent({ timeout: 5000 }).catch(() => ""))?.trim() ?? "";
+    if (text && text === last) return detector;
+    last = text;
+    await page.waitForTimeout(400);
+  }
+  return detector;
+}
+
 async function openSheet(page: Page) {
   await page.goto(`${BASE}/`, { waitUntil: "networkidle", timeout: 30000 });
   const edit = page.locator("[data-today-edit]");
@@ -42,17 +75,25 @@ async function flow(page: Page, width: number, tag: string) {
   await shot(page, `${tag}-today-warned`);
   await page.locator("[data-today-edit]").click();
   await page.locator("[data-jacket-edit]").waitFor();
+  const warning = page.getByRole("dialog").locator("[data-weather-warned]");
+  await warning.waitFor({ timeout: 10000 });
+  await warning.scrollIntoViewIfNeeded();
+  await shot(page, `${tag}-sheet-reopened`);
   await page.locator("[data-jacket-next]").click();
   await page.locator("[data-jacket-on][aria-pressed='true']").waitFor({ timeout: 10000 });
   await shot(page, `${tag}-sheet-another`);
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
 
   await page.goto(`${BASE}/lookbook`, { waitUntil: "domcontentloaded" });
-  const card = page.locator(".look-card").first();
-  await card.waitFor({ timeout: 60000 });
-  await card.locator("button").first().click();
+  const detector = await stableDetector(page);
+  await detector.locator("button").first().click();
   await page.locator("[data-jacket-edit]").waitFor({ timeout: 15000 });
-  await shot(page, `${tag}-lookbook-sheet`);
+  await page.locator("[data-jacket-off]").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  const edited = detector.locator("[data-weather-warned]");
+  await edited.waitFor({ timeout: 10000 });
+  await edited.evaluate((el) => el.scrollIntoView({ block: "center", inline: "nearest" }));
+  await shot(page, `${tag}-detector-edited`);
 
   await page.goto(`${BASE}/?outfitCheck=picker`, { waitUntil: "networkidle", timeout: 30000 });
   await page.locator("[data-outfit-picker]").waitFor({ timeout: 15000 });
@@ -61,6 +102,43 @@ async function flow(page: Page, width: number, tag: string) {
   await page.goto(`${BASE}/?outfitCheck=signedout`, { waitUntil: "networkidle", timeout: 30000 });
   await page.locator("[data-outfit-check-signed-out]").waitFor({ timeout: 15000 });
   await shot(page, `${tag}-check-signed-out`);
+}
+
+async function noAlternative(browser: Awaited<ReturnType<typeof chromium.launch>>, tag: string, width: number) {
+  const ids = ["g_gp53xkrmem9b", "g_6xkkzn06sbdm", "g_2djvq6l9qxbb", "g_8qqqzpwxuwti"];
+  const garments = liveSnapshot.filter((g) => ids.includes(g.id)).map(plated);
+  const packed = packPersist({
+    garments,
+    looks: [],
+    journal: [],
+    avoid: {},
+    drop: {
+      date: TODAY,
+      garmentIds: ids,
+      worn: false,
+      verdict: "pending",
+      occasion: "out",
+      weather: { f: 64, label: "Mild", code: 2, measured: true, highF: 64 },
+    },
+    refPhoto: null,
+    refPhotoBackup: null,
+    messages: [],
+  });
+  const page = await browser.newPage();
+  await stubWeather(page);
+  await page.addInitScript((raw) => {
+    localStorage.setItem("closet.v6", raw);
+  }, packed);
+  await page.setViewportSize({ width, height: width < 500 ? 812 : 900 });
+  await page.goto(`${BASE}/`, { waitUntil: "networkidle", timeout: 30000 });
+  await page.locator("[data-today-edit]").click();
+  await page.locator("[data-jacket-edit]").waitFor({ timeout: 15000 });
+  await page.locator("[data-jacket-next]").click();
+  const note = page.locator("[data-jacket-note]");
+  await note.waitFor({ timeout: 10000 });
+  await note.scrollIntoViewIfNeeded();
+  await shot(page, `${tag}-no-alternative`);
+  await page.close();
 }
 
 async function main() {
@@ -87,12 +165,15 @@ async function main() {
   const page = await browser.newPage();
   const errors: string[] = [];
   page.on("pageerror", (err) => errors.push(err.message));
+  await stubWeather(page);
   await page.addInitScript((raw) => {
     localStorage.setItem("closet.v6", raw);
   }, packed);
   try {
     await flow(page, 1280, "1280");
     await flow(page, 375, "375");
+    await noAlternative(browser, 1280, 1280);
+    await noAlternative(browser, 375, 375);
   } catch (err) {
     await page.screenshot({ path: `${OUT}/failure.png` }).catch(() => {});
     console.error(errors.slice(0, 8).join("\n"));

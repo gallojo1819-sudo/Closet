@@ -18,8 +18,8 @@ import { cutoutsForOnYou, leadTop, lookTuckDecision, nameLook, spreadTitle } fro
 import { tuckMark } from "@/lib/tuck";
 import { useTuckHabits } from "@/lib/use-tuck-habits";
 import { pieceLabel } from "@/lib/piece-label";
-import { editJacket, jacketChoices, selectedOuter, type JacketContext } from "@/lib/jacket-edit";
-import { effectiveIds, readJacketDraft, rememberJacketDraft } from "@/lib/jacket-draft";
+import { editJacket, lastResortNote, legacyJacketAction, reconcileOpenLook, selectedOuter, type JacketContext } from "@/lib/jacket-edit";
+import { effectiveIds, jacketDraftAccount, readJacketDraft, rememberJacketDraft } from "@/lib/jacket-draft";
 import { countsAsOuter } from "@/lib/stylist/jackets";
 import { moreOutfitsForLook } from "@/lib/dress";
 import type { House } from "@/lib/houses";
@@ -63,7 +63,7 @@ export function LookSheet({
   book: Look[];
   closet: Garment[];
   onClose: () => void;
-  onWear: () => void;
+  onWear: (ids: string[]) => void;
   onOpenLook: (look: Look) => void;
   getCard?: () => HTMLElement | null;
   initialLocked?: string[];
@@ -193,15 +193,47 @@ export function LookSheet({
     };
   }, [look.id, cacheKey]);
 
+  const idsRef = useRef(ids);
+  idsRef.current = ids;
+  const openedLook = useRef<string | null>(null);
+  const fitKey = closet.map((g) => `${g.id}:${g.archived ? 1 : 0}:${g.oversized === undefined ? "" : g.oversized ? 1 : 0}:${g.fit ?? ""}`).join(",");
+  const jacketCtxKey = `${jacketCtx?.occasion ?? ""}|${jacketCtx?.season ?? ""}|${jacketCtx?.weatherF ?? ""}|${jacketCtx?.measured ? 1 : 0}|${jacketCtx?.wet ?? ""}|${jacketCtx?.windy ?? ""}|${jacketCtx?.highF ?? ""}`;
   useEffect(() => {
     const owned = new Set(closet.filter((g) => !g.archived).map((g) => g.id));
-    setIds(effectiveIds(baseIds, stamp, owned) ?? look.garmentIds);
+    const ctx: JacketContext = {
+      occasion: jacketCtx?.occasion ?? mapOccasion(look.occasion),
+      season: jacketCtx?.season ?? "fall",
+      weatherF: jacketCtx?.weatherF,
+      measured: jacketCtx?.measured,
+      highF: jacketCtx?.highF,
+      wet: jacketCtx?.wet,
+      windy: jacketCtx?.windy,
+      lockedIds,
+      taste,
+    };
+    const sameLook = openedLook.current === look.id;
+    openedLook.current = look.id;
+    const drafted = effectiveIds(baseIds, stamp, owned, { closet, ctx });
+    if (drafted) {
+      const next = reconcileOpenLook(drafted, closet, ctx);
+      setIds(next.ids);
+      setJacketNote(next.note);
+      setJacketWarning(next.warning);
+    } else if (!sameLook) {
+      setIds(look.garmentIds);
+      setJacketNote(null);
+      setJacketWarning(null);
+    } else {
+      const next = reconcileOpenLook(idsRef.current, closet, ctx);
+      if (next.ids.join(",") !== idsRef.current.join(",")) {
+        setIds(next.ids);
+        setJacketNote(next.note);
+        setJacketWarning(next.warning);
+      }
+    }
     setSwapSlot(null);
     setLockedIds((initialLocked ?? []).filter((id) => look.garmentIds.includes(id)));
-    const draft = readJacketDraft(baseIds, stamp);
-    setJacketNote(draft?.note ?? null);
-    setJacketWarning(draft?.warning ?? null);
-  }, [look.id]);
+  }, [look.id, stamp, fitKey, jacketCtxKey, jacketDraftAccount()]);
 
   const lockForMore = lockedIds.length ? lockedIds : look.garmentIds.slice(0, 1);
   const alts = showAlts
@@ -306,7 +338,7 @@ export function LookSheet({
             <WearButton
               className="h-9 px-4 text-[13px]"
               onConfirming={() => setLanding(true)}
-              onWear={onWear}
+              onWear={() => onWear(activePieces.map((g) => g.id))}
             />
             <button
               type="button"
@@ -390,6 +422,9 @@ export function LookSheet({
             </p>
           ) : null}
           {jacketNote ? <p data-jacket-note className="text-sm text-ink-soft">{jacketNote}</p> : null}
+          {!jacketNote && lastResortNote(activePieces) ? (
+            <p data-last-resort className="text-sm text-ink-soft">{lastResortNote(activePieces)}</p>
+          ) : null}
           {dressing && <p className="micro text-ink-soft">{ON_ME_BUSY_HINT}</p>}
           {dressError && <p className="text-sm text-accent">{dressError}</p>}
           <ul className="flex gap-2 overflow-x-auto">
@@ -405,7 +440,17 @@ export function LookSheet({
                   <button
                     type="button"
                     onClick={() => {
-                      if (on && g.id === outer.jacket?.id) {
+                      const kind = on ? "remove" : "add";
+                      const action = legacyJacketAction(g, activePieces, kind);
+                      if (action === "off") {
+                        applyJacket("off");
+                        return;
+                      }
+                      if (action === "set") {
+                        applyJacket("set", g.id);
+                        return;
+                      }
+                      if (action === "blocked") {
                         applyJacket("off");
                         return;
                       }
@@ -445,10 +490,20 @@ export function LookSheet({
                   >
                     {locked ? "Unlock" : "Lock"}
                   </button>
-                  {slot && on && (
+                  {on && (slot || outer.jacket?.id === g.id) && (
                     <button
                       type="button"
-                      onClick={() => setSwapSlot((cur) => (cur === slot ? null : slot))}
+                      onClick={() => {
+                        if (legacyJacketAction(g, activePieces, "swap") === "next") {
+                          applyJacket("next");
+                          return;
+                        }
+                        if (legacyJacketAction(g, activePieces, "swap") === "blocked") {
+                          applyJacket("off");
+                          return;
+                        }
+                        if (slot) setSwapSlot((cur) => (cur === slot ? null : slot));
+                      }}
                       className="micro mt-1 block text-ink-soft hover:text-ink"
                     >
                       Swap
@@ -458,7 +513,8 @@ export function LookSheet({
                     <button
                       type="button"
                       onClick={() => {
-                        if (g.id === outer.jacket?.id) {
+                        const action = legacyJacketAction(g, activePieces, "remove");
+                        if (action === "off" || action === "blocked") {
                           applyJacket("off");
                           return;
                         }
@@ -478,26 +534,7 @@ export function LookSheet({
           </ul>
           {swapSlot && (
             <div className="flex flex-wrap gap-2 border border-hairline p-2">
-              {(swapSlot === "outerwear" && outer.jacket
-                ? jacketChoices(
-                    activePieces.filter((g) => g.id !== outer.jacket?.id),
-                    closet,
-                    {
-                      occasion: jacketCtx?.occasion ?? mapOccasion(look.occasion),
-                      season: jacketCtx?.season ?? "fall",
-                      weatherF: jacketCtx?.weatherF,
-                      measured: jacketCtx?.measured,
-                      highF: jacketCtx?.highF,
-                      wet: jacketCtx?.wet,
-                      windy: jacketCtx?.windy,
-                      lockedIds,
-                      taste,
-                    },
-                  )
-                    .map((choice) => closet.find((g) => g.id === choice.id))
-                    .filter((g): g is Garment => Boolean(g))
-                : closet.filter((g) => wearSlot(g) === swapSlot && !ids.includes(g.id))
-              )
+              {closet.filter((g) => wearSlot(g) === swapSlot && !ids.includes(g.id) && !countsAsOuter(g))
                 .slice(0, 24)
                 .map((g) => (
                   <button

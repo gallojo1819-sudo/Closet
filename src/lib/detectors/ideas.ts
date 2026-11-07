@@ -37,6 +37,7 @@ import { livePool } from "../rack.ts";
 import { rotationLookKey, rotationRank, type Rotation } from "../rotation.ts";
 import { pieceFitsSeason, type Season } from "../season.ts";
 import { daysIdle, isBrownSuedeOuter, slotOf } from "../style.ts";
+import { jacketChoices, lastResortNote, type JacketContext } from "../jacket-edit.ts";
 import type { JacketGateConditions } from "../jacket-weather.ts";
 import { jacketInfo, jacketRequired, wearSlot } from "../stylist/jackets.ts";
 import { relaxTiers } from "../stylist/legal.ts";
@@ -821,6 +822,46 @@ function spreadJackets(
   }
 }
 
+/** Swap a toggle over pleats for a strict jacket that is not already on the row. The other pieces stay. */
+function preferStrictJackets(
+  looks: Garment[][],
+  live: readonly Garment[],
+  pool: readonly Garment[],
+  occasion: Occasion,
+  season: Season,
+  weatherF: number | undefined,
+  conditions: JacketGateConditions | undefined,
+  finalOk: (pieces: Garment[]) => boolean,
+): void {
+  const ctx: JacketContext = {
+    occasion,
+    season,
+    ...(weatherF !== undefined ? { weatherF, measured: true } : {}),
+    ...(conditions?.highF !== undefined ? { highF: conditions.highF } : {}),
+    ...(conditions?.wet !== undefined ? { wet: conditions.wet } : {}),
+    ...(conditions?.windy !== undefined ? { windy: conditions.windy } : {}),
+  };
+  const byId = new Map(live.map((g) => [g.id, g]));
+  const used = new Set(looks.flat().map((g) => g.id));
+  for (let i = 0; i < looks.length; i += 1) {
+    const look = looks[i]!;
+    const toggle = look.find((g) => /toggle/i.test(`${g.name} ${g.subtype ?? ""}`));
+    if (!toggle || !lastResortNote(look)) continue;
+    const core = look.filter((g) => g.id !== toggle.id);
+    const choices = jacketChoices(core, pool, ctx).filter((row) => row.tier === "strict");
+    const next = choices.map((row) => byId.get(row.id)).find((g): g is Garment => {
+      if (!g) return false;
+      return !used.has(g.id);
+    });
+    if (!next) continue;
+    const replaced = [...core, next];
+    if (!finalOk(replaced)) continue;
+    used.delete(toggle.id);
+    used.add(next.id);
+    looks[i] = replaced;
+  }
+}
+
 function cellDresser(
   cell: Cell,
   live: Garment[],
@@ -1564,6 +1605,7 @@ export function weekRotationRow(
     }
   }
   spreadJackets(looks, strict, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation, twins, led, weekLeadPiece);
+  preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, (pieces) => strict.finalOk(pieces));
   if (ctx.rotation) settle(strict, pairable, ctx.rotation, twins, live.length);
   /* Every piece this scope has found unpairable so far, so the caller's list is complete. */
   const unpairable: Garment[] = [];

@@ -406,7 +406,7 @@ describe("detectors", () => {
     assert.match(html, /<section><h2[^>]*>Oxford and chinos<\/h2><div><p[^>]*>Weekday<\/p><div data-plate-rack="Oxford and chinos outfits">/);
     // The collage is the card's art (its own 1:1.28 box, nothing clipped), and CD's caption
     // follows it in flow inside the one button: a serif title, then the one-line piece list.
-    const cards = html.split('<div class="w-full">').slice(1);
+    const cards = html.split('<div class="w-full" data-detector-card="true">').slice(1);
     assert.equal(cards.length, 2);
     for (const card of cards) {
       assert.match(card, /^<button type="button"[^>]*><div data-collage="">/);
@@ -472,7 +472,7 @@ describe("detectors", () => {
       usual: true,
     };
     const usualHtml = await renderSections([], { ways: [usual], occasion: "weekday", season: "fall" });
-    const plates = usualHtml.split('<div class="w-full">').length - 1;
+    const plates = usualHtml.split('<div class="w-full" data-detector-card="true">').length - 1;
     assert.equal(plates, 4);
     assert.equal(usualHtml.split('<button type="button"').length - 1, plates);
     const source = readFileSync(
@@ -510,7 +510,7 @@ describe("detectors", () => {
     const html = await renderSections([], { ways: [titled], occasion: "weekday", season: "fall" });
     assert.equal(html.split("data-plate-rack=").length - 1, 1);
     assert.equal(html.split('<div data-plate-rack="Oxford and chinos outfits">').length - 1, 1);
-    const cards = html.split('<div class="w-full">').slice(1);
+    const cards = html.split('<div class="w-full" data-detector-card="true">').slice(1);
     assert.equal(cards.length, 3);
     for (const [i, piece] of cards.entries()) {
       assert.match(piece, card);
@@ -533,7 +533,7 @@ describe("detectors", () => {
     const usualHtml = await renderSections([], { ways: [usual], occasion: "weekday", season: "fall" });
     assert.equal(usualHtml.split("data-plate-rack=").length - 1, 1);
     assert.equal(usualHtml.split('<div data-plate-rack="Your usual outfits">').length - 1, 1);
-    const usualCards = usualHtml.split('<div class="w-full">').slice(1);
+    const usualCards = usualHtml.split('<div class="w-full" data-detector-card="true">').slice(1);
     assert.equal(usualCards.length, 4);
     for (const [i, piece] of usualCards.entries()) {
       assert.match(piece, card);

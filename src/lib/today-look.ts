@@ -11,6 +11,7 @@
  * does not pass one, the same way the season bucket is frozen, and never closet.v6.
  */
 import { draftStamp, effectiveIds } from "./jacket-draft.ts";
+import { pageJacketWeather } from "./jacket-weather.ts";
 import type { FrozenConditions } from "./daily-pick.ts";
 import { pickDropIds } from "./drop-pick.ts";
 import { sortLook } from "./look.ts";
@@ -88,7 +89,19 @@ export function todayLookPieces(state: TodayLookState, today = todayNY()): Garme
     weather: drop?.weather,
   });
   const owned = new Set(garments.filter((g) => !g.archived).map((g) => g.id));
-  const over = effectiveIds(ids, stamp, owned);
+  const page = pageJacketWeather(drop?.weather);
+  const over = effectiveIds(ids, stamp, owned, {
+    closet: garments,
+    ctx: {
+      occasion: todayOccasion(drop, today),
+      season,
+      ...(page.weatherF !== undefined ? { weatherF: page.weatherF } : {}),
+      measured: page.measured,
+      ...(page.conditions?.highF !== undefined ? { highF: page.conditions.highF } : {}),
+      ...(page.conditions?.wet !== undefined ? { wet: page.conditions.wet } : {}),
+      ...(page.conditions?.windy !== undefined ? { windy: page.conditions.windy } : {}),
+    },
+  });
   return sortLook(
     (over ?? ids)
       .map((id) => garments.find((g) => g.id === id))

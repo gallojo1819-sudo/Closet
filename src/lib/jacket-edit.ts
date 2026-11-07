@@ -213,8 +213,75 @@ export function jacketChoices(
   return last;
 }
 
-function hardOk(pieces: Garment[], closet: readonly Garment[], ctx: JacketContext): boolean {
-  return ruleHits(pieces, ruleCtx(pieces, closet, ctx)).hard.length === 0;
+/** Strict jackets in `jackets` first. A last-resort jacket stays out while any strict one fits. */
+export function orderJackets(
+  core: readonly Garment[],
+  jackets: readonly Garment[],
+  ctx: JacketContext,
+  closet: readonly Garment[] = jackets,
+): Garment[] {
+  const choices = jacketChoices(core, closet, ctx);
+  const strict = new Set(choices.filter((row) => row.tier === "strict").map((row) => row.id));
+  const last = new Set(choices.filter((row) => row.tier === "lastResort").map((row) => row.id));
+  const strictJ = jackets.filter((g) => strict.has(g.id));
+  const other = jackets.filter((g) => !strict.has(g.id) && !last.has(g.id));
+  const lastJ = strict.size ? [] : jackets.filter((g) => last.has(g.id));
+  return [...strictJ, ...other, ...lastJ];
+}
+
+/** The caption for a toggle or denim jacket over pleated trousers. */
+export function lastResortNote(pieces: readonly Garment[]): string | null {
+  const jacket = selectedOuter(pieces).jacket;
+  const bottom = pieces.find((g) => slotOf(g) === "bottom");
+  if (!jacket || !bottom || !pleated(bottom) || !toggleOrDenim(jacket)) return null;
+  return NOTE_LAST;
+}
+
+/**
+ * What a legacy Swap, Remove, or Add should do with this piece.
+ * A counting outer goes through the jacket resolver. Anything else stays a plain edit.
+ */
+/**
+ * Keep the current core. A jacket that is still offered stays. Otherwise the first
+ * strict jacket replaces it, or the jacket comes off when nothing legal fits.
+ */
+export function reconcileOpenLook(ids: readonly string[], closet: readonly Garment[], ctx: JacketContext): JacketEdit {
+  const map = byId(closet);
+  const pieces = piecesOf(ids, map);
+  const selected = selectedOuter(pieces);
+  if (selected.blocked || !selected.jacket) {
+    return editJacket({ ids, closet, action: "off", ctx });
+  }
+  const core = pieces.filter((g) => g.id !== selected.jacket?.id);
+  const choices = jacketChoices(core, closet, ctx);
+  if (choices.some((row) => row.id === selected.jacket?.id)) {
+    return editJacket({ ids, closet, action: "set", ctx, chooseId: selected.jacket.id });
+  }
+  return editJacket({
+    ids: core.map((g) => g.id),
+    closet,
+    action: "on",
+    ctx,
+    lastJacketId: selected.jacket.id,
+  });
+}
+
+export function legacyJacketAction(
+  piece: Garment,
+  pieces: readonly Garment[],
+  kind: "remove" | "add" | "swap",
+): "off" | "set" | "next" | "plain" | "blocked" {
+  const selected = selectedOuter(pieces);
+  if (selected.blocked === "ambiguous" && countsAsOuter(piece)) return "blocked";
+  if (selected.blocked === "only-top" && piece.id === countingOuters(pieces)[0]?.id) return "plain";
+  const jacketId = selected.jacket?.id ?? null;
+  if (kind === "remove" || kind === "swap") {
+    if (jacketId !== piece.id) return "plain";
+    return kind === "remove" ? "off" : "next";
+  }
+  if (!countsAsOuter(piece)) return "plain";
+  if (jacketId && jacketId !== piece.id) return "blocked";
+  return "set";
 }
 
 function withJacket(coreIds: readonly string[], jacketId: string | null): string[] {
@@ -306,16 +373,18 @@ export function editJacket(input: {
     }
     case "on": {
       if (jacket) return unchanged(null, false);
+      /* Restore the last jacket only when it is still on the offered list: strict, or last resort when nothing stricter fits. */
       const restore = last ? map.get(last) : undefined;
-      if (restore && !restore.archived && hardOk([...corePieces, restore], input.closet, input.ctx)) {
-        return put(restore.id, null, true);
+      const offered = restore && !restore.archived ? choices.find((row) => row.id === restore.id) : undefined;
+      if (restore && offered) {
+        return put(restore.id, offered.tier === "lastResort" ? NOTE_LAST : null, true);
       }
       const first = choices[0];
       if (!first) return unchanged(NOTE_NONE, true);
       return put(first.id, first.tier === "lastResort" ? NOTE_LAST : null, true);
     }
     case "next": {
-      if (!choices.length) return unchanged(jacket ? NOTE_NONE : NOTE_NO_JACKET);
+      if (!choices.length) return unchanged(NOTE_NONE, !jacket);
       const at = jacket ? choices.findIndex((row) => row.id === jacket.id) : -1;
       if (choices.length === 1 && at === 0) return unchanged(NOTE_ONLY);
       const pick = choices[(at + 1) % choices.length]!;

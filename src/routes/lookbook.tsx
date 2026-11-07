@@ -11,7 +11,8 @@ import { Overlay } from "@/components/closet/overlay";
 import { GarmentTile } from "@/components/closet/tile";
 import { rackLine } from "@/lib/gaps";
 import { draftStamp, effectiveIds, readJacketDraft, subscribeJacketDrafts, jacketDraftVersion } from "@/lib/jacket-draft";
-import { pageJacketWeather } from "@/lib/jacket-weather";
+import { lastResortNote } from "@/lib/jacket-edit";
+import { assistantConditions, pageJacketWeather } from "@/lib/jacket-weather";
 import { lookOnMeKey } from "@/lib/images";
 import { useImageSrc } from "@/lib/use-image";
 import {
@@ -244,6 +245,11 @@ function LookCard({
           {warning}
         </p>
       )}
+      {lastResortNote(pieces) ? (
+        <p className="micro mt-1 text-ink-soft" data-last-resort>
+          {lastResortNote(pieces)}
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -336,12 +342,34 @@ function LookbookPage() {
       }),
     [occasion, season, drop?.weather],
   );
+  const jacketCtxFor = useCallback(
+    (occ: string) => ({
+      occasion: occ,
+      season,
+      ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
+      measured: pageJacket.measured,
+      ...(pageConditions?.highF !== undefined ? { highF: pageConditions.highF } : {}),
+      ...(pageConditions?.wet !== undefined ? { wet: pageConditions.wet } : {}),
+      ...(pageConditions?.windy !== undefined ? { windy: pageConditions.windy } : {}),
+    }),
+    [season, pageWeather, pageJacket.measured, pageConditions],
+  );
   const piecesFor = (look: Look) => {
-    const over = effectiveIds(look.garmentIds, stampFor(look), ownedIds);
+    const over = effectiveIds(look.garmentIds, stampFor(look), ownedIds, {
+      closet: garments,
+      ctx: jacketCtxFor(look.occasion || occasion),
+    });
     const ids = over ?? look.garmentIds;
     return ids.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
   };
   const warningFor = (look: Look) => readJacketDraft(look.garmentIds, stampFor(look))?.warning ?? null;
+  const projectCard = (look: Garment[]) => {
+    const ids = look.map((g) => g.id);
+    const stamp = stampFor({ occasion });
+    const over = effectiveIds(ids, stamp, ownedIds, { closet: garments, ctx: jacketCtxFor(occasion) });
+    const show = (over ?? ids).map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
+    return { show, base: look, warning: readJacketDraft(ids, stamp)?.warning ?? null };
+  };
 
   /* The vetoes are the one taste input the rows read; the stored technique weights are never read. */
   const tasteKey = `${taste.vetoes.length}`;
@@ -615,9 +643,11 @@ function LookbookPage() {
       seen.add(id);
       out.push({ id, garmentIds: [...garmentIds] });
     };
-    for (const look of weekRow) add(look.id, look.garmentIds);
-    for (const look of sectionLooks) add(look.id, look.garmentIds);
-    for (const look of heroCards) add(look.id, look.garmentIds);
+    const edited = (ids: readonly string[]) =>
+      effectiveIds(ids, stampFor({ occasion }), ownedIds, { closet: garments, ctx: jacketCtxFor(occasion) }) ?? ids;
+    for (const look of weekRow) add(look.id, edited(look.garmentIds));
+    for (const look of sectionLooks) add(look.id, edited(look.garmentIds));
+    for (const look of heroCards) add(look.id, edited(look.garmentIds));
     return out;
   })();
   const onScreenLookIds = screenLooks.map((look) => look.id);
@@ -632,7 +662,7 @@ function LookbookPage() {
       onScreenLookIds,
       screenLooks,
       ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
-      ...(pageConditions ? { conditions: { ...pageConditions, measured: pageJacket.measured } } : {}),
+      ...(assistantConditions(pageJacket) ? { conditions: assistantConditions(pageJacket) } : {}),
     });
   }, [occasion, season, color, heroId, screenKey, pageWeather, pageConditions, pageJacket.measured, onScreenLookIds, screenLooks]);
 
@@ -789,6 +819,7 @@ function LookbookPage() {
           season={season}
           color={color}
           onOpen={openPlate}
+          project={projectCard}
         />
       )}
       <div className="mt-6 flex flex-wrap gap-3">
@@ -1072,8 +1103,8 @@ function LookbookPage() {
           initialLocked={openLook.lookbook === false ? drop?.lockedIds : undefined}
           getCard={getOpenCard}
           onClose={() => setOpenId(null)}
-          onWear={() => {
-            wearToday(openPieces.map((g) => g.id));
+          onWear={(ids) => {
+            wearToday(ids);
             setOpenId(null);
             setDressed(null);
           }}

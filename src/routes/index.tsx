@@ -21,7 +21,7 @@ import {
   rememberJacketDraft,
   subscribeJacketDrafts,
 } from "@/lib/jacket-draft";
-import { pageJacketWeather } from "@/lib/jacket-weather";
+import { assistantConditions, pageJacketWeather } from "@/lib/jacket-weather";
 import { todaySeasonBucket } from "@/lib/today-season";
 import { rackCanDress, weekStripDays } from "@/lib/lookbook";
 import { engineCacheReady } from "@/lib/engine-cache";
@@ -239,13 +239,14 @@ function Today() {
       occasion,
       ...(drop ? { season: dropSeason } : {}),
       onScreenLookIds,
-      screenLooks: matched?.look
-        ? [{ id: matched.look.id, garmentIds: [...matched.look.garmentIds] }]
-        : [],
+      screenLooks:
+        shown.length >= 2
+          ? [{ id: matched?.look?.id ?? `today-${today}`, garmentIds: shown.map((g) => g.id) }]
+          : [],
       ...(pageWeather !== undefined ? { weatherF: pageWeather } : {}),
-      ...(jacketPage.conditions ? { conditions: { ...jacketPage.conditions, measured: jacketPage.measured } } : {}),
+      ...(assistantConditions(jacketPage) ? { conditions: assistantConditions(jacketPage) } : {}),
     });
-  }, [drop, dropSeason, matched, occasion, onScreenLookIds, pageWeather, jacketPage]);
+  }, [drop, dropSeason, matched, occasion, onScreenLookIds, pageWeather, jacketPage, shown, today]);
 
   const setOccasion = (occasion: Occasion) => {
     rerollDrop(weather, occasion, drop?.garmentIds);
@@ -687,9 +688,8 @@ function Today() {
           closet={garments}
           initialLocked={drop?.lockedIds}
           onClose={() => setDressed(null)}
-          onWear={() => {
-            const drafted = dressed.id.startsWith("today-") ? readJacketDraft(baseIds, jacketStamp)?.ids : null;
-            wearToday(drafted ?? shown.map((g) => g.id));
+          onWear={(ids) => {
+            wearToday(ids);
             setDressed(null);
           }}
           onOpenLook={(next) => setDressed(next)}
