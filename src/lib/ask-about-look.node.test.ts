@@ -14,8 +14,8 @@ describe("look ask quota and budget", () => {
     assert.equal(AI_FN_BUCKET.checkOutfit, "outfit_check");
     assert.equal(AI_LIMITS.outfit_check.hour, 20);
     assert.equal(AI_LIMITS.outfit_check.day, 20);
-    assert.equal(LOOK_ASK_SERVER_MS, 15000);
-    assert.equal(LOOK_ASK_DEADLINE_MS, 20000);
+    assert.equal(LOOK_ASK_SERVER_MS, 25000);
+    assert.equal(LOOK_ASK_DEADLINE_MS, 30000);
     assert.ok(LOOK_ASK_SERVER_MS < LOOK_ASK_DEADLINE_MS);
     assert.ok(LOOK_ASK_DEADLINE_MS < 60000);
   });
