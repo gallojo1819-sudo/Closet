@@ -25,6 +25,7 @@ export const AI_FN_BUCKET: Record<string, AiBucket> = {
   searchOfficial: "search",
   fetchListing: "search",
   checkOutfit: "outfit_check",
+  askAboutLook: "outfit_check",
 };
 
 export type AiLimit = { hour: number; day: number };
@@ -35,7 +36,7 @@ const DEFAULT_LIMITS: Record<AiBucket, AiLimit> = {
   vision: { hour: 300, day: 1500 },
   image: { hour: 150, day: 600 },
   search: { hour: 100, day: 400 },
-  /* One photo check is one unit. 20 a day is the approved cap, about $5 at the high estimate. */
+  /* One photo check or one look ask is one unit. 20 a day, shared, is the approved cap. */
   outfit_check: { hour: 20, day: 20 },
 };
 

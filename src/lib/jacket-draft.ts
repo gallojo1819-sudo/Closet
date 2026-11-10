@@ -21,6 +21,11 @@ export type JacketDraft = {
   warning: string | null;
   note: string | null;
   outdoorsValid: boolean;
+  /**
+   * Pieces on the sheet before the last stylist swap. Null after Undo, Save, Wear, or Close.
+   * Omitted by every jacket toggle. One level, not a stack.
+   */
+  preSwapIds?: string[] | null;
 };
 
 const drafts = new Map<string, JacketDraft>();
@@ -89,13 +94,18 @@ function keyOf(baseIds: readonly string[], stamp: string): string {
 }
 
 export function rememberJacketDraft(draft: JacketDraft): void {
+  const key = keyOf(draft.baseIds, draft.stamp);
+  const prev = drafts.get(key);
+  /* A jacket toggle leaves preSwapIds unset. Keep the snapshot already stored. Null clears it. */
+  const preSwapIds = Object.prototype.hasOwnProperty.call(draft, "preSwapIds") ? draft.preSwapIds : prev?.preSwapIds;
   const next: JacketDraft = {
     ...draft,
     accountId: accountId,
     baseIds: [...draft.baseIds],
     ids: [...draft.ids],
+    ...(preSwapIds !== undefined ? { preSwapIds: preSwapIds ? [...preSwapIds] : preSwapIds } : {}),
   };
-  drafts.set(keyOf(next.baseIds, next.stamp), next);
+  drafts.set(key, next);
   emit();
 }
 

@@ -11,7 +11,7 @@ import { forceLooksForPiece, looksForHero, unusedFromLooks } from "../lookbook.t
 import { z } from "zod";
 import { dressThisPiece, resolvePiecesFromText, pieceSearchBlob } from "../dress.ts";
 import { rackNotes } from "../gaps.ts";
-import { lookOpinion } from "../look-opinion.ts";
+import { lookOpinion, opinionSlotOf } from "../look-opinion.ts";
 import {
   checkSwaps,
   checkVerdict,
@@ -429,7 +429,12 @@ const suggestSwap: ToolDef<{ ids: string[]; occasion?: Occasion; season?: Season
     const pieces = byIds(args.ids, live);
     const occasion = occasionFor(ctx, args.occasion);
     const season = seasonFor(ctx, args.season);
-    const swaps = oneOfEach(pieces) ? checkSwaps(pieces, live, checkCtx(ctx, occasion, season), ctx.taste) : [];
+    const rawSwaps = oneOfEach(pieces) ? checkSwaps(pieces, live, checkCtx(ctx, occasion, season), ctx.taste) : [];
+    /* A vest is a jacket here, never the top checkSwaps would replace. slotOf still calls it a top. */
+    const swaps = rawSwaps.filter((s) => {
+      const outPiece = live.find((g) => g.id === s.outId);
+      return Boolean(outPiece) && !(s.slot === "top" && outPiece && isShortOuter(outPiece));
+    });
     const items = swaps.map((s) => ({
       slot: s.slot,
       out: ref(live.find((g) => g.id === s.outId)!, live),
@@ -441,7 +446,7 @@ const suggestSwap: ToolDef<{ ids: string[]; occasion?: Occasion; season?: Season
       const opinion = lookOpinion(pieces, live, { occasion, season, taste: ctx.taste });
       for (const s of opinion?.swaps ?? []) {
         const cand = live.find((g) => g.id === s.id);
-        const current = pieces.find((g) => slotOf(g) === s.slot || (s.slot === "top" && slotOf(g) === "dress"));
+        const current = pieces.find((g) => opinionSlotOf(g) === s.slot);
         if (!cand || !current) continue;
         items.push({
           slot: s.slot,

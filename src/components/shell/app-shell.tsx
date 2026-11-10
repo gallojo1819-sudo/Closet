@@ -17,6 +17,7 @@ import { useDailyPick } from "@/lib/use-daily-pick";
 import { cn } from "@/lib/utils";
 import { setJacketDraftAccount } from "@/lib/jacket-draft";
 import { noteRoute } from "@/lib/stylist-page";
+import { LookAskPreview } from "@/components/closet/look-ask-preview";
 import { BottomNav } from "./bottom-nav";
 import { StylistDock } from "./stylist-dock";
 import { Toasts } from "./toasts";
@@ -209,6 +210,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {cleaning ? <p className="micro px-4 py-1 text-ink-soft md:px-6">{cleaning}</p> : null}
         {children}
       </main>
+      {import.meta.env.DEV ? <LookAskPreview /> : null}
       <StylistDock />
       <BottomNav />
       <Toasts />
