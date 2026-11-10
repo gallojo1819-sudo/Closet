@@ -7,8 +7,10 @@
 import { liveIdsKey } from "./daily-pick.ts";
 import { drawOrder, drawSeed, pieceWeight, rngFromSalt, type WeightCtx } from "./draw.ts";
 import { slotOf } from "./style.ts";
+import { oversizedOf } from "./stylist/oversized.ts";
 import { isShortOuter } from "./stylist/short-outer.ts";
 import { passesRules, type RuleCtx } from "./stylist/legal.ts";
+import { isKnitTop, isShirtLike, shirtLockedOut } from "./tuck.ts";
 import { ruleSentence } from "./stylist/rule-copy.ts";
 import { pairingBlocked, pieceVetoIds, type TasteMemory } from "./taste.ts";
 import type { Garment, Occasion, Season } from "./types.ts";
@@ -84,6 +86,39 @@ function oneSwap(pieces: Garment[], pool: Garment[], taste: TasteMemory | undefi
 }
 
 /**
+ * A passing vest look still has a shirt to swap. checkSwaps returns nothing once the look
+ * passes, and slotOf would have treated the vest as the top. This is the one top swap
+ * closet_suggest_swap can fall back to: a shirt he tucks, or a regular knit.
+ */
+function vestTopSwap(pieces: Garment[], pool: Garment[], taste: TasteMemory | undefined, ctx: RuleCtx, today: string): OpinionSwap | null {
+  const current = pieces.find((g) => opinionSlotOf(g) === "top");
+  if (!current || isShortOuter(current)) return null;
+  const wctx: WeightCtx = { today };
+  const rng = rngFromSalt(drawSeed(today, `suggest:vest-top:${pieces.map((g) => g.id).sort().join(",")}`, liveIdsKey(pool)));
+  const candidates = drawOrder(
+    pool.filter((cand) => {
+      if (cand.id === current.id || pieces.some((g) => g.id === cand.id)) return false;
+      if (opinionSlotOf(cand) !== "top" || isShortOuter(cand) || oversizedOf(cand)) return false;
+      if (isKnitTop(cand)) return true;
+      return isShirtLike(cand) && !shirtLockedOut(cand);
+    }),
+    (g) => Math.max(pieceWeight(g, wctx), Number.MIN_VALUE),
+    rng,
+  );
+  for (const cand of candidates) {
+    if (taste && pieceVetoIds(taste).has(cand.id)) continue;
+    const next = pieces.map((g) => (g.id === current.id ? cand : g));
+    if (skipped(next, taste) || !passesRules(next, ctx).pass) continue;
+    return {
+      id: cand.id,
+      slot: "top",
+      line: `Better: ${cand.name}, not the ${current.name}.`,
+    };
+  }
+  return null;
+}
+
+/**
  * Two pieces or more. The rules' verdict in plain words, and one owned swap that passes, or
  * nothing. No shop, no rank.
  */
@@ -105,7 +140,8 @@ export function lookOpinion(
   const ctx: RuleCtx = { house: null, occasion: opts?.occasion ?? "weekday", season: opts?.season ?? "fall", pool, taste };
   const verdict = passesRules(pieces, ctx);
   if (verdict.pass) {
-    return { headline: PASSES_LINE, reason: PASSES_LINE, failed: [], house: null, swaps: [], stuck: null };
+    const swap = pieces.some(isShortOuter) ? vestTopSwap(pieces, pool, taste, ctx, today) : null;
+    return { headline: PASSES_LINE, reason: PASSES_LINE, failed: [], house: null, swaps: swap ? [swap] : [], stuck: null };
   }
   const sentences = [...new Set(verdict.failed.map(ruleSentence))];
   const swap = oneSwap(pieces, pool, taste, ctx, today);

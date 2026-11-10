@@ -41,10 +41,10 @@ export function onMeDownloadMs(elapsedMs: number): number {
 export const CHECK_SERVER_MS = 25000;
 /** How long the dock waits for a photo check. The 9 s text deadline is too short for vision plus tools. */
 export const CHECK_DEADLINE_MS = 30000;
-/** One look ask: no vision, four tool steps, under the 60 s function limit. */
-export const LOOK_ASK_SERVER_MS = 15000;
-/** How long the dock waits for a look ask. Shorter than a photo check, longer than a text ask. */
-export const LOOK_ASK_DEADLINE_MS = 20000;
+/** One look ask: no vision, four tool steps. Same server budget as a photo check, under the 60 s function limit. */
+export const LOOK_ASK_SERVER_MS = 25000;
+/** How long the dock waits for a look ask. Same client wait as a photo check. */
+export const LOOK_ASK_DEADLINE_MS = 30000;
 /** Long edge of the photo sent to the check, in pixels. */
 export const CHECK_PHOTO_EDGE = 1024;
 /** JPEG quality of that photo. */

@@ -87,12 +87,14 @@ const SHOP = /\b(?:buy|shop|shops|shopping|store|stores|purchase)\b/gi;
 const URL = /\b(?:https?:\/\/|www\.)\S+/gi;
 const VERDICT = /^(?:works|almost|doesn't work yet|does not work yet)\b/i;
 
-export function estimateCheckUsd(inputTokens: number, outputTokens: number): number {
-  return (inputTokens / 1_000_000) * GROK45_IN_PER_M + (outputTokens / 1_000_000) * GROK45_OUT_PER_M;
+/** grok-4.5 list prices. Reasoning tokens are billed at the output rate, on top of completion tokens. */
+export function estimateCheckUsd(inputTokens: number, outputTokens: number, reasoningTokens = 0): number {
+  const reasoned = Number.isFinite(reasoningTokens) ? Math.max(0, reasoningTokens) : 0;
+  return (inputTokens / 1_000_000) * GROK45_IN_PER_M + ((outputTokens + reasoned) / 1_000_000) * GROK45_OUT_PER_M;
 }
 
-function formatUsd(inputTokens: number, outputTokens: number): string {
-  return estimateCheckUsd(inputTokens, outputTokens).toFixed(4);
+function formatUsd(inputTokens: number, outputTokens: number, reasoningTokens = 0): string {
+  return estimateCheckUsd(inputTokens, outputTokens, reasoningTokens).toFixed(4);
 }
 
 /** One verdict line and at most three fixes. Ratings, links and shopping words are cut. */
@@ -356,8 +358,8 @@ export async function checkOutfitCore(input: CheckOutfitInput, deps: CheckOutfit
   const log = (result: CheckOutfitResult): CheckOutfitResult => {
     if (logged) return result;
     logged = true;
-    const est = estimateCheckUsd(tally.in, tally.out);
-    const line = `[closet] checkOutfit tokens in=${tally.in} out=${tally.out} reasoning=${tally.reasoning} calls=${tally.calls} est_usd=${formatUsd(tally.in, tally.out)}`;
+    const est = estimateCheckUsd(tally.in, tally.out, tally.reasoning);
+    const line = `[closet] checkOutfit tokens in=${tally.in} out=${tally.out} reasoning=${tally.reasoning} calls=${tally.calls} est_usd=${formatUsd(tally.in, tally.out, tally.reasoning)}`;
     console.log(line);
     if (est > CHECK_FLAG_USD) console.log(`[closet] checkOutfit flag est_usd=${est.toFixed(4)} above 0.30`);
     if (deps.dev && result.ok) {
