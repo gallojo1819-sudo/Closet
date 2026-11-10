@@ -6,10 +6,14 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OutfitCheckBar } from "@/components/shell/outfit-check-bar";
 import { askStylist, trendLayer } from "@/lib/ai";
-import { CHECK_DEADLINE_MS } from "@/lib/ai-budget";
+import { CHECK_DEADLINE_MS, LOOK_ASK_DEADLINE_MS } from "@/lib/ai-budget";
+import { askAboutLook } from "@/lib/ask-about-look";
+import { LOOK_ASK_HINT, LOOK_ASK_TIMEOUT_TEXT } from "@/lib/assistant/ask-about-look";
 import { checkOutfit } from "@/lib/outfit-check-ask";
+import { offerLookSwaps } from "@/lib/look-sheet-swaps";
+import { subscribeStylistPanel, takePendingFocus, type FocusRequest } from "@/lib/stylist-panel";
 import { prepareOutfitPhoto, submitOutfitCheck } from "@/lib/outfit-check-client";
-import { SIGNED_OUT, limitMessage } from "@/lib/auth/ai-quota";
+import { SIGNED_OUT, isGateMessage, limitMessage } from "@/lib/auth/ai-quota";
 import { CHECK_LOADING_TEXT, CHECK_USER_TURN } from "@/lib/outfit-check-copy";
 import {
   WHICH_PIECE,
@@ -81,12 +85,6 @@ let trendPassStarted = false;
    earlier session's last answer, whatever its timestamp, is not this look. */
 const SESSION_IDS = new Set<string>();
 
-const panelListeners = new Set<() => void>();
-
-/** Open the one agent's panel from anywhere (top bar, /stylist). No navigation. */
-export function openStylistPanel(): void {
-  for (const fn of panelListeners) fn();
-}
 
 function pageOccasion(value: string | undefined, fallback: Occasion): Occasion {
   return OCCASIONS.some((row) => row.id === value) ? (value as Occasion) : fallback;
@@ -160,6 +158,12 @@ export function StylistDock() {
   const differentTurn = useRef(0);
   const explicitWrite = useRef(false);
   const [open, setOpen] = useState(false);
+  const [focus, setFocus] = useState<FocusRequest | null>(null);
+  const [hintChip, setHintChip] = useState<string | null>(null);
+  const [mockFocusLabel, setMockFocusLabel] = useState<string | null>(null);
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
+  const triedNonce = useRef(0);
   const [shown, setShown] = useState(false);
   const [ring, setRing] = useState(false);
   const [unread, setUnread] = useState(false);
@@ -168,16 +172,48 @@ export function StylistDock() {
   const seenRef = useRef(messages.length);
 
   useEffect(() => {
-    const fn = () => setOpen(true);
-    panelListeners.add(fn);
-    return () => {
-      panelListeners.delete(fn);
-    };
+    return subscribeStylistPanel(() => {
+      const req = takePendingFocus();
+      if (req) setFocus(req);
+      setOpen(true);
+    });
   }, []);
 
   useEffect(() => {
+    if (open) return;
+    setFocus(null);
+    setHintChip(null);
+  }, [open]);
+
+  useEffect(() => {
     if (!import.meta.env.DEV || typeof window === "undefined") return;
-    const value = new URLSearchParams(window.location.search).get("outfitCheck");
+    const params = new URLSearchParams(window.location.search);
+    const lookAsk = params.get("lookAsk");
+    if (lookAsk === "dock" || lookAsk === "asking" || lookAsk === "answered") {
+      setOpen(true);
+      setFocus({
+        nonce: 0,
+        lookIds: ["g_oxford", "g_trousers", "g_loafers"],
+        occasion: "weekend",
+        hint: LOOK_ASK_HINT,
+      });
+      setMockFocusLabel("Navy oxford · Grey trousers");
+      if (lookAsk === "dock" || lookAsk === "asking") setBusy(true);
+      if (lookAsk === "answered") {
+        const createdAt = `${todayNY()}T16:00:00.000Z`;
+        const user = { id: "look-ask-user", role: "user" as const, text: LOOK_ASK_HINT, createdAt };
+        const reply = {
+          id: "look-ask-reply",
+          role: "stylist" as const,
+          text: "Almost.\nTuck the flannel under the vest, or swap it to the navy sweater.\nLeave the brown boots.",
+          createdAt,
+        };
+        SESSION_IDS.add(user.id);
+        SESSION_IDS.add(reply.id);
+        setEcho([user, reply]);
+      }
+    }
+    const value = params.get("outfitCheck");
     if (value !== "open" && value !== "picker" && value !== "loading" && value !== "verdict" && value !== "cap" && value !== "signedout") return;
     setOpen(true);
     setMockKind(value);
@@ -241,9 +277,95 @@ export function StylistDock() {
       .catch(() => {});
   }, [hydrated, setTaste]);
 
+  const focusPieces = useMemo(() => {
+    if (!focus) return [];
+    return focus.lookIds.map((id) => owned.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g));
+  }, [focus, owned]);
+  const focusLine = focusPieces.length >= 2 ? nameLook(focusPieces) : mockFocusLabel;
+
+  const askFocused = async (prompt: string, mode: "auto" | "typed") => {
+    const locked = focusRef.current;
+    const q = prompt.trim();
+    if (!q || !locked || locked.lookIds.length < 2 || busy) return;
+    if (checkAuthRef.current === "pending") return;
+    if (checkAuthRef.current !== "in") {
+      setHintChip(q);
+      if (mode === "typed") pushMessage({ role: "user", text: q });
+      pushMessage({ role: "stylist", text: SIGNED_OUT });
+      return;
+    }
+    setBusy(true);
+    setText("");
+    try {
+      const here = readStylistPage();
+      const res = await askWithDeadline(
+        askAboutLook({
+          data: {
+            prompt: q,
+            lookIds: locked.lookIds,
+            garments: forStylist,
+            page: here,
+            taste: tasteNow ?? emptyTaste(),
+            occasion: locked.occasion ?? pageOccasion(here.occasion, todayOccasion(drop)),
+            ...(typeof here.weatherF === "number" ? { weatherF: here.weatherF } : {}),
+          },
+        }),
+        LOOK_ASK_DEADLINE_MS,
+      );
+      if (!res) {
+        if (mode === "auto") setHintChip(q);
+        else pushMessage({ role: "user", text: q });
+        pushMessage({ role: "stylist", text: LOOK_ASK_TIMEOUT_TEXT });
+        return;
+      }
+      if (!res.ok) {
+        if (mode === "auto" && (isGateMessage(res.error) || res.reason === "quota" || res.reason === "signed_out")) {
+          setHintChip(q);
+          pushMessage({ role: "stylist", text: res.error });
+          return;
+        }
+        if (mode === "typed") pushMessage({ role: "user", text: q });
+        pushMessage({ role: "stylist", text: res.error });
+        return;
+      }
+      setHintChip(null);
+      pushMessage({ role: "user", text: q });
+      const pieces = locked.lookIds.map((id) => owned.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g));
+      pushMessage({
+        role: "stylist",
+        text: res.text,
+        ...(pieces.length >= 2
+          ? {
+              garmentIds: pieces.map((g) => g.id),
+              draftName: nameLook(pieces),
+              draftOccasion: locked.occasion ?? pageOccasion(here.occasion, res.occasion),
+            }
+          : {}),
+      });
+      if (res.swaps.length) offerLookSwaps(res.swaps);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const askFocusedRef = useRef(askFocused);
+  askFocusedRef.current = askFocused;
+
+  useEffect(() => {
+    if (!open || !focus) return;
+    if (focus.nonce === 0 || triedNonce.current === focus.nonce) return;
+    if (checkAuth === "pending") return;
+    triedNonce.current = focus.nonce;
+    void askFocusedRef.current(focus.hint, "auto");
+  }, [open, focus, checkAuth]);
+
   const send = async (prompt: string) => {
     const q = prompt.trim();
-    if (!q || busy || owned.length === 0) return;
+    if (!q || busy) return;
+    if (focusRef.current && focusRef.current.lookIds.length >= 2) {
+      await askFocused(q, "typed");
+      return;
+    }
+    if (owned.length === 0) return;
     explicitWrite.current = false;
     const before = useCloset.getState();
     const staged = recordStylistQuestion(before, q);
@@ -746,7 +868,10 @@ export function StylistDock() {
           />
           <div
             data-stylist-dock
-            className="fixed right-4 bottom-[calc(3.5rem+0.75rem+2.75rem+0.5rem+env(safe-area-inset-bottom))] z-50 flex max-h-[70dvh] w-[min(100vw-2rem,22rem)] flex-col overflow-auto border border-hairline bg-paper text-ink md:right-6 md:bottom-[4.75rem]"
+            className={cn(
+              "fixed right-4 bottom-[calc(3.5rem+0.75rem+2.75rem+0.5rem+env(safe-area-inset-bottom))] flex max-h-[70dvh] w-[min(100vw-2rem,22rem)] flex-col overflow-auto border border-hairline bg-paper text-ink md:right-6 md:bottom-[4.75rem]",
+              focus ? "z-[70]" : "z-50",
+            )}
             style={{
               opacity: shown ? 1 : 0,
               transform: shown ? "translateY(0)" : "translateY(8px)",
@@ -769,6 +894,11 @@ export function StylistDock() {
               <p data-stylist-screen className="mt-1 text-sm text-ink">
                 {sentence}
               </p>
+              {focus && focusLine ? (
+                <p data-focus-look className="mt-2 inline-flex min-h-[44px] items-center border border-hairline px-2 text-sm text-ink">
+                  This look: {focusLine}
+                </p>
+              ) : null}
             </div>
             {notesOpen ? (
               <div className="mt-3 border-t border-hairline">
@@ -839,7 +969,20 @@ export function StylistDock() {
               ) : (
                 <p className="mt-1 text-sm text-ink-soft">Nothing yet.</p>
               )}
-              {thread.length === 0 && !busy && owned.length > 0 ? (
+              {hintChip ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    data-stylist-chip
+                    data-look-ask-hint
+                    onClick={() => void send(hintChip)}
+                    className="micro inline-flex min-h-[44px] items-center border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong hover:text-ink"
+                  >
+                    {hintChip}
+                  </button>
+                </div>
+              ) : null}
+              {thread.length === 0 && !busy && owned.length > 0 && !hintChip ? (
                 <div data-stylist-chips className="mt-3 flex flex-wrap gap-2">
                   {STARTER_CHIPS.map((chip) => (
                     <button

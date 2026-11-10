@@ -20,6 +20,9 @@ import { useTuckHabits } from "@/lib/use-tuck-habits";
 import { pieceLabel } from "@/lib/piece-label";
 import { editJacket, lastResortNote, legacyJacketAction, NOTE_HELD, NOTE_WHICH, reconcileOpenLook, selectedOuter, type JacketContext } from "@/lib/jacket-edit";
 import { effectiveIds, jacketDraftAccount, readJacketDraft, rememberJacketDraft } from "@/lib/jacket-draft";
+import { applyLookAskSwaps, undoLookAskSwap, type LookAskSwap } from "@/lib/look-swap";
+import { registerLookSheetSwaps } from "@/lib/look-sheet-swaps";
+import { openStylistPanel } from "@/lib/stylist-panel";
 import { countsAsOuter } from "@/lib/stylist/jackets";
 import { moreOutfitsForLook } from "@/lib/dress";
 import type { House } from "@/lib/houses";
@@ -87,6 +90,10 @@ export function LookSheet({
   const [ids, setIds] = useState(() => {
     const owned = new Set(closet.filter((g) => !g.archived).map((g) => g.id));
     return effectiveIds(baseIds, stamp, owned) ?? look.garmentIds;
+  });
+  const [preSwapIds, setPreSwapIds] = useState<string[] | null>(() => {
+    const saved = readJacketDraft(baseIds, stamp)?.preSwapIds;
+    return saved && saved.length ? saved : null;
   });
   const [jacketNote, setJacketNote] = useState<string | null>(null);
   const [jacketWarning, setJacketWarning] = useState<string | null>(null);
@@ -195,6 +202,64 @@ export function LookSheet({
 
   const idsRef = useRef(ids);
   idsRef.current = ids;
+  const preSwapRef = useRef(preSwapIds);
+  preSwapRef.current = preSwapIds;
+  const sheetKey = useRef({ baseIds, stamp, closet, look, jacketCtx, lockedIds, taste });
+  sheetKey.current = { baseIds, stamp, closet, look, jacketCtx, lockedIds, taste };
+  const swapCtx = (): JacketContext => {
+    const cur = sheetKey.current;
+    return {
+      occasion: cur.jacketCtx?.occasion ?? mapOccasion(cur.look.occasion),
+      season: cur.jacketCtx?.season ?? "fall",
+      weatherF: cur.jacketCtx?.weatherF,
+      measured: cur.jacketCtx?.measured,
+      highF: cur.jacketCtx?.highF,
+      wet: cur.jacketCtx?.wet,
+      windy: cur.jacketCtx?.windy,
+      lockedIds: cur.lockedIds,
+      taste: cur.taste,
+    };
+  };
+  const clearUndo = () => {
+    if (!preSwapRef.current) return;
+    const hit = readJacketDraft(baseIds, stamp);
+    setPreSwapIds(null);
+    if (!hit?.preSwapIds) return;
+    rememberJacketDraft({ ...hit, ids: [...idsRef.current], preSwapIds: null });
+  };
+  const closeSheet = () => {
+    clearUndo();
+    onClose();
+  };
+  useEffect(() => {
+    return registerLookSheetSwaps({
+      apply: (swaps: readonly LookAskSwap[]) => {
+        const cur = sheetKey.current;
+        const result = applyLookAskSwaps({
+          ids: idsRef.current,
+          baseIds: cur.baseIds,
+          stamp: cur.stamp,
+          closet: cur.closet,
+          swaps,
+          ctx: swapCtx(),
+        });
+        if (!result.wrote) return;
+        setIds(result.ids);
+        setPreSwapIds(result.preSwapIds);
+        if (result.note) setJacketNote(result.note);
+        if (result.warning) setJacketWarning(result.warning);
+      },
+    });
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (!preSwapRef.current) return;
+      const cur = sheetKey.current;
+      const hit = readJacketDraft(cur.baseIds, cur.stamp);
+      if (!hit?.preSwapIds) return;
+      rememberJacketDraft({ ...hit, preSwapIds: null });
+    };
+  }, []);
   const fitKey = closet.map((g) => `${g.id}:${g.archived ? 1 : 0}:${g.oversized === undefined ? "" : g.oversized ? 1 : 0}:${g.fit ?? ""}`).join(",");
   const jacketCtxKey = `${jacketCtx?.occasion ?? ""}|${jacketCtx?.season ?? ""}|${jacketCtx?.weatherF ?? ""}|${jacketCtx?.measured ? 1 : 0}|${jacketCtx?.wet ?? ""}|${jacketCtx?.windy ?? ""}|${jacketCtx?.highF ?? ""}`;
   const baseKey = baseIds.join(",");
@@ -302,7 +367,7 @@ export function LookSheet({
     l.garmentIds.map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g));
 
   return (
-    <Overlay onClose={onClose} getAnchor={getCard} zClass="z-[60]" closeOnEscape={closeOnEscape}>
+    <Overlay onClose={closeSheet} getAnchor={getCard} zClass="z-[60]" closeOnEscape={closeOnEscape}>
         {onBack ? (
           <button
             type="button"
@@ -339,7 +404,11 @@ export function LookSheet({
             <WearButton
               className="h-9 px-4 text-[13px]"
               onConfirming={() => setLanding(true)}
-              onWear={() => onWear(activePieces.map((g) => g.id))}
+              onWear={() => {
+                const worn = activePieces.map((g) => g.id);
+                clearUndo();
+                onWear(worn);
+              }}
             />
             <button
               type="button"
@@ -353,11 +422,43 @@ export function LookSheet({
                   source: "manual",
                   lookbook: false,
                 });
+                clearUndo();
               }}
               className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong disabled:opacity-60"
             >
               {comboSaved ? "Saved" : "Save look"}
             </button>
+            <button
+              type="button"
+              aria-label="Ask about this look"
+              data-ask-about-look
+              onClick={() =>
+                openStylistPanel({
+                  lookIds: activePieces.map((g) => g.id),
+                  occasion: mapOccasion(look.occasion),
+                  promptHint: "What would make this better?",
+                })
+              }
+              className="micro inline-flex min-h-[44px] items-center border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+            >
+              Ask about this look
+            </button>
+            {preSwapIds ? (
+              <button
+                type="button"
+                data-undo-swap
+                aria-label="Undo swap"
+                title="Revert to the pieces before the stylist's swap"
+                onClick={() => {
+                  const restored = undoLookAskSwap({ baseIds, stamp, preSwapIds, closet });
+                  setIds(restored);
+                  setPreSwapIds(null);
+                }}
+                className="micro inline-flex min-h-[44px] items-center border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
+              >
+                Undo swap
+              </button>
+            ) : null}
             {refPhoto ? (
               <button
                 type="button"
@@ -383,7 +484,7 @@ export function LookSheet({
             )}
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeSheet}
               className="micro border border-hairline px-3 py-2 text-ink-soft hover:border-hairline-strong"
             >
               Close

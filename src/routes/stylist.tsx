@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { openStylistPanel } from "@/components/shell/stylist-dock";
+import { openStylistPanel } from "@/lib/stylist-panel";
 
 export const Route = createFileRoute("/stylist")({ component: StylistPage });
 

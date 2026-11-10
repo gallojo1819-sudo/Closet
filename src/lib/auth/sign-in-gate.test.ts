@@ -47,7 +47,7 @@ const SPENDERS: Record<AiBucket, string[]> = {
   vision: ["tagGarment", "classifyScan", "judgeHeldPlate", "identifyPiece"],
   image: ["printGarment", "extractGarment", "recolorCover", "onMePreview"],
   search: ["findOfficialCover", "searchOfficial", "fetchListing"],
-  outfit_check: ["checkOutfit"],
+  outfit_check: ["checkOutfit", "askAboutLook"],
 };
 
 describe("xAI caller gate", () => {
@@ -96,9 +96,10 @@ describe("xAI caller gate", () => {
     assert.equal([...store.keys()].some((key) => key.endsWith(`|${windowStart(T0, HOUR_SECONDS)}`)), false, "old keys pruned");
   });
 
-  it("every spender has a bucket, and the buckets cover exactly the 17 spenders", () => {
+  it("every spender has a bucket, and the buckets cover exactly the 18 spenders", () => {
     const names = Object.keys(AI_FN_BUCKET).sort();
     const expected = Object.values(SPENDERS).flat().sort();
+    assert.equal(expected.length, 18);
     assert.deepEqual(names, expected);
     for (const [bucket, fns] of Object.entries(SPENDERS) as [AiBucket, string[]][]) {
       for (const fn of fns) assert.equal(AI_FN_BUCKET[fn], bucket, fn);
@@ -107,8 +108,9 @@ describe("xAI caller gate", () => {
     assert.equal(SPENDERS.vision.length, 4);
     assert.equal(SPENDERS.image.length, 4);
     assert.equal(SPENDERS.search.length, 3);
-    assert.equal(SPENDERS.outfit_check.length, 1);
+    assert.equal(SPENDERS.outfit_check.length, 2);
     assert.equal(AI_FN_BUCKET.checkOutfit, "outfit_check");
+    assert.equal(AI_FN_BUCKET.askAboutLook, "outfit_check");
     assert.equal(AI_LIMITS.outfit_check.hour, 20);
     assert.equal(AI_LIMITS.outfit_check.day, 20);
     assert.equal(AI_FN_BUCKET.aiStatus, undefined, "aiStatus is gated but not bucketed");
@@ -123,7 +125,7 @@ describe("xAI caller gate", () => {
   });
 
   it("every spender and aiStatus run the caller middleware and gate before any call", () => {
-    const files = ["../ai.ts", "../listing.ts", "../packshot-search.ts", "../outfit-check-ask.ts"];
+    const files = ["../ai.ts", "../listing.ts", "../packshot-search.ts", "../outfit-check-ask.ts", "../ask-about-look.ts"];
     const seen = new Set<string>();
     for (const rel of files) {
       const src = readFileSync(new URL(rel, import.meta.url), "utf8");

@@ -7,6 +7,7 @@
 import { liveIdsKey } from "./daily-pick.ts";
 import { drawOrder, drawSeed, pieceWeight, rngFromSalt, type WeightCtx } from "./draw.ts";
 import { slotOf } from "./style.ts";
+import { isShortOuter } from "./stylist/short-outer.ts";
 import { passesRules, type RuleCtx } from "./stylist/legal.ts";
 import { ruleSentence } from "./stylist/rule-copy.ts";
 import { pairingBlocked, pieceVetoIds, type TasteMemory } from "./taste.ts";
@@ -37,7 +38,12 @@ export type LookOpinion = {
   stuck: string | null;
 };
 
-function slotOfPiece(g: Garment): OpinionSlot | null {
+/**
+ * The slot a swap replaces. A vest, gilet, or cropped layer is the jacket, never the only top.
+ * slotOf still files a vest as a top for the Lookbook and for R6. This is the assistant path only.
+ */
+export function opinionSlotOf(g: Garment): OpinionSlot | null {
+  if (isShortOuter(g)) return "outerwear";
   const s = slotOf(g);
   if (s === "top" || s === "dress") return "top";
   if (s === "bottom" || s === "footwear" || s === "outerwear") return s;
@@ -56,10 +62,10 @@ function oneSwap(pieces: Garment[], pool: Garment[], taste: TasteMemory | undefi
   const wctx: WeightCtx = { today };
   const rng = rngFromSalt(drawSeed(today, `suggest:swap:${pieces.map((g) => g.id).sort().join(",")}`, liveIdsKey(pool)));
   for (const slot of order) {
-    const current = pieces.find((g) => slotOfPiece(g) === slot);
+    const current = pieces.find((g) => opinionSlotOf(g) === slot);
     if (!current) continue;
     const candidates = drawOrder(
-      pool.filter((cand) => cand.id !== current.id && !pieces.some((g) => g.id === cand.id) && slotOfPiece(cand) === slot),
+      pool.filter((cand) => cand.id !== current.id && !pieces.some((g) => g.id === cand.id) && opinionSlotOf(cand) === slot),
       (g) => Math.max(pieceWeight(g, wctx), Number.MIN_VALUE),
       rng,
     );
