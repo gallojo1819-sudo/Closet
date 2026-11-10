@@ -1,6 +1,7 @@
 /**
- * Controllable session for the look-ask dock test. The dock imports useCurrentUserState;
- * the test points that import here so a signed-out open can become signed-in without a new tap.
+ * Controllable Better Auth session for the look-ask dock test. The dock's gate
+ * reads the Supabase account; this mock stays signed out in the case that proves
+ * a Better Auth miss does not block a signed-in Closet account.
  */
 import { useSyncExternalStore } from "react";
 

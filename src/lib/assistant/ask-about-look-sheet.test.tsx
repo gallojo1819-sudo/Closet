@@ -12,8 +12,10 @@ import { StylistDock } from "@/components/shell/stylist-dock";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { limitMessage, SIGNED_OUT } from "../auth/ai-quota.ts";
+import { patchAccount } from "../cloud/account.ts";
 import { clearJacketDrafts, readJacketDraft, setJacketDraftAccount } from "../jacket-draft.ts";
 import { offerLookSwaps } from "../look-sheet-swaps.ts";
+import { CHECK_SIGN_IN_LABEL } from "../outfit-check-copy.ts";
 import { swapIsLegal } from "../look-swap.ts";
 import { livePool } from "../rack.ts";
 import { oversizedOf } from "../stylist/oversized.ts";
@@ -76,6 +78,31 @@ vi.mock("@/lib/images", async () => {
 });
 
 const POOL = livePool(JSON.parse(readFileSync(resolve("src/lib/__fixtures__/engine-garments.json"), "utf8")) as Garment[]);
+const JOE = { id: "joe", email: "joe@prereal.com" };
+
+function signInAccount() {
+  patchAccount({ user: JOE, pending: false, configured: true });
+}
+
+function signOutAccount() {
+  patchAccount({ user: null, pending: false, configured: true });
+}
+
+function resetAccount() {
+  patchAccount({
+    user: null,
+    pending: true,
+    progress: null,
+    configured: false,
+    dialogOpen: false,
+    emailSent: false,
+    error: null,
+    localOnly: false,
+    wrongAccount: false,
+    listedThumbs: null,
+  });
+}
+
 const FLANNEL = "g_2b6fao81vqrs";
 const VEST = "g_ef0u3ljnwa09";
 const CORDS = "g_cfm8n594jea7";
@@ -155,6 +182,7 @@ describe("ask about this look, on the sheet", () => {
     clearJacketDrafts();
     setJacketDraftAccount("");
     setLookAskAuth(signedInLookAskAuth());
+    signInAccount();
     calls.askAboutLook.mockReset();
     calls.askStylist.mockReset();
     calls.checkOutfit.mockReset();
@@ -171,6 +199,7 @@ describe("ask about this look, on the sheet", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     clearJacketDrafts();
+    resetAccount();
   });
 
   it("the button is 44px and opens the dock on the live ids", async () => {
@@ -238,6 +267,7 @@ describe("ask about this look, on the sheet", () => {
 
   it("does not auto-ask when signed out, and signing in later does not send", async () => {
     setLookAskAuth({ user: null, isPending: false });
+    signOutAccount();
     const view = mount(
       <>
         {sheet()}
@@ -253,11 +283,70 @@ describe("ask about this look, on the sheet", () => {
     expect(document.body.textContent).toContain(SIGNED_OUT);
     expect(document.querySelector("[data-focus-look]")?.textContent).toContain("This look:");
     expect(document.querySelector("[data-look-ask-hint]")?.textContent).toContain("What would make this better?");
+    expect(document.body.textContent).toContain(CHECK_SIGN_IN_LABEL);
     await act(async () => {
       setLookAskAuth(signedInLookAskAuth());
+      signInAccount();
     });
     await flush();
     expect(calls.askAboutLook).not.toHaveBeenCalled();
+    unmount(view);
+  });
+
+  it("asks once when Better Auth is signed out and the Supabase account is set", async () => {
+    setLookAskAuth({ user: null, isPending: false });
+    signInAccount();
+    const view = mount(
+      <>
+        {sheet()}
+        <StylistDock />
+      </>,
+    );
+    const button = document.querySelector('[aria-label="Ask about this look"]') as HTMLButtonElement;
+    await act(async () => {
+      button.click();
+    });
+    await flush();
+    expect(calls.askAboutLook).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).not.toContain(SIGNED_OUT);
+    unmount(view);
+  });
+
+  it("waits out a pending account before the auto-ask", async () => {
+    setLookAskAuth({ user: null, isPending: false });
+    patchAccount({ user: null, pending: true, configured: true });
+    const view = mount(
+      <>
+        {sheet()}
+        <StylistDock />
+      </>,
+    );
+    const button = document.querySelector('[aria-label="Ask about this look"]') as HTMLButtonElement;
+    await act(async () => {
+      button.click();
+    });
+    await flush();
+    expect(calls.askAboutLook).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain(SIGNED_OUT);
+    await act(async () => {
+      signInAccount();
+    });
+    await flush();
+    expect(calls.askAboutLook).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).not.toContain(SIGNED_OUT);
+    unmount(view);
+  });
+
+  it("does not show the photo-check sign-in line when the account is set", async () => {
+    setLookAskAuth({ user: null, isPending: false });
+    signInAccount();
+    const view = mount(<StylistDock />);
+    const fab = document.querySelector("[data-stylist-fab]") as HTMLButtonElement;
+    await act(async () => {
+      fab.click();
+    });
+    expect(document.body.textContent).not.toContain(CHECK_SIGN_IN_LABEL);
+    expect(document.querySelector("[data-outfit-check]")).toBeTruthy();
     unmount(view);
   });
 
@@ -306,6 +395,8 @@ describe("ask about this look, on the sheet", () => {
     });
     await flush();
     const draft = readJacketDraft(VEST_IDS, "look:vest");
+    expect(isKnitTop(piece(knit))).toBe(true);
+    expect(piece(knit).name.trim().length).toBeGreaterThan(0);
     expect(draft?.ids).toContain(knit);
     expect(draft?.ids).not.toContain(FLANNEL);
     expect(draft?.preSwapIds).toEqual(VEST_IDS);
@@ -397,6 +488,7 @@ describe("ask about this look, on the sheet", () => {
     });
     await flush();
     expect(calls.askAboutLook).not.toHaveBeenCalled();
+    expect(calls.askStylist).toHaveBeenCalledTimes(1);
     unmount(view);
   });
 });

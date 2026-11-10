@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useAccount } from "@/lib/cloud/account";
 import { jacketDraftVersion, subscribeJacketDrafts } from "@/lib/jacket-draft";
 import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
@@ -149,8 +149,10 @@ export function StylistDock() {
   /* The photo for a user turn. Component state only: it is not a field on the message, so closet.v6 never stores it. */
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [mockKind, setMockKind] = useState<string | null>(null);
-  const session = useCurrentUserState();
-  const liveAuth = session.isPending ? "pending" : session.user ? "in" : "out";
+  /* The account closetCaller already sends. Wait out pending so a reload does not
+     flash SIGNED_OUT or consume the auto-ask nonce. Better Auth is not this gate. */
+  const account = useAccount();
+  const liveAuth = account.pending ? "pending" : account.user ? "in" : "out";
   const checkAuth = mockKind === "signedout" ? "out" : liveAuth;
   const checkAuthRef = useRef(checkAuth);
   checkAuthRef.current = checkAuth;
