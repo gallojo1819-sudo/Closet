@@ -109,6 +109,29 @@ function pageHasWeather(page: StylistPageContext | undefined): boolean {
   return typeof page?.weatherF === "number" && Number.isFinite(page.weatherF);
 }
 
+type WeatherFlags = StylistPageContext["conditions"];
+
+/** Flags the page actually measured. A missing boolean was not measured. */
+function knownWeatherFlags(conditions: WeatherFlags): string {
+  const parts: string[] = [];
+  if (typeof conditions?.wet === "boolean") parts.push(conditions.wet ? "wet" : "not wet");
+  if (typeof conditions?.windy === "boolean") parts.push(conditions.windy ? "windy" : "not windy");
+  return parts.length ? `Measured: ${parts.join(", ")}.` : "";
+}
+
+/** Rain and wind the page did not measure. Temperature is not a substitute. */
+function unmeasuredWeather(conditions: WeatherFlags): string {
+  const missing: string[] = [];
+  if (typeof conditions?.wet !== "boolean") missing.push("rain");
+  if (typeof conditions?.windy !== "boolean") missing.push("wind");
+  if (!missing.length) return "";
+  const noun = missing.join(" and ");
+  const titled = `${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
+  const verb = missing.length === 1 ? "was" : "were";
+  const pronoun = missing.length === 1 ? "it" : "them";
+  return `${titled} ${verb} not measured. Never invent ${pronoun}.`;
+}
+
 /** The tuck mark the sheet already shows, so the ask does not recite it as a fix. */
 export function sheetTuckLine(pieces: readonly Garment[], occasion?: string, neverTuck: readonly string[] = []): SheetTuck {
   const mark = tuckMark(lookTuckDecision(pieces, occasion, neverTuck), leadTop(pieces));
@@ -127,6 +150,13 @@ export function sheetTuckLine(pieces: readonly Garment[], occasion?: string, nev
 
 export function lookAskSystem(pool: readonly Garment[], page: StylistPageContext | undefined): string {
   const weatherKnown = pageHasWeather(page);
+  const flags = knownWeatherFlags(page?.conditions);
+  const unmeasured = weatherKnown ? unmeasuredWeather(page?.conditions) : "";
+  const rainLine = weatherKnown
+    ? [flags, unmeasured, "Never invent a waterproof claim for cotton, wool, or suede."].filter(Boolean).join(" ")
+    : [flags, "Rain and weather come from closet_weather_now or the page reading. Never invent a waterproof claim for cotton, wool, or suede."]
+        .filter(Boolean)
+        .join(" ");
   return [
     buildAssistantSystem({ pool, ...(page ? { page } : {}) }),
     [
@@ -134,7 +164,7 @@ export function lookAskSystem(pool: readonly Garment[], page: StylistPageContext
       "You are answering one question about a look the user already has open.",
       "Call closet_check_look on the given ids first.",
       weatherKnown
-        ? "Then call closet_suggest_swap when a swap would help. The page already has a weather reading, so you may answer rain from that reading. You do not have to call closet_weather_now."
+        ? "Then call closet_suggest_swap when a swap would help. The temperature is already known. You do not have to call closet_weather_now just to read degrees. Do not infer rain or wind from the temperature."
         : "Then call closet_suggest_swap, or closet_weather_now when the question is about rain or weather.",
       "Answer the user's question.",
       "If the sheet already shows the look tucked or untucked, do not tell him to tuck or untuck as a fix.",
@@ -145,9 +175,7 @@ export function lookAskSystem(pool: readonly Garment[], page: StylistPageContext
       "An oversized piece stays untucked. Never tell him to tuck an oversized top.",
       "Never label a knit tucked.",
       "Loafers are fine in every season.",
-      weatherKnown
-        ? "Rain and weather come from the page reading. You do not have to call closet_weather_now. Never invent a waterproof claim for cotton, wool, or suede."
-        : "Rain and weather come from closet_weather_now or the page reading. Never invent a waterproof claim for cotton, wool, or suede.",
+      rainLine,
       "Swaps are the tool's. Do not invent a piece he does not own.",
     ].join("\n"),
   ].join("\n\n");
@@ -159,11 +187,14 @@ export function lookAskUser(
   pool: readonly Garment[],
   occasion?: string,
   neverTuck: readonly string[] = [],
+  conditions?: WeatherFlags,
 ): string {
   const lines = [prompt.trim(), "Look ids:"];
   if (!pieces.length) lines.push("none");
   for (const g of pieces) lines.push(`${g.id} | ${pieceLabel(g, pool)} | ${slotLabel(g)}`);
   lines.push(`Shown on the sheet as: ${sheetTuckLine(pieces, occasion, neverTuck)}`);
+  const flags = knownWeatherFlags(conditions);
+  if (flags) lines.push(flags);
   lines.push("Call closet_check_look on these ids first.");
   return lines.join("\n");
 }
@@ -222,7 +253,7 @@ export function lookAskPromptSizes(
 ): { systemChars: number; userChars: number; toolChars: number; chars: number; tokens: number } {
   const pieces = ids.map((id) => pool.find((g) => g.id === id)).filter((g): g is Garment => Boolean(g));
   const systemChars = lookAskSystem(pool, page).length;
-  const userChars = lookAskUser(prompt, pieces, pool, page?.occasion).length;
+  const userChars = lookAskUser(prompt, pieces, pool, page?.occasion, [], page?.conditions).length;
   const toolChars = JSON.stringify(toModelTools(assistantRegistry)).length;
   const chars = systemChars + userChars + toolChars;
   return { systemChars, userChars, toolChars, chars, tokens: tokensOf(chars) };
@@ -353,6 +384,7 @@ export async function askAboutLookCore(input: AskAboutLookInput, deps: AskAboutL
       taste,
       page,
       ...(weatherF !== undefined ? { weatherF } : {}),
+      ...(input.page?.conditions ? { conditions: input.page.conditions } : {}),
       notes: memoryNotes(),
       today: { drop: null, garments: pool, taste },
       date: deps.date ?? todayISO(),
@@ -380,7 +412,7 @@ export async function askAboutLookCore(input: AskAboutLookInput, deps: AskAboutL
         registry: assistantRegistry,
         ctx,
         system: lookAskSystem(pool, input.page),
-        prompt: lookAskUser(input.prompt ?? "", pieces, pool, occasion, neverTuck),
+        prompt: lookAskUser(input.prompt ?? "", pieces, pool, occasion, neverTuck, input.page?.conditions),
         maxSteps: CHECK_MAX_STEPS,
         keepLines: true,
       });

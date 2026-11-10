@@ -313,11 +313,14 @@ const weatherNow: ToolDef<Record<string, never>> = {
   risk: "read",
   run(ctx) {
     const measured = typeof ctx.weatherF === "number" && Number.isFinite(ctx.weatherF);
+    const conditions = gateConditions(ctx);
     return {
       reading: measured ? { f: ctx.weatherF } : UNMEASURED,
       measured,
       season: seasonFor(ctx),
       date: dateOf(ctx),
+      ...(typeof conditions?.wet === "boolean" ? { wet: conditions.wet } : {}),
+      ...(typeof conditions?.windy === "boolean" ? { windy: conditions.windy } : {}),
     };
   },
 };

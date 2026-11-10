@@ -599,12 +599,46 @@ describe("look ask shape and prompt", () => {
     expect(untucked.toLowerCase()).not.toMatch(/\buntuck\b/);
   });
 
-  it("lets a look ask skip closet_weather_now when the page already has a reading", () => {
-    const withReading = lookAskSystem(POOL, { route: "today", onScreenLookIds: STRIPE_IDS, weatherF: 48 });
-    expect(withReading).toMatch(/you may answer rain from that reading/i);
-    expect(withReading).toMatch(/You do not have to call closet_weather_now/);
+  it("knows the temperature without treating it as rain or wind", async () => {
+    const page = { route: "today" as const, onScreenLookIds: STRIPE_IDS, weatherF: 48 };
+    const degreesOnly = lookAskSystem(POOL, page);
+    expect(degreesOnly).toMatch(/temperature is already known/i);
+    expect(degreesOnly).toMatch(/You do not have to call closet_weather_now just to read degrees/);
+    expect(degreesOnly).toMatch(/Do not infer rain or wind from the temperature/);
+    expect(degreesOnly).toMatch(/Rain and wind were not measured/);
+    expect(degreesOnly).toMatch(/Never invent them/);
+    expect(degreesOnly).not.toMatch(/answer rain/i);
+    const pieces = STRIPE_IDS.map(piece);
+    expect(lookAskUser("is this ok for rain?", pieces, POOL, "weekday")).not.toMatch(/\bwet\b|\bwindy\b/);
+    const wet = lookAskSystem(POOL, { ...page, conditions: { wet: true } });
+    expect(wet).toMatch(/\bwet\b/);
+    expect(wet).toMatch(/Wind was not measured/);
+    expect(wet).not.toMatch(/answer rain/i);
+    expect(lookAskUser("is this ok for rain?", pieces, POOL, "weekday", [], { wet: true })).toMatch(/\bwet\b/);
+    const windy = lookAskSystem(POOL, { ...page, conditions: { windy: true } });
+    expect(windy).toMatch(/\bwindy\b/);
+    expect(windy).toMatch(/Rain was not measured/);
+    expect(lookAskUser("is this ok for rain?", pieces, POOL, "weekday", [], { windy: true })).toMatch(/\bwindy\b/);
     const without = lookAskSystem(POOL, { route: "today", onScreenLookIds: STRIPE_IDS });
     expect(without).toMatch(/closet_weather_now when the question is about rain or weather/);
     expect(without).not.toMatch(/You do not have to call closet_weather_now/);
+    let toolBody = "";
+    const post: XaiPost = async (raw) => {
+      const body = raw as { messages?: { role?: string; content?: unknown }[] };
+      const last = body.messages?.at(-1);
+      if (last?.role === "tool") toolBody = String(last.content);
+      if (last?.role !== "tool") return { ok: true, json: choice({ toolCalls: [{ name: "closet_weather_now", args: {} }] }) };
+      return { ok: true, json: choice({ text: "Almost.\nLeave the brown leather boots." }) };
+    };
+    const forwarded = await askAboutLookCore(
+      inputOf({
+        prompt: "is this ok for rain?",
+        page: { route: "today", onScreenLookIds: VEST_IDS, occasion: "weekend", season: "fall", weatherF: 48, conditions: { wet: true, windy: true } },
+      }),
+      depsOf(post),
+    );
+    expect(forwarded.ok).toBe(true);
+    expect(toolBody).toContain('"wet":true');
+    expect(toolBody).toContain('"windy":true');
   });
 });
