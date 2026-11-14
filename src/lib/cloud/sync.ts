@@ -64,6 +64,7 @@ import {
   savedAccountCopy,
 } from "./copy.ts";
 import { supabaseConfigured } from "./env.ts";
+import { changedKeys, keepSameRefs } from "./keep-refs.ts";
 import { accountPool, type CloudMeta } from "./merge.ts";
 
 
@@ -346,17 +347,19 @@ function applyMerged(next: CloudMeta) {
   };
   const { purgedIds, ...clean } = scrubRack(mixed);
   void purgedIds;
+  const patch = {
+    garments: clean.garments,
+    looks: clean.looks,
+    journal: clean.journal,
+    avoid: next.avoid,
+    drop: clean.drop,
+    seenLooks: clean.seenLooks ?? current.seenLooks,
+    ...(next.taste ? { taste: next.taste } : {}),
+  };
+  const kept = keepSameRefs(current, patch);
   holdPush = true;
   try {
-    useCloset.setState({
-      garments: clean.garments,
-      looks: clean.looks,
-      journal: clean.journal,
-      avoid: next.avoid,
-      drop: clean.drop,
-      seenLooks: clean.seenLooks ?? current.seenLooks,
-      ...(next.taste ? { taste: next.taste } : {}),
-    });
+    if (changedKeys(current, patch).length) useCloset.setState(kept);
     if (next.refPhoto && !current.refPhoto) {
       useCloset.setState({ refPhoto: refImageKey() });
     }
