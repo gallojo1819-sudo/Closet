@@ -294,11 +294,64 @@ export function twinCounts(looks: readonly (readonly Garment[])[]): Map<string, 
   return counts;
 }
 
-/** Look keys this Re-dress has already shown, including looks a reset just cleared. A later swap must not rebuild one. */
+/** Look keys still in this cycle. A later swap must not rebuild one. A reset's held keys are separate: the rows are dressed first, then breakHeld retouches any card that rebuilt one. */
 function shownLooks(rotation?: Rotation): Set<string> | null {
-  if (!rotation) return null;
-  const keys = rotation.hold?.length ? [...rotation.looks, ...rotation.hold] : rotation.looks;
-  return keys.length ? new Set(keys) : null;
+  return rotation?.looks.length ? new Set(rotation.looks) : null;
+}
+
+/**
+ * A card whose look a reset just cleared is retouched: one piece is swapped for
+ * the first legal alternative that is not itself a shown look. The search is
+ * left alone, so the rows stay the ones the cycle would have dressed.
+ */
+function breakHeld(rows: Garment[][][], d: Dresser, rotation: Rotation | undefined, twins: Twins, waived?: Map<string, string[]>): void {
+  const blocked = new Set([...(rotation?.looks ?? []), ...(rotation?.hold ?? [])]);
+  if (!blocked.size) return;
+  const pools = [d.bottoms, d.tops, d.shoes, d.layers];
+  const pageUses = (key: string, except: Garment): number => {
+    let n = 0;
+    for (const row of rows) for (const card of row) for (const piece of card) {
+      if (piece.id === except.id) continue;
+      if (twins.key(piece) === key) n += 1;
+    }
+    return n;
+  };
+  for (const looks of rows) {
+    for (let i = looks.length - 1; i >= 0; i -= 1) {
+      const look = looks[i]!;
+      if (!blocked.has(rotationLookKey(look.map((g) => g.id)))) continue;
+      const relax = waived?.get(lookKey(look)) ?? [];
+      let next: Garment[] | undefined;
+      for (const piece of look) {
+        const core = look.filter((g) => g.id !== piece.id);
+        const rowUsed = new Set(looks.flat().map((g) => twins.key(g)));
+        rowUsed.delete(twins.key(piece));
+        for (const pool of pools) {
+          for (const candidate of pool) {
+            if (candidate.id === piece.id || rowUsed.has(twins.key(candidate))) continue;
+            if (pageUses(twins.key(candidate), piece) >= SCREEN_CAP) continue;
+            const swapped = [...core, candidate];
+            const key = rotationLookKey(swapped.map((g) => g.id));
+            if (blocked.has(key) || !d.finalOk(swapped, relax)) continue;
+            next = swapped;
+            break;
+          }
+          if (next) break;
+        }
+        if (next) break;
+      }
+      if (!next) {
+        looks.splice(i, 1);
+        continue;
+      }
+      blocked.add(rotationLookKey(next.map((g) => g.id)));
+      if (waived) {
+        const prev = waived.get(lookKey(look));
+        if (prev) waived.set(lookKey(next), prev);
+      }
+      looks[i] = next;
+    }
+  }
 }
 
 function repeatsShown(shown: Set<string> | null | undefined, pieces: readonly { id: string }[]): boolean {
@@ -1662,6 +1715,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     );
     row.splice(0, row.length, ...restored);
   }
+  breakHeld(shoeRows, shoeDresser, ctx.rotation, twins, waived);
   return out;
 }
 
@@ -2096,6 +2150,7 @@ export function weekRotationRow(
     );
     looks.splice(0, looks.length, ...restored);
   }
+  breakHeld([looks], strict, ctx.rotation, twins, waived);
   if (ctx.rotation) settle(strict, pairable, ctx.rotation, twins, live.length);
   /* Every piece this scope has found unpairable so far, so the caller's list is complete. */
   const unpairable: Garment[] = [];
