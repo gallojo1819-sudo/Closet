@@ -17,6 +17,7 @@ import {
 import { lastDays, todayISO, todayNY } from "./utils.ts";
 import { garmentMemo, piecesMemo } from "./garment-memo.ts";
 import { isLinenCampPiece, isOvercoatPiece, lookFitsSeason, pieceFitsSeason, seasonFromWeather, seasonWarmth, type Season } from "./season.ts";
+import { thinSoloTop } from "./outfit-rules.ts";
 import { jacketInfo, jeansWithBlazer, slotPieces, wearSlot } from "./stylist/jackets.ts";
 import { JACKET_COVER_IDS, needsJacketOnly, pieceRuleFails, relaxTiers, ruleFails, type RuleCtx } from "./stylist/legal.ts";
 import { wordsCategory } from "./camera-tag.ts";
@@ -275,6 +276,26 @@ function isLayerTop(g: Garment): boolean {
   return s === "top" || s === "dress";
 }
 
+/** Every layer top is a thin polo, tee, linen or camp, and nothing knit or mid covers it. */
+function thinTopsUncovered(pieces: Garment[]): boolean {
+  let tops = 0;
+  let cover = false;
+  for (const g of pieces) {
+    if (isLayerTop(g) && !isBlazerPiece(g) && !isTrueOuter(g)) {
+      if (!thinSoloTop(g)) return false;
+      tops += 1;
+      continue;
+    }
+    if (isMidlayer(g)) {
+      cover = true;
+      continue;
+    }
+    const b = blobOf(g);
+    if (/knit|sweater|cardigan|quarter[- ]?zip|half[- ]?zip/.test(b) && !/hoodie/.test(b) && !isBlazerPiece(g)) cover = true;
+  }
+  return tops > 0 && !cover;
+}
+
 const CHECK_WORD = /\b(gingham|tattersall|windowpane|houndstooth|checks?|plaids?|graph)\b/;
 
 /** Small gingham is not the same scale as windowpane or plaid. Fair isle is not a check. */
@@ -437,7 +458,13 @@ export function occasionFails(pieces: Garment[], occasion: Occasion, f?: number)
  * only top below 55°F while the closet owns a knit. The old per-piece "warmth 2 in winter"
  * nudge is not a rule: the jacket rules (XC-SEA-2, JKT-COV-2) judge the upper body's warmth.
  */
-export function seasonFails(pieces: Garment[], season: Season, f?: number, pool?: readonly Garment[]): string[] {
+export function seasonFails(
+  pieces: Garment[],
+  season: Season,
+  f?: number,
+  pool?: readonly Garment[],
+  highF?: number,
+): string[] {
   const ids: string[] = [];
   const push = (id: string) => {
     if (!ids.includes(id)) ids.push(id);
@@ -453,6 +480,9 @@ export function seasonFails(pieces: Garment[], season: Season, f?: number, pool?
   const outermost = (slots.outer ?? slots.mid ?? slots.top) as Garment | undefined;
   if (outermost && Math.abs(outermost.warmth - target) >= 2) push("WARMTH-FIT");
   if (pieces.length >= 2 && !lookFitsSeason(pieces, season)) push("SEA-FIT");
+  const measured = typeof highF === "number" ? highF : typeof f === "number" ? f : undefined;
+  const coldTop = (measured !== undefined && measured < 50) || (measured === undefined && season === "winter");
+  if (coldTop && thinTopsUncovered(pieces)) push("SEA-TOP-THIN");
   const top = pieces.find(isLayerTop);
   if (f !== undefined && f < 55 && top && isLinenCampPiece(top)) {
     const hasKnit = (pool ?? []).some((g) => {
