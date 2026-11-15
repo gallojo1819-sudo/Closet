@@ -1995,9 +1995,10 @@ export function weekRotationRow(
     leadOf: weekLeadPiece,
     waived,
     pass,
-    /* Idea rows stay on WIDE_ROW_TRIES. The week row needs the longer search: at 32000 the
-       travel week on the fourth Re-dress (Oct 9 2026) closed two cards short of eight. */
-    tries: 64000,
+    /* Travel is the one week that still needs the longer search: at 32000 its fourth
+       Re-dress (Oct 9 2026) closed two cards short of eight. Other weeks stop at 32000,
+       so a week that cannot fill does not spend the extra budget on dead-end heroes. */
+    ...(occasion === "travel" ? { tries: 64000 } : {}),
   };
   /* The unseen looks first; when they run out, the least-recently-shown pieces fill the row to its cap. */
   const looks = fillRow(strict, counts, opts, cap);
