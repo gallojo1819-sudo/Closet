@@ -286,7 +286,8 @@ export function leadTop(pieces: readonly Garment[]): Garment | null {
 
 /**
  * One tuck answer for the plate and the label. "none" when there is nothing to tuck.
- * An oversized lead is always out. A shirt under a vest is in, ahead of a learned habit.
+ * An oversized lead is always out. A knit lead is out. A shirt under a vest, or under
+ * a knit, is in, ahead of a learned habit.
  */
 export function lookTuckDecision(
   pieces: readonly Garment[],
