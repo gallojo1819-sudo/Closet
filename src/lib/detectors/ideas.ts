@@ -1192,9 +1192,11 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
      the jackets are spent; and when the page cap leaves too few pieces for ROW_MIN cards, the
      row ships short rather than not at all. */
   let fills = 0;
+  /* A fill row that landed no card: the page cap has spent the closet; later fill rows cannot land one either. */
+  let fillsSpent = false;
   const fillRows = (upTo: number) => {
     const rotation = ctx.rotation;
-    if (!rotation) return;
+    if (!rotation || fillsSpent) return;
     while (out.length < upTo && fills < FILL_TITLES.length) {
       const d = plainDresser(live, occasion, season, weatherF, color, pool, undefined, false, conditions);
       const ledLocal = new Set(led);
@@ -1225,7 +1227,10 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
         if (looks.length < ROW_MIN && bare) looks = again({ ...bare, layers: [] }, RELAXED_CAP);
         relaxed = looks.length > before;
       }
-      if (!looks.length) return;
+      if (!looks.length) {
+        fillsSpent = true;
+        return;
+      }
       spreadJackets(looks, d, counts, byId, rotation, twins, ledLocal);
       preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
         counts,

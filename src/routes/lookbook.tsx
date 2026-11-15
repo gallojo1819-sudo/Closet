@@ -56,6 +56,7 @@ import { livePool } from "@/lib/rack";
 import { advanceRotation, readRotation, ROTATION_KEY, writeRotation, type Rotation } from "@/lib/rotation";
 import { daysIdle, slotOf } from "@/lib/style";
 import { useCloset } from "@/lib/store";
+import { useIdeaRows } from "@/lib/use-idea-rows";
 import { writeStylistPage } from "@/lib/stylist-page";
 import { emptyTaste } from "@/lib/taste";
 import { OCCASIONS, SEASONS, type Garment, type Look, type Occasion, type Season } from "@/lib/types";
@@ -305,13 +306,6 @@ function LookbookPage() {
   /* Re-dress bumps rowSalt; the rows rebuild in the same idle callback (rowWays), and the old
      rows stay on screen until the new ones land: the salt is not one of the readiness inputs. */
   const [rowSalt, setRowSalt] = useState(0);
-  const [waysFor, setWaysFor] = useState<{ inputs: unknown[]; ways: Way[]; shown: Way[] } | null>(null);
-  const waysInputs = [garments, occasion, season, color, pageWeather, pageConditions];
-  const waysReady = Boolean(waysFor && waysFor.inputs.every((value, i) => Object.is(value, waysInputs[i])));
-  /* Week-card house titles wait for the same rows, so render never builds the cell book. */
-  const ways = waysReady && waysFor ? waysFor.ways : NO_WAYS;
-  /* The rows as rendered (up to ROW_MAX each): the sections and the stylist page both read these. */
-  const shownWays = waysReady && waysFor ? waysFor.shown : NO_WAYS;
   useEffect(() => {
     const run = () => warmCellBook(garments, season, pageWeather, pageConditions);
     const idle = window.requestIdleCallback;
@@ -483,10 +477,9 @@ function LookbookPage() {
   const visible = cards;
   /* "0 looks" is only a fact once the ranked row for these filters has come back. */
   const weekResolved = Boolean(rankedReady);
-  /* The count line, the skeletons and the empty reason wait for both the week row and the idea rows: never a partial number. */
-  const countResolved = pageResolved({ week: weekResolved, ways: waysReady });
   /* The idea rows count the week row's pieces as already on screen (SCREEN_CAP across the page),
-     and lift pieces the store has not put in front of the user lately. Nothing is written. */
+     and lift pieces the store has not put in front of the user lately. Nothing is written.
+     They wait for the ranked week row, so a cold open builds them once, on the row the page keeps. */
   const weekKey = weekRow.map((look) => look.garmentIds.join(",")).join("|");
   const weekIds = useMemo(() => weekKey.split("|").flatMap((ids) => (ids ? ids.split(",") : [])), [weekKey]);
   /* Each week card's lead piece (weekLeadPiece: the stacked plate's first band, the top) leads
@@ -500,11 +493,11 @@ function LookbookPage() {
     [weekKey, byId],
   );
   const suggested = useMemo(() => lastSuggested({ drop, journal, looks: looksAll }), [drop, journal, looksAll]);
-  useEffect(() => {
-    const inputs = [garments, occasion, season, color, pageWeather, pageConditions];
-    let cancelled = false;
-    const run = () => {
-      if (cancelled) return;
+  const idea = useIdeaRows({
+    ready: Boolean(rankedReady),
+    inputs: [garments, occasion, season, color, pageWeather, pageConditions],
+    deps: [rowSalt, weekIds, leadIds, suggested, getRotation, stuckFor, recordPage],
+    build: () => {
       const found = visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather, conditions: pageConditions, salt: rowSalt });
       const shown = rowWays(found, garments, {
         occasion,
@@ -520,22 +513,16 @@ function LookbookPage() {
         stuck: stuckFor(),
       });
       recordPage(shown.flatMap((way) => (way.looks[occasion] ?? []).map((look) => look.map((g) => g.id))));
-      setWaysFor({ inputs, ways: found, shown });
-    };
-    const idle = window.requestIdleCallback;
-    if (typeof idle === "function") {
-      const id = idle(run, { timeout: 1500 });
-      return () => {
-        cancelled = true;
-        window.cancelIdleCallback?.(id);
-      };
-    }
-    const id = window.setTimeout(run, 0);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(id);
-    };
-  }, [garments, occasion, season, color, pageWeather, pageConditions, rowSalt, weekIds, leadIds, suggested, getRotation, stuckFor, recordPage]);
+      return { ways: found, shown };
+    },
+  });
+  /* Week-card house titles wait for the same rows, so render never builds the cell book. */
+  const waysReady = idea.ready;
+  const ways = idea.ways ?? NO_WAYS;
+  /* The rows as rendered (up to ROW_MAX each): the sections and the stylist page both read these. */
+  const shownWays = idea.shown ?? NO_WAYS;
+  /* The count line, the skeletons and the empty reason wait for both the week row and the idea rows: never a partial number. */
+  const countResolved = pageResolved({ week: weekResolved, ways: waysReady });
 
   const unused = useMemo(() => unusedFromLooks(garments, looksAll), [garments, looksAll]);
   const rack = useMemo(

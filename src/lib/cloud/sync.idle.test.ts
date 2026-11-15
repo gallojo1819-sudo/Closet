@@ -709,6 +709,114 @@ describe("startCloudSync idle", () => {
       patchAccount({ localOnly: false });
     }
   });
+
+  it("an unchanged cloud pull keeps the garment, look and drop references", async () => {
+    resetCloudSyncForTests();
+    setAccountProgress(null);
+    setOnline(true);
+    installDom();
+    const calls: Calls = { rpc: 0, update: 0, upload: 0 };
+    const closet = JSON.parse(
+      readFileSync(new URL("../__fixtures__/lookbook-closet-2026-11-14.json", import.meta.url), "utf8"),
+    ) as { id: string }[];
+    const row = {
+      garments: JSON.parse(JSON.stringify(closet)) as typeof closet,
+      looks: [] as { id: string; garmentIds: string[] }[],
+      journal: [] as { date: string; garmentIds: string[] }[],
+      avoid: {},
+      drop: null,
+      ref_photo: false,
+      v: 6,
+      rev: 4,
+      updated_at: "2026-11-14T20:00:00.000Z",
+      deleted_garments: [] as string[],
+      deleted_looks: [] as string[],
+    };
+    const chain = {
+      select() {
+        return chain;
+      },
+      eq() {
+        return chain;
+      },
+      maybeSingle: async () => ({ data: row, error: null }),
+      insert() {
+        calls.update += 1;
+        return chain;
+      },
+      update() {
+        calls.update += 1;
+        return chain;
+      },
+    };
+    setSupabaseForTests({
+      auth: {
+        onAuthStateChange(cb: (event: string, session: unknown) => void) {
+          queueMicrotask(() =>
+            cb("INITIAL_SESSION", {
+              user: { id: "5d458205-b3ca-433a-8b75-4c0a2bbfa1ee", email: "joe@prereal.com" },
+            }),
+          );
+          return { data: { subscription: { unsubscribe() {} } } };
+        },
+        startAutoRefresh: async () => {},
+        stopAutoRefresh: async () => {},
+        getSession: async () => ({ data: { session: { user: { id: "u" } } } }),
+      },
+      from() {
+        return chain;
+      },
+      rpc() {
+        calls.rpc += 1;
+        return Promise.resolve({
+          data: null,
+          error: { code: "42501", message: "permission denied for function closet_meta_push" },
+        });
+      },
+      storage: {
+        from() {
+          return {
+            list: async () => ({ data: [], error: null }),
+            upload: async () => {
+              calls.upload += 1;
+              return { error: null };
+            },
+            remove: async () => ({ error: null }),
+            download: async () => ({ data: null, error: null }),
+          };
+        },
+      },
+    } as never);
+    useCloset.setState({
+      garments: closet as never,
+      looks: [],
+      journal: [],
+      avoid: {},
+      drop: null,
+      seenLooks: {},
+    });
+    const before = useCloset.getState();
+    const garmentChanges: boolean[] = [];
+    const unsub = useCloset.subscribe((state, prev) => {
+      garmentChanges.push(state.garments !== prev.garments);
+    });
+    const stop = startCloudSync();
+    try {
+      await waitUntil(() => isSavedAccountCopy(getAccount().progress), "pull did not finish");
+      assert.equal(useCloset.getState().garments, before.garments);
+      assert.equal(useCloset.getState().looks, before.looks);
+      assert.equal(useCloset.getState().drop, before.drop);
+      assert.equal(garmentChanges.some(Boolean), false);
+      assert.equal(calls.update, 0);
+      assert.equal(calls.upload, 0);
+    } finally {
+      unsub();
+      stop();
+      setSupabaseForTests(null);
+      setAccountProgress(null);
+      useCloset.setState({ garments: [], looks: [], journal: [], drop: null, avoid: {} });
+    }
+  });
 });
 
 describe("header saved copy", () => {
