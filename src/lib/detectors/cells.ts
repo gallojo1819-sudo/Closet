@@ -282,7 +282,12 @@ function winterCellPhrase(g: Garment, phrase: string): boolean {
 }
 
 function matchPhrase(g: Garment, phrase: string, slot: SlotName, cell?: Cell): boolean {
-  if (cell?.key === "flannel_cashmere" && winterCellPhrase(g, phrase)) return true;
+  if (
+    cell?.key === "flannel_cashmere" &&
+    (phrase === "fine knit" || phrase === "wool" || phrase === "flannel trouser" || phrase === "dark suede")
+  ) {
+    return winterCellPhrase(g, phrase);
+  }
   if (slot === "top" && blazer(g)) return false;
   if (slot === "shoe" && phrase === "suede") return suede(g) && !sneaker(g);
   if (slot === "shoe" && phrase === "plain") return plainLoafer(g);
