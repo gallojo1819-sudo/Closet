@@ -270,9 +270,11 @@ function has(set: PaletteColor[], ...names: PaletteColor[]): boolean {
   return names.some((n) => set.includes(n));
 }
 
-const LIGHT_SHADE = new Set<PaletteColor>(["white", "ivory", "cream", "beige", "light blue", "pink", "blush", "gold"]);
+const LIGHT_SHADE = new Set<PaletteColor>(["white", "ivory", "cream", "beige", "light blue", "pink", "blush"]);
 const DARK_SHADE = new Set<PaletteColor>(["navy", "brown", "chocolate", "charcoal", "black", "olive", "burgundy"]);
-const NEAR_SHADE = new Set<PaletteColor>(["burgundy", "maroon", "wine", "rust"]);
+/** Brick stays its own shade, so rust against brick is two shades. */
+type ShadeName = PaletteColor | "brick";
+const NEAR_SHADE = new Set<ShadeName>(["burgundy", "maroon", "wine", "rust", "brick"]);
 
 type ShadePiece = {
   name?: string;
@@ -281,26 +283,45 @@ type ShadePiece = {
   colors?: readonly string[];
 };
 
-function leadShade(g: ShadePiece): PaletteColor | null {
+/** The first palette word in a compound colour ("maroon/brown" is maroon). Brick is not rust. */
+function leadShade(g: ShadePiece): ShadeName | null {
+  const from = (raw: string): ShadeName | null => {
+    for (const chunk of raw.toLowerCase().split(/[/,]+/)) {
+      const text = chunk.trim().replace(/-/g, " ");
+      if (!text) continue;
+      if (text === "brick") return "brick";
+      const whole = canonicalize(text);
+      if (whole) return whole;
+      const words = text.split(/\s+/).filter(Boolean);
+      for (let i = 0; i < words.length; i += 1) {
+        const pair = words.slice(i, i + 2).join(" ");
+        if (pair === "brick") return "brick";
+        const named = canonicalize(pair);
+        if (named) return named;
+        if (words[i] === "brick") return "brick";
+        const one = canonicalize(words[i]);
+        if (one) return one;
+      }
+    }
+    return null;
+  };
   for (const c of g.colors ?? []) {
-    const n = canonicalize(c);
-    if (n) return n;
+    const shade = from(c);
+    if (shade) return shade;
   }
-  const name = (g.name ?? "").toLowerCase();
-  if (/\bbrick\b/.test(name)) return "rust";
-  return null;
+  return from(g.name ?? "");
 }
 
 function lightPiece(g: ShadePiece): boolean {
   const name = `${g.name ?? ""} ${(g.colors ?? []).join(" ")}`.toLowerCase();
   if (/\bpastel\b|\bstone\b/.test(name)) return true;
   const shade = leadShade(g);
-  return shade ? LIGHT_SHADE.has(shade) : false;
+  return shade !== null && shade !== "brick" ? LIGHT_SHADE.has(shade) : false;
 }
 
 function darkPiece(g: ShadePiece): boolean {
   const shade = leadShade(g);
-  if (shade && DARK_SHADE.has(shade)) return true;
+  if (shade && shade !== "brick" && DARK_SHADE.has(shade)) return true;
   return /\bnavy\b|\bbrown\b|chocolate|charcoal|\bblack\b|\bolive\b|burgundy/.test((g.name ?? "").toLowerCase());
 }
 
@@ -316,7 +337,8 @@ function shadeRole(g: ShadePiece): "top" | "bottom" | "footwear" | "outer" | "ot
 /**
  * Hard colour fails. COL-NO-ANCHOR: top, bottom and shoe are all light and nothing
  * in the look is dark. COL-NEAR-SHADE: top and bottom are two different shades of
- * the red family (burgundy and maroon, rust and brick). A tonal look with a dark
+ * the red family (burgundy and maroon, rust and brick). Brick is its own shade.
+ * A tonal look with a dark
  * anchor does not trip COL-NO-ANCHOR.
  */
 export function colorHardFails(

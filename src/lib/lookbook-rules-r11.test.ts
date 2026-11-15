@@ -12,6 +12,7 @@ register(new URL("../../scripts/ts-ext.mjs", import.meta.url), { parentURL: impo
 
 const { benchPage } = await import("./__fixtures__/lookbook-bench.ts");
 const { ruleFails } = await import("./stylist/legal.ts");
+const { colorHardFails } = await import("./color.ts");
 const { jacketRequired } = await import("./stylist/jackets.ts");
 const { twinGroups } = await import("./detectors.ts");
 const { lookTuckDecision } = await import("./look.ts");
@@ -77,11 +78,13 @@ function maxTwin(looks: Garment[][]): number {
 
 describe("R11 lookbook outfit rules", { timeout: 600_000 }, () => {
   const pages = new Map<string, Garment[][]>();
-  const load = (occasion: Occasion, high: number, wet = false) => {
-    const key = `${occasion}:${high}:${wet}`;
+  const load = (occasion: Occasion, high: number, wet = false, season: "fall" | "winter" = "winter", salt = 0) => {
+    const key = `${occasion}:${high}:${wet}:${season}:${salt}`;
     const hit = pages.get(key);
     if (hit) return hit;
-    const built = cardsOf(benchPage(occasion, CLOSET, { weatherF: high, conditions: { highF: high, wet, windy: false } }));
+    const built = cardsOf(
+      benchPage(occasion, CLOSET, { weatherF: high, conditions: { highF: high, wet, windy: false }, season, salt }),
+    );
     pages.set(key, built);
     return built;
   };
@@ -165,6 +168,44 @@ describe("R11 lookbook outfit rules", { timeout: 600_000 }, () => {
     assert.equal(onPage, true, sitting!);
     const grey = cardsOf(benchPage("weekend", CLOSET, { weatherF: 44.4, conditions: { highF: 44.4, wet: false, windy: false }, pin: "g_gp53xkrmem9b" }));
     assert.equal(grey.some((look) => look.some((g) => g.id === "g_gp53xkrmem9b")), true);
+  });
+
+  it("near shades fail, and a tonal look with a dark anchor passes", () => {
+    const sweater = BY_ID.get("g_xbt3gpjuo1p4")!;
+    const maroon = BY_ID.get("g_x1vivoqz2ixd")!;
+    const loafer = BY_ID.get("g_om0dh5nps1ke")!;
+    const field = BY_ID.get("g_sb0mc7s7v346")!;
+    const failed = ruleFails([sweater, maroon, loafer, field], {
+      occasion: "weekend",
+      season: "fall",
+      weatherF: 58,
+      conditions: { highF: 58, wet: false, windy: false },
+      pool: CLOSET,
+    });
+    assert.ok(failed.includes("COL-NEAR-SHADE"), failed.join(","));
+    const rust = { ...sweater, id: "rust-top", name: "rust knit", colors: ["rust"] };
+    const brick = { ...maroon, id: "brick-bottom", name: "brick trousers", colors: ["brick"] };
+    assert.ok(colorHardFails([rust, brick, loafer]).includes("COL-NEAR-SHADE"));
+    const navy = CLOSET.find((g) => g.category === "bottom" && /\bnavy\b/.test(blob(g)))!;
+    assert.equal(colorHardFails([sweater, navy, loafer]).includes("COL-NEAR-SHADE"), false);
+    const brownTop = { ...sweater, id: "brown-top", name: "brown sweater", colors: ["brown"] };
+    const brownBottom = { ...maroon, id: "brown-bottom", name: "brown trousers", colors: ["brown"] };
+    const navyShoe = { ...loafer, id: "navy-shoe", name: "navy loafers", colors: ["navy"] };
+    const tonal = colorHardFails([brownTop, brownBottom, navyShoe]);
+    assert.equal(tonal.includes("COL-NO-ANCHOR"), false, tonal.join(","));
+    assert.equal(tonal.includes("COL-NEAR-SHADE"), false, tonal.join(","));
+  });
+
+  it("no bench card pairs two near shades", () => {
+    const seen: Garment[][] = [];
+    for (const occasion of ["weekend", "weekday", "out"] as const) {
+      for (let salt = 0; salt <= 9; salt += 1) seen.push(...load(occasion, 58, false, "fall", salt));
+      for (const high of [44.4, 42]) seen.push(...load(occasion, high));
+      seen.push(...load(occasion, 44.4, true));
+    }
+    for (const look of seen) {
+      assert.equal(colorHardFails(look).includes("COL-NEAR-SHADE"), false, look.map((g) => g.name).join(" + "));
+    }
   });
 
   it("keeps the owner's rules", () => {
