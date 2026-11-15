@@ -200,16 +200,21 @@ function materialBlank(g: Garment): boolean {
   return !(g.material ?? "").trim();
 }
 
-function lookAlikeKey(g: Garment): string {
-  const words = g.name
+/** Lowercase, punctuation to spaces, one space between words, a trailing plural s dropped. */
+function normalizedName(name: string): string {
+  const words = name
     .toLowerCase()
     .replace(/[^a-z0-9 ]+/g, " ")
     .split(/\s+/)
     .filter(Boolean);
-  const noun = (words.at(-1) ?? "").replace(/(?<!s)s$/, "");
-  const color = nameLeadColor(g.name) ?? looseColor(g.colors?.[0]) ?? (g.colors?.[0] ?? "").trim().toLowerCase();
-  const subtype = (g.subtype ?? "").trim().toLowerCase();
-  return `${slotOf(g)}|${color}|${noun}|${subtype}`;
+  if (words.length) words[words.length - 1] = words[words.length - 1]!.replace(/(?<!s)s$/, "");
+  return words.join(" ");
+}
+
+/** Full name plus subtype. A blank material joins a filled piece only when both match. */
+function lookAlikeKey(g: Garment): string {
+  const subtype = (g.subtype ?? "").trim().toLowerCase().replace(/(?<!s)s$/, "");
+  return `${normalizedName(g.name)}|${subtype}`;
 }
 
 function photoKey(g: Garment): string | null {
@@ -246,7 +251,7 @@ export function twinGroups(pool: readonly Garment[]): Twins {
     if (have === undefined) byPhoto.set(photo, key);
     else if (find(have) !== key) alias.set(key, find(have));
   }
-  /* A blank material and a filled one are the same piece when the slot, lead colour, last noun and subtype match. */
+  /* A blank joins one filled piece with the same full name and subtype. It does not pull the other filled pieces into that group. */
   const alike = new Map<string, Garment[]>();
   for (const g of pool) {
     const key = lookAlikeKey(g);
@@ -255,11 +260,12 @@ export function twinGroups(pool: readonly Garment[]): Twins {
     else alike.set(key, [g]);
   }
   for (const group of alike.values()) {
-    /* A blank joins a filled twin. Two blanks keep the name-word keys, so different pieces stay apart. */
-    if (group.length < 2 || !group.some(materialBlank) || group.every(materialBlank)) continue;
-    const root = find(twinKey(group[0]!));
-    for (const g of group) {
-      const key = find(twinKey(g));
+    const filled = group.filter((g) => !materialBlank(g));
+    const blanks = group.filter(materialBlank);
+    if (!filled.length || !blanks.length) continue;
+    const root = find(twinKey(filled[0]!));
+    for (const blank of blanks) {
+      const key = find(twinKey(blank));
       if (key !== root) alias.set(key, root);
     }
   }

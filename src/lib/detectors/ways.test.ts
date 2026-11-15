@@ -12,6 +12,7 @@ import {
   maxDisjoint,
   renderedSectionLooks,
   sharedDetector,
+  twinGroups,
   visibleDetectors,
   wayChipVisible,
   wayFirstRow,
@@ -593,5 +594,32 @@ describe("the card tag says each thing once", () => {
     assert.match(book, /occasionLabel=\{chapterLabel\}/);
     // The sections render the rows as built by rowWays (up to ROW_MAX), not the engine's five.
     assert.match(book, /ways=\{shownWays\}/);
+  });
+});
+
+describe("look-alike merge", () => {
+  const closet = JSON.parse(
+    readFileSync(new URL("../__fixtures__/lookbook-closet-2026-11-14.json", import.meta.url), "utf8"),
+  ) as Garment[];
+  const twins = twinGroups(closet);
+  const byId = new Map(closet.map((g) => [g.id, g]));
+  const key = (id: string) => twins.key(byId.get(id)!);
+
+  it("joins a blank to the one filled piece with the same name and subtype", () => {
+    assert.equal(key("g_6xkkzn06sbdm"), key("g_gyc76ur3ikb9"));
+    assert.equal(key("g_k75fdfdsnak0"), key("g_yfkavdj5irwe"));
+  });
+
+  it("does not merge different names that share a colour and a last noun", () => {
+    const navy = ["g_v3ovns4bv344", "g_dscxzk8inlx2", "g_dzsh3qh7v6sb", "g_twp15jpdf6h3"];
+    assert.equal(new Set(navy.map(key)).size, navy.length);
+    assert.notEqual(key("g_7z48xpoqh5tx"), key("g_teatot7o1lst"));
+    assert.notEqual(key("g_nk43jo5cbvn1"), key("g_szj91ziihfpw"));
+    assert.notEqual(key("g_bee1dg9rnfe5"), key("g_yfkavdj5irwe"));
+    assert.notEqual(key("g_bee1dg9rnfe5"), key("g_k75fdfdsnak0"));
+  });
+
+  it("keeps two shirts under one name apart when the subtype differs", () => {
+    assert.notEqual(key("g_21b6d3qcohmu"), key("g_z6syv3lx30tn"));
   });
 });
