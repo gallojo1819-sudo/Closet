@@ -715,22 +715,7 @@ function dressCell(
     if (stored.length >= STORE_CAP) return;
     if (stored.some((row) => idsOf(row) === idsOf(pieces))) return;
     if (!legalOk(pieces, occasion, season, weatherF, undefined, conditions)) return;
-    const used = new Set(pieces.map((g) => g.id));
-    const next = layerOn
-      ? layerUp({
-          look: pieces,
-          tops: pool.filter((g) => !used.has(g.id) && (collaredShirt(g) || nonCollaredKnit(g))),
-          keyOf: () => 0,
-          open: (g) => !used.has(g.id),
-          finalOk: (candidate) =>
-            passesCheap(cell, candidate, occasion, season, pool) &&
-            legalOk(candidate, occasion, season, weatherF, undefined, conditions),
-          tally: layerTally,
-          enabled: true,
-        })
-      : pieces;
-    if (stored.some((row) => idsOf(row) === idsOf(next))) return;
-    stored.push(next);
+    stored.push(pieces);
   };
   for (const core of cores) {
     if (stored.length >= STORE_CAP && maxDisjoint(stored).length >= 5) break;
@@ -743,6 +728,26 @@ function dressCell(
       if (!passesCheap(cell, pieces, occasion, season, pool)) continue;
       remember(pieces);
       if (stored.length >= STORE_CAP && maxDisjoint(stored).length >= 5) break;
+    }
+  }
+  /* Layer only the looks the cell will keep. The rest of the store is eligibility, not a card. */
+  if (layerOn) {
+    const keep = new Set(maxDisjoint(stored).map((look) => idsOf(look)));
+    for (let i = 0; i < stored.length; i += 1) {
+      const pieces = stored[i]!;
+      if (!keep.has(idsOf(pieces))) continue;
+      const used = new Set(pieces.map((g) => g.id));
+      stored[i] = layerUp({
+        look: pieces,
+        tops: pool.filter((g) => !used.has(g.id) && (collaredShirt(g) || nonCollaredKnit(g))),
+        keyOf: () => 0,
+        open: (g) => !used.has(g.id),
+        finalOk: (candidate) =>
+          passesCheap(cell, candidate, occasion, season, pool) &&
+          legalOk(candidate, occasion, season, weatherF, undefined, conditions),
+        tally: layerTally,
+        enabled: true,
+      });
     }
   }
   return stored;
