@@ -28,17 +28,31 @@ const { advanceRotation, emptyRotation } = await import("../rotation.ts");
 const { weekLeadPiece } = await import("../look.ts");
 const { emptyTaste } = await import("../taste.ts");
 const { livePool } = await import("../rack.ts");
+const { sittingPieceId } = await import("../gaps.ts");
+const { sneakerPiece } = await import("../outfit-rules.ts");
 
 export const benchCloset = livePool(JSON.parse(readFileSync(BENCH_FIXTURE, "utf8")) as Garment[]);
 
 export type BenchPage = { week: string[][]; rows: { id: string; title: string; looks: string[][] }[]; ms: Record<string, number> };
 
-export function benchPage(occasion: Occasion, garments: Garment[] = benchCloset): BenchPage {
+export type BenchOpts = {
+  season?: Season;
+  weatherF?: number;
+  conditions?: { highF: number; wet: boolean; windy: boolean };
+  salt?: number;
+  /** Overrides the sitting-piece pin. Null dresses with no pin. */
+  pin?: string | null;
+};
+
+export function benchPage(occasion: Occasion, garments: Garment[] = benchCloset, opts: BenchOpts = {}): BenchPage {
   mock.timers.enable({ apis: ["Date"], now: BENCH_NOW });
   try {
     const ms: Record<string, number> = {};
     const t = <T>(k: string, fn: () => T): T => { const a = performance.now(); const r = fn(); ms[k] = Math.round(performance.now() - a); return r; };
-    const season = BENCH_SEASON, weatherF = BENCH_WEATHER_F, conditions = BENCH_CONDITIONS;
+    const season = opts.season ?? BENCH_SEASON;
+    const weatherF = opts.weatherF ?? BENCH_WEATHER_F;
+    const conditions = opts.conditions ?? { ...BENCH_CONDITIONS, highF: weatherF };
+    const salt = opts.salt ?? 0;
     const taste = emptyTaste();
     let rotation = emptyRotation();
     const twins = det.twinGroups(garments);
@@ -50,14 +64,19 @@ export function benchPage(occasion: Occasion, garments: Garment[] = benchCloset)
         alike: new Map(garments.map((g) => [g.id, twins.key(g)])),
       }).next;
     };
-    const built = t("weekRotationRow", () => det.weekRotationRow(garments, { occasion, season, color: null, weatherF, conditions, taste, rotation, cap: 8 } as never));
+    const pin = opts.pin === undefined ? sittingPieceId(garments) : opts.pin;
+    const built = t("weekRotationRow", () => det.weekRotationRow(garments, { occasion, season, color: null, weatherF, conditions, taste, rotation, cap: 8, salt, pin } as never));
     const weekLooks = det.capScreenLooks(lb.realWeekLooks(lb.looksFromRows(built.looks, occasion, built.demoted), new Set(garments.map((g) => g.id))));
     const week = weekLooks.map((l) => [...l.garmentIds]);
     record(built.looks.map((look) => look.map((g) => g.id)));
     const byId = new Map(garments.map((g) => [g.id, g]));
     const leadIds = week.map((ids) => weekLeadPiece(ids.map((id) => byId.get(id)!))?.id).filter((x): x is string => Boolean(x));
-    const found = t("visibleDetectors", () => det.visibleDetectors(garments, { occasion, season, color: null, weatherF, conditions, salt: 0 }));
-    const shown = t("rowWays", () => det.rowWays(found, garments, { occasion, season, color: null, weatherF, conditions, salt: 0, onScreen: week.flat(), leadIds, rotation, stuck: new Set(built.unpairable.map((g) => g.id)) } as never));
+    const found = t("visibleDetectors", () => det.visibleDetectors(garments, { occasion, season, color: null, weatherF, conditions, salt }));
+    const shoePrior = {
+      cards: week.length,
+      sneakers: week.filter((ids) => ids.some((id) => { const g = byId.get(id); return g ? sneakerPiece(g) : false; })).length,
+    };
+    const shown = t("rowWays", () => det.rowWays(found, garments, { occasion, season, color: null, weatherF, conditions, salt, onScreen: week.flat(), leadIds, rotation, stuck: new Set(built.unpairable.map((g) => g.id)), pin, shoePrior } as never));
     record(shown.flatMap((w) => (w.looks[occasion] ?? []).map((look) => look.map((g) => g.id))));
     return { week, rows: shown.map((w) => ({ id: w.id, title: w.title, looks: (w.looks[occasion] ?? []).map((l) => l.map((g) => g.id)) })), ms };
   } finally {

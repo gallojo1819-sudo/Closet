@@ -281,9 +281,13 @@ function lookOffenders(pieces: Garment[], occasion: string): string[] {
     );
     if (underVest.length) bad.push(`oversized top under a vest: ${underVest.map((g) => g.id).join(",")}`);
   }
-  const outer = pieces.find((g) => countingOuter(g));
+  const slotted = slotPieces(pieces);
+  const worn = (id: string | undefined) => pieces.find((g) => g.id === id);
+  const outer = worn(slotted.outer?.id);
   if (outer && !oversizedOf(outer)) {
-    const under = pieces.filter((g) => g.id !== outer.id && oversizedOf(g) && (slotOf(g) === "top" || g.category === "outerwear"));
+    const under = [worn(slotted.top?.id), worn(slotted.mid?.id)].filter((g): g is Garment =>
+      Boolean(g && g.id !== outer.id && oversizedOf(g) && (slotOf(g) === "top" || g.category === "outerwear")),
+    );
     if (under.length) bad.push(`JKT-LAY-9 ${under.map((g) => g.id).join(",")} under ${outer.id}`);
   }
   return bad;
@@ -366,7 +370,8 @@ describe("unaffected look parity", () => {
     const hash = createHash("sha256").update(lines.join("\n")).digest("hex");
     // Base e5c0e5a hash of the same filter was 07be9f89be5f38f72acd49f0c0a71ce7a6c917889c09bc640a876242cecbf206.
     // The draw backfills when an oversized pairing drops, so this filtered set is the post-rule output.
-    expect(hash).toBe("494fd52dc5e0c5f6b56f98c2e592a860693ff781fc031d1fbc5f7619976ad8ad");
+    // R11 gates (thin tops, cardigan, lounge and frayed bottoms, colour anchor, out shirts) move this set.
+    expect(hash).toBe("6ee2de6e05c3e105d91ac3e2e07875e63190b3892f3cfa067fcf2470fbeb20d8");
     vi.useRealTimers();
   });
 });

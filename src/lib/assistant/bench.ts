@@ -327,8 +327,9 @@ export const SCENARIOS: Scenario[] = [
       const d = firstStepData(run, "closet_build_look") as LookData | null;
       if (d?.occasion !== "comfy") problems.push(`occasion ${d?.occasion}, not comfy`);
       if (!lookRowIds(run.text, ctx.pool).length) problems.push("no look was answered");
-      /* Allowed: a comfy look with the distressed jeans is legal in the engine. Not required of the answer. */
-      const withJeans = pieces(ctx, [IDS.creamSweatshirt, IDS.distressedJeans, IDS.sneakers]);
+      /* Allowed: a comfy look with the distressed jeans is legal. The all-white sneaker
+         version has no dark piece, so COL-NO-ANCHOR fails it; brown boots anchor it. */
+      const withJeans = pieces(ctx, [IDS.creamSweatshirt, IDS.distressedJeans, "g_b4zsf3dfrhdv"]);
       if (!isLegal(withJeans, { occasion: "comfy", season: seasonFor(ctx), weatherF: ctx.weatherF })) problems.push("distressed jeans are not allowed on comfy");
       return problems;
     },

@@ -2,195 +2,81 @@
  "weekend": {
   "week": [
    [
-    "g_z7nhuz8vidky",
-    "g_btael28aebgu",
+    "g_teitg9jmpwxa",
+    "g_7z48xpoqh5tx",
+    "g_ayfv9c97ohmv",
     "g_01xaga54r12h",
-    "g_py2swfwot1ed"
-   ],
-   [
-    "g_rpjfgscii90r",
-    "g_v3ovns4bv344",
-    "g_08shegj8gqie",
-    "g_qnmo5yzgl50b"
-   ],
-   [
-    "g_1gb6slz8h71n",
-    "g_lg5qftegw0qo",
-    "g_rxglifsoqobm",
-    "g_491tzu2suiv7"
-   ],
-   [
-    "g_1khiworawkt7",
-    "g_dzsh3qh7v6sb",
-    "g_8ukg5mi9r3fc",
-    "g_8qqqzpwxuwti"
-   ],
-   [
-    "g_2b6fao81vqrs",
-    "g_80sz9s08xpw1",
-    "g_5g4fqg77s4rw",
     "g_sb0mc7s7v346"
    ],
    [
-    "g_jhyr10t2vo13",
-    "g_rvrs9hibr981",
-    "g_2djvq6l9qxbb",
-    "g_5gfabeezh485"
-   ],
-   [
-    "g_3821acdhupu9",
-    "g_xi3w7tz3aren",
-    "g_wgarjdurj7yp",
+    "g_qn51qgub6tu3",
+    "g_btael28aebgu",
+    "g_08shegj8gqie",
     "g_x4adkv9zu9yu"
    ],
    [
-    "g_939onlwfrg9j",
+    "g_xuqvrfy5ocv4",
+    "g_1gb6slz8h71n",
+    "g_lg5qftegw0qo",
+    "g_491tzu2suiv7",
+    "g_b4zsf3dfrhdv"
+   ],
+   [
+    "g_1khiworawkt7",
+    "g_xi3w7tz3aren",
+    "g_wgarjdurj7yp",
+    "g_wwy9b2pusds3"
+   ],
+   [
+    "g_3821acdhupu9",
+    "g_2b6fao81vqrs",
     "g_j994h3k9l8ot",
-    "g_om0dh5nps1ke",
+    "g_2djvq6l9qxbb",
+    "g_qnmo5yzgl50b"
+   ],
+   [
+    "g_kp1ps7qww1ar",
+    "g_rvrs9hibr981",
+    "g_5g4fqg77s4rw",
     "g_3qjmw7n4wj2a"
+   ],
+   [
+    "g_ukietgtd0g64",
+    "g_mq1ob9uc1npn",
+    "g_t3e39jysdda5",
+    "g_8nrtffa2s13s",
+    "g_5gfabeezh485"
+   ],
+   [
+    "g_ri78lj9vspyj",
+    "g_66xj06nllgf2",
+    "g_yae8h1k9pjm1",
+    "g_8qqqzpwxuwti"
    ]
   ],
   "rows": [
-   {
-    "id": "10",
-    "title": "Clean city sportswear",
-    "looks": [
-     [
-      "g_6lolc7ma0mk8",
-      "g_zw51yaqdsx0q",
-      "g_nq7il0e0glnn",
-      "g_8qqqzpwxuwti"
-     ],
-     [
-      "g_7z48xpoqh5tx",
-      "g_j994h3k9l8ot",
-      "g_08shegj8gqie",
-      "g_qnmo5yzgl50b"
-     ],
-     [
-      "g_e4y3rjpn57gj",
-      "g_xi3w7tz3aren",
-      "g_upni66uiqtgb",
-      "g_sb0mc7s7v346"
-     ]
-    ]
-   },
    {
     "id": "3",
     "title": "Cords, gingham, boots",
     "looks": [
      [
+      "g_mqjsmpqgwwvm",
       "g_6lolc7ma0mk8",
-      "g_ayfv9c97ohmv",
-      "g_b4zsf3dfrhdv",
-      "g_1pg9y05mlkek"
-     ],
-     [
-      "g_qn51qgub6tu3",
       "g_cfm8n594jea7",
-      "g_fzekzikyrf50",
-      "g_x4adkv9zu9yu"
+      "g_b4zsf3dfrhdv",
+      "g_3qjmw7n4wj2a"
      ],
      [
       "g_salzdhuswyd3",
       "g_v3ovns4bv344",
       "g_2djvq6l9qxbb",
-      "g_491tzu2suiv7"
-     ]
-    ]
-   },
-   {
-    "id": "forgotten",
-    "title": "Forgotten pieces",
-    "looks": [
-     [
-      "g_n955igwlvcl4",
-      "g_66xj06nllgf2",
-      "g_8nrtffa2s13s",
-      "g_v8836tq76i9r"
+      "g_qnmo5yzgl50b"
      ],
      [
-      "g_bq9qnaa1vkon",
-      "g_6xkkzn06sbdm",
-      "g_wgarjdurj7yp",
-      "g_3qjmw7n4wj2a"
-     ],
-     [
-      "g_7z48xpoqh5tx",
-      "g_vf28ktbdhmtz",
-      "g_5g4fqg77s4rw",
-      "g_5gfabeezh485"
-     ]
-    ]
-   }
-  ]
- },
- "weekday": {
-  "week": [
-   [
-    "g_d1awqw83gd3c",
-    "g_btael28aebgu",
-    "g_01xaga54r12h",
-    "g_x4adkv9zu9yu"
-   ],
-   [
-    "g_tqnnde1xmp0p",
-    "g_v3ovns4bv344",
-    "g_08shegj8gqie",
-    "g_wwy9b2pusds3"
-   ],
-   [
-    "g_1gb6slz8h71n",
-    "g_cfm8n594jea7",
-    "g_2djvq6l9qxbb",
-    "g_491tzu2suiv7"
-   ],
-   [
-    "g_2b6fao81vqrs",
-    "g_vf28ktbdhmtz",
-    "g_5g4fqg77s4rw",
-    "g_sb0mc7s7v346"
-   ],
-   [
-    "g_3821acdhupu9",
-    "g_66xj06nllgf2",
-    "g_yae8h1k9pjm1",
-    "g_qnmo5yzgl50b"
-   ],
-   [
-    "g_bq9qnaa1vkon",
-    "g_6xkkzn06sbdm",
-    "g_wgarjdurj7yp",
-    "g_3qjmw7n4wj2a"
-   ],
-   [
-    "g_xowln4uos3ug",
-    "g_s5d2t696vryw",
-    "g_fzekzikyrf50",
-    "g_5gfabeezh485"
-   ]
-  ],
-  "rows": [
-   {
-    "id": "3",
-    "title": "Cords, gingham, boots",
-    "looks": [
-     [
-      "g_qn51qgub6tu3",
+      "g_jhyr10t2vo13",
+      "g_zzrq3j5n2njk",
       "g_ayfv9c97ohmv",
-      "g_8ukg5mi9r3fc",
-      "g_8qqqzpwxuwti"
-     ],
-     [
-      "g_6lolc7ma0mk8",
-      "g_cfm8n594jea7",
-      "g_b4zsf3dfrhdv",
-      "g_sb0mc7s7v346"
-     ],
-     [
-      "g_rpjfgscii90r",
-      "g_v3ovns4bv344",
-      "g_2djvq6l9qxbb",
+      "g_8nrtffa2s13s",
       "g_wwy9b2pusds3"
      ]
     ]
@@ -200,22 +86,22 @@
     "title": "Clean city sportswear",
     "looks": [
      [
-      "g_6lolc7ma0mk8",
-      "g_8t9o3g4r78c2",
+      "g_9eip7wdtsxzd",
+      "g_j994h3k9l8ot",
       "g_01xaga54r12h",
-      "g_3qjmw7n4wj2a"
+      "g_sb0mc7s7v346"
      ],
      [
-      "g_7z48xpoqh5tx",
-      "g_btael28aebgu",
-      "g_kde45hmnqie9",
-      "g_qnmo5yzgl50b"
-     ],
-     [
-      "g_ap5v0s67pg9d",
+      "g_6lolc7ma0mk8",
       "g_xi3w7tz3aren",
-      "g_rxglifsoqobm",
+      "g_fzekzikyrf50",
       "g_491tzu2suiv7"
+     ],
+     [
+      "g_e4y3rjpn57gj",
+      "g_8t9o3g4r78c2",
+      "g_rxglifsoqobm",
+      "g_8qqqzpwxuwti"
      ]
     ]
    },
@@ -224,21 +110,144 @@
     "title": "Forgotten pieces",
     "looks": [
      [
-      "g_7z48xpoqh5tx",
-      "g_dzsh3qh7v6sb",
+      "g_939onlwfrg9j",
+      "g_80sz9s08xpw1",
+      "g_5gfabeezh485",
+      "g_5g4fqg77s4rw"
+     ],
+     [
+      "g_9eip7wdtsxzd",
+      "g_vf28ktbdhmtz",
+      "g_om0dh5nps1ke",
+      "g_x4adkv9zu9yu"
+     ]
+    ]
+   }
+  ]
+ },
+ "weekday": {
+  "week": [
+   [
+    "g_vzqle7zdtpis",
+    "g_xi3w7tz3aren",
+    "g_01xaga54r12h",
+    "g_x4adkv9zu9yu"
+   ],
+   [
+    "g_mqjsmpqgwwvm",
+    "g_6lolc7ma0mk8",
+    "g_dzsh3qh7v6sb",
+    "g_08shegj8gqie",
+    "g_sb0mc7s7v346"
+   ],
+   [
+    "g_v2gxktsmsoov",
+    "g_1gb6slz8h71n",
+    "g_lxqx9egrqg14",
+    "g_fzekzikyrf50",
+    "g_wwy9b2pusds3"
+   ],
+   [
+    "g_2b6fao81vqrs",
+    "g_j994h3k9l8ot",
+    "g_8qqqzpwxuwti",
+    "g_om0dh5nps1ke"
+   ],
+   [
+    "g_bq9qnaa1vkon",
+    "g_yfkavdj5irwe",
+    "g_2djvq6l9qxbb",
+    "g_qnmo5yzgl50b"
+   ],
+   [
+    "g_3821acdhupu9",
+    "g_pa7kfg14rtzl",
+    "g_x1vivoqz2ixd",
+    "g_b4zsf3dfrhdv",
+    "g_3qjmw7n4wj2a"
+   ],
+   [
+    "g_xuqvrfy5ocv4",
+    "g_mir3akjyhwnr",
+    "g_s5d2t696vryw",
+    "g_5g4fqg77s4rw",
+    "g_491tzu2suiv7"
+   ],
+   [
+    "g_7z48xpoqh5tx",
+    "g_lad85rg9nxs3",
+    "g_8nrtffa2s13s",
+    "g_5gfabeezh485",
+    "g_juk45cokjxxy"
+   ]
+  ],
+  "rows": [
+   {
+    "id": "3",
+    "title": "Cords, gingham, boots",
+    "looks": [
+     [
+      "g_mqjsmpqgwwvm",
+      "g_qn51qgub6tu3",
+      "g_ayfv9c97ohmv",
+      "g_b4zsf3dfrhdv",
+      "g_8qqqzpwxuwti"
+     ],
+     [
+      "g_jhyr10t2vo13",
+      "g_teatot7o1lst",
+      "g_cfm8n594jea7",
       "g_8nrtffa2s13s",
       "g_x4adkv9zu9yu"
      ],
      [
-      "g_8m17f0l0tss9",
-      "g_fvc535elt23d",
-      "g_upni66uiqtgb",
+      "g_salzdhuswyd3",
+      "g_mq1ob9uc1npn",
+      "g_v3ovns4bv344",
+      "g_2djvq6l9qxbb",
+      "g_3qjmw7n4wj2a"
+     ]
+    ]
+   },
+   {
+    "id": "10",
+    "title": "Clean city sportswear",
+    "looks": [
+     [
+      "g_ap5v0s67pg9d",
+      "g_vf28ktbdhmtz",
+      "g_01xaga54r12h",
+      "g_491tzu2suiv7"
+     ],
+     [
+      "g_qn51qgub6tu3",
+      "g_btael28aebgu",
+      "g_wgarjdurj7yp",
+      "g_sb0mc7s7v346"
+     ],
+     [
+      "g_e4y3rjpn57gj",
+      "g_rvrs9hibr981",
+      "g_rxglifsoqobm",
+      "g_1pg9y05mlkek"
+     ]
+    ]
+   },
+   {
+    "id": "forgotten",
+    "title": "Forgotten pieces",
+    "looks": [
+     [
+      "g_xuqvrfy5ocv4",
+      "g_e4y3rjpn57gj",
+      "g_66xj06nllgf2",
+      "g_5g4fqg77s4rw",
       "g_v8836tq76i9r"
      ],
      [
       "g_939onlwfrg9j",
-      "g_x1vivoqz2ixd",
-      "g_yae8h1k9pjm1",
+      "g_xi3w7tz3aren",
+      "g_om0dh5nps1ke",
       "g_5gfabeezh485"
      ]
     ]
@@ -248,34 +257,37 @@
  "out": {
   "week": [
    [
-    "g_xowln4uos3ug",
-    "g_lxqx9egrqg14",
-    "g_8ukg5mi9r3fc",
-    "g_1pg9y05mlkek"
-   ],
-   [
-    "g_gp53xkrmem9b",
-    "g_ayfv9c97ohmv",
+    "g_jhyr10t2vo13",
+    "g_1gb6slz8h71n",
+    "g_bee1dg9rnfe5",
     "g_2djvq6l9qxbb",
-    "g_x4adkv9zu9yu"
+    "g_wwy9b2pusds3"
    ],
    [
     "g_3821acdhupu9",
-    "g_v3ovns4bv344",
-    "g_5g4fqg77s4rw",
+    "g_ayfv9c97ohmv",
+    "g_yae8h1k9pjm1",
     "g_3qjmw7n4wj2a"
    ],
    [
-    "g_mqjsmpqgwwvm",
-    "g_yfkavdj5irwe",
-    "g_yae8h1k9pjm1",
-    "g_8od90wk1sl9k"
+    "g_xuqvrfy5ocv4",
+    "g_tqnnde1xmp0p",
+    "g_lad85rg9nxs3",
+    "g_5g4fqg77s4rw",
+    "g_1pg9y05mlkek"
    ],
    [
-    "g_xuqvrfy5ocv4",
-    "g_6xkkzn06sbdm",
+    "g_oimadifuvalb",
+    "g_vf28ktbdhmtz",
     "g_b4zsf3dfrhdv",
     "g_5gfabeezh485"
+   ],
+   [
+    "g_hhbz4ghpjmd1",
+    "g_7z48xpoqh5tx",
+    "g_66xj06nllgf2",
+    "g_8nrtffa2s13s",
+    "g_x4adkv9zu9yu"
    ]
   ],
   "rows": [
@@ -285,45 +297,17 @@
     "looks": [
      [
       "g_xuqvrfy5ocv4",
-      "g_cfm8n594jea7",
-      "g_8nrtffa2s13s",
+      "g_pa7kfg14rtzl",
+      "g_x1vivoqz2ixd",
+      "g_b4zsf3dfrhdv",
       "g_491tzu2suiv7"
      ],
      [
-      "g_939onlwfrg9j",
-      "g_j994h3k9l8ot",
-      "g_b4zsf3dfrhdv",
-      "g_qnmo5yzgl50b"
-     ],
-     [
-      "g_xowln4uos3ug",
-      "g_66xj06nllgf2",
+      "g_mqjsmpqgwwvm",
+      "g_6lolc7ma0mk8",
+      "g_fvc535elt23d",
       "g_yae8h1k9pjm1",
       "g_sb0mc7s7v346"
-     ]
-    ]
-   },
-   {
-    "id": "more-2",
-    "title": "Next in the rotation",
-    "looks": [
-     [
-      "g_9eip7wdtsxzd",
-      "g_bee1dg9rnfe5",
-      "g_5g4fqg77s4rw",
-      "g_v8836tq76i9r"
-     ],
-     [
-      "g_bq9qnaa1vkon",
-      "g_dscxzk8inlx2",
-      "g_2djvq6l9qxbb",
-      "g_8qqqzpwxuwti"
-     ],
-     [
-      "g_ugyaieefqcxe",
-      "g_btael28aebgu",
-      "g_8ukg5mi9r3fc",
-      "g_5gfabeezh485"
      ]
     ]
    },
@@ -332,21 +316,22 @@
     "title": "Forgotten pieces",
     "looks": [
      [
-      "g_ttw2m97ww8z5",
-      "g_yfkavdj5irwe",
-      "g_5g4fqg77s4rw",
-      "g_wwy9b2pusds3"
-     ],
-     [
       "g_mqjsmpqgwwvm",
-      "g_66xj06nllgf2",
+      "g_6lolc7ma0mk8",
+      "g_8t9o3g4r78c2",
       "g_2djvq6l9qxbb",
       "g_3qjmw7n4wj2a"
      ],
      [
+      "g_bq9qnaa1vkon",
+      "g_cfm8n594jea7",
+      "g_8nrtffa2s13s",
+      "g_8qqqzpwxuwti"
+     ],
+     [
       "g_939onlwfrg9j",
-      "g_ayfv9c97ohmv",
-      "g_om0dh5nps1ke",
+      "g_dzsh3qh7v6sb",
+      "g_5g4fqg77s4rw",
       "g_x4adkv9zu9yu"
      ]
     ]

@@ -209,6 +209,8 @@ describe("new piece anchor", () => {
     for (const day of days) {
       const lines = [`${day}\tpiece\tbase\tbranch`];
       for (const g of tops) {
+        /* C8: a cardigan is a mid layer, so it is not a solo top with a hero look of its own. */
+        if (/cardigan/.test(`${g.subtype} ${g.name}`)) continue;
         const looks = looksForHero(g, liveSnapshot, { today: day });
           assert.ok(looks.length >= 1, `${day} ${g.id} ${g.name}: ${looks.length}`);
           if (named.has(g.id)) assert.ok(looks.length >= 3, `${day} ${g.id} ${g.name}: ${looks.length}`);
