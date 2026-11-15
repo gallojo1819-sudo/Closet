@@ -18,6 +18,7 @@ import {
   isShortsPiece,
   slotOf,
 } from "./style.ts";
+import { frayedBottom, knitLoungeBottom } from "./stylist/jackets.ts";
 import { mapOccasion, type Garment } from "./types.ts";
 
 /** The piece's searchable text, built once per garment (garmentMemo tracks the fields read here). */
@@ -48,6 +49,14 @@ function shoesOf(pieces: Garment[]): Garment[] {
   return pieces.filter((g) => slotOf(g) === "footwear");
 }
 
+function jacketBesidesFleece(g: Garment): boolean {
+  const b = pieceBlob(g);
+  if (!/jacket|blazer|\bcoats?\b|bomber/.test(b)) return false;
+  if (/fleece/.test(b)) return false;
+  if (/zip/.test(b) && /knit|sweater/.test(b)) return false;
+  return true;
+}
+
 function hasKind(list: Garment[], re: RegExp): boolean {
   return list.some((g) => re.test(pieceBlob(g)));
 }
@@ -74,6 +83,15 @@ function rackHas(pool: readonly Garment[] | undefined, slot: "top" | "bottom" | 
   });
   memo.set(key, found);
   return found;
+}
+
+/** A solid or striped collared long-sleeve shirt. Not flannel, camp, bowling, graphic or hoodie. */
+function outCollaredShirt(g: Garment): boolean {
+  if (!isLongSleeveTop(g)) return false;
+  const b = pieceBlob(g);
+  if (/flannel|\bcamp\b|bowling|graphic|hoodie/.test(b)) return false;
+  if (/plaid|gingham|houndstooth|floral|paisley/.test(b) && !/stripe/.test(b)) return false;
+  return /\bshirts?\b|button[- ]?ups?|button[- ]?downs?|dress shirt|oxford/.test(b);
 }
 
 /**
@@ -136,9 +154,15 @@ export function lookFitsOccasion(
   const shorts = bottoms.some(isShortsPiece);
   const blazer = pieces.some(isBlazerPiece);
   const legalBottom = chino || trouser || jean || cord;
+  const lounge = bottoms.some((g) => knitLoungeBottom(g));
+  const frayed = bottoms.some((g) => frayedBottom(g) || isDistressedJean(g));
 
   if (shorts && o === "weekday") return false;
   if (distressed && o !== "weekend" && o !== "comfy") return false;
+  if (lounge && o !== "comfy") return false;
+  if (lounge && o === "comfy" && (loafer || pieces.some((g) => jacketBesidesFleece(g)))) return false;
+  if (frayed && o !== "weekend" && o !== "comfy") return false;
+  if (frayed && loafer) return false;
 
   if (o === "weekday") {
     if (tops.length === 0 || bottoms.length === 0 || shoes.length === 0) return false;
@@ -198,7 +222,8 @@ export function lookFitsOccasion(
       return (hoodie || rugby || graphic || oxford || polo) && (jean || chino) && (sneaker || loafer);
     }
     if (hoodieOnly || hoodie) return false;
-    if (!(oxford || polo || camp || knit)) return false;
+    const collaredShirt = tops.some((g) => outCollaredShirt(g));
+    if (!(oxford || polo || camp || knit || collaredShirt)) return false;
     if (!legalBottom) return false;
     const dressShoe = loafer || mule || boot;
     if (!dressShoe) {
