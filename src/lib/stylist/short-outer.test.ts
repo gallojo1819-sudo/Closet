@@ -371,7 +371,8 @@ describe("unaffected look parity", () => {
     // Base e5c0e5a hash of the same filter was 07be9f89be5f38f72acd49f0c0a71ce7a6c917889c09bc640a876242cecbf206.
     // The draw backfills when an oversized pairing drops, so this filtered set is the post-rule output.
     // R11 gates (thin tops, cardigan, lounge and frayed bottoms, colour anchor, out shirts) move this set.
-    expect(hash).toBe("6ee2de6e05c3e105d91ac3e2e07875e63190b3892f3cfa067fcf2470fbeb20d8");
+    // FIX-2's near-shade gate drops a look that pairs maroon/brown with another near shade, so the set moved again.
+    expect(hash).toBe("395155e4f64e290fae66864ceedf220d25cb83450761a67a52710db0bf413991");
     vi.useRealTimers();
   });
 });

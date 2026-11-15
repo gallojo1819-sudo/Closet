@@ -14,8 +14,9 @@ vi.mock("@/components/closet/overlay", () => ({
 
 /** Canonical day for the parity hash. Clock runs below re-pin to this before hashing. */
 const PIN = "2026-11-04";
-/* R11: thin tops, cardigans, lounge and frayed bottoms, the colour anchor and the out-shirt gate change which looks are legal. */
-const PARITY_HASH = "376b3468cd521bc0fd5fa149e9ee39a24cf19101a7eeae74397189f3b89d7265";
+/* R11: thin tops, cardigans, lounge and frayed bottoms, the colour anchor and the out-shirt gate change which looks are legal.
+   FIX-2's near-shade gate drops a look that pairs maroon/brown with another near shade. */
+const PARITY_HASH = "0e6cf4160c6731a03168659892e2f61da6c6bd278794c50aedaa9202a54d330c";
 
 function pinDay(day: string) {
   vi.useFakeTimers({ toFake: ["Date"] });
