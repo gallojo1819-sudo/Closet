@@ -167,6 +167,18 @@ describe("R11 lookbook outfit rules", { timeout: 600_000 }, () => {
     assert.equal(lookTuckDecision(worn, "weekday"), "out");
   });
 
+  it("an oversized lead is untucked even when the shirt would tuck", () => {
+    const top = CLOSET.find((g) => {
+      const blob = `${g.subtype} ${g.name}`.toLowerCase();
+      return g.category === "top" && /shirt|collar/.test(blob) && !/polo|knit|sweater|hoodie/.test(blob) && !oversizedOf(g);
+    });
+    const bottom = CLOSET.find((g) => g.category === "bottom");
+    assert.ok(top && bottom);
+    const lead = { ...top!, id: "oversized-oxford", oversized: true, tuck: "in" as const };
+    assert.equal(lookTuckDecision([lead, bottom!], "weekday"), "out");
+    assert.equal(lookTuckDecision([{ ...lead, oversized: false }, bottom!], "weekday"), "in");
+  });
+
   it("the sitting piece and the grey knit can lead a cold page", () => {
     const sitting = sittingPieceId(CLOSET);
     assert.ok(sitting);

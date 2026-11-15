@@ -294,6 +294,17 @@ export function twinCounts(looks: readonly (readonly Garment[])[]): Map<string, 
   return counts;
 }
 
+/** Look keys this Re-dress has already shown, including looks a reset just cleared. A later swap must not rebuild one. */
+function shownLooks(rotation?: Rotation): Set<string> | null {
+  if (!rotation) return null;
+  const keys = rotation.hold?.length ? [...rotation.looks, ...rotation.hold] : rotation.looks;
+  return keys.length ? new Set(keys) : null;
+}
+
+function repeatsShown(shown: Set<string> | null | undefined, pieces: readonly { id: string }[]): boolean {
+  return Boolean(shown?.has(rotationLookKey(pieces.map((g) => g.id))));
+}
+
 /** Cards the twins of `g` are on, by the id counts. */
 function twinCount(counts: ReadonlyMap<string, number>, twins: Twins, g: Garment): number {
   let n = 0;
@@ -680,7 +691,7 @@ function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garmen
     drawKey((rank ? rotationWeight(g) : 1 + Math.max(0, fresh(g, countOf(g)))) * shoeWeight(g, climate), rng) -
     crowded(g) -
     over(g);
-  const seen = rotation && rotation.looks.length ? new Set(rotation.looks) : null;
+  const seen = shownLooks(rotation);
   /* A piece leads one card a page (RowOpts.led). A led jacket is closed as hero and partner;
      a led top is closed as a bare card's lead only. The finished look is checked whatever the
      path, so the rule holds for every card this row lands. */
@@ -912,6 +923,8 @@ function spreadJackets(
   /** The page's lead keys: when the jacket leads the card (leadOf), the one swapped in must not lead another. */
   led?: Set<string>,
   leadOf: (pieces: readonly Garment[]) => Garment | null = leadPiece,
+  /** Looks this Re-dress has already shown. A swap that rebuilds one is refused. */
+  shown?: Set<string> | null,
 ): void {
   let total = 0;
   let suede = 0;
@@ -940,7 +953,7 @@ function spreadJackets(
       .sort((a, b) => (rank ? rank(a) - rank(b) : 0) || a.id.localeCompare(b.id));
     const next = options.find((g) => {
       const swapped = [...core, g];
-      if (!d.finalOk(swapped)) return false;
+      if (repeatsShown(shown, swapped) || !d.finalOk(swapped)) return false;
       /* The swap must not hand the card a lead that leads another card (no-op where the top leads). */
       const lead = leadOf(swapped);
       return !lead || lead.id === leadOf(look)?.id || !led?.has(twins.key(lead));
@@ -978,6 +991,8 @@ function spreadShoes(
   waived?: Map<string, string[]>,
   /** Which rows may lose a card that cannot be swapped. Themed rows stay whole. */
   dropRow: (index: number) => boolean = () => true,
+  /** Looks this Re-dress has already shown. A swap that rebuilds one is refused. */
+  shown?: Set<string> | null,
 ): void {
   const byId = (a: Garment, b: Garment) => a.id.localeCompare(b.id);
   const boots = d.shoes.filter((g) => bootPiece(g)).sort(byId);
@@ -1015,7 +1030,7 @@ function spreadShoes(
     const next = options.find((g) => {
       if (rowUsed.has(twins.key(g)) || twinCount(counts, twins, g) >= SCREEN_CAP) return false;
       const swapped = [...core, g];
-      if (!d.finalOk(swapped, relax)) return false;
+      if (repeatsShown(shown, swapped) || !d.finalOk(swapped, relax)) return false;
       const lead = leadOf(swapped);
       const was = leadOf(look);
       return !lead || lead.id === was?.id || !led.has(twins.key(lead));
@@ -1081,6 +1096,8 @@ export function preferStrictJackets(
     waived?: Map<string, string[]>;
     /** When the caller counts the finished looks itself, only read the cap. */
     track?: boolean;
+    /** Looks this Re-dress has already shown. A swap that rebuilds one is refused. */
+    shown?: Set<string> | null;
   },
 ): void {
   const ctx: JacketContext = {
@@ -1136,6 +1153,7 @@ export function preferStrictJackets(
       const leads = book?.led && book.twins ? book.led.has(book.twins.key(candidate)) : false;
       if (!busy && leads) return false;
       const pieces = [...core, candidate];
+      if (repeatsShown(book?.shown, pieces)) return false;
       if (!lookFitsSeason(pieces, season as Season)) return false;
       if (!isLegal(pieces, legalCtx)) return false;
       const hits = ruleHits(pieces, legalCtx);
@@ -1339,13 +1357,14 @@ function forgottenWay(
   for (const look of rows) for (const g of look) shipped.set(g.id, (shipped.get(g.id) ?? 0) + 1);
   const shippedLed = new Set(ctx.led ?? []);
   noteLeads(rows, ctx.twins, shippedLed);
-  spreadJackets(rows, d, shipped, new Map(live.map((g) => [g.id, g])), ctx.rotation, ctx.twins, shippedLed);
+  spreadJackets(rows, d, shipped, new Map(live.map((g) => [g.id, g])), ctx.rotation, ctx.twins, shippedLed, leadPiece, shownLooks(ctx.rotation));
   preferStrictJackets(rows, live, pool, ctx.occasion, ctx.season, ctx.weatherF, ctx.conditions, {
     counts: shipped,
     led: shippedLed,
     twins: ctx.twins,
     leadOf: leadPiece,
     waived,
+    shown: shownLooks(ctx.rotation),
   });
   for (const [id, n] of shipped) counts.set(id, n);
   return {
@@ -1437,13 +1456,14 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
       if (short.length < THEME_ROWS) short.push(way);
       continue;
     }
-    spreadJackets(looks, d, local, byId, ctx.rotation, twins, ledLocal);
+    spreadJackets(looks, d, local, byId, ctx.rotation, twins, ledLocal, leadPiece, shownLooks(ctx.rotation));
     preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
       counts: local,
       led: ledLocal,
       twins,
       leadOf: leadPiece,
       waived,
+      shown: shownLooks(ctx.rotation),
     });
     counts = local;
     led = ledLocal;
@@ -1500,13 +1520,14 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
         fillsSpent = true;
         return;
       }
-      spreadJackets(looks, d, counts, byId, rotation, twins, ledLocal);
+      spreadJackets(looks, d, counts, byId, rotation, twins, ledLocal, leadPiece, shownLooks(rotation));
       preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
         counts,
         led: ledLocal,
         twins,
         leadOf: leadPiece,
         waived,
+        shown: shownLooks(rotation),
       });
       if (looks.length < ROW_MIN) {
         const more = again(d, RELAXED_CAP);
@@ -1519,6 +1540,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
             twins,
             leadOf: leadPiece,
             waived,
+            shown: shownLooks(rotation),
           });
         }
       }
@@ -1585,6 +1607,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
         led,
         twins,
         leadOf: leadPiece,
+        shown: shownLooks(ctx.rotation),
       });
       for (const look of kept) for (const g of look) counts.set(g.id, (counts.get(g.id) ?? 0) + 1);
       out.push({ ...way, pieces: kept[0]!, looks: { ...way.looks, [occasion]: kept } });
@@ -1608,6 +1631,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     wet,
     waived,
     shoeClimate(weatherF, conditions?.highF, wet).cold ? () => true : () => false,
+    shownLooks(ctx.rotation),
   );
   /* One refill, into the last row that lost a card, with a non-sneaker shoe (and no suede when wet). */
   let lost = -1;
@@ -2051,18 +2075,19 @@ export function weekRotationRow(
       looks.push(look);
     }
   }
-  spreadJackets(looks, strict, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation, twins, led, weekLeadPiece);
+  spreadJackets(looks, strict, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation, twins, led, weekLeadPiece, shownLooks(ctx.rotation));
   preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
     counts,
     led,
     twins,
     leadOf: weekLeadPiece,
     waived,
+    shown: shownLooks(ctx.rotation),
   });
   const wetWeek = conditions?.wet === true;
   const beforeWeek = looks.length;
   const mayDrop = shoeClimate(weatherF, conditions?.highF, wetWeek).cold;
-  spreadShoes([looks], strict, counts, twins, led, weekLeadPiece, { cards: 0, sneakers: 0 }, wetWeek, waived, mayDrop ? () => true : () => false);
+  spreadShoes([looks], strict, counts, twins, led, weekLeadPiece, { cards: 0, sneakers: 0 }, wetWeek, waived, mayDrop ? () => true : () => false, shownLooks(ctx.rotation));
   if (looks.length < beforeWeek) {
     const restored = heroRow(
       { ...strict, shoes: refillShoes(strict.shoes, wetWeek) },
