@@ -25,7 +25,7 @@
  * relative imports only, no React, no DOM.
  */
 import { cellKit, isSummerOnlyPiece, maxDisjoint, rankedWays, ROW_MAX, storedRows, type Cell, type Way } from "./cells.ts";
-import { layerUp, tailorUp, type LayerTally } from "./layer-pass.ts";
+import { layerUp, loaferUp, patternJacket, tailorUp, type LayerTally } from "./layer-pass.ts";
 import { detectorColor } from "./palette.ts";
 import type { PaletteColor } from "../color.ts";
 import { liveIdsKey } from "../daily-pick.ts";
@@ -813,7 +813,31 @@ function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garmen
         tally: opts.pass.tailorPlaced ?? { placed: 1 },
         occasion: opts.pass.occasion,
       });
-      look = covered;
+      const dry = opts.pass.conditions?.wet !== true;
+      const casualDay = opts.pass.occasion === "weekday" || opts.pass.occasion === "weekend";
+      if (dry && casualDay) {
+        const openNow = (have: readonly Garment[]) => (g: Garment) =>
+          openLayer(g) && !have.some((p) => twins.key(p) === twins.key(g));
+        const accept = (pieces: Garment[], relax?: readonly string[]) => dd.finalOk(pieces, relax);
+        const shoed = loaferUp({
+          look: covered,
+          shoes: d.shoes,
+          keyOf,
+          open: openNow(covered),
+          finalOk: accept,
+          relax: waivedHere,
+        });
+        look = patternJacket({
+          look: shoed,
+          layers: d.layers,
+          keyOf,
+          open: openNow(shoed),
+          finalOk: accept,
+          relax: waivedHere,
+        });
+      } else {
+        look = covered;
+      }
     }
     if (opts.waived) opts.waived.set(lookKey(look), [...waivedHere]);
     /* A hero dressed while its verdict was open stays open: the next call takes the same path. */

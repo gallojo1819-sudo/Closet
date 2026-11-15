@@ -37,12 +37,12 @@ Was 16 cards, now 16. 16 new or rewritten, 16 no longer on the page.
 - week: grey shirt · maroon/brown trousers · brown leather tassel loafers · brown chore jacket
 - Cords, gingham, boots: cream cable-knit sweater · red gingham shirt · brown corduroy trousers · brown leather boots · olive field jacket
 - Cords, gingham, boots: beige cable-knit half-zip sweater · pink gingham shirt · navy corduroy trousers · navy leather tassel loafers · brown shearling bomber jacket
-- Cords, gingham, boots: brown cable-knit sweater · dark grey button-down shirt · burgundy corduroy pants · navy suede sneakers · navy/black corduroy jacket
+- Cords, gingham, boots: brown cable-knit sweater · dark grey button-down shirt · burgundy corduroy pants · brown suede tassel loafers · blue plaid shearling jacket
 - Clean city sportswear: grey plaid shirt · tan chinos · white leather sneakers · brown chore jacket
-- Clean city sportswear: dark brown button-up shirt · dark brown chinos · light blue leather sneakers · blue plaid shearling jacket
-- Forgotten pieces: light blue half-zip fleece · light blue jeans · navy brown plaid jacket · brown suede loafers
-- Forgotten pieces: light blue long-sleeve polo · cream trousers · brown leather loafers · grey harrington jacket
-- Forgotten pieces: pale yellow ribbed polo · maroon/brown trousers · black woven loafers · white beige toggle jacket
+- Clean city sportswear: red gingham shirt · beige patchwork jeans · cream leather sneakers · navy field jacket
+- Clean city sportswear: brown long-sleeve shirt · navy blue/brown. match original blue/brown. match original denim trousers · navy brown plaid jacket · brown leather loafers
+- Forgotten pieces: light blue half-zip fleece · cream trousers · navy suede sneakers · grey harrington jacket
+- Forgotten pieces: light blue long-sleeve polo · grey pleated trousers · black woven loafers · navy/black corduroy jacket
 
 ## out
 

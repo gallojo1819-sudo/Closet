@@ -11,7 +11,9 @@ import {
   linenPiece,
   loaferOrBoot,
   nonCollaredKnit,
+  sneakerPiece,
   sportCoatPiece,
+  suedeShoe,
   trouserBottom,
 } from "../outfit-rules.ts";
 import { slotOf } from "../style.ts";
@@ -23,6 +25,8 @@ export type TailorTally = { placed: number; tried?: number };
 
 const LAYER_TRIES = 6;
 const BLAZER_TRIES = 4;
+const LOAFER_TRIES = 4;
+const PATTERN_TRIES = 2;
 
 type Ok = (pieces: Garment[], relax?: readonly string[]) => boolean;
 
@@ -152,6 +156,100 @@ export function tailorUp(args: {
   if (args.finalOk(pieces, relax)) {
     tally.placed += 1;
     return pieces;
+  }
+  return look;
+}
+
+function pieceText(g: Garment): string {
+  return `${g.subtype ?? ""} ${g.name ?? ""} ${g.material ?? ""}`.toLowerCase();
+}
+
+/** A knit or sweater worn as the top. Not a polo, hoodie, cardigan or collared sweater. */
+function knitSweaterTop(g: Garment): boolean {
+  const slot = slotOf(g);
+  if (slot !== "top" && slot !== "dress") return false;
+  const b = pieceText(g);
+  if (/hoodie|\bpolos?\b|cardigan/.test(b)) return false;
+  if (/collar/.test(b) && /sweater|knit/.test(b)) return false;
+  return /knit|sweater/.test(b);
+}
+
+/** Trousers, cords, pleats or flannel. Not denim. */
+function plainTrouser(g: Garment): boolean {
+  if (slotOf(g) !== "bottom") return false;
+  const b = pieceText(g);
+  if (/jean|\bdenim\b/.test(b)) return false;
+  return /trouser|cord|pleat|flannel/.test(b);
+}
+
+function casualJacket(g: Garment): boolean {
+  if (sportCoatPiece(g)) return false;
+  const b = pieceText(g);
+  if (/\bvests?\b|gilet/.test(b)) return false;
+  return /jacket|coat/.test(b);
+}
+
+function patternedJacket(g: Garment): boolean {
+  return casualJacket(g) && /plaid|check|herringbone|tweed/.test(pieceText(g));
+}
+
+function loaferPiece(g: Garment): boolean {
+  return /loafer/.test(pieceText(g)) && !sneakerPiece(g);
+}
+
+/**
+ * A knit, a trouser and a casual jacket on a sneaker: try a loafer, suede first.
+ * Weekday and Weekend, dry days. The caller decides that.
+ */
+export function loaferUp(args: {
+  look: Garment[];
+  shoes: readonly Garment[];
+  keyOf: (g: Garment) => number;
+  open: (g: Garment) => boolean;
+  finalOk: Ok;
+  relax?: readonly string[];
+}): Garment[] {
+  const { look } = args;
+  if (!look.some(knitSweaterTop) || !look.some(plainTrouser) || !look.some(casualJacket)) return look;
+  const shoe = look.find((g) => sneakerPiece(g));
+  if (!shoe) return look;
+  const relax = args.relax ?? [];
+  const loafers = args.shoes
+    .filter((g) => args.open(g) && loaferPiece(g))
+    .sort((a, b) => Number(suedeShoe(b)) - Number(suedeShoe(a)) || byKey(args.keyOf)(a, b))
+    .slice(0, LOAFER_TRIES);
+  for (const loafer of loafers) {
+    const pieces = look.map((g) => (g.id === shoe.id ? loafer : g));
+    if (args.finalOk(pieces, relax)) return pieces;
+  }
+  return look;
+}
+
+/**
+ * A knit, a trouser, a suede loafer and a plain casual jacket: try a patterned jacket.
+ */
+export function patternJacket(args: {
+  look: Garment[];
+  layers: readonly Garment[];
+  keyOf: (g: Garment) => number;
+  open: (g: Garment) => boolean;
+  finalOk: Ok;
+  relax?: readonly string[];
+}): Garment[] {
+  const { look } = args;
+  if (!look.some(knitSweaterTop) || !look.some(plainTrouser)) return look;
+  const shoe = look.find((g) => loaferPiece(g) && /suede/.test(pieceText(g)));
+  if (!shoe) return look;
+  const outer = look.find((g) => casualJacket(g) && !patternedJacket(g));
+  if (!outer) return look;
+  const relax = args.relax ?? [];
+  const jackets = args.layers
+    .filter((g) => args.open(g) && patternedJacket(g))
+    .sort(byKey(args.keyOf))
+    .slice(0, PATTERN_TRIES);
+  for (const jacket of jackets) {
+    const pieces = look.map((g) => (g.id === outer.id ? jacket : g));
+    if (args.finalOk(pieces, relax)) return pieces;
   }
   return look;
 }

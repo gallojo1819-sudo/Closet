@@ -196,6 +196,43 @@ describe("R11 lookbook outfit rules", { timeout: 600_000 }, () => {
     assert.equal(tonal.includes("COL-NEAR-SHADE"), false, tonal.join(","));
   });
 
+  it("a fall page at 58F shows Joe's shape", () => {
+    const shape = (look: Garment[]) => {
+      const knit = look.some((g) => {
+        const b = blob(g);
+        if (g.category !== "top" && g.category !== "dress") return false;
+        if (/polo|hoodie|cardigan/.test(b)) return false;
+        if (/collar/.test(b) && /sweater|knit/.test(b)) return false;
+        return /cable/.test(b) || /knit|sweater/.test(b);
+      });
+      const trouser = look.some(
+        (g) =>
+          g.category === "bottom" &&
+          /trouser|chino|pleat/.test(blob(g)) &&
+          /navy|grey|gray/.test(blob(g)) &&
+          !/jean|denim/.test(blob(g)),
+      );
+      const shoe = look.some((g) => /loafer/.test(blob(g)) && /suede/.test(blob(g)) && /brown/.test(blob(g)));
+      const jacket = look.some((g) => {
+        const b = blob(g);
+        if (/blazer|sport/.test(b)) return false;
+        return /plaid|herringbone|\bcheck\b|tweed/.test(b) || (/\bgrey\b|\bgray\b/.test(b) && /jacket|coat/.test(b));
+      });
+      return knit && trouser && shoe && jacket;
+    };
+    const hits: string[] = [];
+    for (const occasion of ["weekday", "weekend"] as const) {
+      for (let salt = 0; salt <= 9; salt += 1) {
+        for (const look of load(occasion, 58, false, "fall", salt)) {
+          if (!shape(look)) continue;
+          assert.equal(lookTuckDecision(look, occasion), "out", look.map((g) => g.name).join(" · "));
+          hits.push(`${occasion} salt ${salt}: ${look.map((g) => g.name).join(" · ")}`);
+        }
+      }
+    }
+    assert.ok(hits.length >= 1, "no card had a knit, a navy or grey trouser, a brown suede loafer and a patterned jacket");
+  });
+
   it("no bench card pairs two near shades", () => {
     const seen: Garment[][] = [];
     for (const occasion of ["weekend", "weekday", "out"] as const) {
