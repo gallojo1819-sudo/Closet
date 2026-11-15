@@ -6,7 +6,8 @@
  * queue (fillRow in ideas.ts), so every tap is a full page. Coverage counts the pieces shown
  * since the last reset; once every eligible piece has appeared (pieces that can never pair are
  * set aside, see weekRotationRow in ideas.ts), or a whole page adds no new piece, the cycle
- * resets: the looks seen so far may come back and the least-recently-shown pieces lead again,
+ * resets: the looks seen so far may come back on the next Re-dress (the idea rows of
+ * the Re-dress that closed the cycle still refuse them) and the least-recently-shown pieces lead again,
  * so the rotation never stalls at nothing new. Look-alike pieces (twinKey in ideas.ts: the
  * same colour, material and kind, as four pairs of white leather sneakers) are capped and
  * ranked as one piece there; the queue itself holds ids. The state is per session, client-side
@@ -24,6 +25,11 @@ export type Rotation = {
   shown: string[];
   /** Keys (rotationLookKey) of looks shown since the last reset. */
   looks: string[];
+  /**
+   * Look keys a reset just cleared. The idea rows of that same Re-dress still
+   * refuse them; the next advance drops this list, so the following Re-dress may repeat.
+   */
+  hold?: string[];
   /** Resets so far: every eligible piece has had a turn this many times. */
   passes: number;
   /** Advances in a row that showed no new piece. Two (a whole page) stall the cycle. */
@@ -119,7 +125,7 @@ export function advanceRotation(r: Rotation, input: AdvanceInput): Advance {
   const stalled = idle >= STALL_ADVANCES && remaining.length > 0;
   if (remaining.length === 0 || stalled) {
     return {
-      next: { v: 1, queue, shown: [], looks: [], passes: r.passes + 1, idle: 0, last },
+      next: { v: 1, queue, shown: [], looks: [], passes: r.passes + 1, idle: 0, last, hold: looks },
       reset: true,
       newPieces,
       remaining: stalled ? remaining : [],
@@ -152,6 +158,7 @@ export function readRotation(raw: string | null | undefined): Rotation {
       passes: typeof got.passes === "number" && Number.isFinite(got.passes) ? got.passes : 0,
       idle: typeof got.idle === "number" && Number.isFinite(got.idle) ? got.idle : 0,
       last: typeof got.last === "string" ? got.last : "",
+      ...(ids(got.hold).length ? { hold: ids(got.hold) } : {}),
     };
   } catch {
     return emptyRotation();

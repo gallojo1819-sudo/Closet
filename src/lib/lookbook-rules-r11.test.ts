@@ -1,0 +1,291 @@
+/**
+ * R11 Lookbook outfit rules. The R10 fixture and bench, cold, with no network.
+ * Out's floor is min(12, two cards for each winter-legal dress-shoe group).
+ */
+import { register } from "node:module";
+import { readFileSync } from "node:fs";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import type { Garment, Occasion } from "./types.ts";
+
+register(new URL("../../scripts/ts-ext.mjs", import.meta.url), { parentURL: import.meta.url });
+
+const { benchPage } = await import("./__fixtures__/lookbook-bench.ts");
+const { colorHardFails } = await import("./color.ts");
+const { jacketRequired } = await import("./stylist/jackets.ts");
+const { twinGroups } = await import("./detectors.ts");
+const { leadTop, lookTuckDecision } = await import("./look.ts");
+const { oversizedOf } = await import("./stylist/oversized.ts");
+const { ruleFails, ruleHits } = await import("./stylist/legal.ts");
+const { sittingPieceId } = await import("./gaps.ts");
+const { livePool } = await import("./rack.ts");
+const { RULE_SENTENCES } = await import("./stylist/rule-copy.ts");
+const {
+  cardiganPiece,
+  collaredShirt,
+  nonCollaredKnit,
+  sneakerPiece,
+  sportCoatPiece,
+  suedeShoe,
+  thinSoloTop,
+} = await import("./outfit-rules.ts");
+
+const CLOSET = livePool(JSON.parse(readFileSync(new URL("./__fixtures__/lookbook-closet-2026-11-14.json", import.meta.url), "utf8")) as Garment[]);
+const BY_ID = new Map(CLOSET.map((g) => [g.id, g]));
+const TWINS = twinGroups(CLOSET);
+
+function cardsOf(page: { week: string[][]; rows: { looks: string[][] }[] }): Garment[][] {
+  const ids = [...page.week, ...page.rows.flatMap((row) => row.looks)];
+  return ids.map((row) => row.map((id) => BY_ID.get(id)).filter((g): g is Garment => Boolean(g)));
+}
+
+function blob(g: Garment): string {
+  return `${g.subtype} ${g.name} ${g.material ?? ""}`.toLowerCase();
+}
+
+function layered(look: Garment[]): boolean {
+  const shirt = look.some(collaredShirt);
+  const knit = look.some(nonCollaredKnit);
+  const coat = look.some(sportCoatPiece);
+  return (shirt && knit) || (shirt && coat);
+}
+
+function thinAlone(look: Garment[]): boolean {
+  const tops = look.filter((g) => g.category === "top" || g.category === "dress");
+  return tops.length > 0 && tops.every(thinSoloTop) && !look.some((g) => nonCollaredKnit(g) && !thinSoloTop(g));
+}
+
+function cardiganAlone(look: Garment[]): boolean {
+  return look.some(cardiganPiece) && !look.some((g) => collaredShirt(g) || /\btees?\b|\bt-?shirts?\b/.test(blob(g)) || (/\bpolos?\b/.test(blob(g)) && /knit/.test(blob(g))));
+}
+
+function jean(look: Garment[]): boolean {
+  return look.some((g) => /\bjeans?\b|denim/.test(blob(g)) && g.category === "bottom");
+}
+
+function loafer(look: Garment[]): boolean {
+  return look.some((g) => /loafer/.test(blob(g)));
+}
+
+function maxTwin(looks: Garment[][]): number {
+  const counts = new Map<string, number>();
+  for (const look of looks) {
+    const seen = new Set<string>();
+    for (const g of look) seen.add(TWINS.key(g));
+    for (const key of seen) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Math.max(0, ...counts.values());
+}
+
+describe("R11 lookbook outfit rules", { timeout: 600_000 }, () => {
+  const pages = new Map<string, Garment[][]>();
+  const load = (occasion: Occasion, high: number, wet = false, season: "fall" | "winter" = "winter", salt = 0) => {
+    const key = `${occasion}:${high}:${wet}:${season}:${salt}`;
+    const hit = pages.get(key);
+    if (hit) return hit;
+    const built = cardsOf(
+      benchPage(occasion, CLOSET, { weatherF: high, conditions: { highF: high, wet, windy: false }, season, salt }),
+    );
+    pages.set(key, built);
+    return built;
+  };
+
+  for (const high of [44.4, 42]) {
+    for (const occasion of ["weekend", "weekday", "out"] as const) {
+      it(`${occasion} at ${high}F dresses within the rules`, () => {
+        const looks = load(occasion, high);
+        const dressShoes = CLOSET.filter((g) => {
+          const b = blob(g);
+          return g.category === "footwear" && !/sneaker|trainer|mule/.test(b) && /loafer|boot/.test(b);
+        });
+        const shoeGroups = new Set(dressShoes.map((g) => TWINS.key(g))).size;
+        const floor = occasion === "out" ? Math.min(12, shoeGroups * 2) : 12;
+        assert.ok(looks.length >= floor, `${occasion} has ${looks.length} cards`);
+        assert.ok(looks.some(layered), "a layered card");
+        assert.equal(looks.filter(thinAlone).length, 0, "no thin top alone");
+        assert.equal(looks.filter(cardiganAlone).length, 0, "no cardigan alone");
+        const sneakers = looks.filter((look) => look.some(sneakerPiece)).length;
+        assert.ok(sneakers / looks.length <= 0.4, `sneakers ${sneakers}/${looks.length}`);
+        assert.ok(maxTwin(looks) <= 2, "twin cap");
+        if (occasion === "out") assert.ok(looks.some((look) => look.some(collaredShirt)), "a collared shirt");
+        if (occasion !== "weekend") {
+          for (const look of looks) {
+            const frayed = look.some((g) => /fray|distress|ripped/.test(blob(g)) && g.category === "bottom");
+            const lounge = look.some((g) => /lounge|track|fleece pant|ribbed knit pant/.test(blob(g)));
+            if (frayed || lounge) assert.equal(look.some((g) => /loafer/.test(blob(g))), false);
+          }
+        }
+        for (const look of looks) {
+          const decision = lookTuckDecision(look, occasion);
+          const knit = look.find(nonCollaredKnit);
+          if (knit) assert.notEqual(decision, "in");
+          const lead = leadTop(look);
+          if (lead && oversizedOf(lead)) assert.notEqual(decision, "in", lead.name);
+        }
+      });
+    }
+  }
+
+  it("weekday or out has a blazer under a casual outer when it is cold", () => {
+    const looks = [...load("weekday", 44.4), ...load("out", 44.4)];
+    const hit = looks.find((look) => look.some(sportCoatPiece));
+    assert.ok(hit, "a blazer card");
+    assert.ok(hit!.some((g) => /field|chore|suede|shearling|toggle|plaid/.test(blob(g)) && /jacket|coat/.test(blob(g))));
+    assert.equal(hit!.some((g) => /cable|chunky/.test(blob(g)) && /knit|sweater/.test(blob(g))), false);
+  });
+
+  it("a wet cold page has no suede shoe or suede outer and few sneakers", () => {
+    for (const occasion of ["weekend", "weekday", "out"] as const) {
+      const looks = load(occasion, 44.4, true);
+      const sneakers = looks.filter((look) => look.some(sneakerPiece)).length;
+      assert.ok(sneakers / looks.length <= 0.4, `${occasion} sneakers ${sneakers}/${looks.length}`);
+      assert.equal(looks.some((look) => look.some(suedeShoe)), false, occasion);
+      assert.equal(looks.some((look) => look.some((g) => /suede|shearling/.test(blob(g)) && /jacket|coat/.test(blob(g)))), false);
+      assert.ok(maxTwin(looks) <= 2);
+    }
+  });
+
+  it("Joe's look passes, and a knit on it is untucked", () => {
+    const shoe = ["g_8ukg5mi9r3fc", "g_8nrtffa2s13s"];
+    for (const season of ["fall", "winter"] as const) {
+      const high = season === "fall" ? 58 : 44.4;
+      for (const occasion of ["weekday", "weekend", "out"] as const) {
+        for (const id of shoe) {
+          const pieces = ["g_mqjsmpqgwwvm", "g_v3ovns4bv344", id, "g_3qjmw7n4wj2a"].map((item) => BY_ID.get(item)!);
+          const failed = ruleFails(pieces, {
+            occasion,
+            season,
+            weatherF: high,
+            conditions: { highF: high, wet: false, windy: false },
+            pool: CLOSET,
+          });
+          assert.deepEqual(failed, [], `${season} ${occasion} ${id}`);
+        }
+      }
+    }
+    const worn = ["g_mqjsmpqgwwvm", "g_v3ovns4bv344", "g_8ukg5mi9r3fc", "g_3qjmw7n4wj2a"].map((id) => BY_ID.get(id)!);
+    assert.equal(lookTuckDecision(worn, "weekday"), "out");
+  });
+
+  it("an oversized lead is untucked even when the shirt would tuck", () => {
+    const top = CLOSET.find((g) => {
+      const blob = `${g.subtype} ${g.name}`.toLowerCase();
+      return g.category === "top" && /shirt|collar/.test(blob) && !/polo|knit|sweater|hoodie/.test(blob) && !oversizedOf(g);
+    });
+    const bottom = CLOSET.find((g) => g.category === "bottom");
+    assert.ok(top && bottom);
+    const lead = { ...top!, id: "oversized-oxford", oversized: true, tuck: "in" as const };
+    assert.equal(lookTuckDecision([lead, bottom!], "weekday"), "out");
+    assert.equal(lookTuckDecision([{ ...lead, oversized: false }, bottom!], "weekday"), "in");
+  });
+
+  it("the sitting piece and the grey knit can lead a cold page", () => {
+    const sitting = sittingPieceId(CLOSET);
+    assert.ok(sitting);
+    const weekend = load("weekend", 44.4);
+    const weekday = load("weekday", 44.4);
+    const onPage = [...weekend, ...weekday].some((look) => look.some((g) => g.id === sitting));
+    assert.equal(onPage, true, sitting!);
+    const grey = cardsOf(benchPage("weekend", CLOSET, { weatherF: 44.4, conditions: { highF: 44.4, wet: false, windy: false }, pin: "g_gp53xkrmem9b" }));
+    assert.equal(grey.some((look) => look.some((g) => g.id === "g_gp53xkrmem9b")), true);
+  });
+
+  it("near shades fail, and a tonal look with a dark anchor passes", () => {
+    const sweater = BY_ID.get("g_xbt3gpjuo1p4")!;
+    const maroon = BY_ID.get("g_x1vivoqz2ixd")!;
+    const loafer = BY_ID.get("g_om0dh5nps1ke")!;
+    const field = BY_ID.get("g_sb0mc7s7v346")!;
+    const failed = ruleFails([sweater, maroon, loafer, field], {
+      occasion: "weekend",
+      season: "fall",
+      weatherF: 58,
+      conditions: { highF: 58, wet: false, windy: false },
+      pool: CLOSET,
+    });
+    assert.ok(failed.includes("COL-NEAR-SHADE"), failed.join(","));
+    const rust = { ...sweater, id: "rust-top", name: "rust knit", colors: ["rust"] };
+    const brick = { ...maroon, id: "brick-bottom", name: "brick trousers", colors: ["brick"] };
+    assert.ok(colorHardFails([rust, brick, loafer]).includes("COL-NEAR-SHADE"));
+    const navy = CLOSET.find((g) => g.category === "bottom" && /\bnavy\b/.test(blob(g)))!;
+    assert.equal(colorHardFails([sweater, navy, loafer]).includes("COL-NEAR-SHADE"), false);
+    const brownTop = { ...sweater, id: "brown-top", name: "brown sweater", colors: ["brown"] };
+    const brownBottom = { ...maroon, id: "brown-bottom", name: "brown trousers", colors: ["brown"] };
+    const navyShoe = { ...loafer, id: "navy-shoe", name: "navy loafers", colors: ["navy"] };
+    const tonal = colorHardFails([brownTop, brownBottom, navyShoe]);
+    assert.equal(tonal.includes("COL-NO-ANCHOR"), false, tonal.join(","));
+    assert.equal(tonal.includes("COL-NEAR-SHADE"), false, tonal.join(","));
+  });
+
+  it("a fall page at 58F shows Joe's shape", () => {
+    const shape = (look: Garment[]) => {
+      const knit = look.some((g) => {
+        const b = blob(g);
+        if (g.category !== "top" && g.category !== "dress") return false;
+        if (/polo|hoodie|cardigan/.test(b)) return false;
+        if (/collar/.test(b) && /sweater|knit/.test(b)) return false;
+        return /cable/.test(b) || /knit|sweater/.test(b);
+      });
+      const trouser = look.some(
+        (g) =>
+          g.category === "bottom" &&
+          /trouser|chino|pleat/.test(blob(g)) &&
+          /navy|grey|gray/.test(blob(g)) &&
+          !/jean|denim/.test(blob(g)),
+      );
+      const shoe = look.some((g) => /loafer/.test(blob(g)) && /suede/.test(blob(g)) && /brown/.test(blob(g)));
+      const jacket = look.some((g) => {
+        const b = blob(g);
+        if (/blazer|sport/.test(b)) return false;
+        return /plaid|herringbone|\bcheck\b|tweed/.test(b) || (/\bgrey\b|\bgray\b/.test(b) && /jacket|coat/.test(b));
+      });
+      return knit && trouser && shoe && jacket;
+    };
+    const hits: string[] = [];
+    for (const occasion of ["weekday", "weekend"] as const) {
+      for (let salt = 0; salt <= 9; salt += 1) {
+        for (const look of load(occasion, 58, false, "fall", salt)) {
+          if (!shape(look)) continue;
+          assert.equal(lookTuckDecision(look, occasion), "out", look.map((g) => g.name).join(" · "));
+          hits.push(`${occasion} salt ${salt}: ${look.map((g) => g.name).join(" · ")}`);
+        }
+      }
+    }
+    assert.ok(hits.length >= 1, "no card had a knit, a navy or grey trouser, a brown suede loafer and a patterned jacket");
+  });
+
+  it("no bench card pairs two near shades", () => {
+    const seen: Garment[][] = [];
+    for (const occasion of ["weekend", "weekday", "out"] as const) {
+      for (let salt = 0; salt <= 9; salt += 1) seen.push(...load(occasion, 58, false, "fall", salt));
+      for (const high of [44.4, 42]) seen.push(...load(occasion, high));
+      seen.push(...load(occasion, 44.4, true));
+    }
+    for (const look of seen) {
+      assert.equal(colorHardFails(look).includes("COL-NEAR-SHADE"), false, look.map((g) => g.name).join(" + "));
+    }
+  });
+
+  it("keeps the owner's rules", () => {
+    const weekend = load("weekend", 44.4);
+    const weekday = load("weekday", 44.4);
+    assert.ok(weekend.some(loafer) || weekday.some(loafer));
+    assert.ok(weekend.some(jean));
+    assert.ok(weekday.some(jean));
+    for (const look of [...weekend, ...weekday, ...load("out", 44.4)]) {
+      const linen = look.some((g) => /linen/.test(blob(g)));
+      const flannel = look.some((g) => /flannel/.test(blob(g)));
+      assert.equal(linen && flannel, false);
+    }
+    const cable = CLOSET.find((g) => /cable/.test(blob(g)) && /knit|sweater/.test(blob(g)))!;
+    const navy = CLOSET.find((g) => sportCoatPiece(g) && /navy/.test(blob(g)))!;
+    const chore = BY_ID.get("g_8qqqzpwxuwti")!;
+    const bottom = weekday[0]!.find((g) => g.category === "bottom")!;
+    const shoe = weekday[0]!.find((g) => g.category === "footwear")!;
+    assert.ok(ruleFails([cable, bottom, shoe, navy], { occasion: "weekday", season: "fall", weatherF: 58, pool: CLOSET }).includes("JKT-LAY-1"));
+    const choreHits = ruleHits([cable, bottom, shoe, chore], { occasion: "weekend", season: "fall", weatherF: 58, pool: CLOSET });
+    assert.deepEqual(choreHits.hard, [], choreHits.hard.join(","));
+    assert.equal(jacketRequired("weekday", "fall", 72, { wet: false, windy: false }), false);
+    assert.equal(jacketRequired("weekday", "fall", 60, { wet: false, windy: false }), true);
+    for (const sentence of Object.values(RULE_SENTENCES)) assert.equal(/\b\d+(?:\.\d+)?\s*\/\s*10\b/.test(sentence), false);
+  });
+});

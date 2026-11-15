@@ -24,7 +24,7 @@ import { assignSlots, evaluatePlates, gateOff, type EvalResult, type Plate } fro
 import { pairingBlocked, pieceVetoIds, type TasteMemory } from "../taste.ts";
 import { evaluateColor } from "./colorChip.ts";
 import { piecesFromIds, stylistHits, type StylistHit } from "./rules.ts";
-import { coatSharesLookWithGraphic, isJacketAddition, jacketHits, jacketRequired, slotPieces, supersededStylist, wearSlot } from "./jackets.ts";
+import { blazerUnderCover, coatSharesLookWithGraphic, isJacketAddition, jacketHits, jacketRequired, slotPieces, supersededStylist, wearSlot } from "./jackets.ts";
 import { shortOuterHits } from "./short-outer.ts";
 import { DELETED_SET, DELETED_SNEAKERS } from "./deleted.ts";
 
@@ -189,10 +189,11 @@ function slotsOverfull(pieces: Garment[]): boolean {
     counts.set(slot, (counts.get(slot) ?? 0) + 1);
   }
   if ((counts.get("bottom") ?? 0) > 1 || (counts.get("shoe") ?? 0) > 1) return true;
-  /* A top, a mid and an outer-eligible dual piece are the most layers a look holds. */
+  /* A top, a mid and an outer are the most layers a look holds. A blazer under one casual outer counts as that mid. */
   const layers = (counts.get("top") ?? 0) + (counts.get("mid") ?? 0) + (counts.get("outer") ?? 0);
   if (layers > 3) return true;
-  if ((counts.get("outer") ?? 0) > 1) return true;
+  const outers = counts.get("outer") ?? 0;
+  if (outers > 1 && !(outers === 2 && blazerUnderCover(pieces))) return true;
   return false;
 }
 
@@ -246,7 +247,7 @@ export function ruleHits(pieces: Garment[], ctx: RuleCtx): RuleHits {
   /* The chapter's own gate (occasion-gate.ts): what weekday, out, weekend, comfy and travel admit. */
   if (!lookFitsOccasion(pieces, occasion, ctx.pool, ctx.house ?? undefined, { wideWeekdayTops: true })) pushHard("OCC-GATE");
   for (const id of occasionFails(pieces, occasion, f)) pushHard(id);
-  for (const id of seasonFails(pieces, season, f, ctx.pool)) pushHard(id);
+  for (const id of seasonFails(pieces, season, f, ctx.pool, ctx.conditions?.highF)) pushHard(id);
   if (sameScaleChecks(pieces)) pushSoft("PATTERN-SCALE");
   if (harmony(pieces, { occasion, ...(f !== undefined ? { f } : {}) }) < 0) pushSoft("COLOR-HARMONY");
   for (const id of trendFails(pieces)) pushSoft(id);
@@ -294,7 +295,9 @@ export function pieceRuleFails(g: Garment, ctx: RuleCtx): string[] {
   const occasion = String(ctx.occasion) as Occasion;
   const season = seasonOf(ctx) as Season;
   for (const id of occasionFails([g], occasion, measuredF(ctx))) if (id !== "OCC-COMFY-COSTUME" && id !== "OCC-OUT-CAMP-UNTUCKED") ids.push(id);
-  for (const id of seasonFails([g], season, undefined, undefined)) if (id !== "SEA-FIT" && id !== "WARMTH-FIT") ids.push(id);
+  for (const id of seasonFails([g], season, undefined, undefined)) {
+    if (id !== "SEA-FIT" && id !== "WARMTH-FIT" && id !== "SEA-TOP-THIN") ids.push(id);
+  }
   if (ctx.taste && !new Set(ctx.lockedIds ?? []).has(g.id) && pieceVetoIds(ctx.taste).has(g.id)) ids.push("VETO-PIECE");
   return ids;
 }

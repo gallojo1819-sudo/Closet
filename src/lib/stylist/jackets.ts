@@ -16,6 +16,7 @@ import {
   type Plate,
 } from "../house-profiles/evaluate.ts";
 import { WEATHER_THRESHOLDS } from "../weather.ts";
+import { casualCover, sportCoatPiece } from "../outfit-rules.ts";
 import { oversizedOf } from "./oversized.ts";
 import { dominant, wash } from "./rules.ts";
 import classFile from "./data/2026-09-30-jacket-classification.json" with { type: "json" };
@@ -218,6 +219,14 @@ function jsig(g: Plate | undefined, id: string, worn: string): boolean {
  * case (Joe, 2026-10-18: jeans can go with a blazer sometimes if it works): they pass the rules
  * and draw at JEANS_BLAZER_ODDS (draw.ts).
  */
+export function knitLoungeBottom(g: Plate): boolean {
+  return jsig(g, "knit_lounge_pant", "bottom");
+}
+
+export function frayedBottom(g: Plate): boolean {
+  return jsig(g, "distressed_or_frayed", "bottom");
+}
+
 export function ecruOrMidJeans(g: Plate): boolean {
   if (!jsig(g, "denim_bottom", "bottom")) return false;
   if (whiteOrStriped(g) || jsig(g, "distressed_or_frayed", "bottom") || jsig(g, "knit_lounge_pant", "bottom")) return false;
@@ -228,10 +237,10 @@ export function ecruOrMidJeans(g: Plate): boolean {
 /** A look whose outer is a sport coat or blazer over ecru or mid-wash clean jeans. */
 export function jeansWithBlazer(pieces: Plate[]): boolean {
   const ps = slotPieces(pieces);
-  const outer = ps.outer;
+  const coat = [ps.outer, ps.mid].find((g) => g && sportCoat(g));
   const bottom = ps.bottom;
-  if (!outer || !bottom) return false;
-  const cls = jacketInfo(outer).class;
+  if (!coat || !bottom) return false;
+  const cls = jacketInfo(coat).class;
   if (cls !== "sport_coat_soft" && cls !== "sport_coat_structured") return false;
   return ecruOrMidJeans(bottom);
 }
@@ -403,7 +412,24 @@ export function slotPieces(pieces: Plate[]): Partial<Record<string, Plate>> {
     else if (!ps.top) ps.top = g;
     else if (!ps.mid) ps.mid = g;
   }
+  /* A blazer under a casual outer is the mid. Only looks that already hold two upper layers can be that stack. */
+  if (ps.outer && ps.mid) {
+    const cover = casualCover(ps.outer) ? ps.outer : casualCover(ps.mid) ? ps.mid : undefined;
+    const coat =
+      sportCoat(ps.outer) || sportCoatPiece(ps.outer) ? ps.outer : sportCoat(ps.mid) || sportCoatPiece(ps.mid) ? ps.mid : undefined;
+    if (cover && coat && cover.id !== coat.id) {
+      ps.outer = cover;
+      ps.mid = coat;
+    }
+  }
   return ps;
+}
+
+/** A blazer or sport coat worn under a field, chore, suede, shearling, toggle or wool plaid jacket. */
+export function blazerUnderCover(pieces: readonly Plate[]): boolean {
+  const cover = pieces.find((g) => casualCover(g));
+  const coat = pieces.find((g) => sportCoat(g) || sportCoatPiece(g));
+  return Boolean(cover && coat && cover.id !== coat.id);
 }
 
 function plateText(g: Plate): string {
@@ -715,18 +741,21 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
   const bottom = ps.bottom;
   const shoe = ps.shoe;
   const info = outer ? jacketInfo(outer) : NONE;
-  const tailored = Boolean(outer && (info.class === "sport_coat_soft" || info.class === "sport_coat_structured"));
-  const casual = Boolean(outer && (info.class === "casual" || info.class === "coat"));
+  /* The sport coat is the mid when a casual outer covers it, and the outer when it is worn alone. */
+  const coat = [mid, outer].find((g): g is Plate => Boolean(g && sportCoat(g)));
+  const coatInfo = coat ? jacketInfo(coat) : NONE;
+  const tailored = Boolean(coat && (coatInfo.class === "sport_coat_soft" || coatInfo.class === "sport_coat_structured"));
+  const casual = Boolean(outer && !sportCoat(outer) && (info.class === "casual" || info.class === "coat"));
 
-  if (tailored && outer) {
+  if (tailored && coat) {
     for (const [worn, g] of [["top", top], ["mid", mid]] as const) {
-      if (!g) continue;
+      if (!g || g.id === coat.id) continue;
       if (jsig(g, "chunky_knit", worn) || jsig(g, "athletic_layer", worn) || jsig(g, "sweat_fleece_top", worn)) {
-        hit("JKT-LAY-1", "hard", 0, `chunky or athletic ${g.name} under sport coat ${outer.name}`);
+        hit("JKT-LAY-1", "hard", 0, `chunky or athletic ${g.name} under sport coat ${coat.name}`);
       }
     }
-    if (top) underHit(top, "top", outer, { ...ctx, occasion: occ, season }, hits);
-    if (mid) underHit(mid, "mid", outer, { ...ctx, occasion: occ, season }, hits);
+    if (top && top.id !== coat.id) underHit(top, "top", coat, { ...ctx, occasion: occ, season }, hits);
+    if (mid && mid.id !== coat.id) underHit(mid, "mid", coat, { ...ctx, occasion: occ, season }, hits);
     if (bottom) {
       if (jsig(bottom, "knit_lounge_pant", "bottom")) hit("JKT-LAY-3", "hard", 0, `track or lounge ${bottom.name} with a sport coat`);
       if (jsig(bottom, "distressed_or_frayed", "bottom")) hit("JKT-LAY-3", "hard", 0, `distressed ${bottom.name} with a sport coat`);
@@ -791,12 +820,12 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
     }
   }
 
-  if (tailored && outer && bottom) {
-    const fm = matFam(outer);
+  if (tailored && coat && bottom) {
+    const fm = matFam(coat);
     const bm = matFam(bottom);
-    const od = dominant(outer);
+    const od = dominant(coat);
     const bd = dominant(bottom);
-    if (fm && fm === bm && od && od === bd) hit("JKT-LAY-7", "soft", -10, `${outer.name} matches ${bottom.name}`);
+    if (fm && fm === bm && od && od === bd) hit("JKT-LAY-7", "soft", -10, `${coat.name} matches ${bottom.name}`);
   }
 
   const scores: number[] = [];
@@ -841,11 +870,15 @@ export function jacketHits(ps: Partial<Record<string, Plate>>, ctx: JacketCtx): 
     }
   }
 
-  if (outer && covered && season === "winter") {
-    const heavy = info.weight === "heavy";
-    const light = info.weight === "light";
-    if (!heavy && light && !mid) hit("JKT-COV-2", "soft", -15, `light outer ${outer.name} with no mid in winter`);
-    const sum = (top?.warmth ?? 0) + (mid?.warmth ?? 0) + (outer.warmth ?? 0);
+  /* Warmth is the outermost non-blazer piece: the casual jacket when one covers a sport coat. */
+  const warmthOuter = outer && mid && sportCoat(outer) && casualCover(mid) ? mid : outer;
+  const warmthMid = warmthOuter === mid ? outer : mid;
+  const warmthInfo = warmthOuter ? jacketInfo(warmthOuter) : NONE;
+  if (warmthOuter && countsAsOuter(warmthOuter) && season === "winter") {
+    const heavy = warmthInfo.weight === "heavy";
+    const light = warmthInfo.weight === "light";
+    if (!heavy && light && !warmthMid) hit("JKT-COV-2", "soft", -15, `light outer ${warmthOuter.name} with no mid in winter`);
+    const sum = (top?.warmth ?? 0) + (warmthMid?.warmth ?? 0) + (warmthOuter.warmth ?? 0);
     if (!heavy && sum < 6) hit("JKT-COV-2", "soft", -10, `winter warmth ${sum} < 6`);
   }
 

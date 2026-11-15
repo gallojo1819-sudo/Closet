@@ -257,6 +257,19 @@ export function rackNotes(garments: Garment[]): RackNote[] {
   return notes.slice(0, 6);
 }
 
+/**
+ * The piece named first on the "Wear what's sitting" note, or null when that note is absent.
+ * The note's text is unchanged. Two pieces with the same name resolve to the longer-idle one.
+ */
+export function sittingPieceId(garments: Garment[]): string | null {
+  const note = rackNotes(garments).find((n) => n.title === "Wear what’s sitting");
+  const name = note?.finishes[0];
+  if (!name) return null;
+  const hits = garments.filter((g) => !g.archived && g.name === name);
+  hits.sort((a, b) => daysIdle(b) - daysIdle(a) || a.id.localeCompare(b.id));
+  return hits[0]?.id ?? null;
+}
+
 export function rackLine(garments: Garment[]): string | null {
   const notes = rackNotes(garments);
   const n = notes[0];

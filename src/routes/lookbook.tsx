@@ -9,7 +9,7 @@ import { LookSheet } from "@/components/closet/look-sheet";
 import { LookSkeleton, RackSkeleton } from "@/components/closet/look-skeleton";
 import { Overlay } from "@/components/closet/overlay";
 import { GarmentTile } from "@/components/closet/tile";
-import { rackLine } from "@/lib/gaps";
+import { rackLine, sittingPieceId } from "@/lib/gaps";
 import { draftStamp, effectiveIds, readJacketDraft, subscribeJacketDrafts, jacketDraftVersion } from "@/lib/jacket-draft";
 import { lastResortNote } from "@/lib/jacket-edit";
 import { assistantConditions, pageJacketWeather } from "@/lib/jacket-weather";
@@ -29,6 +29,8 @@ import {
   type Way,
 } from "@/lib/detectors";
 import { engineCacheReady } from "@/lib/engine-cache";
+import { sneakerPiece } from "@/lib/outfit-rules";
+import { settleWeek } from "@/lib/rank-week";
 import {
   comboKey,
   draftFromPlate,
@@ -431,6 +433,7 @@ function LookbookPage() {
       rotation: getRotation(),
       stuck: stuckFor(),
       cap: 8,
+      pin: sittingPieceId(garments),
     });
     stuckRef.current = { key: filterKey, ids: new Set(built.unpairable.map((g) => g.id)) };
     if (import.meta.env.DEV && built.unpairable.length) {
@@ -449,8 +452,9 @@ function LookbookPage() {
       if (cancel) return;
       timer = window.setTimeout(() => {
         if (cancel) return;
-        const next = dressWeek();
-        if (!cancel) setRanked({ key: filterKey, looks: next });
+        void settleWeek(() => dressWeek()).then((next) => {
+          if (!cancel) setRanked({ key: filterKey, looks: next ?? [] });
+        });
       }, 0);
     });
     return () => {
@@ -499,6 +503,11 @@ function LookbookPage() {
     deps: [rowSalt, weekIds, leadIds, suggested, getRotation, stuckFor, recordPage],
     build: () => {
       const found = visibleDetectors(garments, { occasion, season, color, weatherF: pageWeather, conditions: pageConditions, salt: rowSalt });
+      const pin = sittingPieceId(garments);
+      const weekLooks = weekKey
+        .split("|")
+        .filter(Boolean)
+        .map((ids) => ids.split(",").map((id) => byId.get(id)).filter((g): g is Garment => Boolean(g)));
       const shown = rowWays(found, garments, {
         occasion,
         season,
@@ -511,6 +520,11 @@ function LookbookPage() {
         suggested,
         rotation: getRotation(),
         stuck: stuckFor(),
+        pin,
+        shoePrior: {
+          cards: weekLooks.length,
+          sneakers: weekLooks.filter((look) => look.some((g) => sneakerPiece(g))).length,
+        },
       });
       recordPage(shown.flatMap((way) => (way.looks[occasion] ?? []).map((look) => look.map((g) => g.id))));
       return { ways: found, shown };
@@ -587,11 +601,14 @@ function LookbookPage() {
 
   /* This week's reshuffle: the next turn of the rotation. Writes nothing to the store. */
   const reshuffleWeek = () => {
-    const next = dressWeek();
-    if (next.length) {
-      setShown({ key: filterKey, looks: next });
-      setWeekPulse((x) => x + 1);
-    }
+    void settleWeek(() => dressWeek()).then((next) => {
+      const looks = next ?? [];
+      setRanked({ key: filterKey, looks });
+      if (looks.length) {
+        setShown({ key: filterKey, looks });
+        setWeekPulse((x) => x + 1);
+      }
+    });
   };
 
   /* One Re-dress: new rows (rowWays, idle) and a new week. Nothing is written anywhere. */

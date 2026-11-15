@@ -12,6 +12,7 @@ import {
   maxDisjoint,
   renderedSectionLooks,
   sharedDetector,
+  twinGroups,
   visibleDetectors,
   wayChipVisible,
   wayFirstRow,
@@ -125,10 +126,14 @@ function misfile(wayId: string, look: Garment[]): string | null {
       ].filter(Boolean).length;
       return hits < 2 ? `${hits} of oxford, chino, navy blazer` : null;
     }
-    case "6":
-      if (!tops(look).length || !tops(look).every(fineKnit)) return "a top is not a fine knit";
+    case "6": {
+      const body = tops(look);
+      const knits = body.filter(fineKnit);
+      const shirts = body.filter((g) => !fineKnit(g) && /shirt|oxford|button/.test(said(g)));
+      if (!knits.length || knits.length + shirts.length !== body.length) return "a top is not a fine knit";
       if (!shoes(look).some((g) => /suede/.test(said(g)) && /loafer/.test(said(g)))) return "no suede loafer";
       return null;
+    }
     case "3":
       if (!bottoms(look).some((g) => /cord/.test(said(g)))) return "no cords";
       if (!tops(look).some((g) => /gingham|fair isle|diamond|cable/.test(said(g)))) return "no country top";
@@ -136,12 +141,13 @@ function misfile(wayId: string, look: Garment[]): string | null {
     case "8":
       return look.some((g) => /linen/.test(said(g))) ? null : "no linen";
     case "9": {
+      /* C6: the winter cell also reads a solid knit, a wool trouser, and a dark suede loafer or boot. */
       const hits = [
-        tops(look).some((g) => /cashmere|merino|fine knit/.test(said(g))),
-        bottoms(look).some((g) => /flannel/.test(said(g))),
-        shoes(look).some((g) => /suede/.test(said(g)) && !/sneaker/.test(said(g))),
+        tops(look).some((g) => /cashmere|merino|fine knit|crew|zip|collar/.test(said(g)) && /knit|sweater|wool|cashmere/.test(said(g)) && !/cable|chunky|hoodie|fleece/.test(said(g))),
+        bottoms(look).some((g) => /flannel|wool/.test(said(g)) && /trouser|pant/.test(said(g))),
+        shoes(look).some((g) => /suede/.test(said(g)) && /loafer|boot/.test(said(g)) && /brown|chocolate|navy|black|dark/.test(said(g))),
       ].filter(Boolean).length;
-      return hits < 2 ? `${hits} of cashmere, flannel, dark suede` : null;
+      return hits < 2 ? `${hits} of knit, wool trouser, dark suede` : null;
     }
     case "10":
       if (!shoes(look).some((g) => /sneaker/.test(said(g)))) return "no sneaker";
@@ -286,6 +292,18 @@ describe("a way holds only looks with that way's pieces", () => {
  * top stacked on the first. The denim overshirt is dual-use by classification: a top alone, the
  * outer when it sits over another top. slotOf alone would call that two tops.
  */
+/** A shirt under a knit, or a blazer under a casual outer, is the one mid a cold card may add. */
+function stackedOk(ps: { top?: Garment; mid?: Garment; outer?: Garment }): boolean {
+  if (!ps.mid) return true;
+  const said = (g?: Garment) => `${g?.subtype ?? ""} ${g?.name ?? ""}`.toLowerCase();
+  const upper = [said(ps.top), said(ps.mid)];
+  const shirt = upper.some((b) => /shirt|oxford|button/.test(b));
+  const knit = upper.some((b) => /knit|sweater|zip/.test(b));
+  const coat = upper.some((b) => /blazer|sport/.test(b));
+  const cover = /jacket|coat/.test(said(ps.outer));
+  return (shirt && knit) || (coat && cover);
+}
+
 describe("a way look is one top, one bottom, one shoe, at most one outer; summer shirts sit out fall and winter", () => {
   const VARSITY = "g_j5og5jmzh5tx";
   const SUMMER_SHIRTS = ["g_zh2l854ghu1t", "g_lqf1mrlsure9", "g_jkj2nzfzpf1o"];
@@ -304,7 +322,7 @@ describe("a way look is one top, one bottom, one shoe, at most one outer; summer
           const bottoms = look.filter((g) => slotOf(g) === "bottom").length;
           const shoes = look.filter((g) => slotOf(g) === "footwear").length;
           const outers = look.filter((g) => slotOf(g) === "outerwear").length;
-          if (!ps.top || ps.mid || !ps.bottom || !ps.shoe || bottoms !== 1 || shoes !== 1 || outers > 1) {
+          if (!ps.top || !stackedOk(ps) || !ps.bottom || !ps.shoe || bottoms !== 1 || shoes !== 1 || outers > 1) {
             const stacked = [ps.top, ps.mid].filter(Boolean).length;
             wrong.push(`${way.title}: ${names(look)} (${stacked} top, ${bottoms} bottom, ${shoes} shoe, ${outers} outer)`);
           }
@@ -327,7 +345,7 @@ describe("a way look is one top, one bottom, one shoe, at most one outer; summer
         }
         const ps = slotPieces(pieces);
         const outers = pieces.filter((g) => slotOf(g) === "outerwear").length;
-        if (!ps.top || ps.mid || !ps.bottom || !ps.shoe || outers > 1) {
+        if (!ps.top || !stackedOk(ps) || !ps.bottom || !ps.shoe || outers > 1) {
           wrong.push(`${look.name}: ${[ps.top, ps.mid].filter(Boolean).length} top, ${outers} outer`);
         }
       }
@@ -576,5 +594,32 @@ describe("the card tag says each thing once", () => {
     assert.match(book, /occasionLabel=\{chapterLabel\}/);
     // The sections render the rows as built by rowWays (up to ROW_MAX), not the engine's five.
     assert.match(book, /ways=\{shownWays\}/);
+  });
+});
+
+describe("look-alike merge", () => {
+  const closet = JSON.parse(
+    readFileSync(new URL("../__fixtures__/lookbook-closet-2026-11-14.json", import.meta.url), "utf8"),
+  ) as Garment[];
+  const twins = twinGroups(closet);
+  const byId = new Map(closet.map((g) => [g.id, g]));
+  const key = (id: string) => twins.key(byId.get(id)!);
+
+  it("joins a blank to the one filled piece with the same name and subtype", () => {
+    assert.equal(key("g_6xkkzn06sbdm"), key("g_gyc76ur3ikb9"));
+    assert.equal(key("g_k75fdfdsnak0"), key("g_yfkavdj5irwe"));
+  });
+
+  it("does not merge different names that share a colour and a last noun", () => {
+    const navy = ["g_v3ovns4bv344", "g_dscxzk8inlx2", "g_dzsh3qh7v6sb", "g_twp15jpdf6h3"];
+    assert.equal(new Set(navy.map(key)).size, navy.length);
+    assert.notEqual(key("g_7z48xpoqh5tx"), key("g_teatot7o1lst"));
+    assert.notEqual(key("g_nk43jo5cbvn1"), key("g_szj91ziihfpw"));
+    assert.notEqual(key("g_bee1dg9rnfe5"), key("g_yfkavdj5irwe"));
+    assert.notEqual(key("g_bee1dg9rnfe5"), key("g_k75fdfdsnak0"));
+  });
+
+  it("keeps two shirts under one name apart when the subtype differs", () => {
+    assert.notEqual(key("g_21b6d3qcohmu"), key("g_z6syv3lx30tn"));
   });
 });

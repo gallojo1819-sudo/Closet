@@ -270,6 +270,95 @@ function has(set: PaletteColor[], ...names: PaletteColor[]): boolean {
   return names.some((n) => set.includes(n));
 }
 
+const LIGHT_SHADE = new Set<PaletteColor>(["white", "ivory", "cream", "beige", "light blue", "pink", "blush"]);
+const DARK_SHADE = new Set<PaletteColor>(["navy", "brown", "chocolate", "charcoal", "black", "olive", "burgundy"]);
+/** Brick stays its own shade, so rust against brick is two shades. */
+type ShadeName = PaletteColor | "brick";
+const NEAR_SHADE = new Set<ShadeName>(["burgundy", "maroon", "wine", "rust", "brick"]);
+
+type ShadePiece = {
+  name?: string;
+  subtype?: string;
+  category?: string;
+  colors?: readonly string[];
+};
+
+/** The first palette word in a compound colour ("maroon/brown" is maroon). Brick is not rust. */
+function leadShade(g: ShadePiece): ShadeName | null {
+  const from = (raw: string): ShadeName | null => {
+    for (const chunk of raw.toLowerCase().split(/[/,]+/)) {
+      const text = chunk.trim().replace(/-/g, " ");
+      if (!text) continue;
+      if (text === "brick") return "brick";
+      const whole = canonicalize(text);
+      if (whole) return whole;
+      const words = text.split(/\s+/).filter(Boolean);
+      for (let i = 0; i < words.length; i += 1) {
+        const pair = words.slice(i, i + 2).join(" ");
+        if (pair === "brick") return "brick";
+        const named = canonicalize(pair);
+        if (named) return named;
+        if (words[i] === "brick") return "brick";
+        const one = canonicalize(words[i]);
+        if (one) return one;
+      }
+    }
+    return null;
+  };
+  for (const c of g.colors ?? []) {
+    const shade = from(c);
+    if (shade) return shade;
+  }
+  return from(g.name ?? "");
+}
+
+function lightPiece(g: ShadePiece): boolean {
+  const name = `${g.name ?? ""} ${(g.colors ?? []).join(" ")}`.toLowerCase();
+  if (/\bpastel\b|\bstone\b/.test(name)) return true;
+  const shade = leadShade(g);
+  return shade !== null && shade !== "brick" ? LIGHT_SHADE.has(shade) : false;
+}
+
+function darkPiece(g: ShadePiece): boolean {
+  const shade = leadShade(g);
+  if (shade && shade !== "brick" && DARK_SHADE.has(shade)) return true;
+  return /\bnavy\b|\bbrown\b|chocolate|charcoal|\bblack\b|\bolive\b|burgundy/.test((g.name ?? "").toLowerCase());
+}
+
+function shadeRole(g: ShadePiece): "top" | "bottom" | "footwear" | "outer" | "other" {
+  const b = `${g.subtype ?? ""} ${g.name ?? ""}`.toLowerCase();
+  if (/\b(shoes?|loafers?|mules?|sneakers?|boots?)\b/.test(b)) return "footwear";
+  if (/\b(pants?|chinos?|jeans?|trousers?|shorts?)\b/.test(b)) return "bottom";
+  if (/\b(blazers?|sport\s*coats?|overcoats?|coats?)\b/.test(b) || g.category === "outerwear") return "outer";
+  if (g.category === "footwear" || g.category === "bottom" || g.category === "top") return g.category;
+  return "other";
+}
+
+/**
+ * Hard colour fails. COL-NO-ANCHOR: top, bottom and shoe are all light and nothing
+ * in the look is dark. COL-NEAR-SHADE: top and bottom are two different shades of
+ * the red family (burgundy and maroon, rust and brick). Brick is its own shade.
+ * A tonal look with a dark
+ * anchor does not trip COL-NO-ANCHOR.
+ */
+export function colorHardFails(
+  pieces: readonly ShadePiece[],
+  slotted?: { top?: ShadePiece; bottom?: ShadePiece; shoe?: ShadePiece },
+): string[] {
+  if (pieces.length < 3) return [];
+  const ids: string[] = [];
+  const top = slotted?.top ?? pieces.find((g) => shadeRole(g) === "top");
+  const bottom = slotted?.bottom ?? pieces.find((g) => shadeRole(g) === "bottom");
+  const shoe = slotted?.shoe ?? pieces.find((g) => shadeRole(g) === "footwear");
+  if (top && bottom && shoe && [top, bottom, shoe].every(lightPiece) && !pieces.some(darkPiece)) ids.push("COL-NO-ANCHOR");
+  if (top && bottom) {
+    const a = leadShade(top);
+    const b = leadShade(bottom);
+    if (a && b && a !== b && NEAR_SHADE.has(a) && NEAR_SHADE.has(b)) ids.push("COL-NEAR-SHADE");
+  }
+  return ids;
+}
+
 export function harmony(
   pieces: Garment[],
   opts?: { occasion?: Occasion; f?: number },

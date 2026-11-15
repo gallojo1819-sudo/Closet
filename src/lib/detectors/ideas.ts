@@ -25,6 +25,7 @@
  * relative imports only, no React, no DOM.
  */
 import { cellKit, isSummerOnlyPiece, maxDisjoint, rankedWays, ROW_MAX, storedRows, type Cell, type Way } from "./cells.ts";
+import { layerUp, loaferUp, patternJacket, tailorUp, type LayerTally } from "./layer-pass.ts";
 import { detectorColor } from "./palette.ts";
 import type { PaletteColor } from "../color.ts";
 import { liveIdsKey } from "../daily-pick.ts";
@@ -36,6 +37,15 @@ import { lookFitsOccasion, lookHasColor } from "../lookbook.ts";
 import { livePool } from "../rack.ts";
 import { rotationLookKey, rotationRank, type Rotation } from "../rotation.ts";
 import { lookFitsSeason, pieceFitsSeason, type Season } from "../season.ts";
+import {
+  bootPiece,
+  coldLayer,
+  leatherLoafer,
+  shoeClimate,
+  shoeWeight,
+  sneakerPiece,
+  suedeShoe,
+} from "../outfit-rules.ts";
 import { daysIdle, isBrownSuedeOuter, slotOf } from "../style.ts";
 import { jacketChoices, lastResortNote, selectedOuter, type JacketContext } from "../jacket-edit.ts";
 import type { JacketGateConditions } from "../jacket-weather.ts";
@@ -48,8 +58,11 @@ import { todayNY } from "../utils.ts";
 
 /** Most cards one piece is on across one screen (every row and the week row). */
 export const SCREEN_CAP = 2;
-/** The page cap a plain row owed to the section may use when the strict cap leaves it short. */
-export const RELAXED_CAP = SCREEN_CAP + 1;
+/**
+ * The page cap a plain row owed to the section may use when the strict cap leaves it short.
+ * Same as SCREEN_CAP: a twin group is on two cards at most, and a short row ships short.
+ */
+export const RELAXED_CAP = SCREEN_CAP;
 /** A row shrinks to this before it gives up its theme. */
 export const ROW_MIN = 3;
 export const FORGOTTEN_ID = "forgotten";
@@ -183,6 +196,27 @@ export function twinKey(g: Garment): string {
  * Two garments made from one photo are one piece stored twice, whatever their name or material
  * fields say; a piece with no hash stands on its own.
  */
+function materialBlank(g: Garment): boolean {
+  return !(g.material ?? "").trim();
+}
+
+/** Lowercase, punctuation to spaces, one space between words, a trailing plural s dropped. */
+function normalizedName(name: string): string {
+  const words = name
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length) words[words.length - 1] = words[words.length - 1]!.replace(/(?<!s)s$/, "");
+  return words.join(" ");
+}
+
+/** Full name plus subtype. A blank material joins a filled piece only when both match. */
+function lookAlikeKey(g: Garment): string {
+  const subtype = (g.subtype ?? "").trim().toLowerCase().replace(/(?<!s)s$/, "");
+  return `${normalizedName(g.name)}|${subtype}`;
+}
+
 function photoKey(g: Garment): string | null {
   const hash = (g.fileHash ?? "").trim();
   return hash ? `${slotOf(g)}|${hash}` : null;
@@ -217,6 +251,24 @@ export function twinGroups(pool: readonly Garment[]): Twins {
     if (have === undefined) byPhoto.set(photo, key);
     else if (find(have) !== key) alias.set(key, find(have));
   }
+  /* A blank joins one filled piece with the same full name and subtype. It does not pull the other filled pieces into that group. */
+  const alike = new Map<string, Garment[]>();
+  for (const g of pool) {
+    const key = lookAlikeKey(g);
+    const list = alike.get(key);
+    if (list) list.push(g);
+    else alike.set(key, [g]);
+  }
+  for (const group of alike.values()) {
+    const filled = group.filter((g) => !materialBlank(g));
+    const blanks = group.filter(materialBlank);
+    if (!filled.length || !blanks.length) continue;
+    const root = find(twinKey(filled[0]!));
+    for (const blank of blanks) {
+      const key = find(twinKey(blank));
+      if (key !== root) alias.set(key, root);
+    }
+  }
   const keys = new Map<string, string>();
   const groups = new Map<string, Garment[]>();
   for (const g of pool) {
@@ -240,6 +292,70 @@ export function twinCounts(looks: readonly (readonly Garment[])[]): Map<string, 
   const counts = new Map<string, number>();
   for (const look of looks) for (const g of look) counts.set(twinKey(g), (counts.get(twinKey(g)) ?? 0) + 1);
   return counts;
+}
+
+/** Look keys still in this cycle. A later swap must not rebuild one. A reset's held keys are separate: the rows are dressed first, then breakHeld retouches any card that rebuilt one. */
+function shownLooks(rotation?: Rotation): Set<string> | null {
+  return rotation?.looks.length ? new Set(rotation.looks) : null;
+}
+
+/**
+ * A card whose look a reset just cleared is retouched: one piece is swapped for
+ * the first legal alternative that is not itself a shown look. The search is
+ * left alone, so the rows stay the ones the cycle would have dressed.
+ */
+function breakHeld(rows: Garment[][][], d: Dresser, rotation: Rotation | undefined, twins: Twins, waived?: Map<string, string[]>): void {
+  const blocked = new Set([...(rotation?.looks ?? []), ...(rotation?.hold ?? [])]);
+  if (!blocked.size) return;
+  const pools = [d.bottoms, d.tops, d.shoes, d.layers];
+  const pageUses = (key: string, except: Garment): number => {
+    let n = 0;
+    for (const row of rows) for (const card of row) for (const piece of card) {
+      if (piece.id === except.id) continue;
+      if (twins.key(piece) === key) n += 1;
+    }
+    return n;
+  };
+  for (const looks of rows) {
+    for (let i = looks.length - 1; i >= 0; i -= 1) {
+      const look = looks[i]!;
+      if (!blocked.has(rotationLookKey(look.map((g) => g.id)))) continue;
+      const relax = waived?.get(lookKey(look)) ?? [];
+      let next: Garment[] | undefined;
+      for (const piece of look) {
+        const core = look.filter((g) => g.id !== piece.id);
+        const rowUsed = new Set(looks.flat().map((g) => twins.key(g)));
+        rowUsed.delete(twins.key(piece));
+        for (const pool of pools) {
+          for (const candidate of pool) {
+            if (candidate.id === piece.id || rowUsed.has(twins.key(candidate))) continue;
+            if (pageUses(twins.key(candidate), piece) >= SCREEN_CAP) continue;
+            const swapped = [...core, candidate];
+            const key = rotationLookKey(swapped.map((g) => g.id));
+            if (blocked.has(key) || !d.finalOk(swapped, relax)) continue;
+            next = swapped;
+            break;
+          }
+          if (next) break;
+        }
+        if (next) break;
+      }
+      if (!next) {
+        looks.splice(i, 1);
+        continue;
+      }
+      blocked.add(rotationLookKey(next.map((g) => g.id)));
+      if (waived) {
+        const prev = waived.get(lookKey(look));
+        if (prev) waived.set(lookKey(next), prev);
+      }
+      looks[i] = next;
+    }
+  }
+}
+
+function repeatsShown(shown: Set<string> | null | undefined, pieces: readonly { id: string }[]): boolean {
+  return Boolean(shown?.has(rotationLookKey(pieces.map((g) => g.id))));
 }
 
 /** Cards the twins of `g` are on, by the id counts. */
@@ -272,6 +388,22 @@ export type IdeaContext = {
    * leadPiece). A piece leads one card a page, so no idea row card leads with them.
    */
   leadIds?: readonly string[];
+  /** The piece the "Wear what's sitting" note names. Dressed first when it pairs. */
+  pin?: string | null;
+  /** Week-row cards already on the page, so the sneaker cap is the whole page. */
+  shoePrior?: { cards: number; sneakers: number };
+};
+
+/** Weather and the page's layer tally, shared by every row of one build. */
+export type DressPass = {
+  occasion: Occasion;
+  season: Season;
+  weatherF?: number;
+  conditions?: JacketGateConditions;
+  layerTally: LayerTally;
+  /** Set once a Weekday or Out card carries a blazer. */
+  tailorPlaced?: { placed: number };
+  pin?: string;
 };
 
 /** A hero or partner with its draw key: the larger the key, the sooner it is tried. */
@@ -527,6 +659,10 @@ type RowOpts = {
   leadOf?: (pieces: readonly Garment[]) => Garment | null;
   /** Filled per card landed, by lookKey: the soft rules waived for it (empty for a strict card). */
   waived?: Map<string, string[]>;
+  /** Layering, the blazer stack and the pinned piece. Absent on a row that does not dress. */
+  pass?: DressPass;
+  /** Overrides the row's search budget. The week row asks for more than an idea row. */
+  tries?: number;
 };
 
 type Pairable = {
@@ -601,10 +737,14 @@ function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garmen
     ? (g: Garment) => -rank(g) - over(g)
     : (g: Garment) => drawKey(1 + Math.max(0, fresh(g, countOf(g))), rng) - over(g);
   /* Partners: one draw key each (Efraimidis–Spirakis) by rotation weight, else by freshness; a
-     crowded colour family and a piece past the strict cap go behind every other, in tiers. */
+     crowded colour family and a piece past the strict cap go behind every other, in tiers.
+     At 45°F or under, or on a wet day, a boot weighs double and a sneaker half. */
+  const climate = shoeClimate(opts.pass?.weatherF, opts.pass?.conditions?.highF, opts.pass?.conditions?.wet === true);
   const partnerKey = (g: Garment): number =>
-    drawKey(rank ? rotationWeight(g) : 1 + Math.max(0, fresh(g, countOf(g))), rng) - crowded(g) - over(g);
-  const seen = rotation && rotation.looks.length ? new Set(rotation.looks) : null;
+    drawKey((rank ? rotationWeight(g) : 1 + Math.max(0, fresh(g, countOf(g)))) * shoeWeight(g, climate), rng) -
+    crowded(g) -
+    over(g);
+  const seen = shownLooks(rotation);
   /* A piece leads one card a page (RowOpts.led). A led jacket is closed as hero and partner;
      a led top is closed as a bare card's lead only. The finished look is checked whatever the
      path, so the rule holds for every card this row lands. */
@@ -626,7 +766,15 @@ function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garmen
     for (const g of list) if (!opts.skip?.has(g.id) && d.theme(g, slot)) heroes.push({ g, slot, key: heroKey(g) });
   }
   heroes.sort((a, b) => b.key - a.key || a.g.id.localeCompare(b.g.id));
-  const budget: Budget = { tries: d.wide ? WIDE_ROW_TRIES : ROW_TRIES, hero: HERO_TRIES };
+  if (opts.pass?.pin) {
+    const pin = opts.pass.pin;
+    const at = heroes.findIndex((h) => h.g.id === pin);
+    if (at > 0) {
+      const [hero] = heroes.splice(at, 1);
+      if (hero) heroes.unshift(hero);
+    }
+  }
+  const budget: Budget = { tries: opts.tries ?? (d.wide ? WIDE_ROW_TRIES : ROW_TRIES), hero: HERO_TRIES };
   let unknownTried = 0;
   let unknownWide = 0;
   const needLayer = !d.bareOk([]);
@@ -662,12 +810,16 @@ function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garmen
     budget.hero = HERO_TRIES;
     const before = budget.tries;
     if (rank) hot = crowdedFamilies();
-    /* One key per partner per hero: the draw is made once, the beam and the wide retry read it. */
+    /* One key per partner per hero: the draw is made once, the beam and the wide retry read it.
+       The pinned hero draws from its own stream, so a miss leaves every later hero's draw put. */
+    const pinned = hero.g.id === opts.pass?.pin;
+    const pinRng = pinned ? rngFromSalt((opts.stream ?? salt) ^ 0x51ed) : null;
     const keys = new Map<string, number>();
     const keyOf = (g: Garment) => {
       let k = keys.get(g.id);
       if (k === undefined) {
-        k = partnerKey(g);
+        const weight = (rank ? rotationWeight(g) : 1 + Math.max(0, fresh(g, countOf(g)))) * shoeWeight(g, climate);
+        k = pinRng ? drawKey(weight, pinRng) - crowded(g) - over(g) : partnerKey(g);
         keys.set(g.id, k);
       }
       return k;
@@ -700,6 +852,57 @@ function heroRow(d: Dresser, counts: Map<string, number>, opts: RowOpts): Garmen
       if (!look && pairs !== true) budget.tries = before;
     }
     if (!look) continue;
+    if (opts.pass) {
+      const inLook = new Set(look.map((g) => twins.key(g)));
+      const openLayer = (g: Garment) => openHere(g) && !inLook.has(twins.key(g));
+      const layered = layerUp({
+        look,
+        tops: d.tops,
+        keyOf,
+        open: openLayer,
+        finalOk: (pieces, relax) => dd.finalOk(pieces, relax),
+        relax: waivedHere,
+        tally: opts.pass.layerTally,
+        enabled:
+          (opts.pass.occasion === "weekday" || opts.pass.occasion === "out" || opts.pass.occasion === "weekend") &&
+          coldLayer(opts.pass.season, opts.pass.weatherF, opts.pass.conditions?.highF),
+      });
+      const covered = tailorUp({
+        look: layered,
+        layers: d.layers,
+        keyOf,
+        open: (g) => openLayer(g) && !layered.some((p) => twins.key(p) === twins.key(g)),
+        finalOk: (pieces, relax) => dd.finalOk(pieces, relax),
+        relax: waivedHere,
+        tally: opts.pass.tailorPlaced ?? { placed: 1 },
+        occasion: opts.pass.occasion,
+      });
+      const dry = opts.pass.conditions?.wet !== true;
+      const casualDay = opts.pass.occasion === "weekday" || opts.pass.occasion === "weekend";
+      if (dry && casualDay) {
+        const openNow = (have: readonly Garment[]) => (g: Garment) =>
+          openLayer(g) && !have.some((p) => twins.key(p) === twins.key(g));
+        const accept = (pieces: Garment[], relax?: readonly string[]) => dd.finalOk(pieces, relax);
+        const shoed = loaferUp({
+          look: covered,
+          shoes: d.shoes,
+          keyOf,
+          open: openNow(covered),
+          finalOk: accept,
+          relax: waivedHere,
+        });
+        look = patternJacket({
+          look: shoed,
+          layers: d.layers,
+          keyOf,
+          open: openNow(shoed),
+          finalOk: accept,
+          relax: waivedHere,
+        });
+      } else {
+        look = covered;
+      }
+    }
     if (opts.waived) opts.waived.set(lookKey(look), [...waivedHere]);
     /* A hero dressed while its verdict was open stays open: the next call takes the same path. */
     if (pairs !== undefined) opts.pairable?.note(hero.g, true);
@@ -773,6 +976,8 @@ function spreadJackets(
   /** The page's lead keys: when the jacket leads the card (leadOf), the one swapped in must not lead another. */
   led?: Set<string>,
   leadOf: (pieces: readonly Garment[]) => Garment | null = leadPiece,
+  /** Looks this Re-dress has already shown. A swap that rebuilds one is refused. */
+  shown?: Set<string> | null,
 ): void {
   let total = 0;
   let suede = 0;
@@ -801,7 +1006,7 @@ function spreadJackets(
       .sort((a, b) => (rank ? rank(a) - rank(b) : 0) || a.id.localeCompare(b.id));
     const next = options.find((g) => {
       const swapped = [...core, g];
-      if (!d.finalOk(swapped)) return false;
+      if (repeatsShown(shown, swapped) || !d.finalOk(swapped)) return false;
       /* The swap must not hand the card a lead that leads another card (no-op where the top leads). */
       const lead = leadOf(swapped);
       return !lead || lead.id === leadOf(look)?.id || !led?.has(twins.key(lead));
@@ -820,6 +1025,108 @@ function spreadJackets(
     counts.set(next.id, (counts.get(next.id) ?? 0) + 1);
     suede -= 1;
   }
+}
+
+/**
+ * Sneaker cards past 40% of the page take the next legal boot, then a leather loafer.
+ * On a wet day a suede shoe is swapped the same way. Stops when the share is met or
+ * nothing legal is left. Counts and leads stay current.
+ */
+function spreadShoes(
+  rows: Garment[][][],
+  d: Dresser,
+  counts: Map<string, number>,
+  twins: Twins,
+  led: Set<string>,
+  leadOf: (pieces: readonly Garment[]) => Garment | null,
+  prior: { cards: number; sneakers: number },
+  wet: boolean,
+  waived?: Map<string, string[]>,
+  /** Which rows may lose a card that cannot be swapped. Themed rows stay whole. */
+  dropRow: (index: number) => boolean = () => true,
+  /** Looks this Re-dress has already shown. A swap that rebuilds one is refused. */
+  shown?: Set<string> | null,
+): void {
+  const byId = (a: Garment, b: Garment) => a.id.localeCompare(b.id);
+  const boots = d.shoes.filter((g) => bootPiece(g)).sort(byId);
+  const loafers = d.shoes.filter((g) => leatherLoafer(g)).sort(byId);
+  const rest = d.shoes
+    .filter((g) => !sneakerPiece(g) && !bootPiece(g) && !leatherLoafer(g))
+    .sort(byId);
+  const options = [...boots, ...loafers, ...rest].filter((g) => !(wet && suedeShoe(g)));
+  let sneakers = prior.sneakers;
+  let total = prior.cards;
+  const flat: { row: number; i: number }[] = [];
+  rows.forEach((looks, row) => {
+    looks.forEach((look, i) => {
+      total += 1;
+      if (look.some(sneakerPiece)) sneakers += 1;
+      flat.push({ row, i });
+    });
+  });
+  if (total === 0) return;
+  const over = () => sneakers / total > 0.4;
+  const suedeLeft = () => wet && rows.some((looks) => looks.some((look) => look.some(suedeShoe)));
+  if (!over() && !suedeLeft()) return;
+  for (let n = flat.length - 1; n >= 0 && (over() || suedeLeft()); n -= 1) {
+    const spot = flat[n]!;
+    const looks = rows[spot.row]!;
+    const look = looks[spot.i]!;
+    const sneaker = look.find(sneakerPiece);
+    const suede = wet ? look.find(suedeShoe) : undefined;
+    const old = over() && sneaker ? sneaker : suede;
+    if (!old) continue;
+    const rowUsed = new Set(looks.flat().map((g) => twins.key(g)));
+    rowUsed.delete(twins.key(old));
+    const core = look.filter((g) => g.id !== old.id);
+    const relax = waived?.get(lookKey(look)) ?? [];
+    const next = options.find((g) => {
+      if (rowUsed.has(twins.key(g)) || twinCount(counts, twins, g) >= SCREEN_CAP) return false;
+      const swapped = [...core, g];
+      if (repeatsShown(shown, swapped) || !d.finalOk(swapped, relax)) return false;
+      const lead = leadOf(swapped);
+      const was = leadOf(look);
+      return !lead || lead.id === was?.id || !led.has(twins.key(lead));
+    });
+    if (!next) continue;
+    const was = leadOf(look);
+    const swapped = [...core, next];
+    looks[spot.i] = swapped;
+    if (waived) {
+      const prev = waived.get(lookKey(look));
+      if (prev) waived.set(lookKey(swapped), prev);
+    }
+    if (sneakerPiece(old) && !sneakerPiece(next)) sneakers -= 1;
+    counts.set(old.id, Math.max(0, (counts.get(old.id) ?? 1) - 1));
+    counts.set(next.id, (counts.get(next.id) ?? 0) + 1);
+    const now = leadOf(swapped);
+    if (was && now && was.id !== now.id) {
+      led.delete(twins.key(was));
+      led.add(twins.key(now));
+    }
+  }
+  const drop = (want: (look: Garment[]) => boolean, whileOver: () => boolean) => {
+    for (let r = rows.length - 1; r >= 0 && whileOver(); r -= 1) {
+      if (!dropRow(r)) continue;
+      const looks = rows[r]!;
+      for (let i = looks.length - 1; i >= 0 && whileOver() && looks.length > 1; i -= 1) {
+        const look = looks[i]!;
+        if (!want(look)) continue;
+        looks.splice(i, 1);
+        for (const g of look) counts.set(g.id, Math.max(0, (counts.get(g.id) ?? 1) - 1));
+        if (look.some(sneakerPiece)) sneakers -= 1;
+        total -= 1;
+      }
+    }
+  };
+  /* A sneaker card that nothing legal can replace is left off, so the page stays at or under 40%. */
+  drop((look) => look.some(sneakerPiece), over);
+  if (wet) drop((look) => look.some(suedeShoe), () => rows.some((looks) => looks.some((look) => look.some(suedeShoe))));
+}
+
+/** Shoes a refill may use after a drop: no sneaker, and no suede on a wet day. */
+function refillShoes(shoes: readonly Garment[], wet: boolean): Garment[] {
+  return shoes.filter((g) => !sneakerPiece(g) && !(wet && suedeShoe(g)));
 }
 
 /**
@@ -842,6 +1149,8 @@ export function preferStrictJackets(
     waived?: Map<string, string[]>;
     /** When the caller counts the finished looks itself, only read the cap. */
     track?: boolean;
+    /** Looks this Re-dress has already shown. A swap that rebuilds one is refused. */
+    shown?: Set<string> | null;
   },
 ): void {
   const ctx: JacketContext = {
@@ -853,6 +1162,20 @@ export function preferStrictJackets(
     ...(conditions?.windy !== undefined ? { windy: conditions.windy } : {}),
   };
   const byId = new Map(live.map((g) => [g.id, g]));
+  const keyOf = (g: Garment) => (book?.twins ? book.twins.key(g) : g.id);
+  const leadOf = book?.leadOf ?? leadPiece;
+  /* A top (or any non-jacket) already in the row cannot come back as the jacket. A jacket may. */
+  const wornUnder = (candidate: Garment, jacketId: string): boolean => {
+    const key = keyOf(candidate);
+    for (const row of looks) {
+      const hit = row.filter((g) => keyOf(g) === key);
+      if (!hit.length) continue;
+      const outer = selectedOuter(row).jacket;
+      if (hit.every((g) => g.id === outer?.id || g.id === jacketId)) continue;
+      return true;
+    }
+    return false;
+  };
   for (let i = 0; i < looks.length; i += 1) {
     const look = looks[i]!;
     if (!lastResortNote(look)) continue;
@@ -878,11 +1201,12 @@ export function preferStrictJackets(
     let next: Garment | undefined;
     let replaced: Garment[] | undefined;
     const accept = (candidate: Garment, busy: boolean) => {
-      if (candidate.id === jacket.id) return false;
+      if (candidate.id === jacket.id || wornUnder(candidate, jacket.id)) return false;
       /* A full cap ranks this jacket later. It does not take the jacket off the list. */
       const leads = book?.led && book.twins ? book.led.has(book.twins.key(candidate)) : false;
       if (!busy && leads) return false;
       const pieces = [...core, candidate];
+      if (repeatsShown(book?.shown, pieces)) return false;
       if (!lookFitsSeason(pieces, season as Season)) return false;
       if (!isLegal(pieces, legalCtx)) return false;
       const hits = ruleHits(pieces, legalCtx);
@@ -902,7 +1226,6 @@ export function preferStrictJackets(
       }
     }
     if (!next || !replaced) continue;
-    const leadOf = book?.leadOf ?? leadPiece;
     const was = book?.led && book.twins ? leadOf(look) : null;
     looks[i] = replaced;
     if (book?.waived) {
@@ -1048,6 +1371,7 @@ function forgottenWay(
     twins: Twins;
     /** The page's lead keys so far. Read only: the caller commits the row's leads with the row. */
     led?: ReadonlySet<string>;
+    pass?: DressPass;
   },
 ): Way | null {
   const forgotten = forgottenIds(garments, { today: ctx.today, suggested: ctx.suggested });
@@ -1075,6 +1399,7 @@ function forgottenWay(
       twins: ctx.twins,
       led,
       waived,
+      pass: ctx.pass,
     },
     ROW_MIN,
   )
@@ -1085,13 +1410,14 @@ function forgottenWay(
   for (const look of rows) for (const g of look) shipped.set(g.id, (shipped.get(g.id) ?? 0) + 1);
   const shippedLed = new Set(ctx.led ?? []);
   noteLeads(rows, ctx.twins, shippedLed);
-  spreadJackets(rows, d, shipped, new Map(live.map((g) => [g.id, g])), ctx.rotation, ctx.twins, shippedLed);
+  spreadJackets(rows, d, shipped, new Map(live.map((g) => [g.id, g])), ctx.rotation, ctx.twins, shippedLed, leadPiece, shownLooks(ctx.rotation));
   preferStrictJackets(rows, live, pool, ctx.occasion, ctx.season, ctx.weatherF, ctx.conditions, {
     counts: shipped,
     led: shippedLed,
     twins: ctx.twins,
     leadOf: leadPiece,
     waived,
+    shown: shownLooks(ctx.rotation),
   });
   for (const [id, n] of shipped) counts.set(id, n);
   return {
@@ -1162,6 +1488,15 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
   const rowsWanted = () => Math.max(1, STORY_ROWS - pending - out.length);
   const rowMax = (d: Dresser) => (ctx.rotation ? rowBudget(d, counts, unpairable, rowsWanted(), twins) : ROW_MAX);
   const themeCap = ctx.rotation ? STORY_ROWS - (forgottenWanted ? 1 : 0) : THEME_ROWS;
+  const pass: DressPass = {
+    occasion,
+    season,
+    weatherF,
+    conditions,
+    layerTally: { layered: 0, cards: 0 },
+    tailorPlaced: { placed: 0 },
+    ...(ctx.pin ? { pin: ctx.pin } : {}),
+  };
   for (const way of order) {
     if (out.length >= themeCap) break;
     const cell = cellKit.cells().find((row) => row.id === way.id);
@@ -1169,18 +1504,19 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     const d = cellDresser(cell, live, occasion, season, weatherF, color, pool, conditions);
     const local = new Map(counts);
     const ledLocal = new Set(led);
-    const looks = fillRow(d, local, { salt, stream: seedOf(way.id), fresh, rotation: ctx.rotation, skip: ctx.stuck, max: rowMax(d), twins, led: ledLocal, waived }, ROW_MIN);
+    const looks = fillRow(d, local, { salt, stream: seedOf(way.id), fresh, rotation: ctx.rotation, skip: ctx.stuck, max: rowMax(d), twins, led: ledLocal, waived, pass }, ROW_MIN);
     if (looks.length < ROW_MIN) {
       if (short.length < THEME_ROWS) short.push(way);
       continue;
     }
-    spreadJackets(looks, d, local, byId, ctx.rotation, twins, ledLocal);
+    spreadJackets(looks, d, local, byId, ctx.rotation, twins, ledLocal, leadPiece, shownLooks(ctx.rotation));
     preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
       counts: local,
       led: ledLocal,
       twins,
       leadOf: leadPiece,
       waived,
+      shown: shownLooks(ctx.rotation),
     });
     counts = local;
     led = ledLocal;
@@ -1211,6 +1547,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
         twins,
         led: ledLocal,
         waived,
+        pass,
       };
       let looks = fillRow(d, counts, opts, ROW_MIN);
       const needJacket = jacketNeed(occasion, season, weatherF, conditions);
@@ -1228,16 +1565,22 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
         relaxed = looks.length > before;
       }
       if (!looks.length) {
+        /* The wide pass can spend its budget on heroes that cannot dress under the cap.
+           One beam over the open pool still fills a short row when a later hero can. */
+        looks = heroRow({ ...d, wide: false }, counts, { ...opts, pairable: undefined, max: ROW_MIN });
+      }
+      if (!looks.length) {
         fillsSpent = true;
         return;
       }
-      spreadJackets(looks, d, counts, byId, rotation, twins, ledLocal);
+      spreadJackets(looks, d, counts, byId, rotation, twins, ledLocal, leadPiece, shownLooks(rotation));
       preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
         counts,
         led: ledLocal,
         twins,
         leadOf: leadPiece,
         waived,
+        shown: shownLooks(rotation),
       });
       if (looks.length < ROW_MIN) {
         const more = again(d, RELAXED_CAP);
@@ -1250,6 +1593,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
             twins,
             leadOf: leadPiece,
             waived,
+            shown: shownLooks(rotation),
           });
         }
       }
@@ -1284,6 +1628,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     max: forgottenWanted ? rowMax(plainDresser(live, occasion, season, weatherF, color, pool, undefined, false, conditions)) : undefined,
     twins,
     led,
+    pass,
   });
   if (forgotten) noteLeads(forgotten.looks[occasion] ?? [], twins, led);
   pending = forgotten ? 1 : 0;
@@ -1315,6 +1660,7 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
         led,
         twins,
         leadOf: leadPiece,
+        shown: shownLooks(ctx.rotation),
       });
       for (const look of kept) for (const g of look) counts.set(g.id, (counts.get(g.id) ?? 0) + 1);
       out.push({ ...way, pieces: kept[0]!, looks: { ...way.looks, [occasion]: kept } });
@@ -1323,6 +1669,53 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
   if (forgotten) out.push(forgotten);
   pending = 0;
   fillRows(STORY_ROWS);
+  const shoeRows = out.map((way) => way.looks[occasion] ?? []);
+  const shoeDresser = plainDresser(live, occasion, season, weatherF, color, pool, undefined, false, conditions);
+  const beforeLengths = shoeRows.map((row) => row.length);
+  const wet = conditions?.wet === true;
+  spreadShoes(
+    shoeRows,
+    shoeDresser,
+    counts,
+    twins,
+    led,
+    leadPiece,
+    ctx.shoePrior ?? { cards: 0, sneakers: 0 },
+    wet,
+    waived,
+    shoeClimate(weatherF, conditions?.highF, wet).cold ? () => true : () => false,
+    shownLooks(ctx.rotation),
+  );
+  /* One refill, into the last row that lost a card, with a non-sneaker shoe (and no suede when wet). */
+  let lost = -1;
+  for (let i = shoeRows.length - 1; i >= 0; i -= 1) {
+    if (shoeRows[i]!.length < (beforeLengths[i] ?? 0)) {
+      lost = i;
+      break;
+    }
+  }
+  if (lost >= 0 && ctx.rotation) {
+    const row = shoeRows[lost]!;
+    const way = out[lost]!;
+    const restored = heroRow(
+      { ...shoeDresser, shoes: refillShoes(shoeDresser.shoes, wet) },
+      counts,
+      {
+        salt,
+        stream: seedOf(way.id),
+        fresh,
+        rotation: ctx.rotation,
+        twins,
+        led,
+        waived,
+        pass,
+        seed: row,
+        max: beforeLengths[lost] ?? row.length,
+      },
+    );
+    row.splice(0, row.length, ...restored);
+  }
+  breakHeld(shoeRows, shoeDresser, ctx.rotation, twins, waived);
   return out;
 }
 
@@ -1694,7 +2087,33 @@ export function weekRotationRow(
     if (g) led.add(twins.key(g));
   }
   const seed = drawSeed(today, `lookbook:${occasion}:week`, liveIdsKey(live), salt);
-  const opts: RowOpts = { salt, stream: seed, fresh, rotation: ctx.rotation, max: cap, skip, pairable, twins, led, leadOf: weekLeadPiece, waived };
+  const pass: DressPass = {
+    occasion,
+    season,
+    weatherF,
+    conditions,
+    layerTally: { layered: 0, cards: 0 },
+    tailorPlaced: { placed: 0 },
+    ...(ctx.pin ? { pin: ctx.pin } : {}),
+  };
+  const opts: RowOpts = {
+    salt,
+    stream: seed,
+    fresh,
+    rotation: ctx.rotation,
+    max: cap,
+    skip,
+    pairable,
+    twins,
+    led,
+    leadOf: weekLeadPiece,
+    waived,
+    pass,
+    /* Travel is the one week that still needs the longer search: at 32000 its fourth
+       Re-dress (Oct 9 2026) closed two cards short of eight. Other weeks stop at 32000,
+       so a week that cannot fill does not spend the extra budget on dead-end heroes. */
+    ...(occasion === "travel" ? { tries: 64000 } : {}),
+  };
   /* The unseen looks first; when they run out, the least-recently-shown pieces fill the row to its cap. */
   const looks = fillRow(strict, counts, opts, cap);
   const demoted: number[] = [];
@@ -1710,14 +2129,28 @@ export function weekRotationRow(
       looks.push(look);
     }
   }
-  spreadJackets(looks, strict, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation, twins, led, weekLeadPiece);
+  spreadJackets(looks, strict, counts, new Map(live.map((g) => [g.id, g])), ctx.rotation, twins, led, weekLeadPiece, shownLooks(ctx.rotation));
   preferStrictJackets(looks, live, pool, occasion, season, weatherF, conditions, {
     counts,
     led,
     twins,
     leadOf: weekLeadPiece,
     waived,
+    shown: shownLooks(ctx.rotation),
   });
+  const wetWeek = conditions?.wet === true;
+  const beforeWeek = looks.length;
+  const mayDrop = shoeClimate(weatherF, conditions?.highF, wetWeek).cold;
+  spreadShoes([looks], strict, counts, twins, led, weekLeadPiece, { cards: 0, sneakers: 0 }, wetWeek, waived, mayDrop ? () => true : () => false, shownLooks(ctx.rotation));
+  if (looks.length < beforeWeek) {
+    const restored = heroRow(
+      { ...strict, shoes: refillShoes(strict.shoes, wetWeek) },
+      counts,
+      { ...opts, seed: looks.map((look) => [...look]), max: beforeWeek },
+    );
+    looks.splice(0, looks.length, ...restored);
+  }
+  breakHeld([looks], strict, ctx.rotation, twins, waived);
   if (ctx.rotation) settle(strict, pairable, ctx.rotation, twins, live.length);
   /* Every piece this scope has found unpairable so far, so the caller's list is complete. */
   const unpairable: Garment[] = [];

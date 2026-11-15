@@ -132,7 +132,7 @@ describe("lookTuckDecision", () => {
       subtype: "half-zip sweater",
       tuck: "either",
     });
-    assert.equal(lookTuckDecision([knit, pants()], "weekday"), "in");
+    assert.equal(lookTuckDecision([knit, pants()], "weekday"), "out");
     assert.equal(tuckMark("in", knit), null);
     assert.equal(tuckMark("out", knit), "untucked");
     assert.equal(tuckMark("in", g({ id: "s", name: "White oxford", subtype: "oxford" })), "tucked");

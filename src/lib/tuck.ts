@@ -96,6 +96,15 @@ export function resolveTuck(
   neverTuck?: readonly string[],
 ): "in" | "out" {
   if (oversizedOf(g)) return "out";
+  /* A knit is never tucked. A shirt under a knit is tucked, unless it is locked out. */
+  if (isKnitTop(g)) return "out";
+  if (
+    (pieces ?? []).some((p) => p.id !== g.id && isKnitTop(p)) &&
+    isShirtLike(g) &&
+    !shirtLockedOut(g)
+  ) {
+    return "in";
+  }
   if (
     (pieces ?? []).some(isShortOuter) &&
     isShirtLike(g) &&

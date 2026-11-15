@@ -13,7 +13,8 @@ import { isKnitTop, isShirtLike, tuckDressingLines, tuckMark } from "./tuck.ts";
 import type { Garment, Occasion } from "./types.ts";
 
 const PIN = "2026-11-05";
-const PARITY_HASH = "9f1585b10f3522f775a856cfd72703e2bf8dff1028d44f6ac59993ecd7bb971d";
+/* R11: a knit lead is out, a shirt under a knit is in, and the new gates change the looks. */
+const PARITY_HASH = "d5ad83ebd1a1e10e2d8f15ebbd66fec2b9721c91088c64b29628de6e2141b9c3";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -206,7 +207,7 @@ describe("plate and label", () => {
 
   it("says untucked exactly when the plate draws the hem out, and never tucked on a knit", () => {
     pinDay(PIN);
-    const knitIn: string[] = [];
+    const knitLeads: string[] = [];
     for (const hero of liveSnapshot) {
       if (hero.archived) continue;
       const looks = looksForHero(hero, liveSnapshot, { today: PIN });
@@ -230,10 +231,10 @@ describe("plate and label", () => {
           leadAt >= 0 && bottomAt >= 0 && (z[leadAt] ?? 0) > (z[bottomAt] ?? 0);
         const saysUntucked = /\buntucked\b/.test(caption);
         expect(saysUntucked, look.id).toBe(drawnOut);
-        if (again === "in" && lead && isKnitTop(lead)) {
-          knitIn.push(lead.id);
+        if (lead && isKnitTop(lead)) {
+          knitLeads.push(lead.id);
+          expect(again, lead.name).toBe("out");
           expect(caption, lead.name).not.toMatch(/\btucked\b/);
-          expect(caption, lead.name).not.toMatch(/\buntucked\b/);
         }
         if (again === "in" && tuckMark(again, lead) === "tucked") {
           expect(caption).toMatch(/\btucked\b/);
@@ -248,10 +249,10 @@ describe("plate and label", () => {
         }
       }
     }
-    expect(knitIn.length).toBeGreaterThan(0);
+    expect(knitLeads.length).toBeGreaterThan(0);
   });
 
-  it("a knit that resolves in shows no tuck word on the card", () => {
+  it("a knit resolves out, and the card says untucked, never tucked", () => {
     const knit = piece({
       id: "half",
       name: "Cream ribbed half-zip sweater",
@@ -267,14 +268,15 @@ describe("plate and label", () => {
     });
     const shoes = piece({ id: "shoes", name: "Brown loafers", category: "footwear", subtype: "loafers" });
     const pieces = [knit, trousers, shoes];
-    expect(lookTuckDecision(pieces, "weekday")).toBe("in");
+    expect(lookTuckDecision(pieces, "weekday")).toBe("out");
     expect(tuckMark("in", knit)).toBeNull();
+    expect(tuckMark("out", knit)).toBe("untucked");
     const markup = renderToStaticMarkup(
       <HeroLookCard pieces={pieces} name="Weekday knit" occasion="weekday" />,
     );
-    expect(captionOf(markup)).toBe("weekday");
+    expect(captionOf(markup)).toBe("weekday · untucked");
+    expect(markup).toMatch(/\buntucked\b/);
     expect(markup).not.toMatch(/\btucked\b/);
-    expect(markup).not.toMatch(/\buntucked\b/);
     const out = renderToStaticMarkup(
       <HeroLookCard pieces={pieces} name="Weekend knit" occasion="weekend" />,
     );

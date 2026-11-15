@@ -16,6 +16,8 @@ import { jacketRequired } from "../stylist/jackets.ts";
 import { oversizedOf } from "../stylist/oversized.ts";
 import type { Garment, Look, Occasion } from "../types.ts";
 import { todayISO, todayNY } from "../utils.ts";
+import { coldLayer, collaredShirt, nonCollaredKnit } from "../outfit-rules.ts";
+import { layerUp } from "./layer-pass.ts";
 import { detectorColor } from "./palette.ts";
 import { usualFromCloset } from "./usual.ts";
 
@@ -262,7 +264,30 @@ const PHRASE: Record<string, (g: Garment) => boolean> = {
   vest: (g) => has(g, /\bvest\b|gilet/),
 };
 
-function matchPhrase(g: Garment, phrase: string, slot: SlotName): boolean {
+/** Cell 9 only: Joe's winter words, on top of the shared phrase table. */
+function winterCellPhrase(g: Garment, phrase: string): boolean {
+  if (phrase === "fine knit") {
+    if (blazer(g) || chunkyCable(g) || has(g, /hoodie|fleece/)) return false;
+    if (has(g, /fine knit|merino|cashmere/) && !has(g, /chunky|\bcable\b/)) return true;
+    if (!has(g, /knit|sweater|wool|cashmere/) || !has(g, /crew|collar|zip/)) return false;
+    return !has(g, /chunky|\bcable\b|fair\s*isle|graphic|print|plaid|stripe|houndstooth|check/);
+  }
+  if (phrase === "wool" || phrase === "flannel trouser") {
+    return slotOf(g) === "bottom" && has(g, /wool|flannel/) && has(g, /trouser|pant/) && !blazer(g);
+  }
+  if (phrase === "dark suede") {
+    return suede(g) && !sneaker(g) && (loafer(g) || bootish(g)) && has(g, /brown|chocolate|navy|black/);
+  }
+  return false;
+}
+
+function matchPhrase(g: Garment, phrase: string, slot: SlotName, cell?: Cell): boolean {
+  if (
+    cell?.key === "flannel_cashmere" &&
+    (phrase === "fine knit" || phrase === "wool" || phrase === "flannel trouser" || phrase === "dark suede")
+  ) {
+    return winterCellPhrase(g, phrase);
+  }
   if (slot === "top" && blazer(g)) return false;
   if (slot === "shoe" && phrase === "suede") return suede(g) && !sneaker(g);
   if (slot === "shoe" && phrase === "plain") return plainLoafer(g);
@@ -281,8 +306,8 @@ function matchPhrase(g: Garment, phrase: string, slot: SlotName): boolean {
 function grade(cell: Cell, g: Garment, slot: SlotName): Grade {
   const spec = cell.slots[slot];
   if (!spec) return "no";
-  if (spec.core.some((phrase) => matchPhrase(g, phrase, slot))) return "core";
-  if (spec.compatible.some((phrase) => matchPhrase(g, phrase, slot))) return "compatible";
+  if (spec.core.some((phrase) => matchPhrase(g, phrase, slot, cell))) return "core";
+  if (spec.compatible.some((phrase) => matchPhrase(g, phrase, slot, cell))) return "compatible";
   return "no";
 }
 
@@ -387,7 +412,7 @@ function anchorHits(cell: Cell, pieces: Dressed): number {
   for (const slot of ["top", "bottom", "shoe", "layer"] as const) {
     const g = pieces[slot];
     const phrases = cell.anchors?.any[slot];
-    if (g && phrases?.some((phrase) => matchPhrase(g, phrase, slot))) hits += 1;
+    if (g && phrases?.some((phrase) => matchPhrase(g, phrase, slot, cell))) hits += 1;
   }
   return hits;
 }
@@ -572,6 +597,7 @@ function passesCheap(
 }
 
 function slotRole(g: Garment, cell: Cell): "top" | "other" {
+  if (has(g, /cardigan/)) return "other";
   const s = slotOf(g);
   if (s === "top" || s === "dress") return grade(cell, g, "top") === "no" ? "other" : "top";
   if (s === "outerwear" && !blazer(g) && grade(cell, g, "top") !== "no") return "top";
@@ -680,6 +706,10 @@ function dressCell(
     }
   }
   const stored: Garment[][] = [];
+  const layerTally = { layered: 0, cards: 0 };
+  const layerOn =
+    (occasion === "weekday" || occasion === "out" || occasion === "weekend") &&
+    coldLayer(season, finiteTemp(conditions?.highF) ?? finiteTemp(weatherF), conditions?.highF);
   const needJacket = jacketRequired(
     occasion,
     season,
@@ -703,6 +733,26 @@ function dressCell(
       if (!passesCheap(cell, pieces, occasion, season, pool)) continue;
       remember(pieces);
       if (stored.length >= STORE_CAP && maxDisjoint(stored).length >= 5) break;
+    }
+  }
+  /* Layer only the looks the cell will keep. The rest of the store is eligibility, not a card. */
+  if (layerOn) {
+    const keep = new Set(maxDisjoint(stored).map((look) => idsOf(look)));
+    for (let i = 0; i < stored.length; i += 1) {
+      const pieces = stored[i]!;
+      if (!keep.has(idsOf(pieces))) continue;
+      const used = new Set(pieces.map((g) => g.id));
+      stored[i] = layerUp({
+        look: pieces,
+        tops: pool.filter((g) => !used.has(g.id) && (collaredShirt(g) || nonCollaredKnit(g))),
+        keyOf: () => 0,
+        open: (g) => !used.has(g.id),
+        finalOk: (candidate) =>
+          passesCheap(cell, candidate, occasion, season, pool) &&
+          legalOk(candidate, occasion, season, weatherF, undefined, conditions),
+        tally: layerTally,
+        enabled: true,
+      });
     }
   }
   return stored;
