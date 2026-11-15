@@ -60,6 +60,8 @@ export const IDS = {
   tasselLoafers: "g_8nrtffa2s13s",
   suedeLoafers: "g_8ukg5mi9r3fc",
   sneakers: "g_01xaga54r12h",
+  /** Brown leather boots. Anchors the comfy distressed-jeans look. */
+  brownBoots: "g_b4zsf3dfrhdv",
   navySneakers: "g_9q0j6ksxlgcv",
   polo: "g_939onlwfrg9j",
   creamTrousers: "g_80sz9s08xpw1",
@@ -329,7 +331,7 @@ export const SCENARIOS: Scenario[] = [
       if (!lookRowIds(run.text, ctx.pool).length) problems.push("no look was answered");
       /* Allowed: a comfy look with the distressed jeans is legal. The all-white sneaker
          version has no dark piece, so COL-NO-ANCHOR fails it; brown boots anchor it. */
-      const withJeans = pieces(ctx, [IDS.creamSweatshirt, IDS.distressedJeans, "g_b4zsf3dfrhdv"]);
+      const withJeans = pieces(ctx, [IDS.creamSweatshirt, IDS.distressedJeans, IDS.brownBoots]);
       if (!isLegal(withJeans, { occasion: "comfy", season: seasonFor(ctx), weatherF: ctx.weatherF })) problems.push("distressed jeans are not allowed on comfy");
       return problems;
     },

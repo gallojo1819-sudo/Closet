@@ -1,6 +1,6 @@
 /**
  * R11 Lookbook outfit rules. The R10 fixture and bench, cold, with no network.
- * Out keeps 10 cards: the cold-top rule and the cap of two leave that chapter short of 12.
+ * Out's floor is min(12, two cards for each winter-legal dress-shoe group).
  */
 import { register } from "node:module";
 import { readFileSync } from "node:fs";
@@ -11,11 +11,12 @@ import type { Garment, Occasion } from "./types.ts";
 register(new URL("../../scripts/ts-ext.mjs", import.meta.url), { parentURL: import.meta.url });
 
 const { benchPage } = await import("./__fixtures__/lookbook-bench.ts");
-const { ruleFails } = await import("./stylist/legal.ts");
 const { colorHardFails } = await import("./color.ts");
 const { jacketRequired } = await import("./stylist/jackets.ts");
 const { twinGroups } = await import("./detectors.ts");
-const { lookTuckDecision } = await import("./look.ts");
+const { leadTop, lookTuckDecision } = await import("./look.ts");
+const { oversizedOf } = await import("./stylist/oversized.ts");
+const { ruleFails, ruleHits } = await import("./stylist/legal.ts");
 const { sittingPieceId } = await import("./gaps.ts");
 const { livePool } = await import("./rack.ts");
 const { RULE_SENTENCES } = await import("./stylist/rule-copy.ts");
@@ -93,7 +94,12 @@ describe("R11 lookbook outfit rules", { timeout: 600_000 }, () => {
     for (const occasion of ["weekend", "weekday", "out"] as const) {
       it(`${occasion} at ${high}F dresses within the rules`, () => {
         const looks = load(occasion, high);
-        const floor = occasion === "out" ? 10 : 12;
+        const dressShoes = CLOSET.filter((g) => {
+          const b = blob(g);
+          return g.category === "footwear" && !/sneaker|trainer|mule/.test(b) && /loafer|boot/.test(b);
+        });
+        const shoeGroups = new Set(dressShoes.map((g) => TWINS.key(g))).size;
+        const floor = occasion === "out" ? Math.min(12, shoeGroups * 2) : 12;
         assert.ok(looks.length >= floor, `${occasion} has ${looks.length} cards`);
         assert.ok(looks.some(layered), "a layered card");
         assert.equal(looks.filter(thinAlone).length, 0, "no thin top alone");
@@ -113,6 +119,8 @@ describe("R11 lookbook outfit rules", { timeout: 600_000 }, () => {
           const decision = lookTuckDecision(look, occasion);
           const knit = look.find(nonCollaredKnit);
           if (knit) assert.notEqual(decision, "in");
+          const lead = leadTop(look);
+          if (lead && oversizedOf(lead)) assert.notEqual(decision, "in", lead.name);
         }
       });
     }
@@ -262,7 +270,8 @@ describe("R11 lookbook outfit rules", { timeout: 600_000 }, () => {
     const bottom = weekday[0]!.find((g) => g.category === "bottom")!;
     const shoe = weekday[0]!.find((g) => g.category === "footwear")!;
     assert.ok(ruleFails([cable, bottom, shoe, navy], { occasion: "weekday", season: "fall", weatherF: 58, pool: CLOSET }).includes("JKT-LAY-1"));
-    assert.equal(ruleFails([cable, bottom, shoe, chore], { occasion: "weekend", season: "fall", weatherF: 58, pool: CLOSET }).some((id) => id === "JKT-LAY-1"), false);
+    const choreHits = ruleHits([cable, bottom, shoe, chore], { occasion: "weekend", season: "fall", weatherF: 58, pool: CLOSET });
+    assert.deepEqual(choreHits.hard, [], choreHits.hard.join(","));
     assert.equal(jacketRequired("weekday", "fall", 72, { wet: false, windy: false }), false);
     assert.equal(jacketRequired("weekday", "fall", 60, { wet: false, windy: false }), true);
     for (const sentence of Object.values(RULE_SENTENCES)) assert.equal(/\b\d+(?:\.\d+)?\s*\/\s*10\b/.test(sentence), false);

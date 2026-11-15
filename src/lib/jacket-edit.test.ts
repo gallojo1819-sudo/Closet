@@ -300,13 +300,16 @@ describe("jacket edit", () => {
         assert.equal(lastResortNote(look), NOTE_LAST);
       }
     }
+    const seated: string[] = [];
     for (const row of cases) {
       const key = `${row.date}|${row.occasion}|${[...row.core].sort().join("+")}`;
       const jacket = found.get(key);
-      /* The rotation no longer seats every Nov 6 core. When one is still on the page, its jacket is not a last resort. */
       if (!jacket) continue;
+      seated.push(key);
       assert.equal(lastResortNote(pieces([...row.core, jacket])), null, key);
     }
+    /* The reviewed head seats none of these five exact cores (a card shares at most two of the three ids). The count is pinned so a newly seated core has to keep the jacket check above. */
+    assert.equal(seated.length, 0, seated.join("; "));
   });
 
   it("a capped ledger still seats the least-used strict jacket on the week and detector paths", () => {
