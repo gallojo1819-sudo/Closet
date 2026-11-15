@@ -4,6 +4,7 @@
  * Decision (a): the Italian Summer pink-linen look with the taupe blazer
  * softens COL-9 and PASTEL-b to −10.
  */
+import { colorHardFails } from "../color.ts";
 import { ruleKinds } from "../detectors/behavior.ts";
 import { blob, hasText, plateMemo, sig, slotOfPlate, type Plate } from "../house-profiles/evaluate.ts";
 import cmap from "./data/color-value-map.json" with { type: "json" };
@@ -480,6 +481,20 @@ export function stylistHits(
     if (trucker && season === "winter" && outer && isDenim(outer) && !mid) {
       hit(trucker.id ?? "RRL-P7", trucker.severity ?? "soft", trucker.delta ?? -10, trucker.text ?? "denim trucker alone in winter");
     }
+  }
+
+  const upper = [top, mid, outer].filter((g): g is Plate => Boolean(g));
+  const cardi = upper.filter((g) => /cardigan/.test(blob(g)));
+  if (cardi.length) {
+    const under = upper.some((g) => {
+      if (cardi.some((c) => c.id === g.id)) return false;
+      const b = blob(g);
+      return /\bshirts?\b|oxford|button|\btees?\b|\bt-?shirts?\b/.test(b) || (/\bpolos?\b/.test(b) && /knit|merino/.test(b));
+    });
+    if (!under) hit("TOP-CARDIGAN-ALONE", "hard", 0, `cardigan ${cardi[0]?.name ?? ""} with no shirt under it`);
+  }
+  for (const id of colorHardFails(upper.concat([bot, shoe].filter((g): g is Plate => Boolean(g))), { top, bottom: bot, shoe })) {
+    hit(id, "hard", 0, id === "COL-NO-ANCHOR" ? "light top, bottom and shoe with no dark piece" : "two close shades");
   }
 
   if (!exceptionLook(ps)) return H;
