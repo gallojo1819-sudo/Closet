@@ -1056,6 +1056,11 @@ function spreadShoes(
   if (wet) drop((look) => look.some(suedeShoe), () => rows.some((looks) => looks.some((look) => look.some(suedeShoe))));
 }
 
+/** Shoes a refill may use after a drop: no sneaker, and no suede on a wet day. */
+function refillShoes(shoes: readonly Garment[], wet: boolean): Garment[] {
+  return shoes.filter((g) => !sneakerPiece(g) && !(wet && suedeShoe(g)));
+}
+
 /**
  * A toggle or denim jacket over pleats is seated only when no strict jacket fits this core.
  * A strict jacket already on another card still fits. The other pieces stay.
@@ -1590,6 +1595,8 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
   fillRows(STORY_ROWS);
   const shoeRows = out.map((way) => way.looks[occasion] ?? []);
   const shoeDresser = plainDresser(live, occasion, season, weatherF, color, pool, undefined, false, conditions);
+  const beforeLengths = shoeRows.map((row) => row.length);
+  const wet = conditions?.wet === true;
   spreadShoes(
     shoeRows,
     shoeDresser,
@@ -1598,10 +1605,39 @@ export function rowWays(ways: Way[], garments: Garment[], ctx: IdeaContext): Way
     led,
     leadPiece,
     ctx.shoePrior ?? { cards: 0, sneakers: 0 },
-    conditions?.wet === true,
+    wet,
     waived,
-    shoeClimate(weatherF, conditions?.highF, conditions?.wet === true).cold ? () => true : () => false,
+    shoeClimate(weatherF, conditions?.highF, wet).cold ? () => true : () => false,
   );
+  /* One refill, into the last row that lost a card, with a non-sneaker shoe (and no suede when wet). */
+  let lost = -1;
+  for (let i = shoeRows.length - 1; i >= 0; i -= 1) {
+    if (shoeRows[i]!.length < (beforeLengths[i] ?? 0)) {
+      lost = i;
+      break;
+    }
+  }
+  if (lost >= 0 && ctx.rotation) {
+    const row = shoeRows[lost]!;
+    const way = out[lost]!;
+    const restored = heroRow(
+      { ...shoeDresser, shoes: refillShoes(shoeDresser.shoes, wet) },
+      counts,
+      {
+        salt,
+        stream: seedOf(way.id),
+        fresh,
+        rotation: ctx.rotation,
+        twins,
+        led,
+        waived,
+        pass,
+        seed: row,
+        max: beforeLengths[lost] ?? row.length,
+      },
+    );
+    row.splice(0, row.length, ...restored);
+  }
   return out;
 }
 
@@ -2023,8 +2059,18 @@ export function weekRotationRow(
     leadOf: weekLeadPiece,
     waived,
   });
-  const mayDrop = shoeClimate(weatherF, conditions?.highF, conditions?.wet === true).cold;
-  spreadShoes([looks], strict, counts, twins, led, weekLeadPiece, { cards: 0, sneakers: 0 }, conditions?.wet === true, waived, mayDrop ? () => true : () => false);
+  const wetWeek = conditions?.wet === true;
+  const beforeWeek = looks.length;
+  const mayDrop = shoeClimate(weatherF, conditions?.highF, wetWeek).cold;
+  spreadShoes([looks], strict, counts, twins, led, weekLeadPiece, { cards: 0, sneakers: 0 }, wetWeek, waived, mayDrop ? () => true : () => false);
+  if (looks.length < beforeWeek) {
+    const restored = heroRow(
+      { ...strict, shoes: refillShoes(strict.shoes, wetWeek) },
+      counts,
+      { ...opts, seed: looks.map((look) => [...look]), max: beforeWeek },
+    );
+    looks.splice(0, looks.length, ...restored);
+  }
   if (ctx.rotation) settle(strict, pairable, ctx.rotation, twins, live.length);
   /* Every piece this scope has found unpairable so far, so the caller's list is complete. */
   const unpairable: Garment[] = [];
